@@ -1,17 +1,21 @@
 "use strict";
 
 const $ = id => document.getElementById(id);
-const validViews = new Set(["home", "notes", "dashboard", "commands"]);
+const validViews = new Set(["home", "notes", "dashboard", "commands", "settings"]);
 const viewLabels = {
     home: "COMMAND CENTER",
     notes: "QUICK NOTES",
     dashboard: "SYSTEM DASHBOARD",
-    commands: "F24 COMMANDS"
+    commands: "Super COMMANDS",
+    settings: "PREFERENCES"
 };
 
 let saveTimer = null;
 let pendingSaveData = [];
 let toastTimer = null;
+let launcherCommands = [];
+let launcherSelection = 0;
+let launcherPreviousFocus = null;
 let notesData = { version: 2, activeId: null, notes: [] };
 let notesLoaded = false;
 
@@ -79,6 +83,7 @@ function navigate(view) {
 
     if (view === "notes" && !notesLoaded) send("GetNotes");
     if (view === "dashboard" || view === "home") send("GetMetrics");
+    if (view === "settings") send("GetSettings");
 
     requestAnimationFrame(() => {
         if ($(view)?.classList.contains("active")) {
@@ -93,6 +98,173 @@ document.querySelectorAll("[data-view]").forEach(button => {
 
 document.querySelectorAll("[data-launch]").forEach(button => {
     button.addEventListener("click", () => send("Launch", button.dataset.launch));
+});
+
+const commandDefinitions = [
+    { label: "Command Center", description: "Open the ASCS home view", keywords: "home overview", view: "home" },
+    { label: "Quick Notes", description: "Open your notes and snippets", keywords: "notes scratchpad", view: "notes" },
+    { label: "System Dashboard", description: "View live system metrics and hardware", keywords: "dashboard metrics hardware", view: "dashboard" },
+    { label: "Shortcut Reference", description: "Browse the complete Super shortcut list", keywords: "commands shortcuts", view: "commands" },
+    { label: "Preferences", description: "Configure drives, window snapping, and shortcuts", keywords: "settings options", view: "settings" },
+    { label: "Everything", description: "Search files and folders as you type", keywords: "search files find", launch: "everything" },
+    { label: "Windows Terminal", description: "Open a terminal window", keywords: "console shell powershell", launch: "terminal" },
+    { label: "File Explorer", description: "Browse files and folders", keywords: "explorer folders", launch: "explorer" },
+    { label: "Calculator", description: "Open the Windows calculator", keywords: "math", launch: "calculator" },
+    { label: "Task Manager", description: "Inspect running apps and processes", keywords: "performance processes", launch: "taskmanager" },
+    { label: "Windows Settings", description: "Open Windows system settings", keywords: "configuration", launch: "settings" },
+    { label: "Downloads", description: "Open your Downloads folder", keywords: "files", launch: "downloads" },
+    { label: "Documents", description: "Open your Documents folder", keywords: "projects files", launch: "projects" },
+    { label: "Snipping Tool", description: "Capture a screen region", keywords: "screenshot capture", launch: "snipping" },
+    { label: "Lock workstation", description: "Lock your Windows session", keywords: "security", launch: "lock" },
+    { label: "Toggle mute", description: "Mute or unmute system audio", keywords: "sound volume", launch: "mute" }
+];
+
+function filteredLauncherCommands() {
+    const query = $("launcherSearch").value.trim().toLocaleLowerCase();
+    return commandDefinitions.filter(command =>
+        `${command.label} ${command.description} ${command.keywords}`
+            .toLocaleLowerCase()
+            .includes(query));
+}
+
+function renderLauncherResults() {
+    const results = $("launcherResults");
+    launcherCommands = filteredLauncherCommands();
+    launcherSelection = Math.min(launcherSelection, Math.max(launcherCommands.length - 1, 0));
+    results.replaceChildren();
+
+    if (!launcherCommands.length) {
+        const empty = document.createElement("p");
+        empty.className = "launcher-empty";
+        empty.textContent = "No matching commands.";
+        results.append(empty);
+        return;
+    }
+
+    launcherCommands.forEach((command, index) => {
+        const option = document.createElement("button");
+        option.type = "button";
+        option.className = "launcher-option";
+        option.setAttribute("role", "option");
+        option.setAttribute("aria-selected", String(index === launcherSelection));
+        const copy = document.createElement("span");
+        copy.className = "launcher-option-copy";
+        const label = document.createElement("strong");
+        label.textContent = command.label;
+        const description = document.createElement("small");
+        description.textContent = command.description;
+        copy.append(label, description);
+        const action = document.createElement("span");
+        action.className = "launcher-option-action";
+        action.textContent = command.view ? "OPEN VIEW" : "LAUNCH";
+        option.append(copy, action);
+        option.addEventListener("mouseenter", () => {
+            launcherSelection = index;
+            updateLauncherSelection();
+        });
+        option.addEventListener("click", () => executeLauncherCommand(command));
+        results.append(option);
+    });
+}
+
+function updateLauncherSelection() {
+    $("launcherResults").querySelectorAll(".launcher-option").forEach((option, index) => {
+        option.setAttribute("aria-selected", String(index === launcherSelection));
+    });
+    $("launcherResults").querySelector('[aria-selected="true"]')
+        ?.scrollIntoView({ block: "nearest" });
+}
+
+function openLauncher() {
+    if (!$("launcher").hidden) {
+        $("launcherSearch").focus();
+        return;
+    }
+    launcherPreviousFocus = document.activeElement;
+    $("launcher").hidden = false;
+    $("launcherSearch").value = "";
+    launcherSelection = 0;
+    renderLauncherResults();
+    requestAnimationFrame(() => $("launcherSearch").focus());
+}
+
+function closeLauncher() {
+    $("launcher").hidden = true;
+    if (launcherPreviousFocus instanceof HTMLElement && launcherPreviousFocus.isConnected) {
+        launcherPreviousFocus.focus();
+    }
+}
+
+function executeLauncherCommand(command) {
+    if (command.view) navigate(command.view);
+    else send("Launch", command.launch);
+    closeLauncher();
+}
+
+$("launcherSearch").addEventListener("input", () => {
+    launcherSelection = 0;
+    renderLauncherResults();
+});
+$("launcherSearch").addEventListener("keydown", event => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const direction = event.key === "ArrowDown" ? 1 : -1;
+        launcherSelection = launcherCommands.length
+            ? (launcherSelection + direction + launcherCommands.length) % launcherCommands.length
+            : 0;
+        updateLauncherSelection();
+    } else if (event.key === "Enter") {
+        event.preventDefault();
+        if (launcherCommands[launcherSelection]) {
+            executeLauncherCommand(launcherCommands[launcherSelection]);
+        }
+    } else if (event.key === "Escape") {
+        closeLauncher();
+    }
+});
+$("closeLauncher").addEventListener("click", closeLauncher);
+$("launcher").addEventListener("click", event => {
+    if (event.target === $("launcher")) closeLauncher();
+});
+document.addEventListener("keydown", event => {
+    if ($("launcher").hidden) return;
+    if (event.key === "Escape") {
+        closeLauncher();
+        return;
+    }
+    if (event.key !== "Tab") return;
+
+    const focusable = [...$("launcher").querySelectorAll("input, button:not([disabled])")];
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+    }
+});
+
+$("snapGap").addEventListener("input", () => {
+    $("snapGapValue").value = `${$("snapGap").value} px`;
+    $("snapGapValue").textContent = `${$("snapGap").value} px`;
+});
+$("settingsForm").addEventListener("submit", event => {
+    event.preventDefault();
+    const hotkeys = [...document.querySelectorAll("[data-hotkey]")]
+        .map(input => input.value.trim().toLowerCase());
+    const content = [
+        $("driveLetters").value.trim(),
+        $("snapGap").value,
+        $("preserveWindowSize").checked ? "1" : "0",
+        hotkeys.join(",")
+    ].join("|");
+    $("settingsStatus").textContent = "Saving preferences…";
+    if (!send("SaveSettings", content)) {
+        $("settingsStatus").textContent = "Unable to contact ASCS.";
+    }
 });
 
 document.querySelectorAll("[data-window-action]").forEach(button => {
@@ -373,10 +545,29 @@ function handleWebMessage(event) {
         case "metrics":
             updateMetrics(data);
             break;
+        case "openLauncher":
+            openLauncher();
+            break;
+        case "settings":
+            loadSettings(data);
+            break;
+        case "settingsSaved":
+            updateShortcutReference(Object.fromEntries(
+                [...document.querySelectorAll("[data-hotkey]")].map(input =>
+                    [input.dataset.hotkey, input.value.trim().toUpperCase()])
+            ));
+            $("settingsStatus").textContent = data.message || "Preferences saved.";
+            showToast(data.message || "Preferences saved.");
+            break;
         case "error":
             if (data.scope === "notes") {
                 pendingSaveData.shift();
                 setSaveStatus("SAVE FAILED", "error");
+            }
+            if ($("settings")?.classList.contains("active")) {
+                $("settingsStatus").textContent = typeof data.message === "string"
+                    ? data.message
+                    : "Preferences could not be saved.";
             }
             showToast(typeof data.message === "string" ? data.message : "An error occurred.");
             break;
@@ -384,6 +575,30 @@ function handleWebMessage(event) {
 }
 
 window.chrome?.webview?.addEventListener("message", handleWebMessage);
+
+function loadSettings(data) {
+    $("driveLetters").value = Array.isArray(data.drives) ? data.drives.join(", ") : "";
+    $("snapGap").value = String(data.snapGap ?? 0);
+    $("snapGapValue").value = `${$("snapGap").value} px`;
+    $("snapGapValue").textContent = `${$("snapGap").value} px`;
+    $("preserveWindowSize").checked = data.preserveSize === true;
+    const hotkeys = data.hotkeys && typeof data.hotkeys === "object" ? data.hotkeys : {};
+    document.querySelectorAll("[data-hotkey]").forEach(input => {
+        input.value = typeof hotkeys[input.dataset.hotkey] === "string"
+            ? hotkeys[input.dataset.hotkey].toUpperCase()
+            : "";
+    });
+    updateShortcutReference(hotkeys);
+}
+
+function updateShortcutReference(hotkeys) {
+    document.querySelectorAll("[data-hotkey-display]").forEach(keycap => {
+        const key = hotkeys[keycap.dataset.hotkeyDisplay];
+        if (typeof key === "string" && key.length === 1) {
+            keycap.textContent = key.toUpperCase();
+        }
+    });
+}
 
 function formatMetric(value) {
     const number = Number(value);
@@ -500,8 +715,133 @@ function updateMetrics(data) {
     $("ramDetail").textContent = formatCapacity(data.ramUsed, data.ramTotal);
     $("homeRamDetail").textContent = formatCapacity(data.ramUsed, data.ramTotal);
     renderDrives(data.drives);
+    updateHardware(data.hardware);
     $("metricsUpdated").textContent =
         `Last updated ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+}
+
+function updateHardware(hardware) {
+    if (!hardware || typeof hardware !== "object") return;
+    $("hardwareCpu").textContent = hardware.cpu || "Unavailable";
+    $("hardwareCores").textContent = hardware.cores || "";
+    $("hardwareGpu").textContent = hardware.gpu || "Unavailable";
+    $("hardwareGpuDetail").textContent = hardware.gpuDetail || "";
+    $("hardwareMemory").textContent = hardware.memory || "Unavailable";
+    const storage = Array.isArray(hardware.storage) ? hardware.storage : [];
+    $("hardwareDisks").textContent = storage.length
+        ? `${storage.length} physical ${storage.length === 1 ? "drive" : "drives"}`
+        : "Unavailable";
+    $("hardwareDevice").textContent = [hardware.manufacturer, hardware.model]
+        .filter(value => typeof value === "string" && value.length)
+        .join(" ") || "Unavailable";
+    $("hardwareBoard").textContent = hardware.board || "Unavailable";
+    $("hardwareBios").textContent = hardware.bios || "";
+    $("hardwareWindows").textContent = hardware.windows || "Unavailable";
+    renderPhysicalStorage(storage);
+}
+
+function formatHardwareCapacity(bytes) {
+    const capacity = Number(bytes);
+    if (!Number.isFinite(capacity) || capacity <= 0) return "Capacity unavailable";
+    const gigabytes = capacity / (1024 ** 3);
+    if (gigabytes >= 1024) return `${(gigabytes / 1024).toFixed(1)} TB`;
+    return `${gigabytes.toFixed(1)} GB`;
+}
+
+function appendHardwareText(parent, tagName, className, text) {
+    const element = document.createElement(tagName);
+    element.className = className;
+    element.textContent = text;
+    parent.append(element);
+    return element;
+}
+
+function renderPhysicalStorage(disks) {
+    const container = $("physicalStorage");
+    container.replaceChildren();
+
+    if (!disks.length) {
+        appendHardwareText(container, "p", "physical-storage-empty",
+            "No physical drive details are available.");
+        return;
+    }
+
+    disks.forEach((disk, index) => {
+        const card = document.createElement("article");
+        card.className = "physical-disk-card";
+        const heading = document.createElement("div");
+        heading.className = "physical-disk-heading";
+        appendHardwareText(heading, "strong", "",
+            disk.model || `Physical drive ${index + 1}`);
+        appendHardwareText(heading, "span", "",
+            formatHardwareCapacity(disk.sizeBytes));
+        card.append(heading);
+
+        const partitions = Array.isArray(disk.partitions) ? disk.partitions : [];
+        const details = [
+            disk.interfaceType,
+            disk.mediaType,
+            disk.status,
+            partitions.length
+                ? `${partitions.length} ${partitions.length === 1 ? "partition" : "partitions"}`
+                : "",
+            partitions.some(partition => partition.boot === true) ? "Boot partition" : ""
+        ].filter(value => typeof value === "string" && value.trim());
+        appendHardwareText(card, "p", "physical-disk-meta",
+            details.join(" · ") || "Drive details are limited.");
+
+        if (partitions.length) {
+            const partitionList = document.createElement("div");
+            partitionList.className = "physical-partition-list";
+            partitions.forEach((partition, partitionIndex) => {
+                const partitionLabel = [
+                    `Partition ${partitionIndex + 1}`,
+                    formatHardwareCapacity(partition.sizeBytes),
+                    partition.type,
+                    partition.boot === true ? "Boot" : ""
+                ].filter(value => typeof value === "string" && value.trim());
+                appendHardwareText(partitionList, "span", "",
+                    partitionLabel.join(" · "));
+            });
+            card.append(partitionList);
+        }
+
+        const volumes = Array.isArray(disk.volumes) ? disk.volumes : [];
+        if (volumes.length) {
+            const volumeList = document.createElement("div");
+            volumeList.className = "physical-volume-list";
+            volumes.forEach(volume => {
+                const row = document.createElement("div");
+                row.className = "physical-volume-row";
+                const copy = document.createElement("div");
+                copy.className = "physical-volume-copy";
+                const label = [volume.letter, volume.label]
+                    .filter(value => typeof value === "string" && value.trim())
+                    .join(" — ") || "Mounted volume";
+                appendHardwareText(copy, "strong", "", label);
+                const filesystemStatus = [volume.fileSystem, volume.status]
+                    .filter(value => typeof value === "string" && value.trim())
+                    .join(" · ");
+                if (filesystemStatus) {
+                    appendHardwareText(copy, "small", "", filesystemStatus);
+                }
+                row.append(copy);
+                const size = formatHardwareCapacity(volume.sizeBytes);
+                const free = Number(volume.freeBytes);
+                const sizeText = Number.isFinite(free) && free >= 0
+                    ? `${(free / (1024 ** 3)).toFixed(1)} GB free · ${size}`
+                    : size;
+                appendHardwareText(row, "span", "physical-volume-size", sizeText);
+                volumeList.append(row);
+            });
+            card.append(volumeList);
+        } else {
+            appendHardwareText(card, "p", "physical-disk-meta",
+                "No mounted drive letters were associated with this disk.");
+        }
+
+        container.append(card);
+    });
 }
 
 send("Ready");

@@ -8,7 +8,7 @@ SetWorkingDir(A_ScriptDir)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 1.3.0
+; Version 1.4.0
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -26,6 +26,8 @@ global ASCS_NotesFile := ASCS_DataDir "\notes.json"
 global ASCS_LogFile := ASCS_DataDir "\ASCS_Log.txt"
 global ASCS_WebViewDataDir := ASCS_DataDir "\WebView2"
 global ASCS_VirtualDesktopDllPath := A_ScriptDir "\lib\VirtualDesktopAccessor.dll"
+global ASCS_SettingsFile := ASCS_DataDir "\settings.ini"
+global ASCS_WorkspaceFile := ASCS_DataDir "\workspace.ini"
 
 global ASCS_EverythingPath := ""
 global ASCS_PageReady := false
@@ -34,11 +36,19 @@ global ASCS_DashboardErrorShown := false
 global ASCS_DriveCache := Map()
 global ASCS_NotesRecovered := false
 global ASCS_DesktopAccessorWarningShown := false
-; Edit this list manually to choose which drive letters appear in storage metrics.
+global ASCS_PendingWindowDirection := ""
+global ASCS_PendingLauncher := false
+global ASCS_SnapGap := 0
+global ASCS_PreserveWindowSize := true
+global ASCS_ActionHotkeys := Map()
+global ASCS_WorkspaceRestorePending := []
+global ASCS_HardwareJson := ""
+; Defaults; user selections are persisted in settings.ini.
 global ASCS_Drives := ["C:", "J:"]
 
 DirCreate(ASCS_DataDir)
 DirCreate(ASCS_WebViewDataDir)
+LoadUserSettings()
 
 ASCS_EverythingPath := FindEverything()
 
@@ -103,7 +113,7 @@ try {
     ; Keep the application hidden at startup.
     ASCS_App.Hide()
 
-    WriteLog("ASCS 1.3.0 initialized.")
+    WriteLog("ASCS 1.4.0 initialized.")
 
 } catch as err {
     WriteLog("WebView2 initialization failed: " err.Message)
@@ -129,14 +139,7 @@ try {
         ShowView("home")
 }
 
-F24 & q::ShowView("notes")
-F24 & f::LaunchEverything()
-F24 & i::ShowView("dashboard")
-
-F24 & t::Run("wt.exe")
-F24 & e::Run("explorer.exe")
-F24 & c::Run("calc.exe")
-F24 & h::Run("taskmgr.exe")
+F24 & Space::ShowCommandLauncher()
 
 F24 & l::DllCall("LockWorkStation")
 F24 & m::SoundSetMute(!SoundGetMute())
@@ -149,17 +152,18 @@ F24 & s:: {
     if GetKeyState("Shift", "P")
         Send("#+s")
     else
-        WriteLog("Workspace save requested.")
+        SaveWorkspace()
 }
 
-F24 & r::WriteLog("Workspace restore requested.")
+F24 & r::RestoreWorkspace()
 
-F24 & Left::PositionActiveWindow("left")
-F24 & Right::PositionActiveWindow("right")
-F24 & Up::PositionActiveWindow("up")
-F24 & Down::PositionActiveWindow("down")
+F24 & Left::HandleHorizontalWindowShortcut(-1)
+F24 & Right::HandleHorizontalWindowShortcut(1)
+F24 & Up::HandleWindowDirection("up")
+F24 & Down::HandleWindowDirection("down")
 
 RegisterDesktopHotkeys()
+RegisterConfiguredHotkeys()
 
 RegisterDesktopHotkeys() {
     numpadOffNames := [
@@ -170,13 +174,442 @@ RegisterDesktopHotkeys() {
 
     Loop 9 {
         number := A_Index
-        Hotkey("F24 & " number, SwitchVirtualDesktop.Bind(number))
-        Hotkey("F24 & Numpad" number, SwitchVirtualDesktop.Bind(number))
+        Hotkey("F24 & " number, HandleDesktopShortcut.Bind(number))
+        Hotkey("F24 & Numpad" number, HandleDesktopShortcut.Bind(number))
         Hotkey(
             "F24 & " numpadOffNames[number],
-            SwitchVirtualDesktop.Bind(number)
+            HandleDesktopShortcut.Bind(number)
         )
     }
+}
+
+RegisterConfiguredHotkeys() {
+    global ASCS_ActionHotkeys
+
+    callbacks := Map(
+        "notes", ShowView.Bind("notes"),
+        "everything", LaunchEverything,
+        "dashboard", ShowView.Bind("dashboard"),
+        "terminal", LaunchCommand.Bind("terminal"),
+        "explorer", LaunchCommand.Bind("explorer"),
+        "calculator", LaunchCommand.Bind("calculator"),
+        "taskmanager", LaunchCommand.Bind("taskmanager")
+    )
+
+    for action, key in ASCS_ActionHotkeys
+        Hotkey("F24 & " key, callbacks[action], "On")
+}
+
+LoadUserSettings() {
+    global ASCS_SettingsFile
+    global ASCS_Drives
+    global ASCS_SnapGap
+    global ASCS_PreserveWindowSize
+    global ASCS_ActionHotkeys
+
+    try {
+        ASCS_Drives := ParseDriveList(
+            IniRead(ASCS_SettingsFile, "General", "Drives", "C:,J:")
+        )
+    } catch as err {
+        WriteLog("Invalid drive preferences; using C: and J:. " err.Message)
+        ASCS_Drives := ["C:", "J:"]
+    }
+
+    gap := IniRead(ASCS_SettingsFile, "Window", "SnapGap", "0")
+    if RegExMatch(gap, "^\d+$") && Integer(gap) <= 48
+        ASCS_SnapGap := Integer(gap)
+    else
+        WriteLog("Invalid snap gap preference; using 0.")
+
+    ASCS_PreserveWindowSize :=
+        IniRead(ASCS_SettingsFile, "Window", "PreserveSize", "1") = "1"
+
+    defaults := Map(
+        "notes", "q",
+        "everything", "f",
+        "dashboard", "i",
+        "terminal", "t",
+        "explorer", "e",
+        "calculator", "c",
+        "taskmanager", "h"
+    )
+    keys := Map()
+    used := Map()
+    try {
+        for action, defaultKey in defaults {
+            key := StrLower(IniRead(
+                ASCS_SettingsFile,
+                "Hotkeys",
+                action,
+                defaultKey
+            ))
+            if !RegExMatch(key, "^[a-z]$")
+                throw Error("Hotkeys must be single letters.")
+            if InStr("srlmvjy", key)
+                throw Error("Hotkey conflicts with a reserved system command.")
+            if used.Has(key)
+                throw Error("Hotkey assignments must be unique.")
+            used[key] := true
+            keys[action] := key
+        }
+        ASCS_ActionHotkeys := keys
+    } catch as err {
+        WriteLog("Invalid shortcut preferences; using defaults. " err.Message)
+        ASCS_ActionHotkeys := defaults
+    }
+}
+
+ParseDriveList(value) {
+    drives := []
+    seen := Map()
+
+    for candidate in StrSplit(value, ",") {
+        drive := StrUpper(Trim(candidate))
+        if !RegExMatch(drive, "^[A-Z]:$")
+            throw Error("Drive entries must be letters followed by a colon.")
+        if seen.Has(drive)
+            throw Error("Drive entries must be unique.")
+        seen[drive] := true
+        drives.Push(drive)
+        if (drives.Length > 12)
+            throw Error("At most 12 drives can be monitored.")
+    }
+
+    if !drives.Length
+        throw Error("At least one drive is required.")
+    return drives
+}
+
+SaveUserSettings(content) {
+    global ASCS_SettingsFile
+    global ASCS_Drives
+    global ASCS_DriveCache
+    global ASCS_SnapGap
+    global ASCS_PreserveWindowSize
+    global ASCS_ActionHotkeys
+
+    try {
+        fields := StrSplit(content, "|")
+        if (fields.Length != 4)
+            throw Error("Settings payload has an invalid shape.")
+
+        drives := ParseDriveList(fields[1])
+        if !RegExMatch(fields[2], "^\d+$") || Integer(fields[2]) > 48
+            throw Error("Snap gap must be between 0 and 48 pixels.")
+        if !(fields[3] = "0" || fields[3] = "1")
+            throw Error("Preserve window size must be enabled or disabled.")
+
+        names := ["notes", "everything", "dashboard", "terminal",
+            "explorer", "calculator", "taskmanager"]
+        keys := StrSplit(fields[4], ",")
+        if (keys.Length != names.Length)
+            throw Error("Shortcut preferences are incomplete.")
+
+        hotkeys := Map()
+        used := Map()
+        Loop names.Length {
+            key := StrLower(Trim(keys[A_Index]))
+            if !RegExMatch(key, "^[a-z]$")
+                throw Error("Shortcuts must be single letters.")
+            if InStr("srlmvjy", key)
+                throw Error("That letter is reserved for a system command.")
+            if used.Has(key)
+                throw Error("Each shortcut must use a unique letter.")
+            used[key] := true
+            hotkeys[names[A_Index]] := key
+        }
+
+        previousHotkeys := ASCS_ActionHotkeys
+        IniWrite(JoinArray(drives, ","), ASCS_SettingsFile, "General", "Drives")
+        IniWrite(fields[2], ASCS_SettingsFile, "Window", "SnapGap")
+        IniWrite(fields[3], ASCS_SettingsFile, "Window", "PreserveSize")
+        for action, key in hotkeys
+            IniWrite(key, ASCS_SettingsFile, "Hotkeys", action)
+
+        for action, key in previousHotkeys
+            Hotkey("F24 & " key, "Off")
+
+        ASCS_Drives := drives
+        ASCS_DriveCache.Clear()
+        ASCS_SnapGap := Integer(fields[2])
+        ASCS_PreserveWindowSize := fields[3] = "1"
+        ASCS_ActionHotkeys := hotkeys
+        RegisterConfiguredHotkeys()
+
+        SendToFrontend(
+            '{"type":"settingsSaved","message":"Preferences saved and applied."}'
+        )
+    } catch as err {
+        WriteLog("Settings save failed: " err.Message)
+        SendToFrontend(
+            '{"type":"error","message":' JsonQuote(err.Message) '}'
+        )
+    }
+}
+
+JoinArray(items, separator) {
+    output := ""
+    for index, item in items
+        output .= (index > 1 ? separator : "") item
+    return output
+}
+
+SendSettings() {
+    global ASCS_Drives
+    global ASCS_SnapGap
+    global ASCS_PreserveWindowSize
+    global ASCS_ActionHotkeys
+
+    drives := "["
+    for index, drive in ASCS_Drives
+        drives .= (index > 1 ? "," : "") JsonQuote(drive)
+    drives .= "]"
+
+    hotkeys := "{"
+    index := 0
+    for action, key in ASCS_ActionHotkeys {
+        index++
+        hotkeys .= (index > 1 ? "," : "")
+            . JsonQuote(action) ":" JsonQuote(key)
+    }
+    hotkeys .= "}"
+
+    SendToFrontend(
+        '{"type":"settings","drives":' drives
+        ',"snapGap":' ASCS_SnapGap
+        ',"preserveSize":' (ASCS_PreserveWindowSize ? "true" : "false")
+        ',"hotkeys":' hotkeys '}'
+    )
+}
+
+SaveWorkspace() {
+    global ASCS_App
+    global ASCS_WorkspaceFile
+
+    try {
+        tempPath := ASCS_WorkspaceFile ".tmp"
+        if FileExist(tempPath)
+            FileDelete(tempPath)
+
+        windows := []
+        for hwnd in WinGetList() {
+            if (hwnd = ASCS_App.Hwnd)
+                continue
+
+            title := WinGetTitle("ahk_id " hwnd)
+            if (title = "" || !DllCall("IsWindowVisible", "Ptr", hwnd, "Int"))
+                continue
+
+            if (WinGetMinMax("ahk_id " hwnd) = -1)
+                continue
+
+            exStyle := WinGetExStyle("ahk_id " hwnd)
+            if (exStyle & 0x80)
+                continue
+
+            path := WinGetProcessPath("ahk_id " hwnd)
+            process := WinGetProcessName("ahk_id " hwnd)
+            if (path = "" || process = "")
+                continue
+
+            WinGetPos(&x, &y, &width, &height, "ahk_id " hwnd)
+            context := GetWindowPlacementContext(hwnd)
+            workWidth := Max(1, context["workRight"] - context["workLeft"])
+            workHeight := Max(1, context["workBottom"] - context["workTop"])
+            windows.Push(Map(
+                "path", path,
+                "process", process,
+                "title", title,
+                "monitor", context["monitor"],
+                "x", (x - context["workLeft"]) / workWidth,
+                "y", (y - context["workTop"]) / workHeight,
+                "width", width / workWidth,
+                "height", height / workHeight,
+                "maximized", WinGetMinMax("ahk_id " hwnd) = 1
+            ))
+            if (windows.Length >= 24)
+                break
+        }
+
+        IniWrite(windows.Length, tempPath, "Workspace", "WindowCount")
+        for index, savedWindow in windows {
+            section := "Window" index
+            for key, value in savedWindow
+                IniWrite(value, tempPath, section, key)
+        }
+        FileMove(tempPath, ASCS_WorkspaceFile, 1)
+        ShowDesktopTooltip("Workspace saved (" windows.Length " windows).")
+        WriteLog("Workspace saved with " windows.Length " windows.")
+    } catch as err {
+        WriteLog("Workspace save failed: " err.Message)
+        ShowDesktopTooltip("Unable to save workspace.")
+        try {
+            if (IsSet(tempPath) && FileExist(tempPath))
+                FileDelete(tempPath)
+        }
+    }
+}
+
+RestoreWorkspace() {
+    global ASCS_WorkspaceFile
+    global ASCS_WorkspaceRestorePending
+
+    if !FileExist(ASCS_WorkspaceFile) {
+        ShowDesktopTooltip("No saved workspace was found.")
+        return
+    }
+
+    try {
+        count := Integer(IniRead(
+            ASCS_WorkspaceFile,
+            "Workspace",
+            "WindowCount",
+            "0"
+        ))
+        if (count < 1 || count > 24)
+            throw Error("Saved workspace has an invalid window count.")
+
+        ASCS_WorkspaceRestorePending := []
+        for index in Range(1, count) {
+            section := "Window" index
+            path := IniRead(ASCS_WorkspaceFile, section, "path", "")
+            process := IniRead(ASCS_WorkspaceFile, section, "process", "")
+            title := IniRead(ASCS_WorkspaceFile, section, "title", "")
+            if (path = "" || process = "" || title = "" || !FileExist(path))
+                continue
+
+            record := Map(
+                "path", path,
+                "process", process,
+                "title", title,
+                "monitor", Max(1, Integer(IniRead(ASCS_WorkspaceFile, section, "monitor", "1"))),
+                "x", Float(IniRead(ASCS_WorkspaceFile, section, "x", "0")),
+                "y", Float(IniRead(ASCS_WorkspaceFile, section, "y", "0")),
+                "width", Float(IniRead(ASCS_WorkspaceFile, section, "width", "0.8")),
+                "height", Float(IniRead(ASCS_WorkspaceFile, section, "height", "0.8")),
+                "maximized", IniRead(ASCS_WorkspaceFile, section, "maximized", "0") = "1",
+                "deadline", A_TickCount + 20000,
+                "launched", false,
+                "hwnd", 0
+            )
+            ASCS_WorkspaceRestorePending.Push(record)
+        }
+
+        if !ASCS_WorkspaceRestorePending.Length {
+            ShowDesktopTooltip("No saved applications are available.")
+            return
+        }
+
+        RestoreWorkspaceWindows()
+        SetTimer(RestoreWorkspaceWindows, 500)
+        ShowDesktopTooltip("Restoring saved workspace.")
+    } catch as err {
+        WriteLog("Workspace restore failed: " err.Message)
+        ShowDesktopTooltip("Unable to restore workspace.")
+    }
+}
+
+RestoreWorkspaceWindows(*) {
+    global ASCS_App
+    global ASCS_WorkspaceRestorePending
+
+    remaining := []
+    usedWindows := Map()
+    for record in ASCS_WorkspaceRestorePending {
+        matchedHwnd := record["hwnd"]
+        try {
+            if (matchedHwnd && (!WinExist("ahk_id " matchedHwnd)
+                || WinGetProcessName("ahk_id " matchedHwnd) != record["process"]
+                || usedWindows.Has(matchedHwnd)))
+                matchedHwnd := 0
+        } catch as err {
+            WriteLog("Workspace window verification failed: " err.Message)
+            matchedHwnd := 0
+        }
+        record["hwnd"] := matchedHwnd
+        try {
+            if !matchedHwnd {
+                for hwnd in WinGetList("ahk_exe " record["process"]) {
+                    if (hwnd = ASCS_App.Hwnd || usedWindows.Has(hwnd))
+                        continue
+                    if (WinGetTitle("ahk_id " hwnd) = record["title"]) {
+                        matchedHwnd := hwnd
+                        break
+                    }
+                }
+            }
+        } catch as err {
+            WriteLog("Workspace window lookup failed: " err.Message)
+        }
+
+        if matchedHwnd {
+            usedWindows[matchedHwnd] := true
+            record["hwnd"] := matchedHwnd
+            try {
+                windowTitle := "ahk_id " matchedHwnd
+                WinRestore(windowTitle)
+                context := GetWindowPlacementContext(matchedHwnd)
+                monitor := Min(record["monitor"], MonitorGetCount())
+                MonitorGetWorkArea(
+                    monitor,
+                    &left,
+                    &top,
+                    &right,
+                    &bottom
+                )
+                workWidth := right - left
+                workHeight := bottom - top
+                width := Min(Round(record["width"] * workWidth), workWidth)
+                height := Min(Round(record["height"] * workHeight), workHeight)
+                x := left + Round(record["x"] * workWidth)
+                y := top + Round(record["y"] * workHeight)
+                MoveWindowIntoWorkArea(
+                    matchedHwnd,
+                    x,
+                    y,
+                    width,
+                    height,
+                    left,
+                    top,
+                    right,
+                    bottom,
+                    context
+                )
+                if record["maximized"]
+                    WinMaximize(windowTitle)
+            } catch as err {
+                WriteLog("Workspace window placement failed: " err.Message)
+            }
+            continue
+        }
+
+        if !record["launched"] {
+            try {
+                Run('"' record["path"] '"')
+                record["launched"] := true
+            } catch as err {
+                WriteLog("Workspace application launch failed: " err.Message)
+                continue
+            }
+        }
+
+        if (A_TickCount < record["deadline"])
+            remaining.Push(record)
+        else
+            WriteLog("Workspace restore timed out for " record["path"])
+    }
+
+    ASCS_WorkspaceRestorePending := remaining
+    if !remaining.Length
+        SetTimer(RestoreWorkspaceWindows, 0)
+}
+
+Range(start, end) {
+    result := []
+    Loop end - start + 1
+        result.Push(start + A_Index - 1)
+    return result
 }
 
 SwitchVirtualDesktop(number, thisHotkey := "") {
@@ -205,10 +638,58 @@ SwitchVirtualDesktop(number, thisHotkey := "") {
         if (number > desktopCount)
             return
 
-        DllCall(dll "\GoToDesktopNumber", "Int", number - 1)
+        switched := DllCall(
+            dll "\GoToDesktopNumber",
+            "Int", number - 1,
+            "Int"
+        )
+        if (switched < 0)
+            throw Error("VirtualDesktopAccessor could not switch desktops.")
     } catch as err {
         WriteLog("VirtualDesktopAccessor failed; desktop switch was not performed: " err.Message)
         ShowDesktopTooltip("Virtual desktop switch failed.")
+    }
+}
+
+MoveActiveWindowToDesktop(number, thisHotkey := "") {
+    global ASCS_VirtualDesktopDllPath
+
+    hwnd := GetActiveResizableWindow()
+    if !hwnd
+        return
+
+    if !FileExist(ASCS_VirtualDesktopDllPath) {
+        ShowDesktopTooltip("Add VirtualDesktopAccessor.dll to move windows between desktops.")
+        return
+    }
+
+    try {
+        dll := ASCS_VirtualDesktopDllPath
+        desktopCount := DllCall(dll "\GetDesktopCount", "Int")
+        if (desktopCount < 1)
+            throw Error("VirtualDesktopAccessor returned an invalid desktop count.")
+        if (number < 1 || number > desktopCount)
+            return
+
+        moved := DllCall(
+            dll "\MoveWindowToDesktopNumber",
+            "Ptr", hwnd,
+            "Int", number - 1,
+            "Int"
+        )
+        if (moved < 0)
+            throw Error("VirtualDesktopAccessor rejected the window move.")
+
+        switched := DllCall(
+            dll "\GoToDesktopNumber",
+            "Int", number - 1,
+            "Int"
+        )
+        if (switched < 0)
+            throw Error("VirtualDesktopAccessor could not switch desktops.")
+    } catch as err {
+        WriteLog("Window desktop move failed: " err.Message)
+        ShowDesktopTooltip("Unable to move the window to that desktop.")
     }
 }
 
@@ -221,22 +702,175 @@ ClearDesktopTooltip(*) {
     ToolTip()
 }
 
-PositionActiveWindow(direction) {
+HandleWindowDirection(direction) {
+    global ASCS_PendingWindowDirection
+
+    pending := ASCS_PendingWindowDirection
+    if (pending != "") {
+        SetTimer(ExecutePendingWindowDirection, 0)
+        ASCS_PendingWindowDirection := ""
+
+        if (IsHorizontalDirection(pending) != IsHorizontalDirection(direction)) {
+            horizontal := IsHorizontalDirection(pending) ? pending : direction
+            vertical := IsHorizontalDirection(pending) ? direction : pending
+            quadrant := (vertical = "up" ? "top-" : "bottom-") horizontal
+            PositionActiveWindow(quadrant)
+            return
+        }
+
+        PositionActiveWindow(pending)
+    }
+
+    ASCS_PendingWindowDirection := direction
+    SetTimer(ExecutePendingWindowDirection, -150)
+}
+
+ExecutePendingWindowDirection(*) {
+    global ASCS_PendingWindowDirection
+
+    direction := ASCS_PendingWindowDirection
+    ASCS_PendingWindowDirection := ""
+    if (direction != "")
+        PositionActiveWindow(direction)
+}
+
+IsHorizontalDirection(direction) {
+    return (direction = "left" || direction = "right")
+}
+
+HandleHorizontalWindowShortcut(direction) {
+    if GetKeyState("Shift", "P")
+        MoveActiveWindowToAdjacentMonitor(direction)
+    else
+        HandleWindowDirection(direction < 0 ? "left" : "right")
+}
+
+HandleDesktopShortcut(number, thisHotkey := "") {
+    if GetKeyState("Shift", "P")
+        MoveActiveWindowToDesktop(number)
+    else
+        SwitchVirtualDesktop(number)
+}
+
+GetActiveResizableWindow() {
+    global ASCS_App
+
     hwnd := WinExist("A")
     if !hwnd
-        return
+        return 0
+    if (hwnd = ASCS_App.Hwnd)
+        return 0
 
     try {
         windowTitle := "ahk_id " hwnd
         windowClass := WinGetClass(windowTitle)
         if (windowClass = "Progman" || windowClass = "WorkerW"
             || windowClass = "Shell_TrayWnd")
-            return
+            return 0
 
         style := WinGetStyle(windowTitle)
         if !(style & 0x40000)
-            return
+            return 0
 
+        return hwnd
+    } catch as err {
+        WriteLog("Unable to inspect active window: " err.Message)
+        return 0
+    }
+}
+
+GetWindowPlacementContext(hwnd) {
+    windowTitle := "ahk_id " hwnd
+    WinGetPos(&x, &y, &width, &height, windowTitle)
+    centerX := x + width / 2
+    centerY := y + height / 2
+    monitorIndex := 0
+
+    Loop MonitorGetCount() {
+        MonitorGet(
+            A_Index,
+            &monitorLeft,
+            &monitorTop,
+            &monitorRight,
+            &monitorBottom
+        )
+        if (centerX >= monitorLeft && centerX < monitorRight
+            && centerY >= monitorTop && centerY < monitorBottom) {
+            monitorIndex := A_Index
+            break
+        }
+    }
+
+    if !monitorIndex
+        throw Error("Unable to identify the window's monitor.")
+
+    MonitorGetWorkArea(
+        monitorIndex,
+        &workLeft,
+        &workTop,
+        &workRight,
+        &workBottom
+    )
+    frameBounds := Buffer(16, 0)
+    result := DllCall(
+        "Dwmapi.dll\DwmGetWindowAttribute",
+        "Ptr", hwnd,
+        "UInt", 9,
+        "Ptr", frameBounds,
+        "UInt", frameBounds.Size,
+        "Int"
+    )
+    if result
+        throw Error("DwmGetWindowAttribute failed with code " result ".")
+
+    frameLeft := NumGet(frameBounds, 0, "Int")
+    frameTop := NumGet(frameBounds, 4, "Int")
+    frameRight := NumGet(frameBounds, 8, "Int")
+    frameBottom := NumGet(frameBounds, 12, "Int")
+
+    return Map(
+        "title", windowTitle,
+        "x", x,
+        "y", y,
+        "width", width,
+        "height", height,
+        "monitor", monitorIndex,
+        "workLeft", workLeft,
+        "workTop", workTop,
+        "workRight", workRight,
+        "workBottom", workBottom,
+        "leftInset", Max(0, frameLeft - x),
+        "topInset", Max(0, frameTop - y),
+        "rightInset", Max(0, x + width - frameRight),
+        "bottomInset", Max(0, y + height - frameBottom)
+    )
+}
+
+MoveWindowIntoWorkArea(hwnd, x, y, width, height, workLeft, workTop, workRight, workBottom, context) {
+    width := Min(width, workRight - workLeft)
+    height := Min(height, workBottom - workTop)
+    x := Max(workLeft, Min(x, workRight - width))
+    y := Max(workTop, Min(y, workBottom - height))
+
+    WinMove(
+        x - context["leftInset"],
+        y - context["topInset"],
+        width + context["leftInset"] + context["rightInset"],
+        height + context["topInset"] + context["bottomInset"],
+        "ahk_id " hwnd
+    )
+}
+
+PositionActiveWindow(direction) {
+    global ASCS_SnapGap
+
+    hwnd := GetActiveResizableWindow()
+    if !hwnd
+        return
+
+    windowTitle := "ahk_id " hwnd
+
+    try {
         if (direction = "up") {
             WinMaximize(windowTitle)
             return
@@ -251,66 +885,65 @@ PositionActiveWindow(direction) {
         }
 
         WinRestore(windowTitle)
-        Sleep(50)
-        WinGetPos(&x, &y, &width, &height, windowTitle)
-        centerX := x + width / 2
-        centerY := y + height / 2
-        monitorIndex := 0
+        Sleep(30)
+        context := GetWindowPlacementContext(hwnd)
+        workLeft := context["workLeft"] + ASCS_SnapGap
+        workTop := context["workTop"] + ASCS_SnapGap
+        workRight := context["workRight"] - ASCS_SnapGap
+        workBottom := context["workBottom"] - ASCS_SnapGap
+        splitX := Floor((workLeft + workRight) / 2)
+        splitY := Floor((workTop + workBottom) / 2)
 
-        Loop MonitorGetCount() {
-            MonitorGet(
-                A_Index,
-                &monitorLeft,
-                &monitorTop,
-                &monitorRight,
-                &monitorBottom
-            )
-            if (centerX >= monitorLeft && centerX < monitorRight
-                && centerY >= monitorTop && centerY < monitorBottom) {
-                monitorIndex := A_Index
-                break
-            }
+        switch direction {
+            case "left":
+                targetLeft := workLeft
+                targetTop := workTop
+                targetRight := splitX - Floor(ASCS_SnapGap / 2)
+                targetBottom := workBottom
+            case "right":
+                targetLeft := splitX + Ceil(ASCS_SnapGap / 2)
+                targetTop := workTop
+                targetRight := workRight
+                targetBottom := workBottom
+            case "top":
+                targetLeft := workLeft
+                targetTop := workTop
+                targetRight := workRight
+                targetBottom := splitY - Floor(ASCS_SnapGap / 2)
+            case "bottom":
+                targetLeft := workLeft
+                targetTop := splitY + Ceil(ASCS_SnapGap / 2)
+                targetRight := workRight
+                targetBottom := workBottom
+            case "top-left":
+                targetLeft := workLeft
+                targetTop := workTop
+                targetRight := splitX - Floor(ASCS_SnapGap / 2)
+                targetBottom := splitY - Floor(ASCS_SnapGap / 2)
+            case "top-right":
+                targetLeft := splitX + Ceil(ASCS_SnapGap / 2)
+                targetTop := workTop
+                targetRight := workRight
+                targetBottom := splitY - Floor(ASCS_SnapGap / 2)
+            case "bottom-left":
+                targetLeft := workLeft
+                targetTop := splitY + Ceil(ASCS_SnapGap / 2)
+                targetRight := splitX - Floor(ASCS_SnapGap / 2)
+                targetBottom := workBottom
+            case "bottom-right":
+                targetLeft := splitX + Ceil(ASCS_SnapGap / 2)
+                targetTop := splitY + Ceil(ASCS_SnapGap / 2)
+                targetRight := workRight
+                targetBottom := workBottom
+            default:
+                throw Error("Unsupported snap direction.")
         }
 
-        if !monitorIndex
-            throw Error("Unable to identify the window's monitor.")
-
-        MonitorGetWorkArea(
-            monitorIndex,
-            &workLeft,
-            &workTop,
-            &workRight,
-            &workBottom
-        )
-        frameBounds := Buffer(16, 0)
-        result := DllCall(
-            "Dwmapi.dll\DwmGetWindowAttribute",
-            "Ptr", hwnd,
-            "UInt", 9,
-            "Ptr", frameBounds,
-            "UInt", frameBounds.Size,
-            "Int"
-        )
-        if result
-            throw Error("DwmGetWindowAttribute failed with code " result ".")
-
-        frameLeft := NumGet(frameBounds, 0, "Int")
-        frameTop := NumGet(frameBounds, 4, "Int")
-        frameRight := NumGet(frameBounds, 8, "Int")
-        frameBottom := NumGet(frameBounds, 12, "Int")
-        leftInset := Max(0, frameLeft - x)
-        topInset := Max(0, frameTop - y)
-        rightInset := Max(0, x + width - frameRight)
-        bottomInset := Max(0, y + height - frameBottom)
-
-        splitX := Floor((workLeft + workRight) / 2)
-        targetLeft := (direction = "left") ? workLeft : splitX
-        targetRight := (direction = "left") ? splitX : workRight
         WinMove(
-            targetLeft - leftInset,
-            workTop - topInset,
-            targetRight - targetLeft + leftInset + rightInset,
-            workBottom - workTop + topInset + bottomInset,
+            targetLeft - context["leftInset"],
+            targetTop - context["topInset"],
+            targetRight - targetLeft + context["leftInset"] + context["rightInset"],
+            targetBottom - targetTop + context["topInset"] + context["bottomInset"],
             windowTitle
         )
     } catch as err {
@@ -318,11 +951,123 @@ PositionActiveWindow(direction) {
     }
 }
 
+MoveActiveWindowToAdjacentMonitor(direction) {
+    global ASCS_PreserveWindowSize
+
+    hwnd := GetActiveResizableWindow()
+    if !hwnd
+        return
+
+    try {
+        windowTitle := "ahk_id " hwnd
+        if (WinGetMinMax(windowTitle) != 0)
+            WinRestore(windowTitle)
+        Sleep(30)
+        context := GetWindowPlacementContext(hwnd)
+        sourceX := (context["workLeft"] + context["workRight"]) / 2
+        sourceY := (context["workTop"] + context["workBottom"]) / 2
+        bestMonitor := 0
+        bestDistance := 1.0e20
+
+        Loop MonitorGetCount() {
+            if (A_Index = context["monitor"])
+                continue
+            MonitorGetWorkArea(
+                A_Index,
+                &left,
+                &top,
+                &right,
+                &bottom
+            )
+            targetX := (left + right) / 2
+            targetY := (top + bottom) / 2
+            horizontalDistance := targetX - sourceX
+            if ((direction > 0 && horizontalDistance <= 0)
+                || (direction < 0 && horizontalDistance >= 0))
+                continue
+
+            distance := Abs(horizontalDistance) + Abs(targetY - sourceY) * 1.5
+            if (distance < bestDistance) {
+                bestDistance := distance
+                bestMonitor := A_Index
+            }
+        }
+
+        if !bestMonitor {
+            ShowDesktopTooltip("No monitor in that direction.")
+            return
+        }
+
+        MonitorGetWorkArea(
+            bestMonitor,
+            &targetLeft,
+            &targetTop,
+            &targetRight,
+            &targetBottom
+        )
+
+        if ASCS_PreserveWindowSize {
+            relativeX := (context["x"] - context["workLeft"])
+                / Max(1, context["workRight"] - context["workLeft"])
+            relativeY := (context["y"] - context["workTop"])
+                / Max(1, context["workBottom"] - context["workTop"])
+            targetX := targetLeft + Round(relativeX
+                * (targetRight - targetLeft - context["width"]))
+            targetY := targetTop + Round(relativeY
+                * (targetBottom - targetTop - context["height"]))
+            MoveWindowIntoWorkArea(
+                hwnd,
+                targetX,
+                targetY,
+                context["width"],
+                context["height"],
+                targetLeft,
+                targetTop,
+                targetRight,
+                targetBottom,
+                context
+            )
+        } else {
+            WinMove(
+                targetLeft - context["leftInset"],
+                targetTop - context["topInset"],
+                targetRight - targetLeft + context["leftInset"] + context["rightInset"],
+                targetBottom - targetTop + context["topInset"] + context["bottomInset"],
+                windowTitle
+            )
+        }
+    } catch as err {
+        WriteLog("Monitor move failed: " err.Message)
+    }
+}
+
 ; ==========================================
 ; VIEW NAVIGATION
 ; ==========================================
 
-ShowView(view) {
+ShowCommandLauncher() {
+    global ASCS_PendingLauncher
+
+    ASCS_PendingLauncher := true
+    ShowView("home")
+    SetTimer(DispatchPendingLauncher, -100)
+}
+
+DispatchPendingLauncher(*) {
+    global ASCS_PendingLauncher
+    global ASCS_PageReady
+
+    if !ASCS_PendingLauncher
+        return
+    if ASCS_PageReady {
+        ASCS_PendingLauncher := false
+        SendToFrontend('{"type":"openLauncher"}')
+    } else {
+        SetTimer(DispatchPendingLauncher, -100)
+    }
+}
+
+ShowView(view, thisHotkey := "") {
     global ASCS_App
     global ASCS_PageReady
     global ASCS_PendingView
@@ -388,6 +1133,7 @@ HandleClose(*) {
 HandleWebMessage(sender, args) {
     global ASCS_PageReady
     global ASCS_PendingView
+    global ASCS_PendingLauncher
 
     try {
         message := args.TryGetWebMessageAsString()
@@ -428,6 +1174,11 @@ HandleWebMessage(sender, args) {
 
                 GetNotes()
                 PushDashboard()
+                SendSettings()
+                if ASCS_PendingLauncher {
+                    ASCS_PendingLauncher := false
+                    SendToFrontend('{"type":"openLauncher"}')
+                }
 
                 SetTimer(PushDashboard, 5000)
 
@@ -440,15 +1191,27 @@ HandleWebMessage(sender, args) {
             case "SaveNotes":
                 SaveNotes(content)
 
+            case "GetSettings":
+                if (content = "")
+                    SendSettings()
+                else
+                    WriteLog("Rejected GetSettings payload.")
+
+            case "SaveSettings":
+                SaveUserSettings(content)
+
             case "WindowAction":
                 HandleWindowAction(content)
 
             case "Launch":
-                if (content = "explorer" || content = "browser"
+                if (content = "everything")
+                    LaunchEverything()
+                else if (content = "explorer" || content = "browser"
                     || content = "terminal" || content = "calculator"
                     || content = "taskmanager"
                     || content = "settings" || content = "downloads"
-                    || content = "projects" || content = "snipping")
+                    || content = "projects" || content = "snipping"
+                    || content = "lock" || content = "mute")
                     LaunchCommand(content)
                 else
                     WriteLog("Rejected invalid launcher identifier.")
@@ -515,7 +1278,7 @@ SendToFrontend(json) {
 ; APPLICATION LAUNCHER
 ; ==========================================
 
-LaunchCommand(command) {
+LaunchCommand(command, thisHotkey := "") {
     userProfile := EnvGet("USERPROFILE")
 
     try {
@@ -546,6 +1309,12 @@ LaunchCommand(command) {
 
             case "snipping":
                 Send("#+s")
+
+            case "lock":
+                DllCall("LockWorkStation")
+
+            case "mute":
+                SoundSetMute(!SoundGetMute())
         }
 
     } catch as err {
@@ -676,7 +1445,7 @@ FindEverything() {
     return "Everything.exe"
 }
 
-LaunchEverything() {
+LaunchEverything(thisHotkey := "") {
     global ASCS_EverythingPath
 
     try {
@@ -705,6 +1474,7 @@ SendNotesError(message) {
 
 PushDashboard(*) {
     global ASCS_DashboardErrorShown
+    global ASCS_HardwareJson
 
     try {
         wmi := ComObjGet("winmgmts:\\.\root\cimv2")
@@ -742,6 +1512,9 @@ PushDashboard(*) {
         diskUsed := drives["cUsed"]
         diskTotal := drives["cTotal"]
 
+        if (ASCS_HardwareJson = "")
+            ASCS_HardwareJson := GetHardwareDetails(wmi)
+
         json := '{"type":"metrics","cpu":' cpuUsage
             . ',"ram":' ramUsage
             . ',"ramUsed":' Round(totalRAM - freeRAM, 1)
@@ -749,6 +1522,7 @@ PushDashboard(*) {
             . ',"disk":' diskUsage
             . ',"diskUsed":' Round(diskUsed, 1)
             . ',"diskTotal":' Round(diskTotal, 1)
+            . ',"hardware":' ASCS_HardwareJson
             . ',"drives":' drives["json"] '}'
 
         SendToFrontend(json)
@@ -765,6 +1539,307 @@ PushDashboard(*) {
 
             ASCS_DashboardErrorShown := true
         }
+    }
+}
+
+GetHardwareDetails(wmi) {
+    processors := QueryHardware(
+        wmi,
+        "SELECT Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed FROM Win32_Processor",
+        "processor"
+    )
+    systems := QueryHardware(
+        wmi,
+        "SELECT Manufacturer, Model FROM Win32_ComputerSystem",
+        "computer"
+    )
+    modules := QueryHardware(
+        wmi,
+        "SELECT Capacity, Speed, ConfiguredClockSpeed FROM Win32_PhysicalMemory",
+        "memory"
+    )
+    graphics := QueryHardware(
+        wmi,
+        "SELECT Name, AdapterRAM, DriverVersion FROM Win32_VideoController",
+        "graphics"
+    )
+    disks := QueryHardware(
+        wmi,
+        "SELECT Index, Model, Size, InterfaceType, MediaType, Status FROM Win32_DiskDrive",
+        "storage"
+    )
+    partitions := QueryHardware(
+        wmi,
+        "SELECT DiskIndex, Index, Size, Type, BootPartition FROM Win32_DiskPartition",
+        "partitions"
+    )
+    volumeLinks := QueryHardware(
+        wmi,
+        "SELECT Antecedent, Dependent FROM Win32_LogicalDiskToPartition",
+        "volume mapping"
+    )
+    logicalDisks := QueryHardware(
+        wmi,
+        "SELECT DeviceID, VolumeName, FileSystem, Size, FreeSpace, Status FROM Win32_LogicalDisk",
+        "logical volumes"
+    )
+    baseBoards := QueryHardware(
+        wmi,
+        "SELECT Manufacturer, Product FROM Win32_BaseBoard",
+        "motherboard"
+    )
+    biosRows := QueryHardware(
+        wmi,
+        "SELECT Manufacturer, SMBIOSBIOSVersion FROM Win32_BIOS",
+        "BIOS"
+    )
+    operatingSystems := QueryHardware(
+        wmi,
+        "SELECT Caption, BuildNumber FROM Win32_OperatingSystem",
+        "Windows"
+    )
+
+    cpu := "Unavailable"
+    cores := ""
+    if processors.Length {
+        cpu := HardwareField(processors[1], "Name")
+        if (cpu = "")
+            cpu := "Unavailable"
+        coreCount := HardwareField(processors[1], "NumberOfCores")
+        threadCount := HardwareField(processors[1], "NumberOfLogicalProcessors")
+        if (coreCount != "" && threadCount != "")
+            cores := coreCount " cores · " threadCount " threads"
+        clockSpeed := HardwareField(processors[1], "MaxClockSpeed")
+        if RegExMatch(clockSpeed, "^\d+$")
+            cores .= (cores != "" ? " · " : "") "Up to "
+                Round(Integer(clockSpeed) / 1000, 1) " GHz"
+    }
+
+    manufacturer := ""
+    model := ""
+    if systems.Length {
+        manufacturer := HardwareField(systems[1], "Manufacturer")
+        model := HardwareField(systems[1], "Model")
+    }
+
+    totalMemory := 0
+    memorySpeed := 0
+    moduleCount := 0
+    for module in modules {
+        try {
+            totalMemory += Integer(module.Capacity)
+            moduleCount++
+        } catch as err {
+            WriteLog("Physical memory detail could not be read: " err.Message)
+        }
+        speed := HardwareField(module, "ConfiguredClockSpeed")
+        if (speed = "")
+            speed := HardwareField(module, "Speed")
+        if RegExMatch(speed, "^\d+$")
+            memorySpeed := Max(memorySpeed, Integer(speed))
+    }
+    if !totalMemory {
+        computers := QueryHardware(
+            wmi,
+            "SELECT TotalPhysicalMemory FROM Win32_ComputerSystem",
+            "total memory"
+        )
+        if computers.Length {
+            try totalMemory := Integer(computers[1].TotalPhysicalMemory)
+            catch as err
+                WriteLog("Total memory detail could not be read: " err.Message)
+        }
+    }
+    memory := totalMemory
+        ? Round(totalMemory / 1073741824, 1) " GB"
+        : "Unavailable"
+    if (moduleCount && memory != "Unavailable")
+        memory .= " · " moduleCount " modules"
+    if (memorySpeed && memory != "Unavailable")
+        memory .= " · " memorySpeed " MHz"
+
+    gpuNames := []
+    gpuDetails := []
+    for controller in graphics {
+        name := HardwareField(controller, "Name")
+        if (name != "") {
+            gpuNames.Push(name)
+            adapterRAM := HardwareField(controller, "AdapterRAM")
+            driverVersion := HardwareField(controller, "DriverVersion")
+            details := []
+            if RegExMatch(adapterRAM, "^\d+$")
+                details.Push(Round(Integer(adapterRAM) / 1073741824, 1) " GB reported memory")
+            if (driverVersion != "")
+                details.Push("Driver " driverVersion)
+            if details.Length
+                gpuDetails.Push(JoinArray(details, " · "))
+        }
+    }
+    gpu := gpuNames.Length ? JoinArray(gpuNames, ", ") : "Unavailable"
+    gpuDetail := gpuDetails.Length ? JoinArray(gpuDetails, " | ") : ""
+
+    board := "Unavailable"
+    if baseBoards.Length {
+        boardManufacturer := HardwareField(baseBoards[1], "Manufacturer")
+        boardProduct := HardwareField(baseBoards[1], "Product")
+        board := Trim(boardManufacturer " " boardProduct)
+        if (board = "")
+            board := "Unavailable"
+    }
+
+    bios := ""
+    if biosRows.Length {
+        biosManufacturer := HardwareField(biosRows[1], "Manufacturer")
+        biosVersion := HardwareField(biosRows[1], "SMBIOSBIOSVersion")
+        bios := Trim(biosManufacturer (biosVersion != "" ? " · " biosVersion : ""))
+    }
+
+    partitionDetails := Map()
+    for partition in partitions {
+        diskIndex := HardwareField(partition, "DiskIndex")
+        partitionIndex := HardwareField(partition, "Index")
+        if (diskIndex = "" || partitionIndex = "")
+            continue
+        if !partitionDetails.Has(diskIndex)
+            partitionDetails[diskIndex] := []
+        bootStatus := HardwareField(partition, "BootPartition")
+        partitionDetails[diskIndex].Push(Map(
+            "size", HardwareNumber(partition, "Size"),
+            "type", HardwareField(partition, "Type"),
+            "boot", bootStatus = "True" || bootStatus = "1"
+        ))
+    }
+
+    logicalByLetter := Map()
+    for logicalDisk in logicalDisks {
+        letter := StrUpper(HardwareField(logicalDisk, "DeviceID"))
+        if (letter != "")
+            logicalByLetter[letter] := logicalDisk
+    }
+
+    volumesByDisk := Map()
+    volumeSeenByDisk := Map()
+    for link in volumeLinks {
+        antecedent := HardwareField(link, "Antecedent")
+        dependent := HardwareField(link, "Dependent")
+        if (
+            !RegExMatch(antecedent, "Disk #(\d+), Partition #(\d+)", &partitionMatch)
+            || !RegExMatch(dependent, 'i)DeviceID="([A-Z]:)"', &volumeMatch)
+        )
+            continue
+        diskIndex := partitionMatch[1]
+        volumeLetter := StrUpper(volumeMatch[1])
+        if !volumesByDisk.Has(diskIndex) {
+            volumesByDisk[diskIndex] := []
+            volumeSeenByDisk[diskIndex] := Map()
+        }
+        if !volumeSeenByDisk[diskIndex].Has(volumeLetter) {
+            volumeSeenByDisk[diskIndex][volumeLetter] := true
+            volumesByDisk[diskIndex].Push(volumeLetter)
+        }
+    }
+
+    storageJson := "["
+    storageCount := 0
+    for disk in disks {
+        storageCount++
+        index := HardwareField(disk, "Index")
+        if (index = "" && RegExMatch(HardwareField(disk, "DeviceID"), "i)PHYSICALDRIVE(\d+)", &deviceMatch))
+            index := deviceMatch[1]
+        model := HardwareField(disk, "Model")
+        interfaceType := HardwareField(disk, "InterfaceType")
+        mediaType := HardwareField(disk, "MediaType")
+        diskStatus := HardwareField(disk, "Status")
+
+        partitionJson := "["
+        partitionCount := partitionDetails.Has(index) ? partitionDetails[index].Length : 0
+        if (partitionCount) {
+            for partition in partitionDetails[index] {
+                partitionJson .= (A_Index > 1 ? "," : "")
+                    . '{"sizeBytes":' partition["size"]
+                    . ',"type":' JsonQuote(partition["type"])
+                    . ',"boot":' (partition["boot"] ? "true" : "false") '}'
+            }
+        }
+        partitionJson .= "]"
+
+        volumeJson := "["
+        volumeCount := volumesByDisk.Has(index) ? volumesByDisk[index].Length : 0
+        if (volumeCount) {
+            for volumeLetter in volumesByDisk[index] {
+                volume := logicalByLetter.Has(volumeLetter) ? logicalByLetter[volumeLetter] : ""
+                volumeName := volume != "" ? HardwareField(volume, "VolumeName") : ""
+                fileSystem := volume != "" ? HardwareField(volume, "FileSystem") : ""
+                volumeStatus := volume != "" ? HardwareField(volume, "Status") : ""
+                size := volume != "" ? HardwareNumber(volume, "Size") : "null"
+                free := volume != "" ? HardwareNumber(volume, "FreeSpace") : "null"
+                volumeJson .= (A_Index > 1 ? "," : "")
+                    . '{"letter":' JsonQuote(volumeLetter)
+                    . ',"label":' JsonQuote(volumeName)
+                    . ',"fileSystem":' JsonQuote(fileSystem)
+                    . ',"status":' JsonQuote(volumeStatus)
+                    . ',"sizeBytes":' size
+                    . ',"freeBytes":' free '}'
+            }
+        }
+        volumeJson .= "]"
+
+        storageJson .= (storageCount > 1 ? "," : "")
+            . '{"model":' JsonQuote(model)
+            . ',"sizeBytes":' HardwareNumber(disk, "Size")
+            . ',"interfaceType":' JsonQuote(interfaceType)
+            . ',"mediaType":' JsonQuote(mediaType)
+            . ',"status":' JsonQuote(diskStatus)
+            . ',"partitions":' partitionJson
+            . ',"volumes":' volumeJson '}'
+    }
+    storageJson .= "]"
+
+    windows := "Unavailable"
+    if operatingSystems.Length {
+        caption := HardwareField(operatingSystems[1], "Caption")
+        build := HardwareField(operatingSystems[1], "BuildNumber")
+        if (caption != "")
+            windows := caption (build != "" ? " · Build " build : "")
+    }
+
+    return (
+        '{"manufacturer":' JsonQuote(manufacturer)
+        . ',"model":' JsonQuote(model)
+        . ',"cpu":' JsonQuote(cpu)
+        . ',"cores":' JsonQuote(cores)
+        . ',"gpu":' JsonQuote(gpu)
+        . ',"gpuDetail":' JsonQuote(gpuDetail)
+        . ',"memory":' JsonQuote(memory)
+        . ',"storage":' storageJson
+        . ',"board":' JsonQuote(board)
+        . ',"bios":' JsonQuote(bios)
+        . ',"windows":' JsonQuote(windows) '}'
+    )
+}
+
+HardwareNumber(item, property) {
+    value := HardwareField(item, property)
+    return RegExMatch(value, "^\d+$") ? value : "null"
+}
+
+QueryHardware(wmi, query, category) {
+    rows := []
+    try {
+        for item in wmi.ExecQuery(query)
+            rows.Push(item)
+    } catch as err {
+        WriteLog("Hardware " category " query failed: " err.Message)
+    }
+    return rows
+}
+
+HardwareField(item, property) {
+    try {
+        return Trim(String(item.%property%))
+    } catch as err {
+        WriteLog("Hardware property " property " could not be read: " err.Message)
+        return ""
     }
 }
 

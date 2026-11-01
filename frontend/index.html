@@ -41,7 +41,11 @@
         </button>
         <button class="nav" type="button" data-view="commands" aria-controls="commands">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 9h2m3 0h2m3 0h.01M7 13h.01m3 0h.01m3 0h.01m3 0h.01M8 16h8"/></svg>
-          <span>F24 Commands</span>
+          <span>Super Commands</span>
+        </button>
+        <button class="nav" type="button" data-view="settings" aria-controls="settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="m19.4 15 .1.1a1.8 1.8 0 1 1-2.5 2.5l-.1-.1a1.8 1.8 0 0 0-3 .9v.2a1.8 1.8 0 1 1-3.6 0v-.2a1.8 1.8 0 0 0-3-.9l-.1.1a1.8 1.8 0 1 1-2.5-2.5l.1-.1a1.8 1.8 0 0 0-.9-3H3.7a1.8 1.8 0 1 1 0-3.6h.2a1.8 1.8 0 0 0 .9-3l-.1-.1a1.8 1.8 0 1 1 2.5-2.5l.1.1a1.8 1.8 0 0 0 3-.9v-.2a1.8 1.8 0 1 1 3.6 0v.2a1.8 1.8 0 0 0 3 .9l.1-.1a1.8 1.8 0 1 1 2.5 2.5l-.1.1a1.8 1.8 0 0 0 .9 3h.2a1.8 1.8 0 1 1 0 3.6h-.2a1.8 1.8 0 0 0-.9 3Z"/></svg>
+          <span>Preferences</span>
         </button>
       </nav>
 
@@ -49,9 +53,9 @@
         <span class="status-indicator" aria-hidden="true"></span>
         <span class="sidebar-status">
           <strong>ASCS READY</strong>
-          <small>Version 1.3.0</small>
+          <small>Version 1.4.0</small>
         </span>
-        <span class="key-hint" aria-label="Super key">F24</span>
+        <span class="key-hint" aria-label="Super key">Super</span>
       </div>
     </aside>
 
@@ -144,7 +148,7 @@
               <span class="section-overline">READY WHEN YOU ARE</span>
               <h2 id="actionsHeading">Quick actions</h2>
             </div>
-            <span class="section-shortcut"><kbd>Super</kbd> to return here</span>
+            <span class="section-shortcut"><kbd>Super + Space</kbd> to search commands</span>
           </div>
           <div class="actions">
             <button class="action-card" type="button" data-launch="terminal">
@@ -256,17 +260,43 @@
           <span class="refresh-indicator"><span class="status-indicator" aria-hidden="true"></span> UPDATES AUTOMATICALLY</span>
           <span id="metricsUpdated">Waiting for system metrics</span>
         </div>
+        <section class="hardware-section" aria-labelledby="hardwareHeading">
+          <div class="section-title-row">
+            <div>
+              <span class="section-overline">DEVICE PROFILE</span>
+              <h2 id="hardwareHeading">Hardware &amp; system</h2>
+            </div>
+          </div>
+          <div class="hardware-grid">
+            <article class="hardware-card"><span>PROCESSOR</span><strong id="hardwareCpu">Detecting hardware…</strong><small id="hardwareCores"></small></article>
+            <article class="hardware-card"><span>GRAPHICS</span><strong id="hardwareGpu">Detecting hardware…</strong><small id="hardwareGpuDetail"></small></article>
+            <article class="hardware-card"><span>MEMORY</span><strong id="hardwareMemory">Detecting hardware…</strong></article>
+            <article class="hardware-card"><span>PHYSICAL DRIVES</span><strong id="hardwareDisks">Detecting hardware…</strong></article>
+            <article class="hardware-card"><span>DEVICE</span><strong id="hardwareDevice">Detecting hardware…</strong></article>
+            <article class="hardware-card"><span>MOTHERBOARD</span><strong id="hardwareBoard">Detecting hardware…</strong><small id="hardwareBios"></small></article>
+            <article class="hardware-card"><span>WINDOWS</span><strong id="hardwareWindows">Detecting system…</strong></article>
+          </div>
+          <section class="physical-storage-section" aria-labelledby="physicalStorageTitle">
+            <div class="section-title-row">
+              <div><span class="section-overline">DISK LAYOUT</span><h3 id="physicalStorageTitle">Physical drives &amp; volumes</h3></div>
+              <span class="section-shortcut">Partitions and mounted letters</span>
+            </div>
+            <div id="physicalStorage" class="physical-storage-list" aria-live="polite">
+              <p class="physical-storage-empty">Detecting physical drives…</p>
+            </div>
+          </section>
+        </section>
       </section>
 
       <section class="view" id="commands" aria-labelledby="commandsTitle">
         <div class="page-heading commands-heading">
           <span class="eyebrow"><span class="eyebrow-line"></span> COMPLETE SHORTCUT REFERENCE</span>
-          <h1 id="commandsTitle">F24 Commands<span class="title-period">.</span></h1>
-          <p>Every Super key command currently defined in ASCS, in one place.</p>
+          <h1 id="commandsTitle">Super Commands<span class="title-period">.</span></h1>
+          <p>Every Super key command in ASCS, including window tools and workspace actions.</p>
         </div>
         <div class="command-intro">
-          <span class="command-intro-key" aria-hidden="true"><kbd>F24</kbd></span>
-          <p><strong>F24 is your Super key.</strong><span>Tap it to open the Command Center, or hold it while pressing a listed key.</span></p>
+          <span class="command-intro-key" aria-hidden="true"><kbd>Super</kbd></span>
+          <p><strong>Super is the dedicated command key.</strong><span>Tap it to open the Command Center, or hold it while pressing a listed key.</span></p>
         </div>
         <div class="command-groups">
           <section class="command-group" aria-labelledby="commandViewsTitle">
@@ -275,9 +305,10 @@
               <div><h2 id="commandViewsTitle">ASCS views</h2><p>Open a workspace inside ASCS</p></div>
             </div>
             <div class="shortcut-list">
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd></span><span class="shortcut-description"><strong>Command Center</strong><small>Opens the main ASCS interface when F24 is tapped by itself.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>Q</kbd></span><span class="shortcut-description"><strong>Quick Notes</strong><small>Opens the persistent notes editor.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>I</kbd></span><span class="shortcut-description"><strong>System Dashboard</strong><small>Opens the system metrics view.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd></span><span class="shortcut-description"><strong>Command Center</strong><small>Opens the main ASCS interface when Super is tapped by itself.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Space</kbd></span><span class="shortcut-description"><strong>Command launcher</strong><small>Search apps, ASCS views, and system actions.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="notes">Q</kbd></span><span class="shortcut-description"><strong>Quick Notes</strong><small>Opens the persistent notes editor (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="dashboard">I</kbd></span><span class="shortcut-description"><strong>System Dashboard</strong><small>Shows live metrics and physical system details (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
             </div>
           </section>
 
@@ -287,11 +318,11 @@
               <div><h2 id="commandAppsTitle">Applications</h2><p>Launch a Windows application</p></div>
             </div>
             <div class="shortcut-list">
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>F</kbd></span><span class="shortcut-description"><strong>Everything</strong><small>Opens Everything, ready to search as you type.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>T</kbd></span><span class="shortcut-description"><strong>Windows Terminal</strong><small>Opens Windows Terminal.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>E</kbd></span><span class="shortcut-description"><strong>File Explorer</strong><small>Opens File Explorer.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>C</kbd></span><span class="shortcut-description"><strong>Calculator</strong><small>Opens Calculator.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>H</kbd></span><span class="shortcut-description"><strong>Task Manager</strong><small>Opens Task Manager.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="everything">F</kbd></span><span class="shortcut-description"><strong>Everything</strong><small>Opens Everything, ready to search as you type (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="terminal">T</kbd></span><span class="shortcut-description"><strong>Windows Terminal</strong><small>Opens Windows Terminal (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="explorer">E</kbd></span><span class="shortcut-description"><strong>File Explorer</strong><small>Opens File Explorer (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="calculator">C</kbd></span><span class="shortcut-description"><strong>Calculator</strong><small>Opens Calculator (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="taskmanager">H</kbd></span><span class="shortcut-description"><strong>Task Manager</strong><small>Opens Task Manager (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
             </div>
           </section>
 
@@ -301,7 +332,8 @@
               <div><h2 id="commandDesktopTitle">Virtual desktops</h2><p>Switch to a numbered Windows virtual desktop</p></div>
             </div>
             <div class="shortcut-list">
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>1</kbd>–<kbd>9</kbd></span><span class="shortcut-description"><strong>Desktop 1–9</strong><small>Focuses the numbered virtual desktop (top row or numpad).</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>1</kbd>–<kbd>9</kbd></span><span class="shortcut-description"><strong>Desktop 1–9</strong><small>Focuses the numbered virtual desktop (top row or numpad).</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>1</kbd>–<kbd>9</kbd></span><span class="shortcut-description"><strong>Move active window to desktop</strong><small>Moves the focused resizable window and switches there; nonexistent desktops are ignored.</small></span><span class="shortcut-status">ACTIVE</span></article>
             </div>
           </section>
 
@@ -311,9 +343,10 @@
               <div><h2 id="commandWindowTitle">Window positioning</h2><p>Arrange the active resizable window</p></div>
             </div>
             <div class="shortcut-list">
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>←</kbd>/<kbd>→</kbd></span><span class="shortcut-description"><strong>Snap left / right</strong><small>Places the active window in half of its monitor work area.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>↑</kbd></span><span class="shortcut-description"><strong>Maximize window</strong><small>Maximizes the active resizable window.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>↓</kbd></span><span class="shortcut-description"><strong>Restore / minimize</strong><small>Restores a maximized window; otherwise minimizes it.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>←</kbd>/<kbd>→</kbd></span><span class="shortcut-description"><strong>Snap left / right</strong><small>Places the active window in half of its monitor work area.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>↑</kbd>/<kbd>↓</kbd></span><span class="shortcut-description"><strong>Maximize / restore / minimize</strong><small>Up maximizes; down restores a maximized window or minimizes it.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>←</kbd>, then <kbd>↑</kbd></span><span class="shortcut-description"><strong>Snap to a quadrant</strong><small>Press a horizontal arrow, then an up/down arrow within 150 ms. Any direction pair selects its corresponding quadrant.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>←</kbd>/<kbd>→</kbd></span><span class="shortcut-description"><strong>Move to adjacent monitor</strong><small>Moves the active window left/right; Preferences controls whether its size is preserved.</small></span><span class="shortcut-status">ACTIVE</span></article>
             </div>
           </section>
 
@@ -323,9 +356,9 @@
               <div><h2 id="commandSystemTitle">System controls</h2><p>Control Windows features</p></div>
             </div>
             <div class="shortcut-list">
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>L</kbd></span><span class="shortcut-description"><strong>Lock workstation</strong><small>Locks the current Windows session.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>M</kbd></span><span class="shortcut-description"><strong>Toggle audio mute</strong><small>Mutes or unmutes system audio.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>V</kbd></span><span class="shortcut-description"><strong>Clipboard History</strong><small>Opens the Windows clipboard history with Win+V.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>L</kbd></span><span class="shortcut-description"><strong>Lock workstation</strong><small>Locks the current Windows session.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>M</kbd></span><span class="shortcut-description"><strong>Toggle audio mute</strong><small>Mutes or unmutes system audio.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>V</kbd></span><span class="shortcut-description"><strong>Clipboard History</strong><small>Opens the Windows clipboard history with Win+V.</small></span><span class="shortcut-status">ACTIVE</span></article>
             </div>
           </section>
 
@@ -335,24 +368,66 @@
               <div><h2 id="commandTextTitle">Text utilities</h2><p>Type date and time at the cursor</p></div>
             </div>
             <div class="shortcut-list">
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>J</kbd></span><span class="shortcut-description"><strong>Insert timestamp</strong><small>Types the current date and time: yyyy-MM-dd HH:mm:ss.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>Y</kbd></span><span class="shortcut-description"><strong>Insert date</strong><small>Types today's date: yyyy-MM-dd.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>J</kbd></span><span class="shortcut-description"><strong>Insert timestamp</strong><small>Types the current date and time: yyyy-MM-dd HH:mm:ss.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Y</kbd></span><span class="shortcut-description"><strong>Insert date</strong><small>Types today's date: yyyy-MM-dd.</small></span><span class="shortcut-status">ACTIVE</span></article>
             </div>
           </section>
 
           <section class="command-group command-group-wide" aria-labelledby="commandWorkspaceTitle">
             <div class="command-group-heading">
               <span class="command-group-index">07</span>
-              <div><h2 id="commandWorkspaceTitle">Workspace and capture</h2><p>Workspace controls are placeholders in the current backend</p></div>
+              <div><h2 id="commandWorkspaceTitle">Workspace and capture</h2><p>Save and restore your visible app layout</p></div>
             </div>
             <div class="shortcut-list">
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>S</kbd></span><span class="shortcut-description"><strong>Workspace save request</strong><small>Currently logs a request; workspace saving is not implemented.</small></span><span class="shortcut-status status-placeholder">PLACEHOLDER</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>S</kbd></span><span class="shortcut-description"><strong>Snipping Tool</strong><small>Opens the Windows screen-snipping overlay.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>R</kbd></span><span class="shortcut-description"><strong>Workspace restore request</strong><small>Currently logs a request; workspace restoration is not implemented.</small></span><span class="shortcut-status status-placeholder">PLACEHOLDER</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>S</kbd></span><span class="shortcut-description"><strong>Save workspace</strong><small>Stores the visible app layout locally. Hold Shift with S for Snipping Tool.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>S</kbd></span><span class="shortcut-description"><strong>Snipping Tool</strong><small>Opens the Windows screen-snipping overlay.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>R</kbd></span><span class="shortcut-description"><strong>Restore workspace</strong><small>Relaunches missing apps and restores saved window positions.</small></span><span class="shortcut-status">ACTIVE</span></article>
             </div>
           </section>
+          <p class="settings-note">Default letter assignments for apps and views can be changed in Preferences. S, R, L, M, V, J, and Y are reserved for fixed commands.</p>
         </div>
       </section>
+
+      <section class="view" id="settings" aria-labelledby="settingsTitle">
+        <div class="page-heading">
+          <span class="eyebrow"><span class="eyebrow-line"></span> PERSONALIZE ASCS</span>
+          <h1 id="settingsTitle">Preferences<span class="title-period">.</span></h1>
+          <p>Make ASCS fit your displays, shortcuts, and daily workflow.</p>
+        </div>
+        <form id="settingsForm" class="settings-grid">
+          <section class="settings-card" aria-labelledby="driveSettingsTitle">
+            <div class="settings-heading"><h2 id="driveSettingsTitle">System overview</h2><p>Choose the drive letters shown in storage metrics.</p></div>
+            <label class="settings-field" for="driveLetters"><span>Monitored drives</span><input id="driveLetters" name="drives" type="text" placeholder="C:, J:" autocomplete="off"><small>Comma-separated letters, such as C:, J:. Up to 12 drives.</small></label>
+            <label class="settings-field" for="snapGap"><span>Snap gap <output id="snapGapValue">0 px</output></span><input id="snapGap" name="snapGap" type="range" min="0" max="48" step="2" value="0"><small>Space around snapped windows and between tiles.</small></label>
+            <label class="settings-toggle" for="preserveWindowSize"><input id="preserveWindowSize" name="preserveSize" type="checkbox" checked><span><strong>Preserve size when moving monitors</strong><small>Keep the window's size and relative position on its new display.</small></span></label>
+          </section>
+          <section class="settings-card" aria-labelledby="shortcutSettingsTitle">
+            <div class="settings-heading"><h2 id="shortcutSettingsTitle">Super-key shortcuts</h2><p>Choose unique letters for these app and view commands. Changes apply immediately.</p></div>
+            <div class="shortcut-settings">
+              <label for="hotkeyNotes"><span>Quick Notes</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyNotes" data-hotkey="notes" type="text" maxlength="1" autocomplete="off" aria-label="Quick Notes shortcut"></span></label>
+              <label for="hotkeyEverything"><span>Everything</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyEverything" data-hotkey="everything" type="text" maxlength="1" autocomplete="off" aria-label="Everything shortcut"></span></label>
+              <label for="hotkeyDashboard"><span>System Dashboard</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyDashboard" data-hotkey="dashboard" type="text" maxlength="1" autocomplete="off" aria-label="System Dashboard shortcut"></span></label>
+              <label for="hotkeyTerminal"><span>Windows Terminal</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyTerminal" data-hotkey="terminal" type="text" maxlength="1" autocomplete="off" aria-label="Windows Terminal shortcut"></span></label>
+              <label for="hotkeyExplorer"><span>File Explorer</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyExplorer" data-hotkey="explorer" type="text" maxlength="1" autocomplete="off" aria-label="File Explorer shortcut"></span></label>
+              <label for="hotkeyCalculator"><span>Calculator</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyCalculator" data-hotkey="calculator" type="text" maxlength="1" autocomplete="off" aria-label="Calculator shortcut"></span></label>
+              <label for="hotkeyTaskManager"><span>Task Manager</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyTaskManager" data-hotkey="taskmanager" type="text" maxlength="1" autocomplete="off" aria-label="Task Manager shortcut"></span></label>
+            </div>
+            <p class="settings-note">Reserved keys: S, R, L, M, V, J, and Y. Super + Space opens the command launcher; number and arrow shortcuts remain fixed.</p>
+          </section>
+          <div class="settings-actions"><span id="settingsStatus" role="status">Settings are stored locally on this PC.</span><button class="primary" type="submit">Save preferences</button></div>
+        </form>
+      </section>
+
+      <div class="launcher-backdrop" id="launcher" hidden>
+        <section class="launcher-dialog" role="dialog" aria-modal="true" aria-labelledby="launcherTitle">
+          <div class="launcher-heading"><span class="eyebrow">COMMAND PALETTE</span><button class="secondary" id="closeLauncher" type="button" aria-label="Close command launcher">Esc</button></div>
+          <h2 id="launcherTitle">What would you like to do?</h2>
+          <label class="sr-only" for="launcherSearch">Search commands</label>
+          <input id="launcherSearch" type="search" placeholder="Search apps, views, and actions…" autocomplete="off">
+          <div id="launcherResults" class="launcher-results" role="listbox" aria-label="Available commands"></div>
+          <p class="launcher-hint"><kbd>↑</kbd><kbd>↓</kbd> to navigate <kbd>Enter</kbd> to run <kbd>Esc</kbd> to close</p>
+        </section>
+      </div>
 
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
       <footer class="app-footer"><span>AEOLIONWARE</span><i>·</i> ASCS <i>·</i> One Keystroke Away.</footer>
