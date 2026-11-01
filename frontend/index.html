@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111218">
+  <title>ASCS | Aeolionware</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Application navigation">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none">
+            <path d="M16 4 28 26H4L16 4Z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
+            <path d="m16 12 7 13H9l7-13Z" fill="currentColor" opacity=".28"/>
+            <path d="M11.5 21h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="brand-copy">
+          <strong>AEOLIONWARE</strong>
+          <span>SUPER COMMAND SYSTEM</span>
+        </span>
+      </div>
+
+      <div class="nav-label">WORKSPACE</div>
+      <nav class="primary-nav" aria-label="Workspace">
+        <button class="nav active" type="button" data-view="home" aria-controls="home" aria-current="page">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg>
+          <span>Command Center</span>
+        </button>
+        <button class="nav" type="button" data-view="notes" aria-controls="notes">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.75h7l4.25 4.5v12H7a2 2 0 0 1-2-2v-12a2.5 2.5 0 0 1 2-2.5Z"/><path d="M14 4v5h4M8.5 13h7M8.5 16.5h7"/></svg>
+          <span>Quick Notes</span>
+        </button>
+        <button class="nav" type="button" data-view="search" aria-controls="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m15.5 15.5 4.25 4.25"/></svg>
+          <span>Everything Search</span>
+        </button>
+        <button class="nav" type="button" data-view="dashboard" aria-controls="dashboard">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5V12m5.3 7.5V5m5.4 14.5v-10m5.3 10V8"/></svg>
+          <span>System Dashboard</span>
+        </button>
+        <button class="nav" type="button" data-view="commands" aria-controls="commands">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 9h2m3 0h2m3 0h.01M7 13h.01m3 0h.01m3 0h.01m3 0h.01M8 16h8"/></svg>
+          <span>F24 Commands</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <span class="status-indicator" aria-hidden="true"></span>
+        <span class="sidebar-status">
+          <strong>ASCS READY</strong>
+          <small>Version 1.2.1</small>
+        </span>
+        <span class="key-hint" aria-label="Super key">F24</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="breadcrumb-wrap">
+          <span class="topbar-kicker">AEOLIONWARE</span>
+          <span class="breadcrumb-divider" aria-hidden="true">/</span>
+          <span id="breadcrumb">COMMAND CENTER</span>
+        </div>
+        <div class="top-status"><span class="status-indicator" aria-hidden="true"></span> SYSTEM READY</div>
+      </header>
+
+      <section class="view active" id="home" aria-labelledby="homeTitle">
+        <div class="hero">
+          <div class="hero-copy">
+            <span class="eyebrow"><span class="eyebrow-line"></span> YOUR DESKTOP, IN FLOW</span>
+            <h1 id="homeTitle">Command Center<span class="title-period">.</span></h1>
+            <p class="hero-tagline">AEOLIONWARE, at your command.</p>
+            <p class="hero-description">A quieter, quicker way to work with your Windows environment.</p>
+          </div>
+          <div class="hero-emblem" aria-hidden="true">
+            <span class="emblem-ring emblem-ring-outer"></span>
+            <span class="emblem-ring emblem-ring-inner"></span>
+            <svg viewBox="0 0 80 80" fill="none">
+              <path d="M40 11 67 62H13L40 11Z" stroke="currentColor" stroke-width="2"/>
+              <path d="m40 29 17 31H23l17-31Z" fill="currentColor" opacity=".16"/>
+              <path d="M32 51h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span class="emblem-glow"></span>
+          </div>
+        </div>
+
+        <section class="content-section" aria-labelledby="overviewHeading">
+          <div class="section-title-row">
+            <div>
+              <span class="section-overline">AT A GLANCE</span>
+              <h2 id="overviewHeading">System overview</h2>
+            </div>
+            <span class="live-label"><span class="status-indicator" aria-hidden="true"></span> LIVE METRICS</span>
+          </div>
+          <div class="metrics">
+            <article class="metric-card">
+              <div class="metric-topline">
+                <span class="metric-icon processor-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2.75v3.5m6-3.5v3.5M9 18v3.25m6-3.25v3.25M2.75 9h3.5m-3.5 6h3.5M18 9h3.25M18 15h3.25M9.5 9.5h5v5h-5z"/></svg>
+                </span>
+                <span class="metric-label">PROCESSOR</span>
+                <span class="metric-state">CPU</span>
+              </div>
+              <strong class="metric-value" id="homeCpu">--%</strong>
+              <div class="metric-track" aria-hidden="true"><span id="homeCpuBar"></span></div>
+              <small>Current utilization</small>
+            </article>
+            <article class="metric-card">
+              <div class="metric-topline">
+                <span class="metric-icon memory-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><rect x="3.5" y="7" width="17" height="10" rx="2"/><path d="M7 10v4m4-4v4m4-4v4M7 4.5V7m5-2.5V7m5-2.5V7M7 17v2.5m5-2.5v2.5m5-2.5v2.5"/></svg>
+                </span>
+                <span class="metric-label">MEMORY</span>
+                <span class="metric-state">RAM</span>
+              </div>
+              <strong class="metric-value" id="homeRam">--%</strong>
+              <div class="metric-track" aria-hidden="true"><span id="homeRamBar"></span></div>
+              <small id="homeRamDetail">Waiting for metrics</small>
+            </article>
+            <article class="metric-card">
+              <div class="metric-topline">
+                <span class="metric-icon storage-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><rect x="4" y="4.5" width="16" height="15" rx="3"/><path d="M4.5 11h15M8 15.5h.01M11 15.5h.01"/></svg>
+                </span>
+                <span class="metric-label">STORAGE</span>
+                <span class="metric-state">C:</span>
+              </div>
+              <strong class="metric-value" id="homeDisk">--%</strong>
+              <div class="metric-track" aria-hidden="true"><span id="homeDiskBar"></span></div>
+              <small id="homeDiskDetail">C: drive utilization</small>
+            </article>
+          </div>
+        </section>
+
+        <section class="content-section quick-actions-section" aria-labelledby="actionsHeading">
+          <div class="section-title-row">
+            <div>
+              <span class="section-overline">READY WHEN YOU ARE</span>
+              <h2 id="actionsHeading">Quick actions</h2>
+            </div>
+            <span class="section-shortcut"><kbd>Super</kbd> to return here</span>
+          </div>
+          <div class="actions">
+            <button class="action-card" type="button" data-launch="powershell">
+              <span class="action-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 7 5 5-5 5m7 0h7"/></svg>
+              </span><span class="action-copy"><strong>PowerShell</strong><small>Command line</small></span><span class="action-arrow" aria-hidden="true">↗</span>
+            </button>
+            <button class="action-card" type="button" data-launch="explorer">
+              <span class="action-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5a2 2 0 0 1 2-2h5l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-10Z"/><path d="M3.75 10h16.5"/></svg>
+              </span><span class="action-copy"><strong>File Explorer</strong><small>Browse your files</small></span><span class="action-arrow" aria-hidden="true">↗</span>
+            </button>
+            <button class="action-card" type="button" data-view="search">
+              <span class="action-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 4.5 4.5"/></svg>
+              </span><span class="action-copy"><strong>File Search</strong><small>Find with Everything</small></span><span class="action-arrow" aria-hidden="true">→</span>
+            </button>
+            <button class="action-card" type="button" data-view="notes">
+              <span class="action-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3.75h7l4 4v12.5h-11a2 2 0 0 1-2-2v-12a2.5 2.5 0 0 1 2-2.5Z"/><path d="M13.5 4v4h4m-9 4.5h6m-6 3.5h6"/></svg>
+              </span><span class="action-copy"><strong>Quick Notes</strong><small>Capture a thought</small></span><span class="action-arrow" aria-hidden="true">→</span>
+            </button>
+            <button class="action-card" type="button" data-launch="taskmanager">
+              <span class="action-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5m0 14h16"/><path d="m7 15 3-4 3 2 5-6"/></svg>
+              </span><span class="action-copy"><strong>Task Manager</strong><small>View running apps</small></span><span class="action-arrow" aria-hidden="true">↗</span>
+            </button>
+            <button class="action-card" type="button" data-launch="calculator">
+              <span class="action-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8.5 7h7m-7 5h.01m3.5 0h.01m3.5 0h.01m-7 4h.01m3.5 0h.01m3.5 0h.01"/></svg>
+              </span><span class="action-copy"><strong>Calculator</strong><small>Quick calculations</small></span><span class="action-arrow" aria-hidden="true">↗</span>
+            </button>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="notes" aria-labelledby="notesTitle">
+        <div class="page-heading">
+          <span class="eyebrow"><span class="eyebrow-line"></span> PRODUCTIVITY</span>
+          <h1 id="notesTitle">Quick Notes<span class="title-period">.</span></h1>
+          <p>A calm space to collect the thoughts worth keeping.</p>
+        </div>
+        <div class="editor-card">
+          <div class="editor-toolbar">
+            <div class="editor-heading">
+              <span class="editor-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M6.5 3.75h7l4 4v12.5h-11a2 2 0 0 1-2-2v-12a2.5 2.5 0 0 1 2-2.5Z"/><path d="M13.5 4v4h4m-9 4.5h6m-6 3.5h6"/></svg>
+              </span>
+              <span><strong>PERSONAL NOTES</strong><small>Saved privately on this device</small></span>
+            </div>
+            <span class="save-status" id="saveStatus" role="status" aria-live="polite"><span class="save-status-dot"></span> ALL CHANGES SAVED</span>
+          </div>
+          <textarea id="noteText" aria-label="Personal notes" placeholder="Begin with a thought, a reminder, or an idea..." spellcheck="true"></textarea>
+          <div class="editor-footer"><span>Changes save automatically</span><span class="editor-footer-mark">AEOLIONWARE <i>·</i> NOTES</span></div>
+        </div>
+      </section>
+
+      <section class="view" id="search" aria-labelledby="searchTitle">
+        <div class="page-heading">
+          <span class="eyebrow"><span class="eyebrow-line"></span> FILE MANAGEMENT</span>
+          <h1 id="searchTitle">Everything Search<span class="title-period">.</span></h1>
+          <p>Your indexed files, a query away.</p>
+        </div>
+        <div class="search-card">
+          <label class="search-label" for="searchQuery">SEARCH YOUR FILES</label>
+          <div class="search-input">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 4.5 4.5"/></svg>
+            <input id="searchQuery" type="search" placeholder="Search files and folders..." autocomplete="off" spellcheck="false">
+            <kbd>ENTER</kbd>
+          </div>
+          <div class="search-actions">
+            <p class="hint"><span class="hint-dot"></span> Results open in Voidtools Everything.</p>
+            <button class="primary" type="button" id="searchButton">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 4.5 4.5"/></svg>
+              <span>Search files</span>
+            </button>
+          </div>
+        </div>
+        <div class="search-note">
+          <span class="search-note-icon" aria-hidden="true">i</span>
+          <p>Search coverage depends on the drives and folders indexed by Everything.</p>
+        </div>
+      </section>
+
+      <section class="view" id="dashboard" aria-labelledby="dashboardTitle">
+        <div class="page-heading">
+          <span class="eyebrow"><span class="eyebrow-line"></span> PERFORMANCE</span>
+          <h1 id="dashboardTitle">System Dashboard<span class="title-period">.</span></h1>
+          <p>A measured look at the resources your system is using.</p>
+        </div>
+        <div class="dashboard-grid">
+          <article class="metric-card dashboard-metric">
+            <div class="metric-topline">
+              <span class="metric-icon processor-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2.75v3.5m6-3.5v3.5M9 18v3.25m6-3.25v3.25M2.75 9h3.5m-3.5 6h3.5M18 9h3.25M18 15h3.25M9.5 9.5h5v5h-5z"/></svg>
+              </span>
+              <span class="metric-label">PROCESSOR</span>
+              <span class="metric-state">CPU</span>
+            </div>
+            <div class="dashboard-value"><strong class="metric-value" id="cpu">--%</strong><span>utilization</span></div>
+            <div class="metric-track" role="progressbar" aria-label="CPU utilization" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="cpuBar"></span></div>
+            <small class="metric-caption">Current processor load</small>
+          </article>
+          <article class="metric-card dashboard-metric">
+            <div class="metric-topline">
+              <span class="metric-icon memory-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><rect x="3.5" y="7" width="17" height="10" rx="2"/><path d="M7 10v4m4-4v4m4-4v4M7 4.5V7m5-2.5V7m5-2.5V7M7 17v2.5m5-2.5v2.5m5-2.5v2.5"/></svg>
+              </span>
+              <span class="metric-label">MEMORY</span>
+              <span class="metric-state">RAM</span>
+            </div>
+            <div class="dashboard-value"><strong class="metric-value" id="ram">--%</strong><span>utilization</span></div>
+            <div class="metric-track" role="progressbar" aria-label="RAM utilization" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="ramBar"></span></div>
+            <small class="metric-caption" id="ramDetail">Waiting for metrics</small>
+          </article>
+          <article class="metric-card dashboard-metric">
+            <div class="metric-topline">
+              <span class="metric-icon storage-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><rect x="4" y="4.5" width="16" height="15" rx="3"/><path d="M4.5 11h15M8 15.5h.01M11 15.5h.01"/></svg>
+              </span>
+              <span class="metric-label">STORAGE</span>
+              <span class="metric-state">C:</span>
+            </div>
+            <div class="dashboard-value"><strong class="metric-value" id="disk">--%</strong><span>in use</span></div>
+            <div class="metric-track" role="progressbar" aria-label="C drive storage utilization" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="diskBar"></span></div>
+            <small class="metric-caption" id="diskDetail">C: drive</small>
+          </article>
+        </div>
+        <div class="dashboard-footer">
+          <span class="refresh-indicator"><span class="status-indicator" aria-hidden="true"></span> UPDATES AUTOMATICALLY</span>
+          <span id="metricsUpdated">Waiting for system metrics</span>
+        </div>
+      </section>
+
+      <section class="view" id="commands" aria-labelledby="commandsTitle">
+        <div class="page-heading commands-heading">
+          <span class="eyebrow"><span class="eyebrow-line"></span> COMPLETE SHORTCUT REFERENCE</span>
+          <h1 id="commandsTitle">F24 Commands<span class="title-period">.</span></h1>
+          <p>Every Super key command currently defined in ASCS, in one place.</p>
+        </div>
+        <div class="command-intro">
+          <span class="command-intro-key" aria-hidden="true"><kbd>F24</kbd></span>
+          <p><strong>F24 is your Super key.</strong><span>Tap it to open the Command Center, or hold it while pressing a listed key.</span></p>
+        </div>
+        <div class="command-groups">
+          <section class="command-group" aria-labelledby="commandViewsTitle">
+            <div class="command-group-heading">
+              <span class="command-group-index">01</span>
+              <div><h2 id="commandViewsTitle">ASCS views</h2><p>Open a workspace inside ASCS</p></div>
+            </div>
+            <div class="shortcut-list">
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd></span><span class="shortcut-description"><strong>Command Center</strong><small>Opens the main ASCS interface when F24 is tapped by itself.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>Q</kbd></span><span class="shortcut-description"><strong>Quick Notes</strong><small>Opens the persistent notes editor.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>F</kbd></span><span class="shortcut-description"><strong>Everything Search</strong><small>Opens the ASCS search interface.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>I</kbd></span><span class="shortcut-description"><strong>System Dashboard</strong><small>Opens the system metrics view.</small></span><span class="shortcut-status">ACTIVE</span></article>
+            </div>
+          </section>
+
+          <section class="command-group" aria-labelledby="commandAppsTitle">
+            <div class="command-group-heading">
+              <span class="command-group-index">02</span>
+              <div><h2 id="commandAppsTitle">Applications</h2><p>Launch a Windows application</p></div>
+            </div>
+            <div class="shortcut-list">
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>P</kbd></span><span class="shortcut-description"><strong>PowerShell</strong><small>Opens PowerShell.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>T</kbd></span><span class="shortcut-description"><strong>Windows Terminal</strong><small>Opens Windows Terminal.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>E</kbd></span><span class="shortcut-description"><strong>File Explorer</strong><small>Opens File Explorer.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>C</kbd></span><span class="shortcut-description"><strong>Calculator</strong><small>Opens Calculator.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>H</kbd></span><span class="shortcut-description"><strong>Task Manager</strong><small>Opens Task Manager.</small></span><span class="shortcut-status">ACTIVE</span></article>
+            </div>
+          </section>
+
+          <section class="command-group" aria-labelledby="commandSystemTitle">
+            <div class="command-group-heading">
+              <span class="command-group-index">03</span>
+              <div><h2 id="commandSystemTitle">System controls</h2><p>Control Windows features</p></div>
+            </div>
+            <div class="shortcut-list">
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>L</kbd></span><span class="shortcut-description"><strong>Lock workstation</strong><small>Locks the current Windows session.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>M</kbd></span><span class="shortcut-description"><strong>Toggle audio mute</strong><small>Mutes or unmutes system audio.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>V</kbd></span><span class="shortcut-description"><strong>Clipboard History</strong><small>Opens the Windows clipboard history with Win+V.</small></span><span class="shortcut-status">ACTIVE</span></article>
+            </div>
+          </section>
+
+          <section class="command-group" aria-labelledby="commandTextTitle">
+            <div class="command-group-heading">
+              <span class="command-group-index">04</span>
+              <div><h2 id="commandTextTitle">Text utilities</h2><p>Type date and time at the cursor</p></div>
+            </div>
+            <div class="shortcut-list">
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>J</kbd></span><span class="shortcut-description"><strong>Insert timestamp</strong><small>Types the current date and time: yyyy-MM-dd HH:mm:ss.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>Y</kbd></span><span class="shortcut-description"><strong>Insert date</strong><small>Types today's date: yyyy-MM-dd.</small></span><span class="shortcut-status">ACTIVE</span></article>
+            </div>
+          </section>
+
+          <section class="command-group command-group-wide" aria-labelledby="commandWorkspaceTitle">
+            <div class="command-group-heading">
+              <span class="command-group-index">05</span>
+              <div><h2 id="commandWorkspaceTitle">Workspace and capture</h2><p>Workspace controls are placeholders in the current backend</p></div>
+            </div>
+            <div class="shortcut-list">
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>S</kbd></span><span class="shortcut-description"><strong>Workspace save request</strong><small>Currently logs a request; workspace saving is not implemented.</small></span><span class="shortcut-status status-placeholder">PLACEHOLDER</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>S</kbd></span><span class="shortcut-description"><strong>Snipping Tool</strong><small>Opens the Windows screen-snipping overlay.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>F24</kbd><i>+</i><kbd>R</kbd></span><span class="shortcut-description"><strong>Workspace restore request</strong><small>Currently logs a request; workspace restoration is not implemented.</small></span><span class="shortcut-status status-placeholder">PLACEHOLDER</span></article>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+      <footer class="app-footer"><span>AEOLIONWARE</span><i>·</i> ASCS <i>·</i> Everything. One Keystroke Away.</footer>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
