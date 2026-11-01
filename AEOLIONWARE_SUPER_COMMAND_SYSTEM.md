@@ -2,7 +2,7 @@
 # AEOLIONWARE SUPER COMMAND SYSTEM (ASCS)
 
 **Developer:** Joseph Lionarons
-**Version:** 1.4.0
+**Version:** 1.4.1
 **Project:** Aeolionware SCS
 **Platform:** Windows 11  
 **Architecture:** AutoHotkey v2 + Microsoft Edge WebView2
@@ -498,12 +498,11 @@ This section distinguishes source implementation from verified runtime functiona
 - Virtual desktop switching, active-window desktop moves, quadrant snapping, and monitor-to-monitor movement.
 - Workspace capture/restoration, searchable command launcher, and persistent Preferences.
 - Cached WMI hardware reporting in the System Dashboard.
-- No feature in this document is marked Runtime-tested.
+- Runtime-tested on the target Windows system in v1.4.1: Super+E/T/C/H/F launches, command-launcher app actions, foreground activation of already-running apps, Downloads/Documents, Browser, Windows Settings, and Snipping Tool. These launch paths request activation with `WinActivate`.
 
 ## 9.2 Code-Reviewed, Runtime Testing Pending
 
 - WebView2 virtual-host loading, messaging callbacks, and input focus.
-- Super+F launch behavior.
 - Quick Notes migration/recovery/atomic replacement and flush behavior.
 - J: connected, missing, and disconnected-network cases.
 - VirtualDesktopAccessor exports and OS-build compatibility; numpad mappings.
@@ -540,7 +539,7 @@ This section distinguishes source implementation from verified runtime functiona
 
 - [ ] Test Command Center.
 - [ ] Test Quick Notes.
-- [ ] Test Super+F Everything launch.
+- [x] Test Super+F Everything launch.
 - [ ] Test System Dashboard.
 - [ ] Verify automatic metric updates.
 
@@ -587,7 +586,12 @@ This section distinguishes source implementation from verified runtime functiona
 
 # 12. Testing Procedure
 
-Manual runtime checklist (not yet run):
+Manual runtime checklist; completed v1.4.1 launch tests are recorded below:
+
+- [x] Launch File Explorer, Windows Terminal, Calculator, Task Manager, and Everything with Super+E/T/C/H/F; confirm each becomes foreground.
+- [x] Launch apps through Super+Space and confirm foreground activation, including when the app is already open.
+- [x] Launch Downloads and Documents from Super+Space and confirm the correct folder opens in the foreground.
+- [x] Launch Browser, Windows Settings, and Snipping Tool from Super+Space.
 
 - [ ] Open Quick Notes through navigation, Super hotkey, and re-showing the hidden window; confirm the note caret is at the end.
 - [ ] Create, rename, filter, pin/unpin, change type, copy a snippet, and delete notes; verify confirmation and save status.
@@ -600,14 +604,19 @@ Manual runtime checklist (not yet run):
 - [ ] Change shortcut assignments and drive settings; verify validation, persistence, and immediate rebinding.
 - [ ] Search and run commands through Super+Space with keyboard and mouse.
 - [ ] Verify hardware labels against Windows System Information and Device Manager.
-- [ ] Confirm Super+F launches Everything and its search-as-you-type behavior.
-- [ ] Confirm Super+T opens Windows Terminal.
+- [ ] Verify Everything's search-as-you-type behavior.
 
 A feature should only be marked runtime-tested after successful execution on the target Windows system.
 
 ---
 
 # 13. Changelog
+
+## Version 1.4.1 — Application Foreground Activation
+
+- Added process/window waiting and `WinActivate` requests to application launch paths so launched applications are brought to the foreground when Windows allows it.
+- Manually verified on the target Windows system: Super+E/T/C/H/F shortcuts; app launches from Super+Space; foreground activation when an app was already open; Downloads and Documents folder launches; Browser, Windows Settings, and Snipping Tool launcher actions.
+- Other runtime validation remains pending, including notes, WebView2 integration, dashboard behavior, virtual desktop operations, and workspace restoration.
 
 ## Version 1.4.0 — Window Management and Productivity
 
@@ -627,7 +636,6 @@ A feature should only be marked runtime-tested after successful execution on the
 - Added C:/J: drive metrics and cards, manual `ASCS_Drives` configuration, and 30-second network-drive caching.
 - Added virtual desktop number/numpad shortcuts and Super+arrow window positioning.
 - Added the ASCS icon, draggable title bar, custom window controls, and display-aware startup sizing.
-- Removed the redundant Super+P PowerShell shortcut; Super+T opens Windows Terminal.
 - Updated the in-app shortcut appendix and corrected the documentation filename in project structure.
 - Runtime testing remains pending; no feature is marked runtime-tested.
 

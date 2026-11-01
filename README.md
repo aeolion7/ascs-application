@@ -2,9 +2,9 @@
 
 **Brand:** AEOLIONWARE SUPER COMMAND SYSTEM  
 **Tagline:** AEOLIONWARE, at your command.  
-**Version:** 1.4.0
+**Version:** 1.4.1
 **Platform:** Windows  
-**Status:** Version 1.4.0 implementation in source; runtime verification pending
+**Status:** Version 1.4.1 implementation in source; application launch and foreground-focus behavior verified on the target Windows system; other runtime checks remain pending
 
 ASCS is a keyboard-driven Windows utility suite. It uses AutoHotkey v2 for hotkeys and Windows automation, WebView2 for its graphical interface, and a web frontend built with HTML, CSS, and JavaScript.
 
@@ -182,6 +182,8 @@ Shortcut tables use “Super” as the user-facing name for the dedicated key (m
 | Super + S | Save window workspace | Implemented in source |
 | Super + R | Restore window workspace | Implemented in source |
 
+Application launches wait for a window and request foreground activation with `WinActivate`. This behavior has been manually verified for the shortcuts and launcher actions listed under Version 1.4.1 in the changelog.
+
 Timestamp format: `yyyy-MM-dd HH:mm:ss`  
 Date format: `yyyy-MM-dd`
 
@@ -277,11 +279,12 @@ Status labels distinguish source implementation from execution on the target sys
 
 - **Implemented in source:** Corresponding code exists in the repository.
 - **Code-reviewed:** Source and message contracts have been inspected; this is not runtime verification.
-- **Runtime-tested:** Successfully executed on the target Windows installation. No feature below is currently marked runtime-tested.
+- **Runtime-tested:** Successfully executed on the target Windows installation. The v1.4.1 application launch and foreground-focus checks are documented below; other features remain pending.
 - **Planned or pending:** Not implemented, incomplete, or awaiting validation.
 
 ### Implemented in Source
 
+- Application launch activation, including process/window waiting and `WinActivate`.
 - WebViewGui initialization, messaging setup, event registration, and virtual-host mapping.
 - Frontend readiness handshake and newline-delimited message dispatch.
 - Frontend JSON response handling.
@@ -310,7 +313,6 @@ This review did not execute ASCS, initialize WebView2, or verify callback behavi
 - Virtual-host page loading and WebView2-to-AutoHotkey messaging in both directions.
 - Hidden startup, Super activation, and modifier combinations.
 - Quick Notes save, acknowledgement, and persistence across restarts.
-- Super+F direct launch of Everything.
 - Notes create/delete/rename/pin/type/filter, atomic save, backup recovery, legacy migration, and hide/close flush.
 - J: online/offline behavior and delayed network-drive refresh.
 - Virtual desktop switching with NumLock on/off; confirm nonexistent desktop numbers do nothing.
@@ -335,7 +337,7 @@ This review did not execute ASCS, initialize WebView2, or verify callback behavi
 - Monitor frame-bound calculations depend on Windows DPI coordinate behavior and require runtime verification.
 - Metrics depend on WMI and Windows drive reporting.
 - The Command Center does not display recent activity.
-- No complete runtime test suite or target-system test results are included with the project.
+- No automated runtime test suite is included; targeted manual test results are documented in the v1.4.1 changelog.
 
 ## 12. Development Roadmap
 
@@ -345,7 +347,7 @@ This review did not execute ASCS, initialize WebView2, or verify callback behavi
 - Verify frontend callback registration and message dispatch.
 - Verify frontend-to-AutoHotkey and AutoHotkey-to-frontend communication.
 - Verify hidden startup and Super behavior on the target keyboard.
-- Verify notes, Everything launching, and dashboard operations.
+- Verify notes, Everything search behavior, and dashboard operations; application launching is covered by v1.4.1 manual tests.
 
 ### Future Improvements
 
@@ -354,6 +356,12 @@ This review did not execute ASCS, initialize WebView2, or verify callback behavi
 - Refine keyboard navigation and overall interaction consistency.
 
 ## 13. Changelog
+
+### Version 1.4.1 — Application Foreground Activation
+
+- Added process/window waiting and `WinActivate` requests to application launch paths so launched applications are brought to the foreground when Windows allows it.
+- Manually verified on the target Windows system: Super+E/T/C/H/F shortcuts; app launches from Super+Space; foreground activation when an app was already open; Downloads and Documents folder launches; Browser, Windows Settings, and Snipping Tool launcher actions.
+- Other runtime validation remains pending, including notes, WebView2 integration, dashboard behavior, virtual desktop operations, and workspace restoration.
 
 ### Version 1.4.0 — Window Management and Productivity
 
@@ -373,7 +381,6 @@ This review did not execute ASCS, initialize WebView2, or verify callback behavi
 - Added configurable C:/J: storage cards and a 30-second network-drive metrics cache.
 - Added Super number/numpad virtual desktop switching and Super+arrow active-window positioning.
 - Added the ASCS window icon, branded draggable title bar, window controls, and display-aware startup sizing.
-- Removed the redundant Super+P PowerShell shortcut; Super+T opens Windows Terminal.
 - Runtime testing remains pending; optional DLL exports, Everything command-line behavior, and target-system behavior require verification.
 
 ### Version 1.2.1 — WebView2 Stabilization and Aeolionware Obsidian Redesign

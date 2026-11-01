@@ -8,7 +8,7 @@ SetWorkingDir(A_ScriptDir)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 1.4.0
+; Version 1.4.1
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -113,7 +113,7 @@ try {
     ; Keep the application hidden at startup.
     ASCS_App.Hide()
 
-    WriteLog("ASCS 1.4.0 initialized.")
+    WriteLog("ASCS 1.4.1 initialized.")
 
 } catch as err {
     WriteLog("WebView2 initialization failed: " err.Message)
@@ -1278,34 +1278,63 @@ SendToFrontend(json) {
 ; APPLICATION LAUNCHER
 ; ==========================================
 
+RunAndActivate(target, fallbackWindow := "") {
+    pid := 0
+    Run(target,,, &pid)
+
+    if pid {
+        processWindow := "ahk_pid " pid
+        if WinWait(processWindow,, 8) {
+            WinActivate(processWindow)
+            if WinWaitActive(processWindow,, 2)
+                return true
+        }
+    }
+
+    if (fallbackWindow != "" && WinWait(fallbackWindow,, 2)) {
+        WinActivate(fallbackWindow)
+        if WinWaitActive(fallbackWindow,, 2)
+            return true
+    }
+
+    WriteLog("Launched application window could not be activated: " target)
+    return false
+}
+
 LaunchCommand(command, thisHotkey := "") {
     userProfile := EnvGet("USERPROFILE")
 
     try {
         switch command {
             case "explorer":
-                Run("explorer.exe")
+                RunAndActivate("explorer.exe", "ahk_exe explorer.exe")
 
             case "browser":
-                Run("https://www.google.com")
+                RunAndActivate("https://www.google.com")
 
             case "terminal":
-                Run("wt.exe")
+                RunAndActivate("wt.exe", "ahk_exe WindowsTerminal.exe")
 
             case "calculator":
-                Run("calc.exe")
+                RunAndActivate("calc.exe", "Calculator")
 
             case "taskmanager":
-                Run("taskmgr.exe")
+                RunAndActivate("taskmgr.exe", "ahk_exe Taskmgr.exe")
 
             case "settings":
-                Run("ms-settings:")
+                RunAndActivate("ms-settings:", "ahk_exe SystemSettings.exe")
 
             case "downloads":
-                Run('explorer.exe "' userProfile '\Downloads"')
+                RunAndActivate(
+                    'explorer.exe "' userProfile '\Downloads"',
+                    "ahk_exe explorer.exe"
+                )
 
             case "projects":
-                Run('explorer.exe "' userProfile '\Documents"')
+                RunAndActivate(
+                    'explorer.exe "' userProfile '\Documents"',
+                    "ahk_exe explorer.exe"
+                )
 
             case "snipping":
                 Send("#+s")
@@ -1449,7 +1478,10 @@ LaunchEverything(thisHotkey := "") {
     global ASCS_EverythingPath
 
     try {
-        Run('"' ASCS_EverythingPath '"')
+        RunAndActivate(
+            '"' ASCS_EverythingPath '"',
+            "ahk_exe Everything.exe"
+        )
     } catch as err {
         WriteLog("Everything launch failed: " err.Message)
         MsgBox(
