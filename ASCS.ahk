@@ -106,7 +106,6 @@ F24 & q::ShowView("notes")
 F24 & f::ShowView("search")
 F24 & i::ShowView("dashboard")
 
-F24 & p::Run("powershell.exe")
 F24 & t::Run("wt.exe")
 F24 & e::Run("explorer.exe")
 F24 & c::Run("calc.exe")
