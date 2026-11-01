@@ -2,9 +2,9 @@
 
 **Brand:** AEOLIONWARE SUPER COMMAND SYSTEM  
 **Tagline:** AEOLIONWARE, at your command.  
-**Version:** 1.2.1  
+**Version:** 1.3.0
 **Platform:** Windows  
-**Status:** WebView2 integration stabilization; runtime verification remains outstanding
+**Status:** Version 1.3.0 implementation in source; runtime verification pending
 
 ASCS is a keyboard-driven Windows utility suite. It uses AutoHotkey v2 for hotkeys and Windows automation, WebView2 for its graphical interface, and a web frontend built with HTML, CSS, and JavaScript.
 
@@ -28,13 +28,12 @@ ASCS is a keyboard-driven Windows utility suite. It uses AutoHotkey v2 for hotke
 
 ASCS centralizes application launching, system controls, productivity utilities, file search, and system monitoring behind the F24 key, configured as the Super key through Keychron Launcher.
 
-The application has five primary views:
+The application has four primary views:
 
 1. Command Center
 2. Quick Notes
-3. Everything Search
-4. System Dashboard
-5. F24 Commands, a reference for every shortcut currently defined in the backend
+3. System Dashboard
+4. F24 Commands, a reference for every shortcut currently defined in the backend
 
 ## 2. Architecture
 
@@ -47,7 +46,7 @@ The application has five primary views:
 | Web interface | Microsoft Edge WebView2 | Hosts the embedded frontend |
 | Presentation | HTML and CSS | Defines interface structure and styling |
 | Interaction | JavaScript | Handles navigation, input, and WebView messaging |
-| File search | Voidtools Everything | Indexes and displays matching files |
+| File search | Voidtools Everything | Launches the user's indexed file search |
 | Persistent data | Local files under `data` | Stores notes, activity logs, and WebView2 profile data |
 
 AutoHotkey remains responsible for command execution and Windows integration. The frontend is a presentation and interaction layer, not a general-purpose command executor.
@@ -56,11 +55,13 @@ AutoHotkey remains responsible for command execution and Windows integration. Th
 
 The AutoHotkey script creates a `WebViewGui`, enables WebView messaging, registers message and navigation handlers, maps the `frontend` directory to the `ascs.localhost` virtual host, and navigates to `https://ascs.localhost/index.html`. It requests that the application start hidden. These integration steps are implemented in source but have not yet been verified on the target Windows installation.
 
+The window opens at up to 1920 × 1080 pixels, centered and constrained to the primary display's work area. Its native title bar is disabled while the normal taskbar button is retained; the custom title bar provides the ASCS mark, draggable surface, and minimize, maximize/restore, and hide controls. The Command Center uses a compact layout at shorter heights to avoid scrolling on open.
+
 ## 3. Visual Identity
 
 ### Aeolionware Obsidian
 
-The frontend uses a premium desktop-oriented dark theme with balanced spacing, restrained gradients, rounded layered panels, and indigo/violet accents. Typography uses Segoe UI. Inline SVG provides the interface icons without adding an icon package or image assets.
+The frontend uses a premium desktop-oriented dark theme with balanced spacing, restrained gradients, rounded layered panels, and indigo/violet accents. Typography uses Segoe UI. Inline SVG provides interface graphics; a custom ICO supplies the ASCS window, system-tray, and frontend favicon.
 
 | Design token | Color or treatment |
 | --- | --- |
@@ -83,15 +84,18 @@ The layout adapts to narrower WebView windows, provides visible keyboard focus, 
 ```text
 C:\ASCS\
 ├── ASCS.ahk
-├── ASCS_Documentation.md
+├── AEOLIONWARE_SUPER_COMMAND_SYSTEM.md
 ├── frontend\
+│   ├── assets\
+│   │   └── ascs.ico
 │   ├── index.html
 │   ├── styles.css
 │   └── app.js
 ├── webview\
 │   ├── WebViewToo.ahk
-│   ├── WebView2.ahk
-│   └── dependencies
+│   └── WebView2.ahk
+├── lib\
+│   └── VirtualDesktopAccessor.dll       (required for F24 + 1–9)
 └── data\
     ├── notes.json
     ├── ASCS_Log.txt
@@ -100,12 +104,13 @@ C:\ASCS\
 
 | File or directory | Purpose |
 | --- | --- |
-| `ASCS.ahk` | WebView initialization, shortcuts, message handling, application launching, notes, Everything integration, dashboard metrics, and logging |
+| `ASCS.ahk` | WebView initialization, window chrome, shortcuts, message handling, application launching, notes, dashboard metrics, and logging |
+| `frontend/assets/ascs.ico` | ASCS window, system-tray, and frontend icon |
 | `frontend/index.html` | Structure and content for the four interfaces |
 | `frontend/styles.css` | Aeolionware Obsidian theme and responsive layout |
-| `frontend/app.js` | Navigation, frontend messaging, notes, search, and metric display |
+| `frontend/app.js` | Navigation, frontend messaging, notes, and metric display |
 | `webview/` | Locally installed WebViewToo library and related dependencies |
-| `data/notes.json` | Persistent Quick Notes content |
+| `data/notes.json` | Version 2 Quick Notes collection; `.bak` holds the previous save |
 | `data/ASCS_Log.txt` | Activity and error log |
 | `data/WebView2/` | WebView2 browser profile data |
 
@@ -115,25 +120,25 @@ WebViewToo is maintained separately from ASCS application code.
 
 ### Command Center
 
-The Command Center opens when F24 is tapped. It provides system summaries for CPU, RAM, and C: drive usage; navigation to the other views; and quick actions for PowerShell, File Explorer, Everything Search, Quick Notes, Task Manager, and Calculator.
+The Command Center opens when F24 is tapped. It provides CPU and RAM summaries and one storage card per configured drive. Edit `ASCS_Drives` near the top of `ASCS.ahk` to change the drive list (default: `["C:", "J:"]`). Network-drive metrics are cached for 30 seconds to reduce stalls on disconnected mappings.
 
 The overview receives metrics from the same backend updates used by the System Dashboard. It does not show recent activity because the current backend does not provide an activity-history interface.
 
 ### Quick Notes
 
-Quick Notes is opened with F24 + Q. It provides a multiline editor and sends changes to AutoHotkey after a short debounce. The backend stores note content in `data/notes.json` and returns a save acknowledgement. The frontend displays save status.
+Quick Notes is opened with F24 + Q. It supports multiple notes, title editing, filtering, pinning, deletion, and note/snippet types. Snippets use monospace text and can be copied. Data is stored as a version 2 JSON object in `data/notes.json`; saves are debounced and atomically replaced, with the previous file retained as `.bak`. Legacy `{"content":"..."}` files migrate to a note named “Scratch”.
 
-### Everything Search
+### Everything Launcher
 
-Everything Search is opened with F24 + F. Submit a query with Enter or the Search button. AutoHotkey launches Voidtools Everything with the query; results appear in Everything, not embedded in ASCS.
+F24 + F opens the installed Everything application directly. Type in Everything's own search field to see results as you type; ASCS does not embed search or load the Everything SDK.
 
 ### System Dashboard
 
-The System Dashboard is opened with F24 + I. It displays CPU utilization, RAM utilization and capacity in GB, and C: drive utilization and capacity in GB. The backend requests updates every five seconds after receiving the frontend readiness message.
+The System Dashboard is opened with F24 + I. It displays CPU and RAM metrics and one storage card per configured drive. Metrics refresh every five seconds; mapped or network drives are queried no more often than every 30 seconds.
 
 ### F24 Commands
 
-The F24 Commands view is a complete in-app appendix of the keyboard shortcuts currently defined in `ASCS.ahk`. It groups commands by ASCS view, application, system control, text utility, and workspace/capture action. Workspace save and restore are explicitly identified as placeholders; F24 + Shift + S invokes the Windows Snipping Tool overlay.
+The F24 Commands view is a complete in-app appendix of the keyboard shortcuts currently defined in `ASCS.ahk`. It groups commands by ASCS view, application, virtual desktop, window positioning, system control, text utility, and workspace/capture action. Workspace save and restore are explicitly identified as placeholders; F24 + Shift + S invokes the Windows Snipping Tool overlay.
 
 ## 6. Keyboard Shortcuts
 
@@ -143,9 +148,12 @@ F24 is the Super key. Existing shortcut assignments are:
 | --- | --- | --- |
 | F24 | Open Command Center | Implemented in source |
 | F24 + Q | Open Quick Notes | Implemented in source |
-| F24 + F | Open Everything Search | Implemented in source |
+| F24 + F | Open Everything | Implemented in source |
 | F24 + I | Open System Dashboard | Implemented in source |
-| F24 + P | Open PowerShell | Implemented in source |
+| F24 + 1–9 | Focus virtual desktop 1–9 (top row or numpad) | Implemented in source |
+| F24 + Left / Right | Snap active resizable window to monitor half | Implemented in source |
+| F24 + Up | Maximize active resizable window | Implemented in source |
+| F24 + Down | Restore maximized window or minimize | Implemented in source |
 | F24 + T | Open Windows Terminal | Implemented in source |
 | F24 + E | Open File Explorer | Implemented in source |
 | F24 + C | Open Calculator | Implemented in source |
@@ -162,7 +170,7 @@ F24 is the Super key. Existing shortcut assignments are:
 Timestamp format: `yyyy-MM-dd HH:mm:ss`  
 Date format: `yyyy-MM-dd`
 
-The shortcut definitions have not all been physically tested with the configured keyboard. F24 standalone activation and modifier combinations remain a verification item.
+The shortcut definitions have not been runtime-tested with the configured keyboard. Numpad NumLock-off aliases, virtual desktop DLL compatibility, and multi-monitor/DPI positioning remain verification items.
 
 ## 7. Frontend and Backend Communication
 
@@ -180,14 +188,14 @@ MessageContent
 | Message | Content | Purpose |
 | --- | --- | --- |
 | `Ready` | None | Announces that frontend initialization is complete |
-| `GetNotes` | None | Requests the saved note |
-| `SaveNote` | Note text | Persists note content |
-| `SearchFiles` | Search query | Starts an Everything search |
+| `GetNotes` | None | Requests the saved notes JSON |
+| `SaveNotes` | Full notes JSON text | Atomically persists all notes (replaces `SaveNote`) |
+| `WindowAction` | `minimize`, `maximize`, or `close` | Controls the frameless ASCS window |
 | `Launch` | Allowlisted launcher identifier | Requests an application launch |
 | `GetMetrics` | None | Requests a dashboard update |
 | `Log` | Log text | Adds an activity-log entry |
 
-The first newline separates the message type from its content. Note text may contain further newlines.
+The first newline separates the message type from its content. The full notes JSON is sent as content. The backend validates message types and payload sizes.
 
 ### AutoHotkey to Frontend
 
@@ -196,12 +204,13 @@ AutoHotkey sends JSON with `PostWebMessageAsJson()`.
 | Response type | Purpose |
 | --- | --- |
 | `navigate` | Activates a view |
-| `notes` | Returns saved note content |
+| `notes` | Returns opaque notes JSON in `data`, plus `recovered` |
 | `saved` | Confirms note persistence |
-| `metrics` | Supplies CPU, RAM, and disk measurements |
+| `metrics` | Supplies CPU/RAM, legacy C: fields, and a `drives` array |
+| `flushNotes` | Asks the frontend to immediately send a pending note save |
 | `error` | Displays an error notification |
 
-On `Ready`, the backend marks the page ready, sends the pending view and initial data, and starts the five-second dashboard timer.
+On `Ready`, the backend marks the page ready, sends the pending view and initial data, and starts the five-second dashboard timer. The `metrics` response keeps `disk`, `diskUsed`, and `diskTotal` for C: and adds `drives: [{letter, usage, used, total, online}]`.
 
 ### Security Considerations
 
@@ -226,8 +235,9 @@ These are design requirements; runtime security behavior has not been independen
 ### Optional
 
 - Voidtools Everything for file search.
+- `lib\VirtualDesktopAccessor.dll` for direct virtual desktop switching and desktop-count validation.
 
-The WebView2 Evergreen Runtime is preferred. ASCS should verify runtime availability during startup. Everything executable discovery and launch behavior still require runtime verification.
+Everything is optional and is only needed for the F24 + F launcher. ASCS opens the application directly; no Everything SDK DLL is required. To use F24 + 1–9, place a compatible VirtualDesktopAccessor.dll in `lib`; ASCS reads the current desktop count and jumps directly to the requested existing desktop. If the DLL is missing or fails, switching is disabled rather than using a keyboard fallback that might create desktops. Verify the `GetDesktopCount` and `GoToDesktopNumber` exports for the DLL version in use. The WebView2 Evergreen Runtime is preferred.
 
 ## 9. Installation and Startup
 
@@ -235,7 +245,7 @@ The WebView2 Evergreen Runtime is preferred. ASCS should verify runtime availabi
 2. Install the Microsoft Edge WebView2 Runtime.
 3. Configure the Keychron Super key to emit F24.
 4. Place WebViewToo and its dependencies under `C:\ASCS\webview`.
-5. Place the frontend files under `C:\ASCS\frontend`.
+5. Place the frontend files, including `assets\ascs.ico`, under `C:\ASCS\frontend`.
 6. Ensure the `data` directory is available; the script creates it when needed.
 7. Run `C:\ASCS\ASCS.ahk`.
 
@@ -256,18 +266,19 @@ Status labels distinguish source implementation from execution on the target sys
 - Frontend readiness handshake and newline-delimited message dispatch.
 - Frontend JSON response handling.
 - F24 shortcut definitions, application launchers, and basic system controls.
-- Quick Notes JSON persistence and save acknowledgements.
-- Everything executable discovery and command-line search launch.
-- WMI and drive-based dashboard metrics.
+- Quick Notes v2 multi-note JSON persistence, atomic replacement, backup fallback, and save acknowledgements.
+- F24+F direct Everything launch.
+- Custom ASCS title bar, window controls, and display-aware 1920 × 1080 startup sizing.
+- WMI metrics and configurable C:/J: drive cards with lower-frequency network-drive polling.
+- Numbered virtual desktop and active-window positioning hotkeys.
 - Five-second dashboard refresh after frontend readiness.
 - The four primary frontend interfaces, the F24 Commands appendix, and the Aeolionware Obsidian visual redesign.
 - The F24 Commands appendix, including active shortcut and placeholder labels.
 
 ### Code-Reviewed
 
-- The redesign preserves the existing frontend message names and newline-delimited request format.
-- The frontend response handling matches the JSON message types used by the backend.
-- Existing view IDs, navigation data attributes, launcher identifiers, and core element IDs are retained.
+- The frontend and backend use newline-delimited requests and JSON responses; changed message contracts are listed above.
+- The frontend sends only allowlisted operations; storage cards are generated from the backend `drives` array.
 - The dashboard uses the backend-provided CPU, RAM, storage, and capacity fields.
 
 This review did not execute ASCS, initialize WebView2, or verify callback behavior.
@@ -278,8 +289,12 @@ This review did not execute ASCS, initialize WebView2, or verify callback behavi
 - Virtual-host page loading and WebView2-to-AutoHotkey messaging in both directions.
 - Hidden startup, F24 activation, and modifier combinations.
 - Quick Notes save, acknowledgement, and persistence across restarts.
-- Everything executable detection and search launch.
-- Dashboard metric values and five-second updates.
+- F24+F direct launch of Everything.
+- Notes create/delete/rename/pin/type/filter, atomic save, backup recovery, legacy migration, and hide/close flush.
+- J: online/offline behavior and delayed network-drive refresh.
+- Virtual desktop switching with NumLock on/off; confirm nonexistent desktop numbers do nothing.
+- Window snapping on multiple monitors with different DPI settings.
+- Dashboard metric values, C:/J: online/offline cards, and five-second updates.
 - Responsive layout and interaction at target WebView window sizes.
 - F24 Commands appendix content and navigation.
 
@@ -288,11 +303,11 @@ This review did not execute ASCS, initialize WebView2, or verify callback behavi
 - WebView2 integration has not been verified on the target Windows installation.
 - Startup, frontend callbacks, and keyboard behavior require runtime testing.
 - Workspace save and restore are placeholders that only log requests.
-- Selected-file path copying is not implemented in the current backend.
-- Everything Search depends on the external Everything application and its index.
-- Dashboard storage monitoring is limited to the C: drive.
+- F24+F requires the Everything application to be installed; ASCS delegates search and result display to it.
+- Configured network drive status calls may still block when they are actually polled; mapped drives are cached for 30 seconds.
+- F24+1–9 requires `VirtualDesktopAccessor.dll`; without it, switching is disabled to avoid creating desktops.
+- Monitor frame-bound calculations depend on Windows DPI coordinate behavior and require runtime verification.
 - Metrics depend on WMI and Windows drive reporting.
-- Search results are displayed in Everything rather than inside ASCS.
 - The Command Center does not display recent activity.
 - No complete runtime test suite or target-system test results are included with the project.
 
@@ -304,13 +319,12 @@ This review did not execute ASCS, initialize WebView2, or verify callback behavi
 - Verify frontend callback registration and message dispatch.
 - Verify frontend-to-AutoHotkey and AutoHotkey-to-frontend communication.
 - Verify hidden startup and F24 behavior on the target keyboard.
-- Verify notes, search, and dashboard operations.
+- Verify notes, Everything launching, and dashboard operations.
 
 ### Feature Completion
 
 - Implement full workspace saving and restoration.
-- Restore selected-file path copying.
-- Improve Everything detection and error reporting.
+- Verify F24+F launches Everything.
 - Verify dashboard metrics and refresh behavior.
 
 ### Future Improvements
@@ -320,6 +334,17 @@ This review did not execute ASCS, initialize WebView2, or verify callback behavi
 - Refine keyboard navigation and overall interaction consistency.
 
 ## 13. Changelog
+
+### Version 1.3.0 — Notes v2 and Windows Controls
+
+- Focused the Quick Notes primary input on navigation and window activation using the vendored WebView `MoveFocus(0)` API.
+- F24+F opens Everything directly; embedded SDK search and its bundled SDK files were removed after runtime issues.
+- Added multi-note v2 storage, autosave, atomic replacement, backup recovery, legacy migration, and flush-on-hide/close handling.
+- Added configurable C:/J: storage cards and a 30-second network-drive metrics cache.
+- Added F24 number/numpad virtual desktop switching and F24+arrow active-window positioning.
+- Added the ASCS window icon, branded draggable title bar, window controls, and display-aware startup sizing.
+- Removed the redundant F24+P PowerShell shortcut; F24+T opens Windows Terminal.
+- Runtime testing remains pending; optional DLL exports, Everything command-line behavior, and target-system behavior require verification.
 
 ### Version 1.2.1 — WebView2 Stabilization and Aeolionware Obsidian Redesign
 
