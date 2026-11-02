@@ -54,7 +54,7 @@
         <span class="status-indicator" aria-hidden="true"></span>
         <span class="sidebar-status">
           <strong>ASCS READY</strong>
-          <small>Version 1.4.4</small>
+          <small>Version 1.5.0</small>
         </span>
         <span class="key-hint" aria-label="Super key">Super</span>
       </div>
@@ -321,16 +321,27 @@
             <div class="shortcut-list">
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="everything">F</kbd></span><span class="shortcut-description"><strong>Everything</strong><small>Opens Everything, ready to search as you type (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>B</kbd></span><span class="shortcut-description"><strong>Vivaldi</strong><small>Focuses Vivaldi on this desktop, switches to its desktop if needed, or opens the browser.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="terminal">T</kbd></span><span class="shortcut-description"><strong>Windows Terminal</strong><small>Opens Windows Terminal (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="explorer">E</kbd></span><span class="shortcut-description"><strong>File Explorer</strong><small>Opens File Explorer (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="terminal">T</kbd></span><span class="shortcut-description"><strong>Windows Terminal</strong><small>Focuses an existing window, switching desktops if needed; hold Shift for a new window (D/F create Explorer items).</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="explorer">E</kbd></span><span class="shortcut-description"><strong>File Explorer</strong><small>Focuses an existing window, switching desktops if needed; hold Shift for a new window (D/F create Explorer items).</small></span><span class="shortcut-status">ACTIVE</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="calculator">C</kbd></span><span class="shortcut-description"><strong>Calculator</strong><small>Opens Calculator (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="taskmanager">H</kbd></span><span class="shortcut-description"><strong>Task Manager</strong><small>Opens Task Manager (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
             </div>
           </section>
 
-          <section class="command-group command-group-wide" aria-labelledby="commandDesktopTitle">
+          <section class="command-group" aria-labelledby="commandFilesTitle">
             <div class="command-group-heading">
               <span class="command-group-index">03</span>
+              <div><h2 id="commandFilesTitle">Explorer items</h2><p>Create items in the active File Explorer folder</p></div>
+            </div>
+            <div class="shortcut-list">
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>D</kbd></span><span class="shortcut-description"><strong>New folder</strong><small>Prompts for a folder name and creates it in the active Explorer location.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>F</kbd></span><span class="shortcut-description"><strong>New file</strong><small>Prompts for a filename including its extension and creates an empty file in the active Explorer location.</small></span><span class="shortcut-status">ACTIVE</span></article>
+            </div>
+          </section>
+
+          <section class="command-group" aria-labelledby="commandDesktopTitle">
+            <div class="command-group-heading">
+              <span class="command-group-index">04</span>
               <div><h2 id="commandDesktopTitle">Virtual desktops</h2><p>Switch to a numbered Windows virtual desktop</p></div>
             </div>
             <div class="shortcut-list">
@@ -339,9 +350,9 @@
             </div>
           </section>
 
-          <section class="command-group command-group-wide" aria-labelledby="commandWindowTitle">
+          <section class="command-group" aria-labelledby="commandWindowTitle">
             <div class="command-group-heading">
-              <span class="command-group-index">04</span>
+              <span class="command-group-index">05</span>
               <div><h2 id="commandWindowTitle">Window positioning</h2><p>Arrange the active resizable window</p></div>
             </div>
             <div class="shortcut-list">
@@ -354,7 +365,7 @@
 
           <section class="command-group" aria-labelledby="commandSystemTitle">
             <div class="command-group-heading">
-              <span class="command-group-index">05</span>
+              <span class="command-group-index">06</span>
               <div><h2 id="commandSystemTitle">System controls</h2><p>Control Windows features</p></div>
             </div>
             <div class="shortcut-list">
@@ -366,7 +377,7 @@
 
           <section class="command-group" aria-labelledby="commandTextTitle">
             <div class="command-group-heading">
-              <span class="command-group-index">06</span>
+              <span class="command-group-index">07</span>
               <div><h2 id="commandTextTitle">Text utilities</h2><p>Type date and time at the cursor</p></div>
             </div>
             <div class="shortcut-list">
@@ -375,9 +386,9 @@
             </div>
           </section>
 
-          <section class="command-group command-group-wide" aria-labelledby="commandWorkspaceTitle">
+          <section class="command-group" aria-labelledby="commandWorkspaceTitle">
             <div class="command-group-heading">
-              <span class="command-group-index">07</span>
+              <span class="command-group-index">08</span>
               <div><h2 id="commandWorkspaceTitle">Workspace and capture</h2><p>Save and restore your visible app layout</p></div>
             </div>
             <div class="shortcut-list">
@@ -386,7 +397,7 @@
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>R</kbd></span><span class="shortcut-description"><strong>Restore workspace</strong><small>Relaunches missing apps and restores saved window positions.</small></span><span class="shortcut-status">ACTIVE</span></article>
             </div>
           </section>
-          <p class="settings-note">Default letter assignments for apps and views can be changed in Preferences. S, R, L, M, V, J, and Y are reserved for fixed commands.</p>
+          <p class="settings-note">Default letter assignments for apps and views can be changed in Preferences. S, R, L, M, V, J, and Y are reserved for fixed commands. Super + Shift + D/F create Explorer items when File Explorer is active; unassigned Super + D passes through to Windows Show Desktop.</p>
         </div>
       </section>
 
@@ -414,7 +425,7 @@
               <label for="hotkeyCalculator"><span>Calculator</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyCalculator" data-hotkey="calculator" type="text" maxlength="1" autocomplete="off" aria-label="Calculator shortcut"></span></label>
               <label for="hotkeyTaskManager"><span>Task Manager</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyTaskManager" data-hotkey="taskmanager" type="text" maxlength="1" autocomplete="off" aria-label="Task Manager shortcut"></span></label>
             </div>
-            <p class="settings-note">Reserved keys: B, S, R, L, M, V, J, and Y. Super + Space opens the command launcher; number and arrow shortcuts remain fixed.</p>
+            <p class="settings-note">Reserved keys: B, S, R, L, M, V, J, and Y. Shift + Super + the configured Terminal or Explorer key opens a new window, except D/F, which create Explorer items. Super + Space opens the command launcher; number and arrow shortcuts remain fixed.</p>
           </section>
           <div class="settings-actions"><span id="settingsStatus" role="status">Settings are stored locally on this PC.</span><button class="primary" type="submit">Save preferences</button></div>
         </form>

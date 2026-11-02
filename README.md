@@ -2,9 +2,9 @@
 
 **Brand:** AEOLIONWARE SUPER COMMAND SYSTEM  
 **Tagline:** AEOLIONWARE, at your command.  
-**Version:** 1.4.4
+**Version:** 1.5.0
 **Platform:** Windows 10/11 (Windows 11 target verification)
-**Status:** Version 1.4.4 implementation in source; application launches, Vivaldi cross-desktop focus, workspace basics, snapping, desktop moves, and Command Palette focus across desktops have been verified on the target Windows system. WebView hardening and remaining reliability checks are pending.
+**Status:** Version 1.5.0. Core shortcuts, application reuse, Explorer item creation, dashboard behavior, and the updated command layout have been tested on the target Windows setup. Broader OS/runtime compatibility checks remain listed below.
 
 ASCS is a keyboard-driven Windows utility suite. It uses AutoHotkey v2 for hotkeys and Windows automation, WebView2 for its graphical interface, and a web frontend built with HTML, CSS, and JavaScript.
 
@@ -126,7 +126,7 @@ WebViewToo is maintained separately from ASCS application code.
 
 ### Command Center
 
-The Command Center opens when Super is tapped. It provides CPU and RAM summaries and one storage card per configured drive. Change the drive list in Preferences (defaults: `C:` and `J:`). Drive status and capacity probes are isolated from the hotkey process, time out after eight seconds, and are cached for 30 seconds.
+The Command Center opens when Super is tapped. It provides CPU and RAM summaries and one storage card per configured drive. Change the drive list in Preferences (defaults: `C:` and `J:`). Drive status and capacity probes are isolated from the hotkey process, can run concurrently without AutoHotkey's duplicate-script prompt, time out after eight seconds, and are cached for 30 seconds. Each probe writes to its own result file so an older worker cannot overwrite a newer result; cards refresh as soon as the probe completes.
 
 The overview receives metrics from the same backend updates used by the System Dashboard. It does not show recent activity because the current backend does not provide an activity-history interface.
 
@@ -144,9 +144,13 @@ Super + F opens the installed Everything application directly. Type in Everythin
 
 Super + B detects visible Vivaldi windows even when Windows hides them from the current desktop's normal window list. It focuses a window on the current desktop when possible; if Vivaldi is only open on another desktop, ASCS switches to its topmost window's desktop and focuses it without moving the window or launching a duplicate. If no Vivaldi window exists, ASCS launches the installed browser. Cross-desktop detection requires `VirtualDesktopAccessor.dll` with `GetCurrentDesktopNumber` and `GetWindowDesktopNumber`; if the desktop cannot be detected or switched, ASCS reports the problem instead of opening another window. Super + V remains Clipboard History.
 
+### Explorer Item Creation
+
+With a filesystem folder open and active in File Explorer, Super + Shift + D prompts for a folder name and creates it there. Super + Shift + F prompts for a filename including its extension and creates an empty file in the same folder. Both shortcuts report an error if Explorer is not active, the current location is not a filesystem folder, the name is invalid, or an item with that name already exists. These modified shortcuts do not replace the configurable unshifted Super + D/F assignments.
+
 ### System Dashboard
 
-The System Dashboard is opened with Super + I by default. It displays live CPU/RAM metrics, configured drive cards, processor and graphics details, memory configuration, motherboard and BIOS information, and Windows build. Its physical-drive list maps disks to their partitions and mounted drive letters, including volume labels, file systems, capacities, and free space. Metrics refresh every five seconds while ASCS is visible; polling stops while it is hidden or minimized. Hardware details are read once per session through Windows Management Instrumentation (WMI).
+The System Dashboard is opened with Super + I by default. It displays live CPU/RAM metrics, configured drive cards, processor and graphics details, memory configuration, motherboard and BIOS information, and Windows build. Its physical-drive list maps disks to their partitions and mounted drive letters, including volume labels, file systems, capacities, and free space. Metrics refresh every five seconds while ASCS is visible; polling stops while it is hidden or minimized. Hardware inventory is deferred until the Dashboard is first opened, then read once per session through Windows Management Instrumentation (WMI), whose connection is reused between refreshes.
 
 Hardware inventory uses `Win32_Processor`, `Win32_ComputerSystem`, `Win32_PhysicalMemory`, `Win32_VideoController`, `Win32_DiskDrive`, `Win32_DiskPartition`, `Win32_LogicalDiskToPartition`, `Win32_LogicalDisk`, `Win32_BaseBoard`, `Win32_BIOS`, and `Win32_OperatingSystem`.
 
@@ -156,7 +160,7 @@ The Super Commands view is an in-app appendix of the active shortcuts. App/view 
 
 ### Preferences and command launcher
 
-Preferences configure up to 12 drive letters, snap spacing, monitor-move sizing, and unique letters for application/view shortcuts. Shortcut changes rebind immediately and are saved in `data/settings.ini`. B is reserved for Vivaldi; S, R, L, M, V, J, and Y are reserved for system commands.
+Preferences configure up to 12 drive letters, snap spacing, monitor-move sizing, and unique letters for application/view shortcuts. Shortcut changes rebind immediately and are saved in `data/settings.ini`. B is reserved for Vivaldi; S, R, L, M, V, J, and Y are reserved for system commands. Terminal and Explorer reuse the existing configured shortcut and open a new window when Shift is held; Shift+Super+D/F remain the folder/file creation shortcuts.
 
 The command launcher filters available ASCS views, applications, and system actions. Use arrow keys to navigate, Enter to run, and Escape to close.
 
@@ -170,11 +174,13 @@ Shortcut tables use “Super” as the user-facing name for the dedicated key (m
 
 | Shortcut | Action | Status |
 | --- | --- | --- |
-| Super | Open Command Center | Implemented in source |
+| Super | Show Command Center, or hide it when already active | Implemented in source |
 | Super + Space | Open searchable command launcher | Implemented in source |
 | Super + Q | Open Quick Notes (default; configurable) | Implemented in source |
 | Super + F | Open Everything (default; configurable) | Implemented in source |
 | Super + B | Focus Vivaldi here, switch to its desktop, or open it | Implemented in source |
+| Super + Shift + D | Create a folder in the active File Explorer location | Implemented in source |
+| Super + Shift + F | Create an empty, named file in the active File Explorer location | Implemented in source |
 | Super + I | Open System Dashboard (default; configurable) | Implemented in source |
 | Super + 1–9 | Focus virtual desktop 1–9 (top row or numpad) | Implemented in source |
 | Super + Shift + 1–9 | Move active window to a desktop, then switch to it | Implemented in source |
@@ -182,7 +188,9 @@ Shortcut tables use “Super” as the user-facing name for the dedicated key (m
 | Super + horizontal arrow, then vertical arrow | Snap active window to the selected quadrant | Implemented in source |
 | Super + Shift + Left / Right | Move active window to adjacent monitor | Implemented in source |
 | Super + Up / Down | Maximize, restore, or minimize | Implemented in source |
-| Super + T / E / C / H | Terminal / Explorer / Calculator / Task Manager (defaults; configurable) | Implemented in source |
+| Super + T / E | Reuse Terminal / Explorer, switching desktops if needed (defaults; configurable) | Implemented in source |
+| Super + Shift + T / E | Open a new Terminal / Explorer window (default keys; configurable) | Implemented in source |
+| Super + C / H | Open Calculator / Task Manager (defaults; configurable) | Implemented in source |
 | Super + L | Lock workstation | Implemented in source |
 | Super + M | Toggle audio mute | Implemented in source |
 | Super + V | Open Clipboard History | Implemented in source |
@@ -192,12 +200,12 @@ Shortcut tables use “Super” as the user-facing name for the dedicated key (m
 | Super + S | Save window workspace | Implemented in source |
 | Super + R | Restore window workspace | Implemented in source |
 
-Application launches wait for a window and request foreground activation with `WinActivate`. File Explorer launches specifically wait for a visible Explorer folder window and activate that window, rather than treating the existing Explorer shell process as the folder window. The Explorer foreground behavior, including Downloads and Documents over maximized windows, has been verified on the target system.
+Terminal and Explorer shortcuts reuse a visible existing window, preferring the current desktop and switching desktops when necessary. Hold Shift with the configured Terminal or Explorer shortcut to explicitly open a new window. D/F remain Explorer-item shortcuts when Shift is held. When no reusable window exists, the app is launched; delayed activation is skipped if the user has switched to another window in the meantime. File Explorer launch checks wait for a visible folder window rather than treating the Explorer shell process as the folder window.
 
 Timestamp format: `yyyy-MM-dd HH:mm:ss`  
 Date format: `yyyy-MM-dd`
 
-Shortcut letter defaults are editable in Preferences; the keys B, S, R, L, M, V, J, and Y are reserved. Super + B prefers an open Vivaldi window on the current desktop, switches to the topmost Vivaldi window's desktop when needed, or opens Vivaldi if no window is running; Super + V remains Clipboard History. Super activation and the listed app launch, Vivaldi, snapping, desktop move, and basic workspace behaviors have been verified on the target keyboard/system. Numpad NumLock-off aliases, additional DLL/OS combinations, and mixed-DPI positioning remain verification items.
+Shortcut letter defaults are editable in Preferences; the keys B, S, R, L, M, V, J, and Y are reserved. Super + B prefers an open Vivaldi window on the current desktop, switches to the topmost Vivaldi window's desktop when needed, or opens Vivaldi if no window is running; Super + V remains Clipboard History. Super+Shift+D/F create items only in the active Explorer folder. For Terminal and Explorer, the corresponding configured Shift+Super shortcut opens a new window; D/F keep their item-creation behavior. Super activation and the listed app launch, Vivaldi, snapping, desktop move, and basic workspace behaviors have been verified on the target keyboard/system. New Terminal/Explorer reuse and new-window behavior, numpad NumLock-off aliases, additional DLL/OS combinations, and mixed-DPI positioning remain verification items.
 
 ## 7. Frontend and Backend Communication
 
@@ -219,7 +227,7 @@ MessageContent
 | `SaveNotes` | Full notes JSON text | Atomically persists all notes (replaces `SaveNote`) |
 | `WindowAction` | `minimize`, `maximize`, or `close` | Controls the frameless ASCS window; `close` hides it |
 | `Launch` | Allowlisted launcher identifier | Requests an application launch |
-| `GetMetrics` | None | Requests a dashboard update |
+| `GetMetrics` | `home` or `dashboard` | Requests view-specific metrics and defers hardware inventory until the dashboard is opened |
 | `GetSettings` | None | Requests current preferences |
 | `SaveSettings` | Drives, snap gap, size preference, and shortcut letters | Validates and persists preferences |
 | `Log` | Log text | Adds an activity-log entry |
@@ -242,7 +250,7 @@ AutoHotkey sends JSON with `PostWebMessageAsJson()`.
 | `flushNotes` | Asks the frontend to immediately send a pending note save |
 | `error` | Displays an error notification |
 
-On `Ready`, the backend marks the page ready and sends the pending view and initial data. Dashboard polling starts only while the ASCS window is visible; it refreshes every five seconds and stops when the window is hidden or minimized. The `metrics` response keeps `disk`, `diskUsed`, and `diskTotal` for C: and adds `drives: [{letter, usage, used, total, online}]`.
+On `Ready`, the backend marks the page ready and sends the pending view and initial data. Dashboard polling starts only while the ASCS window is visible; it refreshes every five seconds and stops when the window is hidden or minimized. Drive metrics are pushed again as soon as their asynchronous probe completes. The `metrics` response keeps `disk`, `diskUsed`, and `diskTotal` for C: and adds `drives: [{letter, usage, used, total, online}]`.
 
 ### Security Considerations
 
@@ -282,7 +290,7 @@ Everything is optional and only needed for its launcher. ASCS opens the applicat
 7. Restrict write access to the installing account, Administrators, and SYSTEM; do not run ASCS elevated.
 8. Run `C:\ASCS\ASCS.ahk`.
 
-The script requests hidden startup and is intended to show the Command Center when Super is tapped. Super activation has been verified; hidden startup and WebView integration regression tests remain pending. After changing frontend assets, restart or reload ASCS to load the updated interface.
+The script starts hidden. Tapping Super shows the Command Center, or hides it when it is already active. Reloading the script and registering the configurable shortcuts, including the Shift-modified Terminal/Explorer behavior, have been tested. After changing frontend assets, restart or reload ASCS to load the updated interface.
 
 ## 10. Development Status
 
@@ -295,19 +303,25 @@ Status labels distinguish source implementation from execution on the target sys
 
 ### Implemented in Source
 
-- Application launch activation, including process/window waiting and `WinActivate`.
+- Application launch activation, including asynchronous process/window waiting that avoids stealing focus after the user switches windows.
+- Reuse-first Windows Terminal and File Explorer shortcuts; when an existing window is on another virtual desktop, ASCS switches to that desktop and focuses it. Hold Shift with the configured shortcut to request a new window.
+- A Super-key Command Center toggle that hides the active window or shows the home view.
 - WebViewGui initialization, messaging setup, event registration, and virtual-host mapping.
 - Frontend readiness handshake and newline-delimited message dispatch.
 - Frontend JSON response handling.
 - Super shortcut definitions, application launchers, and basic system controls.
 - Quick Notes v2 multi-note JSON persistence, atomic replacement, backup fallback, and save acknowledgements.
 - Super+F direct Everything launch.
+- Super+Shift+D/F active-Explorer folder and empty-file creation, including name validation and duplicate protection.
 - Custom ASCS title bar, window controls, and display-aware 1920 × 1080 startup sizing.
-- WMI metrics, cached physical-hardware details, and configurable drive cards with network-drive polling guards.
+- WMI metrics with a reused WMI connection, lazy physical-hardware collection on first Dashboard view, and configurable drive cards with network-drive polling guards.
+- Per-drive probe result files and process IDs, concurrent probe execution without duplicate-instance prompts, bounded worker lifetime, cached results, and immediate metric refresh after completion.
+- Incremental drive-card updates and unchanged-hardware render suppression in the frontend.
 - Desktop switching, active-window desktop moves, quadrant snapping, and monitor-to-monitor window movement.
 - Saved workspace capture/restoration and a searchable command launcher.
 - A Preferences view for drive selection, snap gap, monitor sizing, and live shortcut rebinding.
 - Five-second dashboard refresh while the ASCS window is visible; drive probes run in a separate process with an eight-second timeout.
+- A compact, balanced, responsive Commands layout with two desktop columns and a single narrow-screen column; drive cards use the shared metric-card styling.
 - The five primary frontend interfaces, command launcher, Super Commands appendix, and Preferences.
 
 ### Engineering Checks Completed
@@ -328,6 +342,10 @@ Status labels distinguish source implementation from execution on the target sys
 - [x] Workspace save and restore basics.
 - [x] Vivaldi current/other-desktop focus, launch-if-closed, error behavior, and command-launcher entry.
 - [x] Re-showing the existing ASCS/Command Palette window from another desktop without a stale-window error.
+- [x] Super toggles the Command Center; Terminal and Explorer reuse existing windows and can switch desktops to focus them.
+- [x] Shift-modified Terminal/Explorer shortcuts register and reload; Shift+Super+D/F retain their Explorer item-creation actions.
+- [x] Drive probes run independently with unique outputs; Dashboard hardware details are deferred, and completed probes refresh their cards promptly.
+- [x] Responsive Commands layout and shared drive/RAM card styling.
 
 ### Runtime Testing Pending
 
@@ -342,6 +360,8 @@ Status labels distinguish source implementation from execution on the target sys
 - Mixed-DPI layouts, snap gaps, and monitor work-area/frame-bound calculations.
 - Workspace security validation for invalid executable paths and relaunch matching; dynamic shortcut rebinding.
 - Preferences persistence/validation and command launcher filtering/keyboard operation.
+- Full Explorer item-creation edge-case matrix (cancel, invalid names, duplicates, and non-Explorer focus) and D/F passthrough combinations.
+- Terminal/Explorer reuse and new-window behavior across multiple virtual desktops and alternate Windows Terminal configurations.
 - Dashboard metric accuracy, C:/J: online/offline cards, five-second visible-window updates, and no polling while hidden.
 - Hardware detail collection on devices with multiple GPU/disk/memory configurations.
 - Responsive layout and interaction at target WebView window sizes.
@@ -349,18 +369,18 @@ Status labels distinguish source implementation from execution on the target sys
 
 ## 11. Known Limitations
 
-- Version 1.4.4 WebView origin restrictions and security settings require regression testing on the target installation; basic page readiness has previously been observed.
-- Startup, frontend callbacks, and keyboard behavior require runtime testing.
+- WebView origin restrictions, security settings, and complete startup/frontend callback regression coverage still need broader testing across supported installations.
+- Additional Windows builds, virtual desktop DLL versions, and modifier/keyboard configurations need compatibility testing.
 - Workspace restore validates absolute existing `.exe` paths against the recorded process name and launches without arguments; only up to 24 visible windows are captured.
 - Super+F requires the Everything application to be installed; ASCS delegates search and result display to it.
 - The VirtualDesktopAccessor DLL's broader window-move APIs and OS-build compatibility require additional testing; Vivaldi cross-desktop focus and the reported desktop-move behavior have been verified on the target system.
-- Drive readiness and capacity checks run in a separate AutoHotkey process; the main process stops a worker after eight seconds and caches results for 30 seconds. Verify timeout and retry behavior on the target system.
-- Desktop switching, window moves, and focusing existing Vivaldi windows across desktops require `VirtualDesktopAccessor.dll`; without it, those actions report failure.
+- Drive readiness and capacity checks run in a separate AutoHotkey process; the main process stops a worker after eight seconds and caches results for 30 seconds. WMI and Windows drive reporting determine metric availability.
+- Desktop switching, window moves, and focusing existing Vivaldi, Terminal, or Explorer windows across desktops require `VirtualDesktopAccessor.dll`; if unavailable, ASCS reports the failure rather than launching a duplicate.
 - Monitor frame-bound calculations depend on Windows DPI coordinate behavior and require runtime verification.
 - Metrics depend on WMI and Windows drive reporting.
 - The Command Center does not display recent activity.
 - Activity log entries are single-line, capped, and rotated at 1 MiB to one backup.
-- No automated runtime test suite is included; targeted manual test results are documented in the v1.4.1–v1.4.4 changelog entries.
+- No automated runtime test suite is included; the current release has been verified with targeted script, browser, and on-device checks.
 
 ## 12. Development Roadmap
 
@@ -378,6 +398,21 @@ Status labels distinguish source implementation from execution on the target sys
 - Refine keyboard navigation and overall interaction consistency.
 
 ## 13. Changelog
+
+### Version 1.5.0 — Performance, Launch Reuse, and Command Center Polish
+
+- Made tapping Super toggle the Command Center: show the home view when ASCS is inactive, or hide it when already active.
+- Changed Terminal and Explorer to reuse an existing visible window, preferring the current desktop and switching desktops when necessary. Hold Shift with the configured shortcut to open a new window; the D/F item-creation bindings keep their existing behavior.
+- Made delayed application activation asynchronous and conditional on the foreground remaining unchanged, reducing accidental foreground stealing.
+- Added Super+Shift+D to create a folder in the active File Explorer location.
+- Added Super+Shift+F to create an empty file in the active File Explorer location; enter a filename with its extension.
+- Kept unshifted Super+D/F available for configurable shortcuts; unassigned Super+D passes through to Windows Show Desktop.
+- Require the target File Explorer window to be active; validate names and refuse to overwrite existing items.
+- Improved drive metrics by allowing concurrent probe workers, giving every probe a unique result path, reusing the WMI connection, and refreshing metrics as soon as a probe completes.
+- Deferred detailed hardware inventory until the Dashboard is first opened; the Command Center receives only the metrics it needs.
+- Reconcile drive cards in place and skip unchanged hardware rendering; normalized drive card styling with other metric cards.
+- Reworked the Commands reference into balanced flowing columns with compact spacing and a single-column narrow-screen layout.
+- Updated the README and in-app shortcut descriptions to document the launch policy, performance work, and modified shortcuts.
 
 ### Version 1.4.4 — WebView and Workspace Hardening
 

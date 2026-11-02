@@ -8,7 +8,7 @@ SetWorkingDir(A_ScriptDir)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 1.4.4
+; Version 1.5.0
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -35,6 +35,7 @@ global ASCS_PendingView := "home"
 global ASCS_DashboardErrorShown := false
 global ASCS_DriveCache := Map()
 global ASCS_DriveProbes := Map()
+global ASCS_Wmi := 0
 global ASCS_NotesRecovered := false
 global ASCS_DesktopAccessorWarningShown := false
 global ASCS_PendingWindowDirection := ""
@@ -69,7 +70,7 @@ try {
 
     ASCS_App := WebViewGui(
         "-Caption +Resize +E0x40000",
-        "ASCS - Aeolionware",
+        "Aeolionware SCS",
         ,
         {
             DataDir: ASCS_WebViewDataDir,
@@ -120,7 +121,7 @@ try {
     ; Keep the application hidden at startup.
     ASCS_App.Hide()
 
-    WriteLog("ASCS 1.4.4 initialized.")
+    WriteLog("ASCS 1.5.0 initialized.")
 
 } catch as err {
     WriteLog("WebView2 initialization failed: " err.Message)
@@ -143,7 +144,7 @@ try {
     KeyWait("F24")
 
     if (A_PriorKey = "F24")
-        ShowView("home")
+        ToggleCommandCenter()
 }
 
 F24 & Space::ShowCommandLauncher()
@@ -204,8 +205,146 @@ RegisterConfiguredHotkeys() {
         "taskmanager", LaunchCommand.Bind("taskmanager")
     )
 
-    for action, key in ASCS_ActionHotkeys
+    for action, key in ASCS_ActionHotkeys {
+        if (key = "d" || key = "f")
+            continue
         Hotkey("F24 & " key, callbacks[action], "On")
+    }
+
+    for key in ["d", "f"] {
+        callback := 0
+        for action, configuredKey in ASCS_ActionHotkeys {
+            if (configuredKey = key) {
+                callback := callbacks[action]
+                break
+            }
+        }
+        Hotkey(
+            "F24 & " key,
+            HandleExplorerShortcut.Bind(key, callback),
+            "On"
+        )
+    }
+}
+
+HandleExplorerShortcut(key, callback := 0, thisHotkey := "") {
+    if GetKeyState("Shift", "P") {
+        CreateExplorerItem(key = "d" ? "folder" : "file")
+        return
+    }
+
+    if IsObject(callback)
+        callback.Call()
+    else
+        Send("#" key)
+}
+
+CreateExplorerItem(kind) {
+    try {
+        folderPath := GetActiveExplorerFolder(kind)
+        if (kind = "folder") {
+            prompt := "Enter a name for the new folder:"
+            title := "Create folder"
+            defaultName := "New folder"
+        } else {
+            prompt := "Enter a filename, including its extension (for example, notes.txt):"
+            title := "Create file"
+            defaultName := "New file.txt"
+        }
+
+        response := InputBox(prompt, title, "w460 h150", defaultName)
+        if (response.Result != "OK")
+            return
+
+        name := response.Value
+        ValidateExplorerItemName(name, kind)
+        itemPath := RTrim(folderPath, "\") "\" name
+        if (kind = "folder")
+            CreateNewExplorerDirectory(itemPath)
+        else
+            CreateNewExplorerFile(itemPath)
+    } catch as err {
+        itemType := kind = "folder" ? "Folder" : "File"
+        WriteLog(itemType " creation error: " err.Message)
+        MsgBox(
+            err.Message,
+            "Aeolionware SCS: " itemType " Creation Error",
+            "Icon!"
+        )
+    }
+}
+
+GetActiveExplorerFolder(kind) {
+    activeHwnd := WinGetID("A")
+    activeClass := WinGetClass("ahk_id " activeHwnd)
+    if (activeClass != "CabinetWClass" && activeClass != "ExploreWClass")
+        throw Error(
+            "Focus the File Explorer window containing the directory where you want to create the new "
+            (kind = "folder" ? "folder." : "file.")
+        )
+
+    shell := ComObject("Shell.Application")
+    for window in shell.Windows {
+        if (window.HWND != activeHwnd)
+            continue
+
+        folderPath := window.Document.Folder.Self.Path
+        if !DirExist(folderPath)
+            throw Error("The active Explorer location is not a filesystem folder.")
+        return folderPath
+    }
+
+    throw Error("Could not identify the active File Explorer folder.")
+}
+
+ValidateExplorerItemName(name, kind) {
+    if (name = "" || Trim(name) = "")
+        throw Error("A name is required.")
+    if (StrLen(name) > 255)
+        throw Error("The name must be 255 characters or fewer.")
+    if RegExMatch(name, "[\x00-\x1F<>:`"/\\|?*]")
+        throw Error("The name contains a character that Windows does not allow.")
+    if RegExMatch(name, "[ .]$")
+        throw Error("Names cannot end with a space or period.")
+    if (name = "." || name = "..")
+        throw Error("That name is not allowed.")
+    if RegExMatch(name, "i)^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)")
+        throw Error("That name is reserved by Windows.")
+    if (kind = "file" && !RegExMatch(name, "^.+\.[^.]+$"))
+        throw Error("Enter a filename with an extension, such as notes.txt.")
+}
+
+CreateNewExplorerDirectory(path) {
+    if !DllCall("CreateDirectoryW", "Str", path, "Ptr", 0, "Int") {
+        errorCode := A_LastError
+        if (errorCode = 183)
+            throw Error("An item with that name already exists.")
+        throw Error("Windows could not create the folder (error " errorCode ").")
+    }
+}
+
+CreateNewExplorerFile(path) {
+    handle := DllCall(
+        "CreateFileW",
+        "Str", path,
+        "UInt", 0x40000000,
+        "UInt", 0,
+        "Ptr", 0,
+        "UInt", 1,
+        "UInt", 0x80,
+        "Ptr", 0,
+        "Ptr"
+    )
+    if (handle = -1) {
+        errorCode := A_LastError
+        if (errorCode = 80 || errorCode = 183)
+            throw Error("An item with that name already exists.")
+        throw Error("Windows could not create the file (error " errorCode ").")
+    }
+    if !DllCall("CloseHandle", "Ptr", handle, "Int") {
+        errorCode := A_LastError
+        throw Error("Windows could not finish creating the file (error " errorCode ").")
+    }
 }
 
 LoadUserSettings() {
@@ -1078,6 +1217,15 @@ ShowCommandLauncher() {
     SetTimer(DispatchPendingLauncher, -100)
 }
 
+ToggleCommandCenter() {
+    global ASCS_App
+
+    if WinActive("ahk_id " ASCS_App.Hwnd)
+        HandleClose()
+    else
+        ShowView("home")
+}
+
 DispatchPendingLauncher(*) {
     global ASCS_PendingLauncher
     global ASCS_PageReady
@@ -1273,10 +1421,14 @@ HandleWebMessage(sender, args) {
                     WriteLog("Rejected invalid launcher identifier.")
 
             case "GetMetrics":
-                if (content = "")
+                if (content = "home" || content = "dashboard") {
+                    ASCS_PendingView := content
                     PushDashboard()
-                else
+                } else if (content = "") {
+                    PushDashboard()
+                } else {
                     WriteLog("Rejected GetMetrics payload.")
+                }
 
             case "Log":
                 if (StrLen(content) <= 4096)
@@ -1365,26 +1517,69 @@ SendToFrontend(json) {
 ; ==========================================
 
 RunAndActivate(target, fallbackWindow := "") {
+    foregroundAtLaunch := DllCall("GetForegroundWindow", "Ptr")
     pid := 0
     Run(target,,, &pid)
 
-    if pid {
-        processWindow := "ahk_pid " pid
-        if WinWait(processWindow,, 8) {
-            WinActivate(processWindow)
-            if WinWaitActive(processWindow,, 2)
-                return true
+    if (!pid && fallbackWindow = "") {
+        WriteLog("Launched application did not provide a process ID: " target)
+        return false
+    }
+
+    deadline := A_TickCount + 8000
+    SetTimer(
+        WaitForApplicationWindow.Bind(
+            pid,
+            fallbackWindow,
+            foregroundAtLaunch,
+            deadline,
+            target
+        ),
+        -100
+    )
+    return true
+}
+
+WaitForApplicationWindow(
+    pid,
+    fallbackWindow,
+    foregroundAtLaunch,
+    deadline,
+    target,
+    *
+) {
+    try {
+        if pid {
+            processWindow := "ahk_pid " pid
+            if WinExist(processWindow) {
+                ActivateLaunchedWindow(processWindow, foregroundAtLaunch)
+                return
+            }
         }
-    }
 
-    if (fallbackWindow != "" && WinWait(fallbackWindow,, 2)) {
-        WinActivate(fallbackWindow)
-        if WinWaitActive(fallbackWindow,, 2)
-            return true
-    }
+        if (fallbackWindow != "" && WinExist(fallbackWindow)) {
+            ActivateLaunchedWindow(fallbackWindow, foregroundAtLaunch)
+            return
+        }
 
-    WriteLog("Launched application window could not be activated: " target)
-    return false
+        if (A_TickCount >= deadline) {
+            WriteLog("Launched application window did not appear: " target)
+            return
+        }
+
+        SetTimer(
+            WaitForApplicationWindow.Bind(
+                pid,
+                fallbackWindow,
+                foregroundAtLaunch,
+                deadline,
+                target
+            ),
+            -100
+        )
+    } catch as err {
+        WriteLog("Launched application activation failed: " target " | " err.Message)
+    }
 }
 
 GetExplorerWindows() {
@@ -1408,62 +1603,230 @@ GetExplorerWindows() {
     return windows
 }
 
-RunAndActivateExplorer(target, openRequestedFolder := false) {
+GetTerminalWindows() {
+    previousDetectHidden := A_DetectHiddenWindows
+    try {
+        DetectHiddenWindows(true)
+        windows := []
+        for hwnd in WinGetList("ahk_exe WindowsTerminal.exe") {
+            if DllCall("IsWindowVisible", "Ptr", hwnd, "Int")
+                windows.Push(hwnd)
+        }
+    } finally {
+        DetectHiddenWindows(previousDetectHidden)
+    }
+
+    return windows
+}
+
+FocusExistingApplication(windows, applicationName) {
+    global ASCS_VirtualDesktopDllPath
+
+    if !FileExist(ASCS_VirtualDesktopDllPath) {
+        ShowDesktopTooltip(
+            "Add VirtualDesktopAccessor.dll to focus apps across desktops."
+        )
+        throw Error(
+            applicationName " is already open, but cross-desktop focus "
+            "requires VirtualDesktopAccessor.dll."
+        )
+    }
+
+    dll := ASCS_VirtualDesktopDllPath
+    currentDesktop := DllCall(dll "\GetCurrentDesktopNumber", "Int")
+    if (currentDesktop < 0)
+        throw Error("Unable to determine the current virtual desktop.")
+
+    selectedWindow := 0
+    selectedDesktop := -1
+    for hwnd in windows {
+        desktop := DllCall(
+            dll "\GetWindowDesktopNumber",
+            "Ptr", hwnd,
+            "Int"
+        )
+        if (desktop < 0)
+            throw Error("Unable to determine an " applicationName " window's desktop.")
+
+        if (desktop = currentDesktop) {
+            selectedWindow := hwnd
+            selectedDesktop := desktop
+            break
+        }
+
+        if !selectedWindow {
+            selectedWindow := hwnd
+            selectedDesktop := desktop
+        }
+    }
+
+    if !selectedWindow
+        return false
+
+    if (selectedDesktop != currentDesktop) {
+        switched := DllCall(
+            dll "\GoToDesktopNumber",
+            "Int", selectedDesktop,
+            "Int"
+        )
+        if (switched < 0)
+            throw Error("Unable to switch to the " applicationName " desktop.")
+    }
+
+    window := "ahk_id " selectedWindow
+    WinActivate(window)
+    if !WinWaitActive(window,, 2)
+        throw Error("Unable to focus the existing " applicationName " window.")
+    return true
+}
+
+RunAndActivateExplorer(
+    target,
+    openRequestedFolder := false,
+    forceNew := false
+) {
+    foregroundAtLaunch := DllCall("GetForegroundWindow", "Ptr")
     existingWindows := Map()
     existingExplorerWindows := GetExplorerWindows()
     for hwnd in existingExplorerWindows
         existingWindows[hwnd] := true
 
-    if (existingExplorerWindows.Length && !openRequestedFolder) {
-        ActivateExplorerWindow(existingExplorerWindows[1])
+    if (existingExplorerWindows.Length && !openRequestedFolder && !forceNew) {
+        FocusExistingApplication(existingExplorerWindows, "File Explorer")
         return true
     }
 
     Run(target)
     deadline := A_TickCount + 8000
-    selectedWindow := 0
-
-    while (A_TickCount < deadline) {
-        windows := GetExplorerWindows()
-        for hwnd in windows {
-            if !existingWindows.Has(hwnd) {
-                selectedWindow := hwnd
-                break
-            }
-        }
-        if selectedWindow
-            break
-        Sleep(100)
-    }
-
-    if !selectedWindow {
-        windows := GetExplorerWindows()
-        if windows.Length
-            selectedWindow := windows[1]
-    }
-
-    if !selectedWindow {
-        throw Error("File Explorer window did not appear: " target)
-    }
-
-    ActivateExplorerWindow(selectedWindow)
+    SetTimer(
+        WaitForExplorerWindow.Bind(
+            existingWindows,
+            foregroundAtLaunch,
+            deadline,
+            target,
+            forceNew
+        ),
+        -100
+    )
     return true
 }
 
-ActivateExplorerWindow(hwnd) {
-    window := "ahk_id " hwnd
-    WinActivate(window)
-    if !WinWaitActive(window,, 2)
-        throw Error("File Explorer window could not be activated: " hwnd)
+WaitForExplorerWindow(
+    existingWindows,
+    foregroundAtLaunch,
+    deadline,
+    target,
+    forceNew,
+    *
+) {
+    try {
+        windows := GetExplorerWindows()
+        for hwnd in windows {
+            if !existingWindows.Has(hwnd) {
+                ActivateExplorerWindow(hwnd, foregroundAtLaunch)
+                return
+            }
+        }
+
+        if (A_TickCount >= deadline) {
+            if (windows.Length && !forceNew) {
+                ActivateExplorerWindow(windows[1], foregroundAtLaunch)
+            } else {
+                WriteLog("File Explorer window did not appear: " target)
+            }
+            return
+        }
+
+        SetTimer(
+            WaitForExplorerWindow.Bind(
+                existingWindows,
+                foregroundAtLaunch,
+                deadline,
+                target,
+                forceNew
+            ),
+            -100
+        )
+    } catch as err {
+        WriteLog("File Explorer activation failed: " target " | " err.Message)
+    }
 }
 
-LaunchCommand(command, thisHotkey := "") {
+WaitForNewTerminalWindow(
+    existingWindows,
+    foregroundAtLaunch,
+    deadline,
+    *
+) {
+    try {
+        for hwnd in GetTerminalWindows() {
+            if !existingWindows.Has(hwnd) {
+                ActivateLaunchedWindow(
+                    "ahk_id " hwnd,
+                    foregroundAtLaunch
+                )
+                return
+            }
+        }
+
+        if (A_TickCount >= deadline) {
+            WriteLog("New Windows Terminal window did not appear.")
+            return
+        }
+
+        SetTimer(
+            WaitForNewTerminalWindow.Bind(
+                existingWindows,
+                foregroundAtLaunch,
+                deadline
+            ),
+            -100
+        )
+    } catch as err {
+        WriteLog("New Windows Terminal activation failed: " err.Message)
+    }
+}
+
+ActivateExplorerWindow(hwnd, foregroundAtLaunch) {
+    window := "ahk_id " hwnd
+    ActivateLaunchedWindow(window, foregroundAtLaunch)
+}
+
+ActivateLaunchedWindow(window, foregroundAtLaunch) {
+    if WinActive(window)
+        return true
+
+    if (DllCall("GetForegroundWindow", "Ptr") != foregroundAtLaunch)
+        return false
+
+    WinActivate(window)
+    if WinWaitActive(window,, 1)
+        return true
+
+    if (DllCall("GetForegroundWindow", "Ptr") != foregroundAtLaunch)
+        return false
+
+    throw Error("Window could not be activated: " window)
+}
+
+LaunchCommand(command, thisHotkey := "", forceNew := false, *) {
     userProfile := EnvGet("USERPROFILE")
+    if (
+        !forceNew
+        && (command = "terminal" || command = "explorer")
+        && (thisHotkey != "")
+        && GetKeyState("Shift", "P")
+    )
+        forceNew := true
 
     try {
         switch command {
             case "explorer":
-                RunAndActivateExplorer("explorer.exe")
+                RunAndActivateExplorer(
+                    forceNew ? "explorer.exe /n" : "explorer.exe",
+                    false,
+                    forceNew
+                )
 
             case "browser":
                 RunAndActivate("https://www.google.com")
@@ -1472,7 +1835,30 @@ LaunchCommand(command, thisHotkey := "") {
                 LaunchVivaldi()
 
             case "terminal":
-                RunAndActivate("wt.exe", "ahk_exe WindowsTerminal.exe")
+                if forceNew {
+                    existingWindows := Map()
+                    for hwnd in GetTerminalWindows()
+                        existingWindows[hwnd] := true
+                    foregroundAtLaunch := DllCall("GetForegroundWindow", "Ptr")
+                    Run("wt.exe -w new")
+                    SetTimer(
+                        WaitForNewTerminalWindow.Bind(
+                            existingWindows,
+                            foregroundAtLaunch,
+                            A_TickCount + 8000
+                        ),
+                        -100
+                    )
+                } else {
+                    windows := GetTerminalWindows()
+                    if windows.Length
+                        FocusExistingApplication(windows, "Windows Terminal")
+                    else
+                        RunAndActivate(
+                            "wt.exe",
+                            "ahk_exe WindowsTerminal.exe"
+                        )
+                }
 
             case "calculator":
                 RunAndActivate("calc.exe", "Calculator")
@@ -1789,6 +2175,8 @@ SendNotesError(message) {
 PushDashboard(*) {
     global ASCS_DashboardErrorShown
     global ASCS_HardwareJson
+    global ASCS_PendingView
+    global ASCS_Wmi
 
     if !IsDashboardWindowVisible() {
         SetTimer(PushDashboard, 0)
@@ -1796,7 +2184,9 @@ PushDashboard(*) {
     }
 
     try {
-        wmi := ComObjGet("winmgmts:\\.\root\cimv2")
+        if !IsObject(ASCS_Wmi)
+            ASCS_Wmi := ComObjGet("winmgmts:\\.\root\cimv2")
+        wmi := ASCS_Wmi
 
         cpuTotal := 0
         cpuCount := 0
@@ -1831,8 +2221,11 @@ PushDashboard(*) {
         diskUsed := drives["cUsed"]
         diskTotal := drives["cTotal"]
 
-        if (ASCS_HardwareJson = "")
+        if (ASCS_PendingView = "dashboard" && ASCS_HardwareJson = "")
             ASCS_HardwareJson := GetHardwareDetails(wmi)
+        hardwareJson := ASCS_HardwareJson != ""
+            ? ASCS_HardwareJson
+            : "null"
 
         json := '{"type":"metrics","cpu":' cpuUsage
             . ',"ram":' ramUsage
@@ -1841,7 +2234,7 @@ PushDashboard(*) {
             . ',"disk":' diskUsage
             . ',"diskUsed":' Round(diskUsed, 1)
             . ',"diskTotal":' Round(diskTotal, 1)
-            . ',"hardware":' ASCS_HardwareJson
+            . ',"hardware":' hardwareJson
             . ',"drives":' drives["json"] '}'
 
         SendToFrontend(json)
@@ -1849,6 +2242,7 @@ PushDashboard(*) {
         ASCS_DashboardErrorShown := false
 
     } catch as err {
+        ASCS_Wmi := 0
         if !ASCS_DashboardErrorShown {
             WriteLog("Dashboard metrics failed: " err.Message)
 
@@ -2225,13 +2619,15 @@ StartDriveProbe(drive, now) {
     if !RegExMatch(letter, "i)^[A-Z]$")
         throw Error("Invalid drive letter for metrics probe.")
 
-    resultPath := A_ScriptDir "\data\drive-" StrUpper(letter) ".probe"
+    probeId := DllCall("GetCurrentProcessId", "UInt") "-" now
+    resultPath := A_ScriptDir "\data\drive-" StrUpper(letter)
+        . "-" probeId ".probe"
     try {
         if FileExist(resultPath)
             FileDelete(resultPath)
 
         command := '"' A_AhkPath '" "' A_ScriptDir
-            . '\ASCS.DriveProbe.ahk" ' StrUpper(letter)
+            . '\ASCS.DriveProbe.ahk" ' StrUpper(letter) " " probeId
         Run(command,, "Hide", &pid)
         ASCS_DriveCache[drive]["checked"] := now
         ASCS_DriveProbes[drive] := Map(
@@ -2254,6 +2650,7 @@ PollDriveProbes(*) {
     global ASCS_DriveProbes
 
     now := A_TickCount
+    metricsChanged := false
     for drive, probe in ASCS_DriveProbes.Clone() {
         if (now - probe["started"] >= 8000) {
             try {
@@ -2267,6 +2664,7 @@ PollDriveProbes(*) {
                 "metric", OfflineDriveMetric(drive)
             )
             ASCS_DriveProbes.Delete(drive)
+            metricsChanged := true
             WriteLog("Drive metrics probe timed out for " drive ".")
             continue
         }
@@ -2305,18 +2703,23 @@ PollDriveProbes(*) {
                 WriteLog("Drive metrics probe response failed for " drive ": " err.Message)
             }
             try FileDelete(resultPath)
+            metricsChanged := true
         } else {
             ASCS_DriveCache[drive] := Map(
                 "checked", now,
                 "metric", OfflineDriveMetric(drive)
             )
             WriteLog("Drive metrics worker exited without a result for " drive ".")
+            metricsChanged := true
         }
         ASCS_DriveProbes.Delete(drive)
     }
 
     if !ASCS_DriveProbes.Count
         SetTimer(PollDriveProbes, 0)
+
+    if metricsChanged
+        SetTimer(PushDashboard, -1)
 }
 
 OfflineDriveMetric(drive) {

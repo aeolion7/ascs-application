@@ -18,6 +18,7 @@ let launcherSelection = 0;
 let launcherPreviousFocus = null;
 let notesData = { version: 2, activeId: null, notes: [] };
 let notesLoaded = false;
+let lastHardwareSignature = null;
 
 function send(type, content = "") {
     const webview = window.chrome?.webview;
@@ -82,7 +83,7 @@ function navigate(view) {
     $("breadcrumb").textContent = viewLabels[view];
 
     if (view === "notes" && !notesLoaded) send("GetNotes");
-    if (view === "dashboard" || view === "home") send("GetMetrics");
+    if (view === "dashboard" || view === "home") send("GetMetrics", view);
     if (view === "settings") send("GetSettings");
 
     requestAnimationFrame(() => {
@@ -628,6 +629,7 @@ function formatCapacity(used, total) {
 function createDriveCard(drive, dashboard) {
     const card = document.createElement("article");
     card.className = `metric-card${dashboard ? " dashboard-metric" : ""} drive-card`;
+    card.dataset.drive = drive.letter;
     const topline = document.createElement("div");
     topline.className = "metric-topline";
     const icon = document.createElement("span");
@@ -669,7 +671,6 @@ function createDriveCard(drive, dashboard) {
     } else {
         card.append(topline, value, track, detail);
     }
-    updateDriveCard(card, drive);
     return card;
 }
 
@@ -692,14 +693,30 @@ function updateDriveCard(card, drive) {
 
 function renderDrives(drives) {
     if (!Array.isArray(drives)) return;
-    const home = $("homeDrives");
-    const dashboard = $("dashboardDrives");
-    home.replaceChildren();
-    dashboard.replaceChildren();
-    drives.forEach(drive => {
-        home.append(createDriveCard(drive, false));
-        dashboard.append(createDriveCard(drive, true));
-    });
+
+    function updateCards(container, dashboard) {
+        const existing = new Map(
+            [...container.children].map(card => [card.dataset.drive, card])
+        );
+
+        drives.forEach((drive, index) => {
+            let card = existing.get(drive.letter);
+            if (card) {
+                existing.delete(drive.letter);
+            } else {
+                card = createDriveCard(drive, dashboard);
+            }
+            updateDriveCard(card, drive);
+
+            const current = container.children[index];
+            if (current !== card) container.insertBefore(card, current || null);
+        });
+
+        existing.forEach(card => card.remove());
+    }
+
+    updateCards($("homeDrives"), false);
+    updateCards($("dashboardDrives"), true);
 }
 
 function updateMetrics(data) {
@@ -723,6 +740,9 @@ function updateMetrics(data) {
 
 function updateHardware(hardware) {
     if (!hardware || typeof hardware !== "object") return;
+    const signature = JSON.stringify(hardware);
+    if (signature === lastHardwareSignature) return;
+
     $("hardwareCpu").textContent = hardware.cpu || "Unavailable";
     $("hardwareCores").textContent = hardware.cores || "";
     $("hardwareGpu").textContent = hardware.gpu || "Unavailable";
@@ -739,6 +759,7 @@ function updateHardware(hardware) {
     $("hardwareBios").textContent = hardware.bios || "";
     $("hardwareWindows").textContent = hardware.windows || "Unavailable";
     renderPhysicalStorage(storage);
+    lastHardwareSignature = signature;
 }
 
 function formatHardwareCapacity(bytes) {

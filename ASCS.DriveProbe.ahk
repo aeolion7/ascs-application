@@ -1,11 +1,16 @@
 #Requires AutoHotkey v2.0 64-bit
+#SingleInstance Off
+#NoTrayIcon
 
-if (A_Args.Length != 1 || !RegExMatch(A_Args[1], "i)^[A-Z]$"))
+if (A_Args.Length != 2
+    || !RegExMatch(A_Args[1], "i)^[A-Z]$")
+    || !RegExMatch(A_Args[2], "^\d+-\d+$"))
     ExitApp(2)
 
 letter := StrUpper(A_Args[1])
+probeId := A_Args[2]
 drive := letter ":"
-resultPath := A_ScriptDir "\data\drive-" letter ".probe"
+resultPath := A_ScriptDir "\data\drive-" letter "-" probeId ".probe"
 tempPath := resultPath ".tmp"
 online := false
 usage := 0
