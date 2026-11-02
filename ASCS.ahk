@@ -88,7 +88,7 @@ try {
         TraySetIcon(ASCS_IconPath)
         ApplyWindowIcon()
     } catch as err {
-        WriteLog("Window icon could not be loaded: " err.Message)
+        WriteLog("Application icon setup failed: " err.Message)
     }
 
     ; Enable host-to-frontend messaging.
@@ -1122,8 +1122,12 @@ ApplyWindowIcon() {
     if !ASCS_WindowIcon
         return
 
-    SendMessage(0x80, 1, ASCS_WindowIcon,, "ahk_id " ASCS_App.Hwnd)
-    SendMessage(0x80, 0, ASCS_WindowIcon,, "ahk_id " ASCS_App.Hwnd)
+    hwnd := ASCS_App.Hwnd
+    if !DllCall("IsWindow", "Ptr", hwnd, "Int")
+        throw Error("ASCS window handle is invalid")
+
+    DllCall("SendMessageW", "Ptr", hwnd, "UInt", 0x80, "Ptr", 1, "Ptr", ASCS_WindowIcon, "Ptr")
+    DllCall("SendMessageW", "Ptr", hwnd, "UInt", 0x80, "Ptr", 0, "Ptr", ASCS_WindowIcon, "Ptr")
 }
 
 ; ==========================================
