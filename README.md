@@ -2,9 +2,9 @@
 
 **Brand:** AEOLIONWARE SUPER COMMAND SYSTEM  
 **Tagline:** AEOLIONWARE, at your command.  
-**Version:** 1.4.2
+**Version:** 1.4.3
 **Platform:** Windows  
-**Status:** Version 1.4.2 implementation in source; existing application launch and foreground-focus behavior verified on the target Windows system; new Vivaldi focus-or-open behavior and other runtime checks remain pending
+**Status:** Version 1.4.3 implementation in source; existing application launch and foreground-focus behavior verified on the target Windows system; Vivaldi cross-desktop focus and other runtime checks remain pending
 
 ASCS is a keyboard-driven Windows utility suite. It uses AutoHotkey v2 for hotkeys and Windows automation, WebView2 for its graphical interface, and a web frontend built with HTML, CSS, and JavaScript.
 
@@ -96,7 +96,7 @@ C:\ASCS\
 │   ├── WebViewToo.ahk
 │   └── WebView2.ahk
 ├── lib\
-│   └── VirtualDesktopAccessor.dll       (optional; desktop switching/window moves)
+│   └── VirtualDesktopAccessor.dll       (optional; desktop switching/window moves/cross-desktop focus)
 └── data\
     ├── notes.json
     ├── settings.ini
@@ -139,7 +139,7 @@ Super + F opens the installed Everything application directly. Type in Everythin
 
 ### Vivaldi
 
-Super + B focuses the topmost existing Vivaldi window, restoring it if minimized; if no Vivaldi window is open, ASCS launches the installed browser. If Vivaldi cannot be found or activated, ASCS logs and displays an error. Super + V remains Clipboard History.
+Super + B detects visible Vivaldi windows even when Windows hides them from the current desktop's normal window list. It focuses a window on the current desktop when possible; if Vivaldi is only open on another desktop, ASCS switches to its topmost window's desktop and focuses it without moving the window or launching a duplicate. If no Vivaldi window exists, ASCS launches the installed browser. Cross-desktop detection requires `VirtualDesktopAccessor.dll` with `GetCurrentDesktopNumber` and `GetWindowDesktopNumber`; if the desktop cannot be detected or switched, ASCS reports the problem instead of opening another window. Super + V remains Clipboard History.
 
 ### System Dashboard
 
@@ -169,7 +169,7 @@ Shortcut tables use “Super” as the user-facing name for the dedicated key (m
 | Super + Space | Open searchable command launcher | Implemented in source |
 | Super + Q | Open Quick Notes (default; configurable) | Implemented in source |
 | Super + F | Open Everything (default; configurable) | Implemented in source |
-| Super + B | Focus an open Vivaldi window or open Vivaldi | Implemented in source |
+| Super + B | Focus Vivaldi here, switch to its desktop, or open it | Implemented in source |
 | Super + I | Open System Dashboard (default; configurable) | Implemented in source |
 | Super + 1–9 | Focus virtual desktop 1–9 (top row or numpad) | Implemented in source |
 | Super + Shift + 1–9 | Move active window to a desktop, then switch to it | Implemented in source |
@@ -192,7 +192,7 @@ Application launches wait for a window and request foreground activation with `W
 Timestamp format: `yyyy-MM-dd HH:mm:ss`  
 Date format: `yyyy-MM-dd`
 
-Shortcut letter defaults are editable in Preferences; the keys B, S, R, L, M, V, J, and Y are reserved. Super + B focuses an open Vivaldi window or opens Vivaldi when no window is running; Super + V remains Clipboard History. These definitions have not been runtime-tested with the configured keyboard. Numpad NumLock-off aliases, virtual desktop DLL compatibility, and multi-monitor/DPI positioning remain verification items.
+Shortcut letter defaults are editable in Preferences; the keys B, S, R, L, M, V, J, and Y are reserved. Super + B prefers an open Vivaldi window on the current desktop, switches to the topmost Vivaldi window's desktop when needed, or opens Vivaldi if no window is running; Super + V remains Clipboard History. These definitions have not been runtime-tested with the configured keyboard. Numpad NumLock-off aliases, virtual desktop DLL compatibility, and multi-monitor/DPI positioning remain verification items.
 
 ## 7. Frontend and Backend Communication
 
@@ -262,9 +262,9 @@ These are design requirements; runtime security behavior has not been independen
 ### Optional
 
 - Voidtools Everything for file search.
-- `lib\VirtualDesktopAccessor.dll` for direct desktop switching and moving windows between desktops.
+- `lib\VirtualDesktopAccessor.dll` for direct desktop switching, moving windows between desktops, and focusing Vivaldi across desktops.
 
-Everything is optional and is only needed for its launcher. ASCS opens the application directly; no Everything SDK DLL is required. To use desktop switching or window moves, place a compatible VirtualDesktopAccessor.dll in `lib`; ASCS reads the current desktop count and targets only existing desktops. If the DLL is missing or fails, these actions are disabled rather than using a keyboard fallback that might create desktops. Verify the `GetDesktopCount`, `GoToDesktopNumber`, and `MoveWindowToDesktopNumber` exports for the DLL version in use. The upstream API documents `-1` as the error return; ASCS treats nonnegative results as success. The WebView2 Evergreen Runtime is preferred.
+Everything is optional and only needed for its launcher. ASCS opens the application directly; no Everything SDK DLL is required. To use desktop switching or window moves, place a compatible VirtualDesktopAccessor.dll in `lib`; ASCS reads the current desktop count and targets only existing desktops. Super + B also uses this DLL to locate Vivaldi across desktops and switch to its desktop. That behavior additionally requires the `GetCurrentDesktopNumber` and `GetWindowDesktopNumber` exports. For desktop shortcuts and window moves, verify `GetDesktopCount`, `GoToDesktopNumber`, and `MoveWindowToDesktopNumber`. If the DLL or required exports are missing or fail, desktop actions report a failure and Super + B does not open a duplicate Vivaldi window. The upstream API documents `-1` as the error return; ASCS treats nonnegative results as success. The WebView2 Evergreen Runtime is preferred.
 
 ## 9. Installation and Startup
 
@@ -284,7 +284,7 @@ Status labels distinguish source implementation from execution on the target sys
 
 - **Implemented in source:** Corresponding code exists in the repository.
 - **Code-reviewed:** Source and message contracts have been inspected; this is not runtime verification.
-- **Runtime-tested:** Successfully executed on the target Windows installation. Existing application launch and foreground-focus checks from v1.4.1 are documented below; Vivaldi in v1.4.2 and other features remain pending.
+- **Runtime-tested:** Successfully executed on the target Windows installation. Existing application launch and foreground-focus checks from v1.4.1 are documented below; Vivaldi cross-desktop behavior in v1.4.3 and other features remain pending.
 - **Planned or pending:** Not implemented, incomplete, or awaiting validation.
 
 ### Implemented in Source
@@ -336,13 +336,13 @@ This review did not execute ASCS, initialize WebView2, or verify callback behavi
 - Startup, frontend callbacks, and keyboard behavior require runtime testing.
 - Workspace restore depends on the saved executable paths still existing and windows becoming available; only up to 24 visible windows are captured.
 - Super+F requires the Everything application to be installed; ASCS delegates search and result display to it.
-- The VirtualDesktopAccessor DLL's window-move API and OS build compatibility have not been verified at runtime.
+- The VirtualDesktopAccessor DLL's window-move and cross-desktop Vivaldi APIs and OS build compatibility have not been verified at runtime.
 - A disconnected network drive can still stall during the Windows readiness check; polling is isolated and cached to reduce exposure.
-- Desktop switching and window moves require `VirtualDesktopAccessor.dll`; without it, those actions are disabled.
+- Desktop switching, window moves, and focusing existing Vivaldi windows across desktops require `VirtualDesktopAccessor.dll`; without it, those actions report failure.
 - Monitor frame-bound calculations depend on Windows DPI coordinate behavior and require runtime verification.
 - Metrics depend on WMI and Windows drive reporting.
 - The Command Center does not display recent activity.
-- No automated runtime test suite is included; targeted manual test results are documented in the v1.4.1 and v1.4.2 changelog entries.
+- No automated runtime test suite is included; targeted manual test results are documented in the v1.4.1, v1.4.2, and v1.4.3 changelog entries.
 
 ## 12. Development Roadmap
 
@@ -352,7 +352,7 @@ This review did not execute ASCS, initialize WebView2, or verify callback behavi
 - Verify frontend callback registration and message dispatch.
 - Verify frontend-to-AutoHotkey and AutoHotkey-to-frontend communication.
 - Verify hidden startup and Super behavior on the target keyboard.
-- Verify notes, Everything search behavior, dashboard operations, and the new Vivaldi focus-or-open shortcut; existing application launching is covered by v1.4.1 manual tests.
+- Verify notes, Everything search behavior, dashboard operations, and Vivaldi cross-desktop detection/focus; existing application launching is covered by v1.4.1 manual tests.
 
 ### Future Improvements
 
@@ -362,11 +362,18 @@ This review did not execute ASCS, initialize WebView2, or verify callback behavi
 
 ## 13. Changelog
 
+### Version 1.4.3 — Vivaldi Cross-Desktop Detection
+
+- Fixed Super+B detection of Vivaldi windows on other virtual desktops by temporarily enabling AutoHotkey hidden-window enumeration, then filtering out invisible helper windows.
+- Kept current-desktop Vivaldi windows preferred; when needed, switch to the desktop of the topmost Vivaldi window before activation without moving or duplicating windows.
+- Cross-desktop detection and focus still require runtime verification on the target Windows system.
+
 ### Version 1.4.2 — Vivaldi Focus-or-Open
 
-- Added Super+B to focus an existing Vivaldi window or launch Vivaldi; added Vivaldi to the command launcher while retaining Super+V for Clipboard History.
-- Reserved B from configurable shortcuts and documented the new binding in the shortcut reference and Preferences.
-- Vivaldi installation discovery, focus behavior, and shortcut operation remain to be runtime-tested on the target Windows system.
+- Added Super+B to focus or launch Vivaldi, and to prefer an existing window on the current desktop before switching to another desktop.
+- Cross-desktop focus requires `GetCurrentDesktopNumber` and `GetWindowDesktopNumber` from VirtualDesktopAccessor.dll; if these APIs are unavailable, ASCS reports the problem instead of launching a duplicate.
+- Added Vivaldi to the command launcher while retaining Super+V for Clipboard History; reserved B from configurable shortcuts and documented the binding in the shortcut reference and Preferences.
+- Initial cross-desktop window enumeration did not find Vivaldi windows on other desktops; corrected in v1.4.3.
 
 ### Version 1.4.1 — Application Foreground Activation
 

@@ -8,7 +8,7 @@ SetWorkingDir(A_ScriptDir)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 1.4.2
+; Version 1.4.3
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -113,7 +113,7 @@ try {
     ; Keep the application hidden at startup.
     ASCS_App.Hide()
 
-    WriteLog("ASCS 1.4.2 initialized.")
+    WriteLog("ASCS 1.4.3 initialized.")
 
 } catch as err {
     WriteLog("WebView2 initialization failed: " err.Message)
@@ -1362,29 +1362,98 @@ LaunchCommand(command, thisHotkey := "") {
 
 LaunchVivaldi() {
     try {
-        windows := WinGetList("ahk_exe vivaldi.exe")
+        windows := GetVivaldiWindows()
         if windows.Length {
-            window := "ahk_id " windows[1]
-            WinActivate(window)
-            if WinWaitActive(window,, 2)
-                return true
-            throw Error("An existing Vivaldi window could not be activated.")
+            FocusVivaldiWindow(windows)
+            return true
         }
 
-        return RunAndActivate(
+        launched := RunAndActivate(
             '"' FindVivaldi() '"',
             "ahk_exe vivaldi.exe"
         )
+        if !launched
+            throw Error("Vivaldi did not open or could not be activated.")
+        return true
     } catch as err {
         WriteLog("Vivaldi focus or launch failed: " err.Message)
         MsgBox(
-            "Unable to focus or open Vivaldi. Check that it is installed.`n`n"
-            err.Message,
+            "Unable to focus or open Vivaldi.`n`n" err.Message,
             "Vivaldi",
             "Iconx"
         )
         return false
     }
+}
+
+GetVivaldiWindows() {
+    previousDetectHidden := A_DetectHiddenWindows
+    try {
+        DetectHiddenWindows(true)
+        windows := WinGetList("ahk_exe vivaldi.exe")
+    } finally {
+        DetectHiddenWindows(previousDetectHidden)
+    }
+
+    visibleWindows := []
+    for hwnd in windows {
+        if DllCall("IsWindowVisible", "Ptr", hwnd, "Int")
+            visibleWindows.Push(hwnd)
+    }
+    return visibleWindows
+}
+
+FocusVivaldiWindow(windows) {
+    global ASCS_VirtualDesktopDllPath
+
+    if !FileExist(ASCS_VirtualDesktopDllPath)
+        throw Error(
+            "Vivaldi is open, but its virtual desktop cannot be detected. "
+            "Install VirtualDesktopAccessor.dll with GetCurrentDesktopNumber "
+            "and GetWindowDesktopNumber exports."
+        )
+
+    dll := ASCS_VirtualDesktopDllPath
+    currentDesktop := DllCall(dll "\GetCurrentDesktopNumber", "Int")
+    if (currentDesktop < 0)
+        throw Error("Unable to determine the current virtual desktop.")
+
+    currentDesktopWindow := 0
+    firstWindow := windows[1]
+    firstWindowDesktop := -1
+    for hwnd in windows {
+        desktop := DllCall(
+            dll "\GetWindowDesktopNumber",
+            "Ptr", hwnd,
+            "Int"
+        )
+        if (desktop < 0)
+            throw Error("Unable to determine a Vivaldi window's virtual desktop.")
+
+        if (hwnd = firstWindow)
+            firstWindowDesktop := desktop
+        if (desktop = currentDesktop) {
+            currentDesktopWindow := hwnd
+            break
+        }
+    }
+
+    hwnd := currentDesktopWindow ? currentDesktopWindow : firstWindow
+
+    if (!currentDesktopWindow && firstWindowDesktop != currentDesktop) {
+        switched := DllCall(
+            dll "\GoToDesktopNumber",
+            "Int", firstWindowDesktop,
+            "Int"
+        )
+        if (switched < 0)
+            throw Error("Unable to switch to Vivaldi's virtual desktop.")
+    }
+
+    window := "ahk_id " hwnd
+    WinActivate(window)
+    if !WinWaitActive(window,, 2)
+        throw Error("An existing Vivaldi window could not be activated.")
 }
 
 FindVivaldi() {
