@@ -2,9 +2,9 @@
 
 **Brand:** AEOLIONWARE SUPER COMMAND SYSTEM  
 **Tagline:** AEOLIONWARE, at your command.  
-**Version:** 1.4.3
+**Version:** 1.4.4
 **Platform:** Windows  
-**Status:** Version 1.4.3 implementation in source; existing application launch and foreground-focus behavior verified on the target Windows system; Vivaldi cross-desktop focus and other runtime checks remain pending
+**Status:** Version 1.4.4 implementation in source; existing application launch and foreground-focus behavior verified on the target Windows system; workspace, WebView security, isolated drive probes, Vivaldi cross-desktop focus, and other runtime checks remain pending
 
 ASCS is a keyboard-driven Windows utility suite. It uses AutoHotkey v2 for hotkeys and Windows automation, WebView2 for its graphical interface, and a web frontend built with HTML, CSS, and JavaScript.
 
@@ -42,7 +42,7 @@ The application has five primary views:
 
 | Layer | Technology | Responsibility |
 | --- | --- | --- |
-| Keyboard input | Keychron Launcher | Maps the physical Super key to Super |
+| Keyboard input | Keychron Launcher | Maps the physical Super key to F24; ASCS presents it as Super |
 | Automation | AutoHotkey v2 (64-bit) | Handles shortcuts, Windows commands, persistence, and system queries |
 | Web interface | Microsoft Edge WebView2 | Hosts the embedded frontend |
 | Presentation | HTML and CSS | Defines interface structure and styling |
@@ -54,7 +54,7 @@ AutoHotkey remains responsible for command execution and Windows integration. Th
 
 ### Startup and Page Loading
 
-The AutoHotkey script creates a `WebViewGui`, enables WebView messaging, registers message and navigation handlers, maps the `frontend` directory to the `ascs.localhost` virtual host, and navigates to `https://ascs.localhost/index.html`. It requests that the application start hidden. These integration steps are implemented in source but have not yet been verified on the target Windows installation.
+The AutoHotkey script creates a `WebViewGui`, enables WebView messaging, registers message and navigation handlers, maps the `frontend` directory to the `ascs.localhost` virtual host, and navigates to `https://ascs.localhost/index.html`. Basic frontend readiness has previously been observed on the target installation. Version 1.4.4 additionally restricts navigation and messages to this origin; regression testing of those restrictions is pending.
 
 The window opens at up to 1920 × 1080 pixels, centered and constrained to the primary display's work area. Its native title bar is disabled while the normal taskbar button is retained; the custom title bar provides the ASCS mark, draggable surface, and minimize, maximize/restore, and hide controls. The Command Center uses a compact layout at shorter heights to avoid scrolling on open.
 
@@ -85,6 +85,7 @@ The layout adapts to narrower WebView windows, provides visible keyboard focus, 
 ```text
 C:\ASCS\
 ├── ASCS.ahk
+├── ASCS.DriveProbe.ahk
 ├── AEOLIONWARE_SUPER_COMMAND_SYSTEM.md
 ├── frontend\
 │   ├── assets\
@@ -108,6 +109,7 @@ C:\ASCS\
 | File or directory | Purpose |
 | --- | --- |
 | `ASCS.ahk` | WebView initialization, window chrome, shortcuts, message handling, application launching, notes, dashboard metrics, and logging |
+| `ASCS.DriveProbe.ahk` | Isolated per-drive metrics worker; the main hotkey process enforces an eight-second timeout |
 | `frontend/assets/ascs.ico` | ASCS window, system-tray, and frontend icon |
 | `frontend/index.html` | Structure and content for the five interfaces and command launcher |
 | `frontend/styles.css` | Aeolionware Obsidian theme and responsive layout |
@@ -187,7 +189,7 @@ Shortcut tables use “Super” as the user-facing name for the dedicated key (m
 | Super + S | Save window workspace | Implemented in source |
 | Super + R | Restore window workspace | Implemented in source |
 
-Application launches wait for a window and request foreground activation with `WinActivate`. This behavior has been manually verified for the shortcuts and launcher actions listed under Version 1.4.1 in the changelog.
+Application launches wait for a window and request foreground activation with `WinActivate`. File Explorer launches specifically wait for a visible Explorer folder window and activate that window, rather than treating the existing Explorer shell process as the folder window. This Explorer activation fix is implemented in source; its runtime test is pending.
 
 Timestamp format: `yyyy-MM-dd HH:mm:ss`  
 Date format: `yyyy-MM-dd`
@@ -212,14 +214,14 @@ MessageContent
 | `Ready` | None | Announces that frontend initialization is complete |
 | `GetNotes` | None | Requests the saved notes JSON |
 | `SaveNotes` | Full notes JSON text | Atomically persists all notes (replaces `SaveNote`) |
-| `WindowAction` | `minimize`, `maximize`, or `close` | Controls the frameless ASCS window |
+| `WindowAction` | `minimize`, `maximize`, or `close` | Controls the frameless ASCS window; `close` hides it |
 | `Launch` | Allowlisted launcher identifier | Requests an application launch |
 | `GetMetrics` | None | Requests a dashboard update |
 | `GetSettings` | None | Requests current preferences |
 | `SaveSettings` | Drives, snap gap, size preference, and shortcut letters | Validates and persists preferences |
 | `Log` | Log text | Adds an activity-log entry |
 
-The first newline separates the message type from its content. The full notes JSON is sent as content. The backend validates message types and payload sizes.
+The first newline separates the message type from its content. The full notes JSON is sent as content. The backend validates message types and payload sizes, accepts messages only from `https://ascs.localhost`, and cancels navigation outside that origin.
 
 ### AutoHotkey to Frontend
 
@@ -237,7 +239,7 @@ AutoHotkey sends JSON with `PostWebMessageAsJson()`.
 | `flushNotes` | Asks the frontend to immediately send a pending note save |
 | `error` | Displays an error notification |
 
-On `Ready`, the backend marks the page ready, sends the pending view and initial data, and starts the five-second dashboard timer. The `metrics` response keeps `disk`, `diskUsed`, and `diskTotal` for C: and adds `drives: [{letter, usage, used, total, online}]`.
+On `Ready`, the backend marks the page ready and sends the pending view and initial data. Dashboard polling starts only while the ASCS window is visible; it refreshes every five seconds and stops when the window is hidden or minimized. The `metrics` response keeps `disk`, `diskUsed`, and `diskTotal` for C: and adds `drives: [{letter, usage, used, total, online}]`.
 
 ### Security Considerations
 
@@ -253,11 +255,11 @@ These are design requirements; runtime security behavior has not been independen
 
 ### Required
 
-- Windows 10 or Windows 11.
+- Windows 10 or Windows 11 (Windows 11 is the target verification platform).
 - AutoHotkey v2, 64-bit.
 - Microsoft Edge WebView2 Runtime.
 - Locally installed WebViewToo and its required files under `C:\ASCS\webview`.
-- Keychron Launcher configured to emit Super for the Super key.
+- Keychron Launcher configured to emit F24 for the physical Super key.
 
 ### Optional
 
@@ -270,11 +272,12 @@ Everything is optional and only needed for its launcher. ASCS opens the applicat
 
 1. Install AutoHotkey v2, 64-bit.
 2. Install the Microsoft Edge WebView2 Runtime.
-3. Configure the Keychron Super key to emit Super.
+3. Configure the Keychron Super key to emit F24 (the user-facing shortcut name is Super).
 4. Place WebViewToo and its dependencies under `C:\ASCS\webview`.
 5. Place the frontend files, including `assets\ascs.ico`, under `C:\ASCS\frontend`.
 6. Ensure the `data` directory is available; the script creates it when needed.
-7. Run `C:\ASCS\ASCS.ahk`.
+7. Restrict write access to the installing account, Administrators, and SYSTEM; do not run ASCS elevated.
+8. Run `C:\ASCS\ASCS.ahk`.
 
 The script requests hidden startup and is intended to show the Command Center when Super is tapped. These behaviors remain unverified on the target system. After changing frontend assets, restart or reload ASCS to load the updated interface.
 
@@ -284,7 +287,7 @@ Status labels distinguish source implementation from execution on the target sys
 
 - **Implemented in source:** Corresponding code exists in the repository.
 - **Code-reviewed:** Source and message contracts have been inspected; this is not runtime verification.
-- **Runtime-tested:** Successfully executed on the target Windows installation. Existing application launch and foreground-focus checks from v1.4.1 are documented below; Vivaldi cross-desktop behavior in v1.4.3 and other features remain pending.
+- **Runtime-tested:** Successfully executed on the target Windows installation. Existing application launch and foreground-focus checks from v1.4.1 are documented below; Vivaldi cross-desktop behavior and v1.4.4 security/reliability changes remain pending.
 - **Planned or pending:** Not implemented, incomplete, or awaiting validation.
 
 ### Implemented in Source
@@ -301,7 +304,7 @@ Status labels distinguish source implementation from execution on the target sys
 - Desktop switching, active-window desktop moves, quadrant snapping, and monitor-to-monitor window movement.
 - Saved workspace capture/restoration and a searchable command launcher.
 - A Preferences view for drive selection, snap gap, monitor sizing, and live shortcut rebinding.
-- Five-second dashboard refresh after frontend readiness.
+- Five-second dashboard refresh while the ASCS window is visible; drive probes run in a separate process with an eight-second timeout.
 - The five primary frontend interfaces, command launcher, Super Commands appendix, and Preferences.
 
 ### Code-Reviewed
@@ -314,35 +317,36 @@ This review did not execute ASCS, initialize WebView2, or verify callback behavi
 
 ### Runtime Testing Pending
 
-- WebViewToo initialization and event callback registration.
-- Virtual-host page loading and WebView2-to-AutoHotkey messaging in both directions.
+- Regression-test WebView navigation cancellation, untrusted message rejection, blocked new windows, and release WebView settings.
+- Verify virtual-host page loading and WebView2-to-AutoHotkey messaging in both directions.
 - Hidden startup, Super activation, and modifier combinations.
 - Quick Notes save, acknowledgement, and persistence across restarts.
 - Notes create/delete/rename/pin/type/filter, atomic save, backup recovery, legacy migration, and hide/close flush.
-- J: online/offline behavior and delayed network-drive refresh.
+- J: online/offline behavior, eight-second worker timeout, and delayed network-drive refresh without blocking hotkeys.
 - Virtual desktop switching with NumLock on/off; confirm nonexistent desktop numbers do nothing.
 - Active-window moves between desktops with the supplied DLL and error behavior for unsupported exports.
 - Quadrant snapping, adjacent-monitor movement, snap gaps, and mixed-DPI layouts.
-- Workspace save/relaunch/restore behavior and dynamic shortcut rebinding.
+- Workspace save/relaunch/restore behavior, rejection of invalid executable paths, and dynamic shortcut rebinding.
 - Preferences persistence/validation and command launcher filtering/keyboard operation.
-- Dashboard metric values, C:/J: online/offline cards, and five-second updates.
+- Dashboard metric values, C:/J: online/offline cards, five-second visible-window updates, and no polling while hidden.
 - Hardware detail collection on devices with multiple GPU/disk/memory configurations.
 - Responsive layout and interaction at target WebView window sizes.
 - Super Commands appendix content and navigation.
 
 ## 11. Known Limitations
 
-- WebView2 integration has not been verified on the target Windows installation.
+- Version 1.4.4 WebView origin restrictions and security settings require regression testing on the target installation; basic page readiness has previously been observed.
 - Startup, frontend callbacks, and keyboard behavior require runtime testing.
-- Workspace restore depends on the saved executable paths still existing and windows becoming available; only up to 24 visible windows are captured.
+- Workspace restore validates absolute existing `.exe` paths against the recorded process name and launches without arguments; only up to 24 visible windows are captured.
 - Super+F requires the Everything application to be installed; ASCS delegates search and result display to it.
 - The VirtualDesktopAccessor DLL's window-move and cross-desktop Vivaldi APIs and OS build compatibility have not been verified at runtime.
-- A disconnected network drive can still stall during the Windows readiness check; polling is isolated and cached to reduce exposure.
+- Drive readiness and capacity checks run in a separate AutoHotkey process; the main process stops a worker after eight seconds and caches results for 30 seconds. Verify timeout and retry behavior on the target system.
 - Desktop switching, window moves, and focusing existing Vivaldi windows across desktops require `VirtualDesktopAccessor.dll`; without it, those actions report failure.
 - Monitor frame-bound calculations depend on Windows DPI coordinate behavior and require runtime verification.
 - Metrics depend on WMI and Windows drive reporting.
 - The Command Center does not display recent activity.
-- No automated runtime test suite is included; targeted manual test results are documented in the v1.4.1, v1.4.2, and v1.4.3 changelog entries.
+- Activity log entries are single-line, capped, and rotated at 1 MiB to one backup.
+- No automated runtime test suite is included; targeted manual test results are documented in the v1.4.1–v1.4.4 changelog entries.
 
 ## 12. Development Roadmap
 
@@ -362,11 +366,22 @@ This review did not execute ASCS, initialize WebView2, or verify callback behavi
 
 ## 13. Changelog
 
+### Version 1.4.4 — WebView and Workspace Hardening
+
+- Validated workspace restore targets as absolute, existing `.exe` paths matching the saved process name; restore never accepts stored command-line arguments.
+- Restricted WebView navigation and bridge messages to `https://ascs.localhost`; blocked popup windows and disabled DevTools, context menus, browser accelerators, and zoom controls.
+- Added a restrictive frontend Content Security Policy.
+- Moved drive capacity/status probes into a separate process with an eight-second timeout; dashboard polling now stops when ASCS is hidden or minimized and resumes while visible.
+- Sanitized and bounded activity-log entries and rotate the log at 1 MiB.
+- Updated the Keychron setup instructions to emit F24 and aligned platform, message-contract, and runtime-status documentation.
+- Target-system regression testing remains pending.
+
 ### Version 1.4.3 — Vivaldi Cross-Desktop Detection
 
 - Fixed Super+B detection of Vivaldi windows on other virtual desktops by temporarily enabling AutoHotkey hidden-window enumeration, then filtering out invisible helper windows.
 - Kept current-desktop Vivaldi windows preferred; when needed, switch to the desktop of the topmost Vivaldi window before activation without moving or duplicating windows.
 - Cross-desktop detection and focus still require runtime verification on the target Windows system.
+- File Explorer shortcuts and folder-launch actions now target a visible folder window instead of the existing Explorer shell process; runtime verification is pending.
 
 ### Version 1.4.2 — Vivaldi Focus-or-Open
 

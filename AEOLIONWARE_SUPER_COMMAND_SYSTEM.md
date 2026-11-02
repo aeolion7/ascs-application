@@ -2,9 +2,9 @@
 # AEOLIONWARE SUPER COMMAND SYSTEM (ASCS)
 
 **Developer:** Joseph Lionarons
-**Version:** 1.4.3
+**Version:** 1.4.4
 **Project:** Aeolionware SCS
-**Platform:** Windows 11  
+**Platform:** Windows 10/11 (Windows 11 target verification)
 **Architecture:** AutoHotkey v2 + Microsoft Edge WebView2
 
 ---
@@ -15,7 +15,7 @@ Aeolionware Super Command System (ASCS) is a keyboard-driven Windows automation 
 
 ASCS combines AutoHotkey automation with a graphical WebView2 frontend to provide a unified command interface.
 
-The system uses Super as its Super key, allowing users to access applications and system utilities through keyboard shortcuts.
+The user-facing Super key is emitted as F24 by Keychron Launcher, allowing ASCS to access applications and system utilities through keyboard shortcuts.
 
 ## Primary Objectives
 
@@ -96,7 +96,8 @@ Examples:
 | Ready | Announces frontend readiness |
 | GetNotes | Requests saved notes |
 | SaveNotes | Saves complete notes JSON (replaces SaveNote) |
-| WindowAction | Minimizes, maximizes/restores, or hides the ASCS window |
+| WindowAction | `minimize`, `maximize`, or `close`; `close` hides the ASCS window |
+| Launch | Requests an allowlisted launcher action |
 | GetMetrics | Requests system metrics |
 | GetSettings | Requests current preferences |
 | SaveSettings | Validates and persists preferences |
@@ -124,11 +125,13 @@ Supported message types:
 
 The `metrics` response retains the C: `disk`, `diskUsed`, and `diskTotal` fields and adds `drives:[{letter, usage, used, total, online}]` and a cached `hardware` object.
 
+The backend accepts messages only from `https://ascs.localhost` and cancels navigation outside that origin. New-window requests are blocked.
+
 ### Frontend Readiness
 
 The frontend sends a `Ready` message after its JavaScript initialization.
 
-The backend uses this handshake to determine when frontend communication can begin.
+The backend uses this handshake to determine when frontend communication can begin. Dashboard polling starts only while the ASCS window is visible and stops when it is hidden or minimized.
 
 This prevents application data from being sent before the page has initialized.
 
@@ -140,10 +143,8 @@ This prevents application data from being sent before the page has initialized.
 C:\ASCS\
 │
 ├── ASCS.ahk
+├── ASCS.DriveProbe.ahk
 ├── AEOLIONWARE_SUPER_COMMAND_SYSTEM.md
-├── assets\
-│   └── ascs.ico
-│
 ├── frontend\
 │   ├── assets\
 │   │   └── ascs.ico
@@ -173,6 +174,7 @@ Contains:
 
 - Global configuration.
 - WebView2 initialization.
+- Asynchronous dashboard drive-probe coordination and timeout enforcement.
 - Super shortcut definitions.
 - Frontend/backend messaging.
 - Application launching.
@@ -418,7 +420,7 @@ Date format:
 | Super + S | Save workspace | Implemented |
 | Super + R | Restore workspace | Implemented |
 
-The saved workspace is local and limited to 24 visible windows. Applications must still exist at their saved executable paths to be relaunched.
+The saved workspace is local and limited to 24 visible windows. Relaunch accepts only an absolute, existing `.exe` path matching its saved process name; command-line arguments are never stored or accepted.
 
 ---
 
@@ -426,13 +428,13 @@ The saved workspace is local and limited to 24 visible windows. Applications mus
 
 ## 7.1 Required Dependencies
 
-1. Windows 10 or Windows 11.
+1. Windows 10 or Windows 11 (Windows 11 is the target verification platform).
 2. AutoHotkey v2, 64-bit.
 3. Microsoft Edge WebView2 Runtime.
 4. WebViewToo.
 5. WebView2.ahk.
 6. Required WebView2 loader dependencies.
-7. Keychron Launcher configured to emit Super.
+7. Keychron Launcher configured to emit F24 for the physical Super key.
 
 ## 7.2 Optional Dependencies
 
@@ -460,13 +462,14 @@ WebView2 profile data is stored in:
 
 1. Install AutoHotkey v2, 64-bit.
 2. Install Microsoft Edge WebView2 Runtime.
-3. Configure the Keychron Super key to emit Super.
+3. Configure the Keychron Super key to emit F24 (the user-facing shortcut name is Super).
 4. Place WebViewToo and its dependencies in `C:\ASCS\webview`.
 5. Place the frontend files, including `assets\ascs.ico`, in `C:\ASCS\frontend`.
 6. Place a compatible `VirtualDesktopAccessor.dll` in `C:\ASCS\lib` for desktop switching, window-to-desktop movement, and focusing Vivaldi across desktops.
 7. Use Preferences to configure monitored drives and shortcut letters; the defaults are C: and J:.
 8. Create the data directory.
-9. Run `ASCS.ahk`.
+9. Restrict write access to the installing account, Administrators, and SYSTEM; do not run ASCS elevated.
+10. Run `ASCS.ahk`.
 
 ## 8.2 Startup Behavior
 
@@ -505,15 +508,20 @@ This section distinguishes source implementation from verified runtime functiona
 - Cached WMI hardware reporting in the System Dashboard.
 - Runtime-tested on the target Windows system in v1.4.1: Super+E/T/C/H/F launches, command-launcher app actions, foreground activation of already-running apps, Downloads/Documents, Browser, Windows Settings, and Snipping Tool. These launch paths request activation with `WinActivate`.
 - Implemented in v1.4.2 and fixed in v1.4.3, runtime testing pending: Super+B detects visible Vivaldi windows across desktops, prefers a current-desktop window, otherwise switches to the topmost window's desktop and focuses it, or opens the installed browser when no Vivaldi window exists. Cross-desktop focus uses `GetCurrentDesktopNumber` and `GetWindowDesktopNumber` from VirtualDesktopAccessor.dll. Vivaldi is available in the command launcher. Super+V remains Clipboard History; B is reserved from configurable shortcut assignments.
+- Implemented in source, runtime testing pending: Super+E activates the topmost visible File Explorer folder window if one is already open; otherwise it launches Explorer and activates the resulting folder window. Downloads and Documents launches wait for a new or available visible folder window and activate it instead of treating the reused Explorer shell process as the folder window.
 
 ## 9.2 Code-Reviewed, Runtime Testing Pending
 
-- WebView2 virtual-host loading, messaging callbacks, and input focus.
+- WebView navigation/message-origin restrictions, popup blocking, Content Security Policy, and release WebView settings.
+- Workspace executable-path validation and rejection of invalid paths.
+- Isolated drive probe timeouts, retries, and absence of hotkey stalls for disconnected shares.
+- Dashboard polling stops when the window is hidden or minimized and resumes while visible.
 - Quick Notes migration/recovery/atomic replacement and flush behavior.
 - J: connected, missing, and disconnected-network cases.
 - VirtualDesktopAccessor exports and OS-build compatibility; numpad mappings.
 - Snap coordinates, monitor work areas, invisible borders, and mixed-DPI displays.
 - Keyboard conflicts and all Super combinations on the target keyboard.
+- File Explorer foreground activation when opened over a maximized window, including Downloads and Documents launcher actions.
 
 ## 9.3 New Feature Validation Pending
 
@@ -576,18 +584,19 @@ This section distinguishes source implementation from verified runtime functiona
 
 # 11. Known Limitations
 
-1. WebView2 initialization has not yet been verified on the target Windows installation.
-2. Frontend/backend communication requires runtime testing.
+1. Version 1.4.4 WebView origin restrictions and security settings require regression testing; basic page readiness has previously been observed on the target installation.
+2. Frontend/backend communication and keyboard behavior require runtime testing.
 3. Super standalone activation and modifier combinations require physical keyboard testing.
-4. Workspace restoration is limited to 24 saved visible windows; apps that no longer exist cannot be relaunched.
+4. Workspace restoration is limited to 24 saved visible windows; relaunch requires an absolute, existing `.exe` path matching the saved process name, with no stored command-line arguments.
 5. Super+F requires Everything to be installed; executable detection may need adjustment for portable installations.
 6. CPU and RAM metrics depend on WMI reporting.
-7. Dashboard metrics are sampled every five seconds.
+7. Dashboard metrics are sampled every five seconds while the ASCS window is visible; polling is stopped while hidden or minimized.
 8. Optional DLL APIs and Windows-version behavior require target-system verification.
-9. Network-drive status calls may still wait while being polled; slow drives are cached for 30 seconds.
+9. Drive probes run in a separate process, are stopped after eight seconds, and are cached for 30 seconds; verify timeout behavior on the target system.
 10. Super+1–9 and Super+Shift+1–9 require VirtualDesktopAccessor.dll; unsupported APIs disable the action without creating desktops.
 11. DPI-coordinate behavior for invisible frame-border compensation requires multi-monitor testing.
 12. Super+B and Vivaldi window activation, installation discovery, and cross-desktop switching require runtime verification; Vivaldi must be installed to launch it. Cross-desktop focus requires VirtualDesktopAccessor.dll with `GetCurrentDesktopNumber` and `GetWindowDesktopNumber`.
+13. Activity logs rotate at 1 MiB and retain one backup; verify behavior on the target installation.
 
 ---
 
@@ -599,6 +608,8 @@ Manual runtime checklist; completed v1.4.1 launch tests and pending v1.4.3 Vival
 - [x] Launch apps through Super+Space and confirm foreground activation, including when the app is already open.
 - [x] Launch Downloads and Documents from Super+Space and confirm the correct folder opens in the foreground.
 - [x] Launch Browser, Windows Settings, and Snipping Tool from Super+Space.
+- [ ] Launch File Explorer with Super+E over a maximized window; confirm an existing folder window becomes foreground, or a new one opens and becomes foreground.
+- [ ] Open Downloads and Documents from the command launcher over a maximized window; confirm each requested folder becomes foreground.
 - [ ] Verify Super+B detects a visible Vivaldi window on another desktop, prefers a current-desktop Vivaldi window when available, otherwise switches to the topmost Vivaldi window's desktop and focuses it, including when minimized.
 - [ ] Verify Super+B launches Vivaldi when closed, reports a clear error if Vivaldi is unavailable, and reports a clear error rather than opening a duplicate if the desktop DLL or required exports are unavailable.
 - [ ] Verify Vivaldi can be launched from the Super+Space command launcher.
@@ -615,12 +626,27 @@ Manual runtime checklist; completed v1.4.1 launch tests and pending v1.4.3 Vival
 - [ ] Search and run commands through Super+Space with keyboard and mouse.
 - [ ] Verify hardware labels against Windows System Information and Device Manager.
 - [ ] Verify Everything's search-as-you-type behavior.
+- [ ] Verify WebView navigation outside `https://ascs.localhost` and popup requests are cancelled, messages from other origins are rejected, and release WebView settings block DevTools/context menus/browser accelerators/zoom.
+- [ ] Modify a workspace entry to include a relative path, command-line text, mismatched process name, and missing executable; confirm each entry is skipped without launching.
+- [ ] Disconnect or delay a configured network drive; confirm drive metrics time out after eight seconds without freezing hotkeys and retry after the 30-second cache.
+- [ ] Confirm dashboard polling stops when ASCS is hidden/minimized and resumes while visible.
+- [ ] Confirm activity-log newlines are sanitized and a log larger than 1 MiB rotates to one backup.
 
 A feature should only be marked runtime-tested after successful execution on the target Windows system.
 
 ---
 
 # 13. Changelog
+
+## Version 1.4.4 — WebView and Workspace Hardening
+
+- Validated workspace restore targets as absolute, existing `.exe` paths matching the saved process name; restore never accepts stored command-line arguments.
+- Restricted WebView navigation and bridge messages to `https://ascs.localhost`; blocked popup windows and disabled DevTools, context menus, browser accelerators, and zoom controls.
+- Added a restrictive frontend Content Security Policy.
+- Moved drive capacity/status probes into a separate process with an eight-second timeout; dashboard polling stops when ASCS is hidden or minimized and resumes while visible.
+- Sanitized and bounded activity-log entries and rotate the log at 1 MiB.
+- Corrected Keychron configuration instructions to emit F24 and aligned platform, message-contract, and runtime-status documentation.
+- Target-system regression testing remains pending.
 
 ## Version 1.4.3 — Vivaldi Cross-Desktop Detection
 

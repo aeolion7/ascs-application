@@ -8,7 +8,7 @@ SetWorkingDir(A_ScriptDir)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 1.4.3
+; Version 1.4.4
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -34,6 +34,7 @@ global ASCS_PageReady := false
 global ASCS_PendingView := "home"
 global ASCS_DashboardErrorShown := false
 global ASCS_DriveCache := Map()
+global ASCS_DriveProbes := Map()
 global ASCS_NotesRecovered := false
 global ASCS_DesktopAccessorWarningShown := false
 global ASCS_PendingWindowDirection := ""
@@ -92,14 +93,20 @@ try {
 
     ; Enable host-to-frontend messaging.
     ASCS_App.Settings.IsWebMessageEnabled := true
+    ASCS_App.Settings.AreDevToolsEnabled := false
+    ASCS_App.Settings.AreDefaultContextMenusEnabled := false
+    ASCS_App.Settings.AreBrowserAcceleratorKeysEnabled := false
+    ASCS_App.Settings.IsZoomControlEnabled := false
 
     ; Register WebView2 events.
     ASCS_App.WebMessageReceived(HandleWebMessage)
     ASCS_App.NavigationStarting(HandleNavigationStarting)
     ASCS_App.NavigationCompleted(HandleNavigationCompleted)
+    ASCS_App.NewWindowRequested(HandleNewWindowRequested)
 
     ; Handle window close without terminating ASCS.
     ASCS_App.OnEvent("Close", HandleClose)
+    ASCS_App.OnEvent("Size", HandleASCSSize)
 
     ; Map the frontend directory to a local HTTPS origin.
     ASCS_App.BrowseFolder(
@@ -113,7 +120,7 @@ try {
     ; Keep the application hidden at startup.
     ASCS_App.Hide()
 
-    WriteLog("ASCS 1.4.3 initialized.")
+    WriteLog("ASCS 1.4.4 initialized.")
 
 } catch as err {
     WriteLog("WebView2 initialization failed: " err.Message)
@@ -477,8 +484,10 @@ RestoreWorkspace() {
             path := IniRead(ASCS_WorkspaceFile, section, "path", "")
             process := IniRead(ASCS_WorkspaceFile, section, "process", "")
             title := IniRead(ASCS_WorkspaceFile, section, "title", "")
-            if (path = "" || process = "" || title = "" || !FileExist(path))
+            if (title = "" || !IsValidWorkspaceExecutable(path, process)) {
+                WriteLog("Skipped an invalid or unavailable workspace executable.")
                 continue
+            }
 
             record := Map(
                 "path", path,
@@ -509,6 +518,21 @@ RestoreWorkspace() {
         WriteLog("Workspace restore failed: " err.Message)
         ShowDesktopTooltip("Unable to restore workspace.")
     }
+}
+
+IsValidWorkspaceExecutable(path, process) {
+    if (path = "" || process = "" || InStr(path, '"')
+        || RegExMatch(path, "[\x00-\x1F]")
+        || !RegExMatch(path, "i)^[A-Z]:\\"))
+        return false
+
+    SplitPath(path, &fileName)
+    if (StrLower(fileName) != StrLower(process)
+        || !RegExMatch(fileName, "i)^[A-Z0-9_. -]+\.exe$"))
+        return false
+
+    attributes := FileExist(path)
+    return (attributes != "" && !InStr(attributes, "D"))
 }
 
 RestoreWorkspaceWindows(*) {
@@ -1078,6 +1102,7 @@ ShowView(view, thisHotkey := "") {
     ASCS_App.Show()
     ApplyWindowIcon()
     WinActivate("ahk_id " ASCS_App.Hwnd)
+    StartDashboardPolling()
 
     try {
         ASCS_App.MoveFocus(0)
@@ -1109,7 +1134,18 @@ ApplyWindowIcon() {
 HandleNavigationStarting(sender, args) {
     global ASCS_PageReady
 
+    if !IsTrustedWebViewUrl(args.Uri) {
+        args.Cancel := true
+        WriteLog("Blocked navigation outside the ASCS origin.")
+        return
+    }
+
     ASCS_PageReady := false
+}
+
+HandleNewWindowRequested(sender, args) {
+    args.Handled := true
+    WriteLog("Blocked a WebView request to open a new window.")
 }
 
 HandleNavigationCompleted(sender, args) {
@@ -1125,6 +1161,17 @@ HandleClose(*) {
 
     SendToFrontend('{"type":"flushNotes"}')
     ASCS_App.Hide()
+    SetTimer(PushDashboard, 0)
+}
+
+HandleASCSSize(guiObj, minMax, width, height) {
+    global ASCS_PageReady
+
+    if (minMax = -1) {
+        SetTimer(PushDashboard, 0)
+    } else if ASCS_PageReady {
+        SetTimer(PushDashboard, 5000)
+    }
 }
 
 ; ==========================================
@@ -1137,6 +1184,11 @@ HandleWebMessage(sender, args) {
     global ASCS_PendingLauncher
 
     try {
+        if !IsTrustedWebViewUrl(args.Source) {
+            WriteLog("Rejected a WebView message from an untrusted origin.")
+            return
+        }
+
         message := args.TryGetWebMessageAsString()
 
         if (message = "")
@@ -1174,14 +1226,13 @@ HandleWebMessage(sender, args) {
                 )
 
                 GetNotes()
-                PushDashboard()
                 SendSettings()
                 if ASCS_PendingLauncher {
                     ASCS_PendingLauncher := false
                     SendToFrontend('{"type":"openLauncher"}')
                 }
 
-                SetTimer(PushDashboard, 5000)
+                StartDashboardPolling()
 
             case "GetNotes":
                 if (content = "")
@@ -1239,12 +1290,42 @@ HandleWebMessage(sender, args) {
     }
 }
 
+IsTrustedWebViewUrl(url) {
+    return RegExMatch(
+        url,
+        "i)^https://ascs\.localhost(?::443)?(?:[/?#]|$)"
+    )
+}
+
+StartDashboardPolling() {
+    global ASCS_PageReady
+
+    if !ASCS_PageReady
+        return
+
+    SetTimer(PushDashboard, 5000)
+    PushDashboard()
+}
+
+IsDashboardWindowVisible() {
+    global ASCS_App
+
+    try {
+        return (DllCall("IsWindowVisible", "Ptr", ASCS_App.Hwnd, "Int")
+            && WinGetMinMax("ahk_id " ASCS_App.Hwnd) != -1)
+    } catch as err {
+        WriteLog("Dashboard visibility check failed: " err.Message)
+        return false
+    }
+}
+
 HandleWindowAction(action) {
     global ASCS_App
 
     switch action {
         case "minimize":
             WinMinimize("ahk_id " ASCS_App.Hwnd)
+            SetTimer(PushDashboard, 0)
 
         case "maximize":
             if (WinGetMinMax("ahk_id " ASCS_App.Hwnd) = 1)
@@ -1303,13 +1384,83 @@ RunAndActivate(target, fallbackWindow := "") {
     return false
 }
 
+GetExplorerWindows() {
+    previousDetectHidden := A_DetectHiddenWindows
+    try {
+        DetectHiddenWindows(true)
+        windows := []
+        seen := Map()
+        for className in ["CabinetWClass", "ExploreWClass"] {
+            for hwnd in WinGetList("ahk_class " className) {
+                if !seen.Has(hwnd) && DllCall("IsWindowVisible", "Ptr", hwnd, "Int") {
+                    seen[hwnd] := true
+                    windows.Push(hwnd)
+                }
+            }
+        }
+    } finally {
+        DetectHiddenWindows(previousDetectHidden)
+    }
+
+    return windows
+}
+
+RunAndActivateExplorer(target, openRequestedFolder := false) {
+    existingWindows := Map()
+    existingExplorerWindows := GetExplorerWindows()
+    for hwnd in existingExplorerWindows
+        existingWindows[hwnd] := true
+
+    if (existingExplorerWindows.Length && !openRequestedFolder) {
+        ActivateExplorerWindow(existingExplorerWindows[1])
+        return true
+    }
+
+    Run(target)
+    deadline := A_TickCount + 8000
+    selectedWindow := 0
+
+    while (A_TickCount < deadline) {
+        windows := GetExplorerWindows()
+        for hwnd in windows {
+            if !existingWindows.Has(hwnd) {
+                selectedWindow := hwnd
+                break
+            }
+        }
+        if selectedWindow
+            break
+        Sleep(100)
+    }
+
+    if !selectedWindow {
+        windows := GetExplorerWindows()
+        if windows.Length
+            selectedWindow := windows[1]
+    }
+
+    if !selectedWindow {
+        throw Error("File Explorer window did not appear: " target)
+    }
+
+    ActivateExplorerWindow(selectedWindow)
+    return true
+}
+
+ActivateExplorerWindow(hwnd) {
+    window := "ahk_id " hwnd
+    WinActivate(window)
+    if !WinWaitActive(window,, 2)
+        throw Error("File Explorer window could not be activated: " hwnd)
+}
+
 LaunchCommand(command, thisHotkey := "") {
     userProfile := EnvGet("USERPROFILE")
 
     try {
         switch command {
             case "explorer":
-                RunAndActivate("explorer.exe", "ahk_exe explorer.exe")
+                RunAndActivateExplorer("explorer.exe")
 
             case "browser":
                 RunAndActivate("https://www.google.com")
@@ -1330,15 +1481,15 @@ LaunchCommand(command, thisHotkey := "") {
                 RunAndActivate("ms-settings:", "ahk_exe SystemSettings.exe")
 
             case "downloads":
-                RunAndActivate(
+                RunAndActivateExplorer(
                     'explorer.exe "' userProfile '\Downloads"',
-                    "ahk_exe explorer.exe"
+                    true
                 )
 
             case "projects":
-                RunAndActivate(
+                RunAndActivateExplorer(
                     'explorer.exe "' userProfile '\Documents"',
-                    "ahk_exe explorer.exe"
+                    true
                 )
 
             case "snipping":
@@ -1635,6 +1786,11 @@ SendNotesError(message) {
 PushDashboard(*) {
     global ASCS_DashboardErrorShown
     global ASCS_HardwareJson
+
+    if !IsDashboardWindowVisible() {
+        SetTimer(PushDashboard, 0)
+        return
+    }
 
     try {
         wmi := ComObjGet("winmgmts:\\.\root\cimv2")
@@ -2006,6 +2162,7 @@ HardwareField(item, property) {
 GetDriveMetrics() {
     global ASCS_Drives
     global ASCS_DriveCache
+    global ASCS_DriveProbes
 
     drivesJson := "["
     cUsage := 0
@@ -2015,56 +2172,23 @@ GetDriveMetrics() {
 
     for drive in ASCS_Drives {
         metricIndex++
-        try {
-            driveType := DllCall("GetDriveTypeW", "Str", drive "\", "UInt")
-        } catch as err {
-            WriteLog("Drive type check failed for " drive ": " err.Message)
-            driveType := 0
-        }
-        isSlowDrive := (driveType != 3)
         now := A_TickCount
 
-        ; Non-fixed drives are polled at most once per 30 seconds; even status checks
-        ; can wait on a disconnected share, so avoid repeating them on each five-second update.
-        if (isSlowDrive && ASCS_DriveCache.Has(drive)
-            && now - ASCS_DriveCache[drive]["checked"] < 30000) {
+        if !ASCS_DriveCache.Has(drive) {
+            ASCS_DriveCache[drive] := Map(
+                "checked", now - 30000,
+                "metric", OfflineDriveMetric(drive)
+            )
+        }
+
+        if (!ASCS_DriveProbes.Has(drive)
+            && now - ASCS_DriveCache[drive]["checked"] >= 30000)
+            StartDriveProbe(drive, now)
+
+        if ASCS_DriveCache.Has(drive) {
             driveMetric := ASCS_DriveCache[drive]["metric"]
         } else {
-            try {
-                status := DriveGetStatus(drive)
-                if (status != "Ready")
-                    throw Error("Drive status: " status)
-
-                total := DriveGetCapacity(drive) / 1024
-                free := DriveGetSpaceFree(drive) / 1024
-                if (total <= 0)
-                    throw Error("Drive capacity is unavailable.")
-
-                used := Round(total - free, 1)
-                usage := Round((total - free) / total * 100)
-                driveMetric := Map(
-                    "letter", drive,
-                    "usage", usage,
-                    "used", used,
-                    "total", Round(total, 1),
-                    "online", true
-                )
-            } catch as err {
-                WriteLog("Drive metrics failed for " drive ": " err.Message)
-                driveMetric := Map(
-                    "letter", drive,
-                    "usage", 0,
-                    "used", 0,
-                    "total", 0,
-                    "online", false
-                )
-            }
-
-            if isSlowDrive
-                ASCS_DriveCache[drive] := Map(
-                    "checked", now,
-                    "metric", driveMetric
-                )
+            driveMetric := OfflineDriveMetric(drive)
         }
 
         drivesJson .= (metricIndex > 1 ? "," : "")
@@ -2090,6 +2214,118 @@ GetDriveMetrics() {
     )
 }
 
+StartDriveProbe(drive, now) {
+    global ASCS_DriveCache
+    global ASCS_DriveProbes
+
+    letter := SubStr(drive, 1, 1)
+    if !RegExMatch(letter, "i)^[A-Z]$")
+        throw Error("Invalid drive letter for metrics probe.")
+
+    resultPath := A_ScriptDir "\data\drive-" StrUpper(letter) ".probe"
+    try {
+        if FileExist(resultPath)
+            FileDelete(resultPath)
+
+        command := '"' A_AhkPath '" "' A_ScriptDir
+            . '\ASCS.DriveProbe.ahk" ' StrUpper(letter)
+        Run(command,, "Hide", &pid)
+        ASCS_DriveCache[drive]["checked"] := now
+        ASCS_DriveProbes[drive] := Map(
+            "pid", pid,
+            "started", now,
+            "result", resultPath
+        )
+        SetTimer(PollDriveProbes, 250)
+    } catch as err {
+        ASCS_DriveCache[drive] := Map(
+            "checked", now,
+            "metric", OfflineDriveMetric(drive)
+        )
+        WriteLog("Drive metrics worker could not start for " drive ": " err.Message)
+    }
+}
+
+PollDriveProbes(*) {
+    global ASCS_DriveCache
+    global ASCS_DriveProbes
+
+    now := A_TickCount
+    for drive, probe in ASCS_DriveProbes.Clone() {
+        if (now - probe["started"] >= 8000) {
+            try {
+                if ProcessExist(probe["pid"])
+                    ProcessClose(probe["pid"])
+            } catch as err {
+                WriteLog("Drive metrics worker could not be stopped: " err.Message)
+            }
+            ASCS_DriveCache[drive] := Map(
+                "checked", now,
+                "metric", OfflineDriveMetric(drive)
+            )
+            ASCS_DriveProbes.Delete(drive)
+            WriteLog("Drive metrics probe timed out for " drive ".")
+            continue
+        }
+
+        if ProcessExist(probe["pid"])
+            continue
+
+        resultPath := probe["result"]
+        if FileExist(resultPath) {
+            try {
+                fields := StrSplit(Trim(FileRead(resultPath)), "`n")
+                if (fields.Length != 4
+                    || !RegExMatch(Trim(fields[1]), "^[01]$")
+                    || !RegExMatch(Trim(fields[2]), "^\d+(?:\.\d+)?$")
+                    || !RegExMatch(Trim(fields[3]), "^\d+(?:\.\d+)?$")
+                    || !RegExMatch(Trim(fields[4]), "^\d+(?:\.\d+)?$"))
+                    throw Error("Invalid drive probe response.")
+
+                online := Trim(fields[1]) = "1"
+                usage := Min(100, Max(0, Float(Trim(fields[2]))))
+                used := Max(0, Float(Trim(fields[3])))
+                total := Max(0, Float(Trim(fields[4])))
+                metric := online
+                    ? Map("letter", drive, "usage", usage, "used", used,
+                        "total", total, "online", true)
+                    : OfflineDriveMetric(drive)
+                ASCS_DriveCache[drive] := Map(
+                    "checked", now,
+                    "metric", metric
+                )
+            } catch as err {
+                ASCS_DriveCache[drive] := Map(
+                    "checked", now,
+                    "metric", OfflineDriveMetric(drive)
+                )
+                WriteLog("Drive metrics probe response failed for " drive ": " err.Message)
+            }
+            try FileDelete(resultPath)
+        } else {
+            ASCS_DriveCache[drive] := Map(
+                "checked", now,
+                "metric", OfflineDriveMetric(drive)
+            )
+            WriteLog("Drive metrics worker exited without a result for " drive ".")
+        }
+        ASCS_DriveProbes.Delete(drive)
+    }
+
+    if !ASCS_DriveProbes.Count
+        SetTimer(PollDriveProbes, 0)
+}
+
+OfflineDriveMetric(drive) {
+    return Map(
+        "letter", drive,
+        "usage", 0,
+        "used", 0,
+        "total", 0,
+        "online", false
+    )
+}
+
 ; ==========================================
 ; ACTIVITY LOG
 ; ==========================================
@@ -2097,7 +2333,20 @@ GetDriveMetrics() {
 WriteLog(message := "ASCS activity") {
     global ASCS_LogFile
 
+    message := RegExReplace(String(message), "[\r\n]+", " ")
+    message := RegExReplace(
+        message,
+        "[\x00-\x08\x0B\x0C\x0E-\x1F]",
+        ""
+    )
+    if (StrLen(message) > 4096)
+        message := SubStr(message, 1, 4096)
+
     try {
+        if (FileExist(ASCS_LogFile)
+            && FileGetSize(ASCS_LogFile) >= 1048576)
+            FileMove(ASCS_LogFile, ASCS_LogFile ".1", 1)
+
         FileAppend(
             FormatTime(, "yyyy-MM-dd HH:mm:ss")
             " | " message "`n",
