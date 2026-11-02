@@ -2,7 +2,7 @@
 # AEOLIONWARE SUPER COMMAND SYSTEM (ASCS)
 
 **Developer:** Joseph Lionarons
-**Version:** 1.4.1
+**Version:** 1.4.2
 **Project:** Aeolionware SCS
 **Platform:** Windows 11  
 **Architecture:** AutoHotkey v2 + Microsoft Edge WebView2
@@ -301,11 +301,15 @@ The frontend migrates legacy `{"content":"..."}` files to one note titled “Scr
 
 Super + F launches the installed Voidtools Everything application directly. Type in Everything's search field to see results as you type. ASCS has no embedded search view or SDK dependency.
 
-## 5.4 Window Appearance
+## 5.4 Vivaldi Shortcut
+
+Super + B focuses the topmost existing Vivaldi window, restoring it if minimized; if no Vivaldi window is open, ASCS launches the installed browser. If Vivaldi cannot be found or activated, ASCS logs and displays an error. Super + V remains the Windows Clipboard History shortcut.
+
+## 5.5 Window Appearance
 
 The WebView window disables the native title bar while retaining its normal taskbar button. The window and system-tray icon use the ASCS ICO, which is reapplied whenever the window is shown; the custom title bar includes minimize, maximize/restore, and hide controls. Startup size is up to 1920 × 1080 pixels and is centered within the primary display's work area. The Command Center uses a compact layout at shorter heights to avoid scrolling on open.
 
-## 5.5 System Dashboard
+## 5.6 System Dashboard
 
 Displays system resource utilization and a hardware inventory.
 
@@ -336,13 +340,13 @@ Hardware details are collected once per session from:
 - Win32_OperatingSystem.
 - Windows drive information.
 
-## 5.6 Preferences and Command Launcher
+## 5.7 Preferences and Command Launcher
 
 Super + Space opens a searchable launcher for ASCS views, Windows applications, and system actions. Arrow keys move the selection, Enter runs it, and Escape closes the palette.
 
-Preferences configures monitored drives, snap spacing, whether window size is preserved when moving between monitors, and the letter assignments for application/view shortcuts. Shortcut changes rebind immediately. Preferences are stored in `data/settings.ini`.
+Preferences configures monitored drives, snap spacing, whether window size is preserved when moving between monitors, and the letter assignments for application/view shortcuts. Shortcut changes rebind immediately. B is reserved for Vivaldi; S, R, L, M, V, J, and Y are reserved for system commands. Preferences are stored in `data/settings.ini`.
 
-## 5.7 Workspaces
+## 5.8 Workspaces
 
 Super + S records up to 24 visible application windows and their normalized monitor placement in `data/workspace.ini`; Super + R restores the saved placement and relaunches missing applications. Super + Shift + S remains the Windows Snipping Tool shortcut.
 
@@ -366,6 +370,7 @@ Shortcut tables use “Super” as the user-facing name for the dedicated key; K
 | Shortcut | Action |
 |---|---|
 | Super + F | Open Everything (default; configurable) |
+| Super + B | Focus an open Vivaldi window or open Vivaldi |
 | Super + T | Windows Terminal (default; configurable) |
 | Super + E | File Explorer (default; configurable) |
 | Super + C | Calculator (default; configurable) |
@@ -499,6 +504,7 @@ This section distinguishes source implementation from verified runtime functiona
 - Workspace capture/restoration, searchable command launcher, and persistent Preferences.
 - Cached WMI hardware reporting in the System Dashboard.
 - Runtime-tested on the target Windows system in v1.4.1: Super+E/T/C/H/F launches, command-launcher app actions, foreground activation of already-running apps, Downloads/Documents, Browser, Windows Settings, and Snipping Tool. These launch paths request activation with `WinActivate`.
+- Implemented in v1.4.2, runtime testing pending: Super+B focuses the topmost existing Vivaldi window or opens the installed browser, and Vivaldi is available in the command launcher. Super+V remains Clipboard History; B is reserved from configurable shortcut assignments.
 
 ## 9.2 Code-Reviewed, Runtime Testing Pending
 
@@ -581,17 +587,20 @@ This section distinguishes source implementation from verified runtime functiona
 9. Network-drive status calls may still wait while being polled; slow drives are cached for 30 seconds.
 10. Super+1–9 and Super+Shift+1–9 require VirtualDesktopAccessor.dll; unsupported APIs disable the action without creating desktops.
 11. DPI-coordinate behavior for invisible frame-border compensation requires multi-monitor testing.
+12. Super+B and Vivaldi window activation/installation discovery require runtime verification; Vivaldi must be installed to launch it.
 
 ---
 
 # 12. Testing Procedure
 
-Manual runtime checklist; completed v1.4.1 launch tests are recorded below:
+Manual runtime checklist; completed v1.4.1 launch tests and pending v1.4.2 Vivaldi checks are recorded below:
 
 - [x] Launch File Explorer, Windows Terminal, Calculator, Task Manager, and Everything with Super+E/T/C/H/F; confirm each becomes foreground.
 - [x] Launch apps through Super+Space and confirm foreground activation, including when the app is already open.
 - [x] Launch Downloads and Documents from Super+Space and confirm the correct folder opens in the foreground.
 - [x] Launch Browser, Windows Settings, and Snipping Tool from Super+Space.
+- [ ] Verify Super+B focuses an existing Vivaldi window (including a minimized one), launches Vivaldi when closed, and reports a clear error if Vivaldi is unavailable.
+- [ ] Verify Vivaldi can be launched from the Super+Space command launcher.
 
 - [ ] Open Quick Notes through navigation, Super hotkey, and re-showing the hidden window; confirm the note caret is at the end.
 - [ ] Create, rename, filter, pin/unpin, change type, copy a snippet, and delete notes; verify confirmation and save status.
@@ -611,6 +620,12 @@ A feature should only be marked runtime-tested after successful execution on the
 ---
 
 # 13. Changelog
+
+## Version 1.4.2 — Vivaldi Focus-or-Open
+
+- Added Super+B to focus an existing Vivaldi window or launch Vivaldi; added Vivaldi to the command launcher while retaining Super+V for Clipboard History.
+- Reserved B from configurable shortcuts and documented the binding in the in-app shortcut reference and Preferences.
+- Vivaldi installation discovery, focus behavior, and shortcut operation remain to be runtime-tested on the target Windows system.
 
 ## Version 1.4.1 — Application Foreground Activation
 

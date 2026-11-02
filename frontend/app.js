@@ -107,6 +107,7 @@ const commandDefinitions = [
     { label: "Shortcut Reference", description: "Browse the complete Super shortcut list", keywords: "commands shortcuts", view: "commands" },
     { label: "Preferences", description: "Configure drives, window snapping, and shortcuts", keywords: "settings options", view: "settings" },
     { label: "Everything", description: "Search files and folders as you type", keywords: "search files find", launch: "everything" },
+    { label: "Vivaldi", description: "Focus an open window or open Vivaldi", keywords: "browser web internet", launch: "vivaldi" },
     { label: "Windows Terminal", description: "Open a terminal window", keywords: "console shell powershell", launch: "terminal" },
     { label: "File Explorer", description: "Browse files and folders", keywords: "explorer folders", launch: "explorer" },
     { label: "Calculator", description: "Open the Windows calculator", keywords: "math", launch: "calculator" },

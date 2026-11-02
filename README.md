@@ -2,9 +2,9 @@
 
 **Brand:** AEOLIONWARE SUPER COMMAND SYSTEM  
 **Tagline:** AEOLIONWARE, at your command.  
-**Version:** 1.4.1
+**Version:** 1.4.2
 **Platform:** Windows  
-**Status:** Version 1.4.1 implementation in source; application launch and foreground-focus behavior verified on the target Windows system; other runtime checks remain pending
+**Status:** Version 1.4.2 implementation in source; existing application launch and foreground-focus behavior verified on the target Windows system; new Vivaldi focus-or-open behavior and other runtime checks remain pending
 
 ASCS is a keyboard-driven Windows utility suite. It uses AutoHotkey v2 for hotkeys and Windows automation, WebView2 for its graphical interface, and a web frontend built with HTML, CSS, and JavaScript.
 
@@ -137,6 +137,10 @@ Quick Notes is opened with Super + Q. It supports multiple notes, title editing,
 
 Super + F opens the installed Everything application directly. Type in Everything's own search field to see results as you type; ASCS does not embed search or load the Everything SDK.
 
+### Vivaldi
+
+Super + B focuses the topmost existing Vivaldi window, restoring it if minimized; if no Vivaldi window is open, ASCS launches the installed browser. If Vivaldi cannot be found or activated, ASCS logs and displays an error. Super + V remains Clipboard History.
+
 ### System Dashboard
 
 The System Dashboard is opened with Super + I by default. It displays live CPU/RAM metrics, configured drive cards, processor and graphics details, memory configuration, motherboard and BIOS information, and Windows build. Its physical-drive list maps disks to their partitions and mounted drive letters, including volume labels, file systems, capacities, and free space. Metrics refresh every five seconds; hardware details are read once per session.
@@ -147,7 +151,7 @@ The Super Commands view is an in-app appendix of the active shortcuts. App/view 
 
 ### Preferences and command launcher
 
-Preferences configure up to 12 drive letters, snap spacing, monitor-move sizing, and unique letters for application/view shortcuts. Shortcut changes rebind immediately and are saved in `data/settings.ini`.
+Preferences configure up to 12 drive letters, snap spacing, monitor-move sizing, and unique letters for application/view shortcuts. Shortcut changes rebind immediately and are saved in `data/settings.ini`. B is reserved for Vivaldi; S, R, L, M, V, J, and Y are reserved for system commands.
 
 The command launcher filters available ASCS views, applications, and system actions. Use arrow keys to navigate, Enter to run, and Escape to close.
 
@@ -165,6 +169,7 @@ Shortcut tables use “Super” as the user-facing name for the dedicated key (m
 | Super + Space | Open searchable command launcher | Implemented in source |
 | Super + Q | Open Quick Notes (default; configurable) | Implemented in source |
 | Super + F | Open Everything (default; configurable) | Implemented in source |
+| Super + B | Focus an open Vivaldi window or open Vivaldi | Implemented in source |
 | Super + I | Open System Dashboard (default; configurable) | Implemented in source |
 | Super + 1–9 | Focus virtual desktop 1–9 (top row or numpad) | Implemented in source |
 | Super + Shift + 1–9 | Move active window to a desktop, then switch to it | Implemented in source |
@@ -187,7 +192,7 @@ Application launches wait for a window and request foreground activation with `W
 Timestamp format: `yyyy-MM-dd HH:mm:ss`  
 Date format: `yyyy-MM-dd`
 
-Shortcut letter defaults are editable in Preferences; the keys S, R, L, M, V, J, and Y are reserved. These definitions have not been runtime-tested with the configured keyboard. Numpad NumLock-off aliases, virtual desktop DLL compatibility, and multi-monitor/DPI positioning remain verification items.
+Shortcut letter defaults are editable in Preferences; the keys B, S, R, L, M, V, J, and Y are reserved. Super + B focuses an open Vivaldi window or opens Vivaldi when no window is running; Super + V remains Clipboard History. These definitions have not been runtime-tested with the configured keyboard. Numpad NumLock-off aliases, virtual desktop DLL compatibility, and multi-monitor/DPI positioning remain verification items.
 
 ## 7. Frontend and Backend Communication
 
@@ -279,7 +284,7 @@ Status labels distinguish source implementation from execution on the target sys
 
 - **Implemented in source:** Corresponding code exists in the repository.
 - **Code-reviewed:** Source and message contracts have been inspected; this is not runtime verification.
-- **Runtime-tested:** Successfully executed on the target Windows installation. The v1.4.1 application launch and foreground-focus checks are documented below; other features remain pending.
+- **Runtime-tested:** Successfully executed on the target Windows installation. Existing application launch and foreground-focus checks from v1.4.1 are documented below; Vivaldi in v1.4.2 and other features remain pending.
 - **Planned or pending:** Not implemented, incomplete, or awaiting validation.
 
 ### Implemented in Source
@@ -337,7 +342,7 @@ This review did not execute ASCS, initialize WebView2, or verify callback behavi
 - Monitor frame-bound calculations depend on Windows DPI coordinate behavior and require runtime verification.
 - Metrics depend on WMI and Windows drive reporting.
 - The Command Center does not display recent activity.
-- No automated runtime test suite is included; targeted manual test results are documented in the v1.4.1 changelog.
+- No automated runtime test suite is included; targeted manual test results are documented in the v1.4.1 and v1.4.2 changelog entries.
 
 ## 12. Development Roadmap
 
@@ -347,7 +352,7 @@ This review did not execute ASCS, initialize WebView2, or verify callback behavi
 - Verify frontend callback registration and message dispatch.
 - Verify frontend-to-AutoHotkey and AutoHotkey-to-frontend communication.
 - Verify hidden startup and Super behavior on the target keyboard.
-- Verify notes, Everything search behavior, and dashboard operations; application launching is covered by v1.4.1 manual tests.
+- Verify notes, Everything search behavior, dashboard operations, and the new Vivaldi focus-or-open shortcut; existing application launching is covered by v1.4.1 manual tests.
 
 ### Future Improvements
 
@@ -356,6 +361,12 @@ This review did not execute ASCS, initialize WebView2, or verify callback behavi
 - Refine keyboard navigation and overall interaction consistency.
 
 ## 13. Changelog
+
+### Version 1.4.2 — Vivaldi Focus-or-Open
+
+- Added Super+B to focus an existing Vivaldi window or launch Vivaldi; added Vivaldi to the command launcher while retaining Super+V for Clipboard History.
+- Reserved B from configurable shortcuts and documented the new binding in the shortcut reference and Preferences.
+- Vivaldi installation discovery, focus behavior, and shortcut operation remain to be runtime-tested on the target Windows system.
 
 ### Version 1.4.1 — Application Foreground Activation
 

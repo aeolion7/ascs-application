@@ -8,7 +8,7 @@ SetWorkingDir(A_ScriptDir)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 1.4.1
+; Version 1.4.2
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -113,7 +113,7 @@ try {
     ; Keep the application hidden at startup.
     ASCS_App.Hide()
 
-    WriteLog("ASCS 1.4.1 initialized.")
+    WriteLog("ASCS 1.4.2 initialized.")
 
 } catch as err {
     WriteLog("WebView2 initialization failed: " err.Message)
@@ -144,6 +144,7 @@ F24 & Space::ShowCommandLauncher()
 F24 & l::DllCall("LockWorkStation")
 F24 & m::SoundSetMute(!SoundGetMute())
 F24 & v::Send("#v")
+F24 & b::LaunchVivaldi()
 
 F24 & j::SendText(FormatTime(, "yyyy-MM-dd HH:mm:ss"))
 F24 & y::SendText(FormatTime(, "yyyy-MM-dd"))
@@ -246,8 +247,8 @@ LoadUserSettings() {
             ))
             if !RegExMatch(key, "^[a-z]$")
                 throw Error("Hotkeys must be single letters.")
-            if InStr("srlmvjy", key)
-                throw Error("Hotkey conflicts with a reserved system command.")
+            if InStr("bsrlmvjy", key)
+                throw Error("Hotkey conflicts with a reserved command.")
             if used.Has(key)
                 throw Error("Hotkey assignments must be unique.")
             used[key] := true
@@ -312,8 +313,8 @@ SaveUserSettings(content) {
             key := StrLower(Trim(keys[A_Index]))
             if !RegExMatch(key, "^[a-z]$")
                 throw Error("Shortcuts must be single letters.")
-            if InStr("srlmvjy", key)
-                throw Error("That letter is reserved for a system command.")
+            if InStr("bsrlmvjy", key)
+                throw Error("That letter is reserved for a built-in command.")
             if used.Has(key)
                 throw Error("Each shortcut must use a unique letter.")
             used[key] := true
@@ -1207,6 +1208,7 @@ HandleWebMessage(sender, args) {
                 if (content = "everything")
                     LaunchEverything()
                 else if (content = "explorer" || content = "browser"
+                    || content = "vivaldi"
                     || content = "terminal" || content = "calculator"
                     || content = "taskmanager"
                     || content = "settings" || content = "downloads"
@@ -1312,6 +1314,9 @@ LaunchCommand(command, thisHotkey := "") {
             case "browser":
                 RunAndActivate("https://www.google.com")
 
+            case "vivaldi":
+                LaunchVivaldi()
+
             case "terminal":
                 RunAndActivate("wt.exe", "ahk_exe WindowsTerminal.exe")
 
@@ -1353,6 +1358,60 @@ LaunchCommand(command, thisHotkey := "") {
             '{"type":"error","message":"Unable to launch application."}'
         )
     }
+}
+
+LaunchVivaldi() {
+    try {
+        windows := WinGetList("ahk_exe vivaldi.exe")
+        if windows.Length {
+            window := "ahk_id " windows[1]
+            WinActivate(window)
+            if WinWaitActive(window,, 2)
+                return true
+            throw Error("An existing Vivaldi window could not be activated.")
+        }
+
+        return RunAndActivate(
+            '"' FindVivaldi() '"',
+            "ahk_exe vivaldi.exe"
+        )
+    } catch as err {
+        WriteLog("Vivaldi focus or launch failed: " err.Message)
+        MsgBox(
+            "Unable to focus or open Vivaldi. Check that it is installed.`n`n"
+            err.Message,
+            "Vivaldi",
+            "Iconx"
+        )
+        return false
+    }
+}
+
+FindVivaldi() {
+    localAppData := EnvGet("LOCALAPPDATA")
+    paths := [
+        A_ProgramFiles "\Vivaldi\Application\vivaldi.exe",
+        A_ProgramFiles " (x86)\Vivaldi\Application\vivaldi.exe",
+        localAppData "\Vivaldi\Application\vivaldi.exe"
+    ]
+
+    for path in paths {
+        if FileExist(path)
+            return path
+    }
+
+    for root in ["HKCU", "HKLM"] {
+        try {
+            path := RegRead(
+                root "\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\vivaldi.exe"
+            )
+            path := Trim(path, '"')
+            if FileExist(path)
+                return path
+        }
+    }
+
+    return "vivaldi.exe"
 }
 
 ; ==========================================
