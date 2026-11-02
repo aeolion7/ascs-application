@@ -8,7 +8,7 @@ SetWorkingDir(A_ScriptDir)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 1.5.0
+; Version 1.5.1
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -44,7 +44,10 @@ global ASCS_SnapGap := 0
 global ASCS_PreserveWindowSize := true
 global ASCS_ActionHotkeys := Map()
 global ASCS_WorkspaceRestorePending := []
+global ASCS_WorkspaceClaimed := Map()
 global ASCS_HardwareJson := ""
+global ASCS_CpuSample := 0
+global ASCS_NotesFileTime := ""
 ; Defaults; user selections are persisted in settings.ini.
 global ASCS_Drives := ["C:", "J:"]
 
@@ -55,7 +58,7 @@ LoadUserSettings()
 ASCS_EverythingPath := FindEverything()
 
 if !FileExist(ASCS_NotesFile)
-    FileAppend('{"content":""}', ASCS_NotesFile, "UTF-8")
+    FileAppend('{"version":2,"activeId":null,"notes":[]}', ASCS_NotesFile, "UTF-8")
 
 ; ==========================================
 ; WEBVIEW2 INITIALIZATION
@@ -98,6 +101,10 @@ try {
     ASCS_App.Settings.AreDefaultContextMenusEnabled := false
     ASCS_App.Settings.AreBrowserAcceleratorKeysEnabled := false
     ASCS_App.Settings.IsZoomControlEnabled := false
+    ; WebViewToo injects a "global" host object into *.localhost pages that
+    ; exposes every AutoHotkey function to page script. ASCS uses only the
+    ; allowlisted postMessage bridge, so host objects are disabled entirely.
+    ASCS_App.Settings.AreHostObjectsAllowed := false
 
     ; Register WebView2 events.
     ASCS_App.WebMessageReceived(HandleWebMessage)
@@ -121,7 +128,7 @@ try {
     ; Keep the application hidden at startup.
     ASCS_App.Hide()
 
-    WriteLog("ASCS 1.5.0 initialized.")
+    WriteLog("ASCS 1.5.1 initialized.")
 
 } catch as err {
     WriteLog("WebView2 initialization failed: " err.Message)
@@ -159,9 +166,21 @@ F24 & y::SendText(FormatTime(, "yyyy-MM-dd"))
 
 F24 & s:: {
     if GetKeyState("Shift", "P")
-        Send("#+s")
+        LaunchSnipping()
     else
         SaveWorkspace()
+}
+
+; Synthesizing Win+Shift+S while the physical Shift (and F24) are held can
+; leave Windows seeing a lone Win press, which opens Start. The screen-clip
+; URI opens the same capture overlay without sending any keystrokes.
+LaunchSnipping() {
+    try {
+        Run("ms-screenclip:")
+    } catch as err {
+        WriteLog("Snipping overlay launch failed: " err.Message)
+        ShowDesktopTooltip("Unable to open the Snipping Tool.")
+    }
 }
 
 F24 & r::RestoreWorkspace()
@@ -453,17 +472,22 @@ SaveUserSettings(content) {
         if (keys.Length != names.Length)
             throw Error("Shortcut preferences are incomplete.")
 
+        labels := ["Quick Notes", "Everything", "System Dashboard",
+            "Windows Terminal", "File Explorer", "Calculator", "Task Manager"]
         hotkeys := Map()
         used := Map()
         Loop names.Length {
             key := StrLower(Trim(keys[A_Index]))
+            label := labels[A_Index]
             if !RegExMatch(key, "^[a-z]$")
-                throw Error("Shortcuts must be single letters.")
+                throw Error(label " needs a single letter (A–Z).")
             if InStr("bsrlmvjy", key)
-                throw Error("That letter is reserved for a built-in command.")
+                throw Error(label ": Super+" StrUpper(key)
+                    " is reserved for a built-in command (B, S, R, L, M, V, J, Y).")
             if used.Has(key)
-                throw Error("Each shortcut must use a unique letter.")
-            used[key] := true
+                throw Error(label ": Super+" StrUpper(key)
+                    " is already assigned to " used[key] ".")
+            used[key] := label
             hotkeys[names[A_Index]] := key
         }
 
@@ -490,8 +514,11 @@ SaveUserSettings(content) {
     } catch as err {
         WriteLog("Settings save failed: " err.Message)
         SendToFrontend(
-            '{"type":"error","message":' JsonQuote(err.Message) '}'
+            '{"type":"error","scope":"settings","message":'
+            JsonQuote(err.Message) '}'
         )
+        ; Nothing was applied; resend the active values so the form matches them.
+        SendSettings()
     }
 }
 
@@ -539,45 +566,47 @@ SaveWorkspace() {
         if FileExist(tempPath)
             FileDelete(tempPath)
 
+        explorerFolders := GetExplorerFolderMap()
         windows := []
+        skipped := 0
         for hwnd in WinGetList() {
-            if (hwnd = ASCS_App.Hwnd)
+            if !IsWorkspaceWindow(hwnd)
                 continue
 
-            title := WinGetTitle("ahk_id " hwnd)
-            if (title = "" || !DllCall("IsWindowVisible", "Ptr", hwnd, "Int"))
-                continue
+            ; One unusual window must not abort the whole snapshot.
+            try {
+                windowTitle := "ahk_id " hwnd
+                path := WinGetProcessPath(windowTitle)
+                process := WinGetProcessName(windowTitle)
+                if (path = "" || process = "")
+                    continue
 
-            if (WinGetMinMax("ahk_id " hwnd) = -1)
-                continue
-
-            exStyle := WinGetExStyle("ahk_id " hwnd)
-            if (exStyle & 0x80)
-                continue
-
-            path := WinGetProcessPath("ahk_id " hwnd)
-            process := WinGetProcessName("ahk_id " hwnd)
-            if (path = "" || process = "")
-                continue
-
-            WinGetPos(&x, &y, &width, &height, "ahk_id " hwnd)
-            context := GetWindowPlacementContext(hwnd)
-            workWidth := Max(1, context["workRight"] - context["workLeft"])
-            workHeight := Max(1, context["workBottom"] - context["workTop"])
-            windows.Push(Map(
-                "path", path,
-                "process", process,
-                "title", title,
-                "monitor", context["monitor"],
-                "x", (x - context["workLeft"]) / workWidth,
-                "y", (y - context["workTop"]) / workHeight,
-                "width", width / workWidth,
-                "height", height / workHeight,
-                "maximized", WinGetMinMax("ahk_id " hwnd) = 1
-            ))
+                WinGetPos(&x, &y, &width, &height, windowTitle)
+                context := GetWindowPlacementContext(hwnd)
+                workWidth := Max(1, context["workRight"] - context["workLeft"])
+                workHeight := Max(1, context["workBottom"] - context["workTop"])
+                windows.Push(Map(
+                    "path", path,
+                    "process", process,
+                    "title", WinGetTitle(windowTitle),
+                    "folder", explorerFolders.Has(hwnd) ? explorerFolders[hwnd] : "",
+                    "monitor", context["monitor"],
+                    "x", (x - context["workLeft"]) / workWidth,
+                    "y", (y - context["workTop"]) / workHeight,
+                    "width", width / workWidth,
+                    "height", height / workHeight,
+                    "maximized", WinGetMinMax(windowTitle) = 1
+                ))
+            } catch as err {
+                skipped++
+                WriteLog("Workspace skipped a window: " err.Message)
+            }
             if (windows.Length >= 24)
                 break
         }
+
+        if !windows.Length
+            throw Error("No windows could be captured.")
 
         IniWrite(windows.Length, tempPath, "Workspace", "WindowCount")
         for index, savedWindow in windows {
@@ -586,11 +615,14 @@ SaveWorkspace() {
                 IniWrite(value, tempPath, section, key)
         }
         FileMove(tempPath, ASCS_WorkspaceFile, 1)
-        ShowDesktopTooltip("Workspace saved (" windows.Length " windows).")
+        ShowDesktopTooltip(
+            "Workspace saved (" windows.Length " windows"
+            (skipped ? ", " skipped " skipped" : "") ")."
+        )
         WriteLog("Workspace saved with " windows.Length " windows.")
     } catch as err {
         WriteLog("Workspace save failed: " err.Message)
-        ShowDesktopTooltip("Unable to save workspace.")
+        ShowDesktopTooltip("Unable to save workspace: " err.Message)
         try {
             if (IsSet(tempPath) && FileExist(tempPath))
                 FileDelete(tempPath)
@@ -598,12 +630,79 @@ SaveWorkspace() {
     }
 }
 
+; Top-level application windows on the current desktop that a workspace
+; can save or reuse. Minimized windows can be reused but are not saved.
+IsWorkspaceWindow(hwnd, allowMinimized := false) {
+    global ASCS_App
+
+    try {
+        if (hwnd = ASCS_App.Hwnd)
+            return false
+        windowTitle := "ahk_id " hwnd
+        if (WinGetTitle(windowTitle) = ""
+            || !DllCall("IsWindowVisible", "Ptr", hwnd, "Int")
+            || IsWindowCloaked(hwnd))
+            return false
+        if (WinGetExStyle(windowTitle) & 0x80)   ; WS_EX_TOOLWINDOW
+            return false
+        if (DllCall("GetWindow", "Ptr", hwnd, "UInt", 4, "Ptr"))   ; owned popup
+            return false
+        windowClass := WinGetClass(windowTitle)
+        if (windowClass = "Progman" || windowClass = "WorkerW"
+            || windowClass = "Shell_TrayWnd"
+            || windowClass = "Shell_SecondaryTrayWnd")
+            return false
+        if (!allowMinimized && WinGetMinMax(windowTitle) = -1)
+            return false
+        return true
+    } catch {
+        return false
+    }
+}
+
+; Cloaked windows include those on other virtual desktops and suspended UWP
+; frames; they report off-screen or stale positions.
+IsWindowCloaked(hwnd) {
+    cloaked := 0
+    result := DllCall(
+        "Dwmapi.dll\DwmGetWindowAttribute",
+        "Ptr", hwnd,
+        "UInt", 14,   ; DWMWA_CLOAKED
+        "UInt*", &cloaked,
+        "UInt", 4,
+        "Int"
+    )
+    return (result = 0 && cloaked != 0)
+}
+
+; Maps File Explorer window handles to their current filesystem folder.
+GetExplorerFolderMap() {
+    folders := Map()
+    try {
+        for window in ComObject("Shell.Application").Windows {
+            try {
+                path := window.Document.Folder.Self.Path
+                if DirExist(path)
+                    folders[window.HWND] := path
+            }
+        }
+    } catch as err {
+        WriteLog("Explorer folder lookup failed: " err.Message)
+    }
+    return folders
+}
+
 RestoreWorkspace() {
     global ASCS_WorkspaceFile
     global ASCS_WorkspaceRestorePending
+    global ASCS_WorkspaceClaimed
 
     if !FileExist(ASCS_WorkspaceFile) {
-        ShowDesktopTooltip("No saved workspace was found.")
+        ShowWorkspaceMessage(
+            "No saved workspace was found.`n`n"
+            "Arrange your windows, then press Super+S to save a workspace.",
+            "Iconi"
+        )
         return
     }
 
@@ -617,21 +716,21 @@ RestoreWorkspace() {
         if (count < 1 || count > 24)
             throw Error("Saved workspace has an invalid window count.")
 
-        ASCS_WorkspaceRestorePending := []
+        pending := []
         for index in Range(1, count) {
             section := "Window" index
             path := IniRead(ASCS_WorkspaceFile, section, "path", "")
             process := IniRead(ASCS_WorkspaceFile, section, "process", "")
-            title := IniRead(ASCS_WorkspaceFile, section, "title", "")
-            if (title = "" || !IsValidWorkspaceExecutable(path, process)) {
-                WriteLog("Skipped an invalid or unavailable workspace executable.")
+            if !IsValidWorkspaceExecutable(path, process) {
+                WriteLog("Skipped an invalid or unavailable workspace executable: " path)
                 continue
             }
 
-            record := Map(
+            pending.Push(Map(
                 "path", path,
                 "process", process,
-                "title", title,
+                "title", IniRead(ASCS_WorkspaceFile, section, "title", ""),
+                "folder", IniRead(ASCS_WorkspaceFile, section, "folder", ""),
                 "monitor", Max(1, Integer(IniRead(ASCS_WorkspaceFile, section, "monitor", "1"))),
                 "x", Float(IniRead(ASCS_WorkspaceFile, section, "x", "0")),
                 "y", Float(IniRead(ASCS_WorkspaceFile, section, "y", "0")),
@@ -639,24 +738,33 @@ RestoreWorkspace() {
                 "height", Float(IniRead(ASCS_WorkspaceFile, section, "height", "0.8")),
                 "maximized", IniRead(ASCS_WorkspaceFile, section, "maximized", "0") = "1",
                 "deadline", A_TickCount + 20000,
-                "launched", false,
-                "hwnd", 0
-            )
-            ASCS_WorkspaceRestorePending.Push(record)
+                "launched", false
+            ))
         }
 
-        if !ASCS_WorkspaceRestorePending.Length {
-            ShowDesktopTooltip("No saved applications are available.")
+        if !pending.Length {
+            ShowWorkspaceMessage(
+                "None of the applications in the saved workspace are available.",
+                "Icon!"
+            )
             return
         }
 
-        RestoreWorkspaceWindows()
-        SetTimer(RestoreWorkspaceWindows, 500)
+        ASCS_WorkspaceRestorePending := pending
+        ASCS_WorkspaceClaimed := Map()
         ShowDesktopTooltip("Restoring saved workspace.")
+        RestoreWorkspaceWindows()
+        if ASCS_WorkspaceRestorePending.Length
+            SetTimer(RestoreWorkspaceWindows, 500)
     } catch as err {
         WriteLog("Workspace restore failed: " err.Message)
-        ShowDesktopTooltip("Unable to restore workspace.")
+        ShowWorkspaceMessage("Unable to restore the workspace.`n`n" err.Message, "Iconx")
     }
+}
+
+ShowWorkspaceMessage(message, icon) {
+    ; Runs on a short timer so the hotkey thread returns immediately.
+    SetTimer(() => MsgBox(message, "Aeolionware SCS: Workspace", icon " T15"), -1)
 }
 
 IsValidWorkspaceExecutable(path, process) {
@@ -670,87 +778,97 @@ IsValidWorkspaceExecutable(path, process) {
         || !RegExMatch(fileName, "i)^[A-Z0-9_. -]+\.exe$"))
         return false
 
+    ; Windows Terminal lives under WindowsApps, which is not always readable;
+    ; it is relaunched through its wt.exe alias instead of this path.
+    if (StrLower(process) = "windowsterminal.exe")
+        return true
+
     attributes := FileExist(path)
     return (attributes != "" && !InStr(attributes, "D"))
 }
 
-RestoreWorkspaceWindows(*) {
-    global ASCS_App
-    global ASCS_WorkspaceRestorePending
+; Command used to open one additional window for a saved record.
+GetWorkspaceLaunchCommand(record) {
+    switch StrLower(record["process"]) {
+        case "explorer.exe":
+            if (record["folder"] != "" && DirExist(record["folder"]))
+                return 'explorer.exe "' record["folder"] '"'
+            return "explorer.exe"
+        case "windowsterminal.exe":
+            return "wt.exe -w new"
+    }
+    return '"' record["path"] '"'
+}
 
-    remaining := []
-    usedWindows := Map()
-    for record in ASCS_WorkspaceRestorePending {
-        matchedHwnd := record["hwnd"]
-        try {
-            if (matchedHwnd && (!WinExist("ahk_id " matchedHwnd)
-                || WinGetProcessName("ahk_id " matchedHwnd) != record["process"]
-                || usedWindows.Has(matchedHwnd)))
-                matchedHwnd := 0
-        } catch as err {
-            WriteLog("Workspace window verification failed: " err.Message)
-            matchedHwnd := 0
+; Matches saved records to existing windows before launching anything:
+;   1. exact match (same Explorer folder, or same title for other apps);
+;   2. any other unclaimed window of the same process (titles change).
+; An application is launched only when no unclaimed window of its process
+; remains, so already-open Terminal/Explorer/browser windows are reused.
+RestoreWorkspaceWindows(*) {
+    global ASCS_WorkspaceRestorePending
+    global ASCS_WorkspaceClaimed
+
+    pending := ASCS_WorkspaceRestorePending
+    ; Windows placed on earlier ticks stay claimed for the whole restore.
+    claimed := ASCS_WorkspaceClaimed
+    candidates := Map()
+    needsFolders := false
+    for record in pending {
+        key := StrLower(record["process"])
+        if !candidates.Has(key) {
+            list := []
+            try {
+                for hwnd in WinGetList("ahk_exe " record["process"])
+                    if IsWorkspaceWindow(hwnd, true)
+                        list.Push(hwnd)
+            } catch as err {
+                WriteLog("Workspace window lookup failed: " err.Message)
+            }
+            candidates[key] := list
         }
-        record["hwnd"] := matchedHwnd
-        try {
-            if !matchedHwnd {
-                for hwnd in WinGetList("ahk_exe " record["process"]) {
-                    if (hwnd = ASCS_App.Hwnd || usedWindows.Has(hwnd))
-                        continue
-                    if (WinGetTitle("ahk_id " hwnd) = record["title"]) {
-                        matchedHwnd := hwnd
-                        break
+        if (record["folder"] != "")
+            needsFolders := true
+    }
+    folders := needsFolders ? GetExplorerFolderMap() : Map()
+
+    matches := Map()
+    for pass in [1, 2] {
+        for index, record in pending {
+            if matches.Has(index)
+                continue
+            for hwnd in candidates[StrLower(record["process"])] {
+                if claimed.Has(hwnd)
+                    continue
+                if (pass = 1) {
+                    if (record["folder"] != "") {
+                        if !(folders.Has(hwnd) && folders[hwnd] = record["folder"])
+                            continue
+                    } else {
+                        try title := WinGetTitle("ahk_id " hwnd)
+                        catch
+                            continue
+                        if (title != record["title"])
+                            continue
                     }
                 }
+                claimed[hwnd] := true
+                matches[index] := hwnd
+                break
             }
-        } catch as err {
-            WriteLog("Workspace window lookup failed: " err.Message)
         }
+    }
 
-        if matchedHwnd {
-            usedWindows[matchedHwnd] := true
-            record["hwnd"] := matchedHwnd
-            try {
-                windowTitle := "ahk_id " matchedHwnd
-                WinRestore(windowTitle)
-                context := GetWindowPlacementContext(matchedHwnd)
-                monitor := Min(record["monitor"], MonitorGetCount())
-                MonitorGetWorkArea(
-                    monitor,
-                    &left,
-                    &top,
-                    &right,
-                    &bottom
-                )
-                workWidth := right - left
-                workHeight := bottom - top
-                width := Min(Round(record["width"] * workWidth), workWidth)
-                height := Min(Round(record["height"] * workHeight), workHeight)
-                x := left + Round(record["x"] * workWidth)
-                y := top + Round(record["y"] * workHeight)
-                MoveWindowIntoWorkArea(
-                    matchedHwnd,
-                    x,
-                    y,
-                    width,
-                    height,
-                    left,
-                    top,
-                    right,
-                    bottom,
-                    context
-                )
-                if record["maximized"]
-                    WinMaximize(windowTitle)
-            } catch as err {
-                WriteLog("Workspace window placement failed: " err.Message)
-            }
+    remaining := []
+    for index, record in pending {
+        if matches.Has(index) {
+            PlaceWorkspaceWindow(matches[index], record)
             continue
         }
 
         if !record["launched"] {
             try {
-                Run('"' record["path"] '"')
+                Run(GetWorkspaceLaunchCommand(record))
                 record["launched"] := true
             } catch as err {
                 WriteLog("Workspace application launch failed: " err.Message)
@@ -767,6 +885,29 @@ RestoreWorkspaceWindows(*) {
     ASCS_WorkspaceRestorePending := remaining
     if !remaining.Length
         SetTimer(RestoreWorkspaceWindows, 0)
+}
+
+PlaceWorkspaceWindow(hwnd, record) {
+    try {
+        windowTitle := "ahk_id " hwnd
+        WinRestore(windowTitle)
+        context := GetWindowPlacementContext(hwnd)
+        monitor := Min(record["monitor"], MonitorGetCount())
+        MonitorGetWorkArea(monitor, &left, &top, &right, &bottom)
+        workWidth := right - left
+        workHeight := bottom - top
+        width := Min(Round(record["width"] * workWidth), workWidth)
+        height := Min(Round(record["height"] * workHeight), workHeight)
+        x := left + Round(record["x"] * workWidth)
+        y := top + Round(record["y"] * workHeight)
+        MoveWindowIntoWorkArea(
+            hwnd, x, y, width, height, left, top, right, bottom, context
+        )
+        if record["maximized"]
+            WinMaximize(windowTitle)
+    } catch as err {
+        WriteLog("Workspace window placement failed: " err.Message)
+    }
 }
 
 Range(start, end) {
@@ -799,8 +940,10 @@ SwitchVirtualDesktop(number, thisHotkey := "") {
             throw Error("VirtualDesktopAccessor returned an invalid desktop count.")
         }
 
-        if (number > desktopCount)
+        if (number > desktopCount) {
+            ShowMissingDesktopTooltip(number, desktopCount)
             return
+        }
 
         switched := DllCall(
             dll "\GoToDesktopNumber",
@@ -832,8 +975,10 @@ MoveActiveWindowToDesktop(number, thisHotkey := "") {
         desktopCount := DllCall(dll "\GetDesktopCount", "Int")
         if (desktopCount < 1)
             throw Error("VirtualDesktopAccessor returned an invalid desktop count.")
-        if (number < 1 || number > desktopCount)
+        if (number < 1 || number > desktopCount) {
+            ShowMissingDesktopTooltip(number, desktopCount)
             return
+        }
 
         moved := DllCall(
             dll "\MoveWindowToDesktopNumber",
@@ -857,9 +1002,17 @@ MoveActiveWindowToDesktop(number, thisHotkey := "") {
     }
 }
 
+ShowMissingDesktopTooltip(number, desktopCount) {
+    ShowDesktopTooltip(
+        "Desktop " number " does not exist ("
+        desktopCount (desktopCount = 1 ? " desktop is" : " desktops are")
+        " open)."
+    )
+}
+
 ShowDesktopTooltip(message) {
     ToolTip(message)
-    SetTimer(ClearDesktopTooltip, -1500)
+    SetTimer(ClearDesktopTooltip, -2000)
 }
 
 ClearDesktopTooltip(*) {
@@ -946,27 +1099,7 @@ GetActiveResizableWindow() {
 GetWindowPlacementContext(hwnd) {
     windowTitle := "ahk_id " hwnd
     WinGetPos(&x, &y, &width, &height, windowTitle)
-    centerX := x + width / 2
-    centerY := y + height / 2
-    monitorIndex := 0
-
-    Loop MonitorGetCount() {
-        MonitorGet(
-            A_Index,
-            &monitorLeft,
-            &monitorTop,
-            &monitorRight,
-            &monitorBottom
-        )
-        if (centerX >= monitorLeft && centerX < monitorRight
-            && centerY >= monitorTop && centerY < monitorBottom) {
-            monitorIndex := A_Index
-            break
-        }
-    }
-
-    if !monitorIndex
-        throw Error("Unable to identify the window's monitor.")
+    monitorIndex := GetWindowMonitorIndex(hwnd)
 
     MonitorGetWorkArea(
         monitorIndex,
@@ -1008,6 +1141,27 @@ GetWindowPlacementContext(hwnd) {
         "rightInset", Max(0, x + width - frameRight),
         "bottomInset", Max(0, y + height - frameBottom)
     )
+}
+
+; Returns the AutoHotkey monitor index for the display Windows considers the
+; window to be on (nearest display when it is partly or fully off-screen).
+GetWindowMonitorIndex(hwnd) {
+    hMonitor := DllCall("MonitorFromWindow", "Ptr", hwnd, "UInt", 2, "Ptr")   ; NEAREST
+    info := Buffer(40, 0)
+    NumPut("UInt", 40, info, 0)
+    if (hMonitor && DllCall("GetMonitorInfoW", "Ptr", hMonitor, "Ptr", info, "Int")) {
+        left := NumGet(info, 4, "Int")
+        top := NumGet(info, 8, "Int")
+        right := NumGet(info, 12, "Int")
+        bottom := NumGet(info, 16, "Int")
+        Loop MonitorGetCount() {
+            MonitorGet(A_Index, &monitorLeft, &monitorTop, &monitorRight, &monitorBottom)
+            if (monitorLeft = left && monitorTop = top
+                && monitorRight = right && monitorBottom = bottom)
+                return A_Index
+        }
+    }
+    return MonitorGetPrimary()
 }
 
 MoveWindowIntoWorkArea(hwnd, x, y, width, height, workLeft, workTop, workRight, workBottom, context) {
@@ -1211,19 +1365,26 @@ MoveActiveWindowToAdjacentMonitor(direction) {
 
 ShowCommandLauncher() {
     global ASCS_PendingLauncher
+    global ASCS_PageReady
 
-    ASCS_PendingLauncher := true
-    ShowView("home")
-    SetTimer(DispatchPendingLauncher, -100)
+    ShowASCS()
+    if ASCS_PageReady {
+        SendToFrontend('{"type":"openLauncher"}')
+    } else {
+        ASCS_PendingLauncher := true
+        SetTimer(DispatchPendingLauncher, -100)
+    }
 }
 
+; Super tap: hide when ASCS is active; otherwise show it on the view that was
+; last open this session (the Command Center after a fresh start).
 ToggleCommandCenter() {
     global ASCS_App
 
     if WinActive("ahk_id " ASCS_App.Hwnd)
         HandleClose()
     else
-        ShowView("home")
+        ShowASCS()
 }
 
 DispatchPendingLauncher(*) {
@@ -1241,15 +1402,22 @@ DispatchPendingLauncher(*) {
 }
 
 ShowView(view, thisHotkey := "") {
+    ShowASCS(view)
+}
+
+; Shows and focuses ASCS. With a view, navigates to it; without one, the
+; frontend keeps its current view and refreshes it. Nothing slow runs here:
+; metrics are scheduled on timers so the window responds immediately.
+ShowASCS(view := "") {
     global ASCS_App
     global ASCS_PageReady
     global ASCS_PendingView
 
-    ASCS_PendingView := view
+    if (view != "")
+        ASCS_PendingView := view
 
     ASCS_App.Show()
     WinActivate("ahk_id " ASCS_App.Hwnd)
-    StartDashboardPolling()
 
     try {
         ASCS_App.MoveFocus(0)
@@ -1257,10 +1425,17 @@ ShowView(view, thisHotkey := "") {
         WriteLog("WebView focus failed: " err.Message)
     }
 
-    if ASCS_PageReady
-        SendToFrontend(
-            '{"type":"navigate","view":' JsonQuote(view) '}'
-        )
+    if ASCS_PageReady {
+        if (view != "")
+            SendToFrontend(
+                '{"type":"navigate","view":' JsonQuote(view) '}'
+            )
+        else
+            SendToFrontend('{"type":"resume"}')
+        ReloadNotesIfChangedExternally()
+    }
+
+    StartDashboardPolling()
 }
 
 ApplyWindowIcon() {
@@ -1285,9 +1460,13 @@ ApplyWindowIcon() {
 HandleNavigationStarting(sender, args) {
     global ASCS_PageReady
 
-    if !IsTrustedWebViewUrl(args.Uri) {
+    uri := args.Uri
+    if !IsTrustedWebViewUrl(uri) {
         args.Cancel := true
-        WriteLog("Blocked navigation outside the ASCS origin.")
+        ; WebViewToo loads its own data: template before ASCS navigates;
+        ; cancelling that is expected and is not worth logging.
+        if !RegExMatch(uri, "i)^data:")
+            WriteLog("Blocked navigation outside the ASCS origin.")
         return
     }
 
@@ -1300,7 +1479,8 @@ HandleNewWindowRequested(sender, args) {
 }
 
 HandleNavigationCompleted(sender, args) {
-    if !args.IsSuccess
+    ; Status 14 (OperationCanceled) is the expected result of a blocked navigation.
+    if (!args.IsSuccess && args.WebErrorStatus != 14)
         WriteLog(
             "Frontend navigation failed. WebErrorStatus: "
             args.WebErrorStatus
@@ -1409,7 +1589,7 @@ HandleWebMessage(sender, args) {
             case "Launch":
                 if (content = "everything")
                     LaunchEverything()
-                else if (content = "explorer" || content = "browser"
+                else if (content = "explorer"
                     || content = "vivaldi"
                     || content = "terminal" || content = "calculator"
                     || content = "taskmanager"
@@ -1423,9 +1603,9 @@ HandleWebMessage(sender, args) {
             case "GetMetrics":
                 if (content = "home" || content = "dashboard") {
                     ASCS_PendingView := content
-                    PushDashboard()
+                    RequestDashboardPush()
                 } else if (content = "") {
-                    PushDashboard()
+                    RequestDashboardPush()
                 } else {
                     WriteLog("Rejected GetMetrics payload.")
                 }
@@ -1458,7 +1638,18 @@ StartDashboardPolling() {
     if !ASCS_PageReady
         return
 
+    SampleCpuUsage()   ; baseline for the first reading
     SetTimer(PushDashboard, 5000)
+    RequestDashboardPush(300)
+}
+
+; Coalesces metric requests into one push on a timer, so that message
+; handlers and hotkeys never wait on metric collection.
+RequestDashboardPush(delay := 1) {
+    SetTimer(PushDashboardOnce, -delay)
+}
+
+PushDashboardOnce(*) {
     PushDashboard()
 }
 
@@ -1828,9 +2019,6 @@ LaunchCommand(command, thisHotkey := "", forceNew := false, *) {
                     forceNew
                 )
 
-            case "browser":
-                RunAndActivate("https://www.google.com")
-
             case "vivaldi":
                 LaunchVivaldi()
 
@@ -1882,7 +2070,7 @@ LaunchCommand(command, thisHotkey := "", forceNew := false, *) {
                 )
 
             case "snipping":
-                Send("#+s")
+                LaunchSnipping()
 
             case "lock":
                 DllCall("LockWorkStation")
@@ -2027,9 +2215,10 @@ FindVivaldi() {
 ; QUICK NOTES
 ; ==========================================
 
-GetNotes() {
+GetNotes(external := false) {
     global ASCS_NotesFile
     global ASCS_NotesRecovered
+    global ASCS_NotesFileTime
 
     recovered := false
     hadNotesFile := false
@@ -2064,15 +2253,44 @@ GetNotes() {
     }
 
     ASCS_NotesRecovered := recovered
+    ASCS_NotesFileTime := GetNotesFileStamp()
     SendToFrontend(
         '{"type":"notes","data":'
-        JsonQuote(raw) ',"recovered":' (recovered ? "true" : "false") '}'
+        JsonQuote(raw) ',"recovered":' (recovered ? "true" : "false")
+        ',"external":' (external ? "true" : "false") '}'
     )
+}
+
+; Modification time and size of notes.json, used to notice outside edits.
+GetNotesFileStamp() {
+    global ASCS_NotesFile
+
+    try {
+        if FileExist(ASCS_NotesFile)
+            return FileGetTime(ASCS_NotesFile, "M") "|" FileGetSize(ASCS_NotesFile)
+    }
+    return ""
+}
+
+; Called when ASCS is shown: if notes.json was edited, replaced, or restored
+; outside ASCS since it was last read or written, send the new contents.
+; The frontend keeps its own copy instead when it has unsaved edits.
+ReloadNotesIfChangedExternally() {
+    global ASCS_NotesFileTime
+
+    if (ASCS_NotesFileTime = "")
+        return
+    stamp := GetNotesFileStamp()
+    if (stamp = ASCS_NotesFileTime)
+        return
+    WriteLog("notes.json changed outside ASCS; reloading notes.")
+    GetNotes(true)
 }
 
 SaveNotes(content) {
     global ASCS_NotesFile
     global ASCS_NotesRecovered
+    global ASCS_NotesFileTime
 
     try {
         byteCount := StrPut(content, "UTF-8") - 1
@@ -2099,6 +2317,7 @@ SaveNotes(content) {
             FileCopy(ASCS_NotesFile, backupPath, 1)
 
         FileMove(tempPath, ASCS_NotesFile, 1)
+        ASCS_NotesFileTime := GetNotesFileStamp()
         ASCS_NotesRecovered := false
         SendToFrontend('{"type":"saved"}')
 
@@ -2184,33 +2403,17 @@ PushDashboard(*) {
     }
 
     try {
-        if !IsObject(ASCS_Wmi)
-            ASCS_Wmi := ComObjGet("winmgmts:\\.\root\cimv2")
-        wmi := ASCS_Wmi
+        ; CPU and RAM come from fast Win32 calls. WMI's
+        ; Win32_Processor.LoadPercentage blocks for about one second per query,
+        ; which froze the UI and delayed hotkeys in 1.5.0.
+        cpuUsage := SampleCpuUsage()
 
-        cpuTotal := 0
-        cpuCount := 0
-
-        totalRAM := 0
-        freeRAM := 0
-
-        for cpu in wmi.ExecQuery(
-            "SELECT LoadPercentage FROM Win32_Processor"
-        ) {
-            cpuTotal += cpu.LoadPercentage
-            cpuCount++
-        }
-
-        cpuUsage := cpuCount
-            ? Round(cpuTotal / cpuCount)
-            : 0
-
-        for os in wmi.ExecQuery(
-            "SELECT TotalVisibleMemorySize, FreePhysicalMemory FROM Win32_OperatingSystem"
-        ) {
-            totalRAM := os.TotalVisibleMemorySize / 1048576
-            freeRAM := os.FreePhysicalMemory / 1048576
-        }
+        memory := Buffer(64, 0)
+        NumPut("UInt", 64, memory, 0)
+        if !DllCall("GlobalMemoryStatusEx", "Ptr", memory, "Int")
+            throw Error("GlobalMemoryStatusEx failed.")
+        totalRAM := NumGet(memory, 8, "UInt64") / 1073741824
+        freeRAM := NumGet(memory, 16, "UInt64") / 1073741824
 
         ramUsage := totalRAM
             ? Round((totalRAM - freeRAM) / totalRAM * 100)
@@ -2221,8 +2424,10 @@ PushDashboard(*) {
         diskUsed := drives["cUsed"]
         diskTotal := drives["cTotal"]
 
+        ; Hardware inventory (about 0.1–0.5 s of WMI) runs on its own timer
+        ; after this push, so the Dashboard renders live metrics first.
         if (ASCS_PendingView = "dashboard" && ASCS_HardwareJson = "")
-            ASCS_HardwareJson := GetHardwareDetails(wmi)
+            SetTimer(CollectHardwareDetails, -50)
         hardwareJson := ASCS_HardwareJson != ""
             ? ASCS_HardwareJson
             : "null"
@@ -2253,6 +2458,49 @@ PushDashboard(*) {
             ASCS_DashboardErrorShown := true
         }
     }
+}
+
+; Returns system CPU utilization (0–100) since the previous sample. Samples
+; taken less than 250 ms apart reuse the last value to avoid noisy readings.
+SampleCpuUsage() {
+    global ASCS_CpuSample
+
+    idle := 0, kernel := 0, user := 0
+    if !DllCall("GetSystemTimes", "Int64*", &idle, "Int64*", &kernel, "Int64*", &user, "Int")
+        return IsObject(ASCS_CpuSample) ? ASCS_CpuSample["usage"] : 0
+
+    now := A_TickCount
+    total := kernel + user   ; kernel time includes idle time
+    usage := 0
+    if IsObject(ASCS_CpuSample) {
+        if (now - ASCS_CpuSample["tick"] < 250)
+            return ASCS_CpuSample["usage"]
+        totalDelta := total - ASCS_CpuSample["total"]
+        idleDelta := idle - ASCS_CpuSample["idle"]
+        usage := totalDelta > 0
+            ? Max(0, Min(100, Round((totalDelta - idleDelta) / totalDelta * 100)))
+            : ASCS_CpuSample["usage"]
+    }
+    ASCS_CpuSample := Map("idle", idle, "total", total, "tick", now, "usage", usage)
+    return usage
+}
+
+CollectHardwareDetails(*) {
+    global ASCS_HardwareJson
+    global ASCS_Wmi
+
+    if (ASCS_HardwareJson != "")
+        return
+    try {
+        if !IsObject(ASCS_Wmi)
+            ASCS_Wmi := ComObjGet("winmgmts:\\.\root\cimv2")
+        ASCS_HardwareJson := GetHardwareDetails(ASCS_Wmi)
+    } catch as err {
+        ASCS_Wmi := 0
+        ASCS_HardwareJson := "null"   ; do not retry every refresh this session
+        WriteLog("Hardware inventory failed: " err.Message)
+    }
+    RequestDashboardPush()
 }
 
 GetHardwareDetails(wmi) {

@@ -297,7 +297,7 @@
         </div>
         <div class="command-intro">
           <span class="command-intro-key" aria-hidden="true"><kbd>Super</kbd></span>
-          <p><strong>Super is the dedicated command key.</strong><span>Tap it to open the Command Center, or hold it while pressing a listed key.</span></p>
+          <p><strong>Super is the dedicated command key.</strong><span>Tap it to show or hide ASCS (it reopens on the last view you used), or hold it while pressing a listed key.</span></p>
         </div>
         <div class="command-groups">
           <section class="command-group" aria-labelledby="commandViewsTitle">
@@ -306,7 +306,7 @@
               <div><h2 id="commandViewsTitle">ASCS views</h2><p>Open a workspace inside ASCS</p></div>
             </div>
             <div class="shortcut-list">
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd></span><span class="shortcut-description"><strong>Command Center</strong><small>Opens the main ASCS interface when Super is tapped by itself.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd></span><span class="shortcut-description"><strong>Show / hide ASCS</strong><small>Tap Super by itself. Opens on the Command Center after startup, then on the last view you used.</small></span><span class="shortcut-status">ACTIVE</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Space</kbd></span><span class="shortcut-description"><strong>Command launcher</strong><small>Search apps, ASCS views, and system actions.</small></span><span class="shortcut-status">ACTIVE</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="notes">Q</kbd></span><span class="shortcut-description"><strong>Quick Notes</strong><small>Opens the persistent notes editor (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="dashboard">I</kbd></span><span class="shortcut-description"><strong>System Dashboard</strong><small>Shows live metrics and physical system details (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
@@ -394,7 +394,7 @@
             <div class="shortcut-list">
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>S</kbd></span><span class="shortcut-description"><strong>Save workspace</strong><small>Stores the visible app layout locally. Hold Shift with S for Snipping Tool.</small></span><span class="shortcut-status">ACTIVE</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>S</kbd></span><span class="shortcut-description"><strong>Snipping Tool</strong><small>Opens the Windows screen-snipping overlay.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>R</kbd></span><span class="shortcut-description"><strong>Restore workspace</strong><small>Relaunches missing apps and restores saved window positions.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>R</kbd></span><span class="shortcut-description"><strong>Restore workspace</strong><small>Reuses open windows first, relaunches missing apps, and restores saved positions.</small></span><span class="shortcut-status">ACTIVE</span></article>
             </div>
           </section>
           <p class="settings-note">Default letter assignments for apps and views can be changed in Preferences. S, R, L, M, V, J, and Y are reserved for fixed commands. Super + Shift + D/F create Explorer items when File Explorer is active; unassigned Super + D passes through to Windows Show Desktop.</p>
@@ -439,6 +439,18 @@
           <input id="launcherSearch" type="search" placeholder="Search apps, views, and actions…" autocomplete="off">
           <div id="launcherResults" class="launcher-results" role="listbox" aria-label="Available commands"></div>
           <p class="launcher-hint"><kbd>↑</kbd><kbd>↓</kbd> to navigate <kbd>Enter</kbd> to run <kbd>Esc</kbd> to close</p>
+        </section>
+      </div>
+
+      <div class="confirm-backdrop" id="confirmDialog" hidden>
+        <section class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogMessage">
+          <span class="eyebrow">CONFIRM</span>
+          <h2 id="confirmDialogTitle"></h2>
+          <p id="confirmDialogMessage"></p>
+          <div class="confirm-actions">
+            <button class="secondary" type="button" id="confirmDialogCancel">Cancel</button>
+            <button class="primary" type="button" id="confirmDialogConfirm">Confirm</button>
+          </div>
         </section>
       </div>
 

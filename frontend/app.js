@@ -6,7 +6,7 @@ const viewLabels = {
     home: "COMMAND CENTER",
     notes: "QUICK NOTES",
     dashboard: "SYSTEM DASHBOARD",
-    commands: "Super COMMANDS",
+    commands: "SUPER COMMANDS",
     settings: "PREFERENCES"
 };
 
@@ -19,6 +19,7 @@ let launcherPreviousFocus = null;
 let notesData = { version: 2, activeId: null, notes: [] };
 let notesLoaded = false;
 let lastHardwareSignature = null;
+let pendingNotices = [];
 
 function send(type, content = "") {
     const webview = window.chrome?.webview;
@@ -41,6 +42,68 @@ function showToast(message) {
 
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toast.classList.remove("show"), 2800);
+}
+
+// Shows a toast now, or the next time ASCS gains focus when the window is
+// hidden (for example, notes loaded during hidden startup).
+function showNotice(message) {
+    if (document.hasFocus()) {
+        showToast(message);
+    } else if (!pendingNotices.includes(message)) {
+        pendingNotices.push(message);
+    }
+}
+
+function flushNotices() {
+    if (!pendingNotices.length) return;
+    const message = pendingNotices.join(" ");
+    pendingNotices = [];
+    showToast(message);
+}
+
+// Styled replacement for window.confirm(). Resolves true when confirmed.
+function confirmDialog({ title, message, confirmLabel = "Confirm", danger = false }) {
+    return new Promise(resolve => {
+        const backdrop = $("confirmDialog");
+        const confirmButton = $("confirmDialogConfirm");
+        const cancelButton = $("confirmDialogCancel");
+        const previousFocus = document.activeElement;
+
+        $("confirmDialogTitle").textContent = title;
+        $("confirmDialogMessage").textContent = message;
+        confirmButton.textContent = confirmLabel;
+        confirmButton.classList.toggle("danger-solid", danger);
+        backdrop.hidden = false;
+        requestAnimationFrame(() => cancelButton.focus());
+
+        function finish(result) {
+            backdrop.hidden = true;
+            backdrop.removeEventListener("keydown", onKey);
+            backdrop.removeEventListener("click", onBackdrop);
+            confirmButton.removeEventListener("click", onConfirm);
+            cancelButton.removeEventListener("click", onCancel);
+            if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
+            resolve(result);
+        }
+        function onConfirm() { finish(true); }
+        function onCancel() { finish(false); }
+        function onBackdrop(event) { if (event.target === backdrop) finish(false); }
+        function onKey(event) {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                finish(false);
+            } else if (event.key === "Tab") {
+                event.preventDefault();
+                (document.activeElement === cancelButton ? confirmButton : cancelButton).focus();
+            }
+        }
+
+        backdrop.addEventListener("keydown", onKey);
+        backdrop.addEventListener("click", onBackdrop);
+        confirmButton.addEventListener("click", onConfirm);
+        cancelButton.addEventListener("click", onCancel);
+    });
 }
 
 function setSaveStatus(label, state) {
@@ -276,6 +339,8 @@ document.querySelectorAll("[data-window-action]").forEach(button => {
 });
 
 window.addEventListener("focus", () => {
+    flushNotices();
+    if (!$("confirmDialog").hidden || !$("launcher").hidden) return;
     const activeView = document.querySelector(".view.active")?.id;
     if (activeView) requestAnimationFrame(() => focusPrimaryInput(activeView));
 });
@@ -399,7 +464,7 @@ function loadNotes(raw, recovered) {
     try {
         parsed = JSON.parse(raw);
     } catch {
-        showToast("Saved notes could not be parsed.");
+        showNotice("Saved notes could not be parsed.");
         return;
     }
 
@@ -412,12 +477,12 @@ function loadNotes(raw, recovered) {
         if ($("notes").classList.contains("active")) {
             requestAnimationFrame(() => focusPrimaryInput("notes"));
         }
-        showToast("Your legacy note was migrated.");
+        showNotice("Your notes were upgraded from the pre-1.4 format into a note named \"Scratch\".");
         return;
     }
 
     if (parsed?.version !== 2 || !Array.isArray(parsed.notes)) {
-        showToast("Saved notes use an unsupported format.");
+        showNotice("Saved notes use an unsupported format.");
         return;
     }
 
@@ -430,7 +495,7 @@ function loadNotes(raw, recovered) {
         && typeof note.created === "string"
         && typeof note.updated === "string");
     if (!validNotes) {
-        showToast("Saved notes contain an invalid note entry.");
+        showNotice("Saved notes contain an invalid note entry.");
         return;
     }
 
@@ -442,7 +507,7 @@ function loadNotes(raw, recovered) {
     if (!notesData.notes.some(note => note.id === notesData.activeId)) {
         notesData.activeId = notesData.notes[0]?.id ?? null;
     }
-    if (recovered) showToast("Notes were recovered from the backup file.");
+    if (recovered) showNotice("notes.json could not be read, so your notes were restored from notes.json.bak.");
     notesLoaded = true;
     renderActiveNote();
     if ($("notes").classList.contains("active")) {
@@ -473,9 +538,16 @@ $("newNoteButton").addEventListener("click", () => {
     focusPrimaryInput("notes");
 });
 
-$("deleteNoteButton").addEventListener("click", () => {
+$("deleteNoteButton").addEventListener("click", async () => {
     const note = activeNote();
-    if (!note || !window.confirm(`Delete "${noteLabel(note)}"?`)) return;
+    if (!note) return;
+    const confirmed = await confirmDialog({
+        title: `Delete "${noteLabel(note)}"?`,
+        message: "This permanently removes the note and its contents.",
+        confirmLabel: "Delete note",
+        danger: true
+    });
+    if (!confirmed || activeNote() !== note) return;
     notesData.notes = notesData.notes.filter(item => item.id !== note.id);
     notesData.activeId = notesData.notes[0]?.id ?? null;
     renderActiveNote();
@@ -529,8 +601,23 @@ function handleWebMessage(event) {
             navigate(data.view);
             break;
         case "notes":
-            if (typeof data.data === "string") loadNotes(data.data, data.recovered === true);
+            if (typeof data.data !== "string") break;
+            if (data.external === true && (saveTimer !== null || pendingSaveData.length)) {
+                // Unsaved edits win; the next save overwrites the outside change.
+                showNotice("notes.json changed outside ASCS, but you have unsaved edits; keeping your edits.");
+                break;
+            }
+            if (data.external === true) showNotice("Notes reloaded because notes.json changed outside ASCS.");
+            loadNotes(data.data, data.recovered === true);
             break;
+        case "resume": {
+            // ASCS was re-shown on the view that was already open.
+            const view = document.querySelector(".view.active")?.id ?? "home";
+            if (view === "home" || view === "dashboard") send("GetMetrics", view);
+            if (view === "notes" && !notesLoaded) send("GetNotes");
+            requestAnimationFrame(() => focusPrimaryInput(view));
+            break;
+        }
         case "flushNotes":
             flushPendingNotes();
             break;

@@ -2,9 +2,9 @@
 
 **Brand:** AEOLIONWARE SUPER COMMAND SYSTEM  
 **Tagline:** AEOLIONWARE, at your command.  
-**Version:** 1.5.0
+**Version:** 1.5.1
 **Platform:** Windows 10/11 (Windows 11 target verification)
-**Status:** Version 1.5.0. Core shortcuts, application reuse, Explorer item creation, dashboard behavior, and the updated command layout have been tested on the target Windows setup. Broader OS/runtime compatibility checks remain listed below.
+**Status:** Version 1.5.1. The 1.5.0 manual test pass (84 checks) covered startup, views, the command palette, shortcuts, application reuse, Explorer item creation, virtual desktops, window positioning, workspaces, Quick Notes, metrics, and Preferences on the target Windows setup. Version 1.5.1 fixes the issues that pass found and needs a focused regression pass (see [Development Status](#10-development-status)).
 
 ASCS is a keyboard-driven Windows utility suite. It uses AutoHotkey v2 for hotkeys and Windows automation, WebView2 for its graphical interface, and a web frontend built with HTML, CSS, and JavaScript.
 
@@ -126,13 +126,15 @@ WebViewToo is maintained separately from ASCS application code.
 
 ### Command Center
 
-The Command Center opens when Super is tapped. It provides CPU and RAM summaries and one storage card per configured drive. Change the drive list in Preferences (defaults: `C:` and `J:`). Drive status and capacity probes are isolated from the hotkey process, can run concurrently without AutoHotkey's duplicate-script prompt, time out after eight seconds, and are cached for 30 seconds. Each probe writes to its own result file so an older worker cannot overwrite a newer result; cards refresh as soon as the probe completes.
+Tapping Super shows ASCS on the view that was last open during the current session, or hides ASCS when it is already active. After ASCS starts, the first view is the Command Center; the sidebar or the command palette's “Command Center” entry returns to it at any time. The Command Center provides CPU and RAM summaries and one storage card per configured drive. Change the drive list in Preferences (defaults: `C:` and `J:`). Drive status and capacity probes are isolated from the hotkey process, can run concurrently without AutoHotkey's duplicate-script prompt, time out after eight seconds, and are cached for 30 seconds. Each probe writes to its own result file so an older worker cannot overwrite a newer result; cards refresh as soon as the probe completes.
 
 The overview receives metrics from the same backend updates used by the System Dashboard. It does not show recent activity because the current backend does not provide an activity-history interface.
 
 ### Quick Notes
 
-Quick Notes is opened with Super + Q. It supports multiple notes, title editing, filtering, pinning, deletion, and note/snippet types. Snippets use monospace text and can be copied. Data is stored as a version 2 JSON object in `data/notes.json`; saves are debounced and atomically replaced, with the previous file retained as `.bak`. Legacy `{"content":"..."}` files migrate to a note named “Scratch”.
+Quick Notes is opened with Super + Q. It supports multiple notes, title editing, filtering, pinning, deletion, and note/snippet types. Snippets use monospace text and can be copied. Data is stored as a version 2 JSON object in `data/notes.json`; saves are debounced and atomically replaced, with the previous file retained as `.bak`. Deleting a note asks for confirmation in an in-app dialog.
+
+If `notes.json` is unreadable at startup, ASCS loads `notes.json.bak` and shows a notice the next time the window is focused. When ASCS is shown, it checks whether `notes.json` was changed outside ASCS (edited, replaced, or restored) and reloads it; if the editor has unsaved changes, those are kept and the next save overwrites the outside change. As a compatibility path for files written before version 1.4, a single-note file of the form `{"content":"..."}` is converted into a note named “Scratch”; new installations start with an empty version 2 collection.
 
 Each note stores an `id`, `title`, `type` (`note` or `snippet`), `content`, `pinned`, and ISO-8601 `created`/`updated` timestamps. The collection stores `version`, `activeId`, and a `notes` array.
 
@@ -150,7 +152,7 @@ With a filesystem folder open and active in File Explorer, Super + Shift + D pro
 
 ### System Dashboard
 
-The System Dashboard is opened with Super + I by default. It displays live CPU/RAM metrics, configured drive cards, processor and graphics details, memory configuration, motherboard and BIOS information, and Windows build. Its physical-drive list maps disks to their partitions and mounted drive letters, including volume labels, file systems, capacities, and free space. Metrics refresh every five seconds while ASCS is visible; polling stops while it is hidden or minimized. Hardware inventory is deferred until the Dashboard is first opened, then read once per session through Windows Management Instrumentation (WMI), whose connection is reused between refreshes.
+The System Dashboard is opened with Super + I by default. It displays live CPU/RAM metrics, configured drive cards, processor and graphics details, memory configuration, motherboard and BIOS information, and Windows build. Its physical-drive list maps disks to their partitions and mounted drive letters, including volume labels, file systems, capacities, and free space. Metrics refresh every five seconds while ASCS is visible; polling stops while it is hidden or minimized. CPU utilization comes from `GetSystemTimes` deltas and memory from `GlobalMemoryStatusEx`; both return immediately. Hardware inventory is deferred until the Dashboard is first opened, then read once per session through Windows Management Instrumentation (WMI) on a timer after the live metrics are displayed. Showing ASCS, navigating, and hotkeys never wait for metric collection.
 
 Hardware inventory uses `Win32_Processor`, `Win32_ComputerSystem`, `Win32_PhysicalMemory`, `Win32_VideoController`, `Win32_DiskDrive`, `Win32_DiskPartition`, `Win32_LogicalDiskToPartition`, `Win32_LogicalDisk`, `Win32_BaseBoard`, `Win32_BIOS`, and `Win32_OperatingSystem`.
 
@@ -160,13 +162,17 @@ The Super Commands view is an in-app appendix of the active shortcuts. App/view 
 
 ### Preferences and command launcher
 
-Preferences configure up to 12 drive letters, snap spacing, monitor-move sizing, and unique letters for application/view shortcuts. Shortcut changes rebind immediately and are saved in `data/settings.ini`. B is reserved for Vivaldi; S, R, L, M, V, J, and Y are reserved for system commands. Terminal and Explorer reuse the existing configured shortcut and open a new window when Shift is held; Shift+Super+D/F remain the folder/file creation shortcuts.
+Preferences configure up to 12 drive letters, snap spacing, monitor-move sizing, and unique letters for application/view shortcuts. Shortcut changes rebind immediately and are saved in `data/settings.ini`. If a value is rejected, the message names the shortcut and conflicting letter, nothing is applied, and the form returns to the active values. B is reserved for Vivaldi; S, R, L, M, V, J, and Y are reserved for system commands. Terminal and Explorer reuse the existing configured shortcut and open a new window when Shift is held; Shift+Super+D/F remain the folder/file creation shortcuts.
 
 The command launcher filters available ASCS views, applications, and system actions. Use arrow keys to navigate, Enter to run, and Escape to close.
 
 ### Workspaces
 
-Super + S saves a snapshot of up to 24 visible application windows; Super + R restores their positions and relaunches missing processes. Window placement is saved locally in `data/workspace.ini`.
+Super + S saves a snapshot of up to 24 visible application windows on the current virtual desktop; Super + R restores them. Window placement is saved locally in `data/workspace.ini`.
+
+- **Save** skips windows that are minimized, cloaked (for example, on another virtual desktop), tool windows, owned dialogs, and the desktop/taskbar. A window that cannot be measured is skipped and logged instead of cancelling the snapshot. File Explorer windows also record their folder.
+- **Restore** reuses open windows before launching anything. First, each saved window is matched exactly (same Explorer folder, or same title for other applications). Then it is matched to any other unclaimed window of the same application, so windows whose titles have changed (Terminal, editors, browsers) are reused. An application is launched only when no unclaimed window of it remains: Explorer reopens the saved folder, and Windows Terminal opens through `wt.exe`. Matching continues for up to 20 seconds per window.
+- If no workspace has been saved, or it cannot be restored, ASCS shows an information dialog.
 
 ## 6. Keyboard Shortcuts
 
@@ -174,7 +180,7 @@ Shortcut tables use “Super” as the user-facing name for the dedicated key (m
 
 | Shortcut | Action | Status |
 | --- | --- | --- |
-| Super | Show Command Center, or hide it when already active | Implemented in source |
+| Super | Show ASCS on the last-used view (Command Center after startup), or hide it when already active | Implemented in source |
 | Super + Space | Open searchable command launcher | Implemented in source |
 | Super + Q | Open Quick Notes (default; configurable) | Implemented in source |
 | Super + F | Open Everything (default; configurable) | Implemented in source |
@@ -196,7 +202,7 @@ Shortcut tables use “Super” as the user-facing name for the dedicated key (m
 | Super + V | Open Clipboard History | Implemented in source |
 | Super + J | Insert timestamp | Implemented in source |
 | Super + Y | Insert date | Implemented in source |
-| Super + Shift + S | Open Snipping Tool | Implemented in source |
+| Super + Shift + S | Open the Snipping Tool capture overlay (`ms-screenclip:`) | Implemented in source |
 | Super + S | Save window workspace | Implemented in source |
 | Super + R | Restore window workspace | Implemented in source |
 
@@ -241,16 +247,17 @@ AutoHotkey sends JSON with `PostWebMessageAsJson()`.
 | Response type | Purpose |
 | --- | --- |
 | `navigate` | Activates a view |
-| `notes` | Returns opaque notes JSON in `data`, plus `recovered` |
+| `resume` | ASCS was re-shown without a view change; the frontend refreshes the current view |
+| `notes` | Returns opaque notes JSON in `data`, plus `recovered` and `external` (reloaded after an outside change) |
 | `saved` | Confirms note persistence |
 | `metrics` | Supplies CPU/RAM, legacy C: fields, and a `drives` array |
 | `settings` | Returns current preferences |
 | `settingsSaved` | Confirms preferences were saved and applied |
 | `openLauncher` | Opens the command palette |
 | `flushNotes` | Asks the frontend to immediately send a pending note save |
-| `error` | Displays an error notification |
+| `error` | Displays an error notification; optional `scope` is `notes` or `settings` |
 
-On `Ready`, the backend marks the page ready and sends the pending view and initial data. Dashboard polling starts only while the ASCS window is visible; it refreshes every five seconds and stops when the window is hidden or minimized. Drive metrics are pushed again as soon as their asynchronous probe completes. The `metrics` response keeps `disk`, `diskUsed`, and `diskTotal` for C: and adds `drives: [{letter, usage, used, total, online}]`.
+On `Ready`, the backend marks the page ready and sends the pending view and initial data. Metric requests (`GetMetrics`, showing the window, completed drive probes) are coalesced onto a timer and never run inside a message handler or hotkey. Dashboard polling starts only while the ASCS window is visible; it refreshes every five seconds and stops when the window is hidden or minimized. Drive metrics are pushed again as soon as their asynchronous probe completes. The `metrics` response keeps `disk`, `diskUsed`, and `diskTotal` for C: and adds `drives: [{letter, usage, used, total, online}]`.
 
 ### Security Considerations
 
@@ -260,7 +267,7 @@ On `Ready`, the backend marks the page ready and sends the pending view and init
 - Keep file access limited to ASCS data paths where practical.
 - Restrict external navigation to approved destinations.
 
-The backend cancels navigation outside `https://ascs.localhost`, rejects bridge messages whose source is outside that origin, and blocks new-window requests. Release WebView settings disable DevTools, default context menus, browser accelerator keys, and zoom controls. The frontend Content Security Policy limits resource loading to the local app (with inline styles and data images allowed). These controls are implemented but still require target-system regression testing.
+The backend cancels navigation outside `https://ascs.localhost`, rejects bridge messages whose source is outside that origin, and blocks new-window requests. Release WebView settings disable DevTools, default context menus, browser accelerator keys, zoom controls, and host objects. Host objects are disabled because WebViewToo otherwise injects a `global` object into `*.localhost` pages that exposes every AutoHotkey function to page script, bypassing the allowlisted bridge. The cancelled navigation of WebViewToo's built-in `data:` template at startup is expected and is not logged. The frontend Content Security Policy limits resource loading to the local app (with inline styles and data images allowed). These controls are implemented but still require target-system regression testing.
 
 ## 8. Dependencies
 
@@ -290,7 +297,7 @@ Everything is optional and only needed for its launcher. ASCS opens the applicat
 7. Restrict write access to the installing account, Administrators, and SYSTEM; do not run ASCS elevated.
 8. Run `C:\ASCS\ASCS.ahk`.
 
-The script starts hidden. Tapping Super shows the Command Center, or hides it when it is already active. Reloading the script and registering the configurable shortcuts, including the Shift-modified Terminal/Explorer behavior, have been tested. After changing frontend assets, restart or reload ASCS to load the updated interface.
+The script starts hidden. Tapping Super shows the Command Center after startup (later, the last-used view), or hides ASCS when it is already active. Reloading the script and registering the configurable shortcuts, including the Shift-modified Terminal/Explorer behavior, have been tested. After changing frontend assets, restart or reload ASCS to load the updated interface.
 
 ## 10. Development Status
 
@@ -346,32 +353,27 @@ Status labels distinguish source implementation from execution on the target sys
 - [x] Shift-modified Terminal/Explorer shortcuts register and reload; Shift+Super+D/F retain their Explorer item-creation actions.
 - [x] Drive probes run independently with unique outputs; Dashboard hardware details are deferred, and completed probes refresh their cards promptly.
 - [x] Responsive Commands layout and shared drive/RAM card styling.
+- [x] 1.5.0 manual pass: hidden startup, single instance, window chrome, WebView restrictions (context menu, DevTools, zoom, reload), command palette filtering and keyboard operation, all palette entries and quick actions.
+- [x] 1.5.0 manual pass: configurable and fixed Super shortcuts, Terminal/Explorer/Vivaldi reuse and new-window behavior, missing-DLL reporting, and focus-steal protection.
+- [x] 1.5.0 manual pass: full Explorer item-creation matrix, top-row and numpad (NumLock on/off) desktop switching, desktop moves, half/quadrant snapping, snap gap, and maximize/restore/minimize.
+- [x] 1.5.0 manual pass: Quick Notes create/rename/filter/pin/type/copy/delete, persistence across restarts, hide flush, exit flush, backup recovery, and 5 MB limit.
+- [x] 1.5.0 manual pass: CPU/RAM/drive cards, five-second refresh, no polling while hidden, hardware and disk-layout details, Preferences persistence/validation/live rebinding, and Super Commands content.
 
 ### Runtime Testing Pending
 
-- Regression-test WebView navigation cancellation, untrusted message rejection, blocked new windows, and release WebView settings.
-- Verify virtual-host page loading and WebView2-to-AutoHotkey messaging in both directions.
-- Hidden startup, WebView initialization/loading, and frontend/backend callback regression tests.
-- Modifier combinations and numpad desktop shortcuts with NumLock both on and off.
-- Quick Notes save, acknowledgement, and persistence across restarts.
-- Notes create/delete/rename/pin/type/filter, atomic save, backup recovery, legacy migration, and hide/close flush.
-- J: online/offline behavior, eight-second worker timeout, and delayed network-drive refresh without blocking hotkeys.
-- Virtual desktop switching bounds, active-window moves, unsupported exports, and additional OS/DLL combinations.
-- Mixed-DPI layouts, snap gaps, and monitor work-area/frame-bound calculations.
-- Workspace security validation for invalid executable paths and relaunch matching; dynamic shortcut rebinding.
-- Preferences persistence/validation and command launcher filtering/keyboard operation.
-- Full Explorer item-creation edge-case matrix (cancel, invalid names, duplicates, and non-Explorer focus) and D/F passthrough combinations.
-- Terminal/Explorer reuse and new-window behavior across multiple virtual desktops and alternate Windows Terminal configurations.
-- Dashboard metric accuracy, C:/J: online/offline cards, five-second visible-window updates, and no polling while hidden.
+- **1.5.1 regression:** Super+Shift+S opens the capture overlay (not Start); the window and palette respond immediately after showing; Super resumes the last-used view; a desktop number beyond the desktop count shows a tooltip; workspace save with two windows of one application; workspace restore reuses open Terminal/Explorer windows and reopens saved Explorer folders; the missing-workspace dialog; the delete-note dialog; the backup-recovery and outside-change notices; Preferences form reset after a rejected save; and the `SUPER COMMANDS` breadcrumb.
+- Mixed-DPI and multi-monitor layouts, adjacent-monitor moves, and monitor work-area/frame-bound calculations (the target system has a single monitor).
+- Network-drive offline behavior, the eight-second worker timeout, and delayed refresh without blocking hotkeys.
+- Additional Windows builds, VirtualDesktopAccessor DLL versions, and alternate Windows Terminal launch configurations.
 - Hardware detail collection on devices with multiple GPU/disk/memory configurations.
-- Responsive layout and interaction at target WebView window sizes.
-- Super Commands appendix content and navigation.
+
+- Untrusted-origin message rejection and blocked new-window requests (not reachable from the shipped frontend; verify with a deliberately modified page).
 
 ## 11. Known Limitations
 
 - WebView origin restrictions, security settings, and complete startup/frontend callback regression coverage still need broader testing across supported installations.
 - Additional Windows builds, virtual desktop DLL versions, and modifier/keyboard configurations need compatibility testing.
-- Workspace restore validates absolute existing `.exe` paths against the recorded process name and launches without arguments; only up to 24 visible windows are captured.
+- Workspace restore validates absolute existing `.exe` paths against the recorded process name and launches without arguments (except Explorer folders and Windows Terminal, as described in [Workspaces](#workspaces)); only up to 24 visible windows on the current desktop are captured. Windows of the same application whose titles have changed are matched in enumeration order, so two such windows can swap positions.
 - Super+F requires the Everything application to be installed; ASCS delegates search and result display to it.
 - The VirtualDesktopAccessor DLL's broader window-move APIs and OS-build compatibility require additional testing; Vivaldi cross-desktop focus and the reported desktop-move behavior have been verified on the target system.
 - Drive readiness and capacity checks run in a separate AutoHotkey process; the main process stops a worker after eight seconds and caches results for 30 seconds. WMI and Windows drive reporting determine metric availability.
@@ -398,6 +400,24 @@ Status labels distinguish source implementation from execution on the target sys
 - Refine keyboard navigation and overall interaction consistency.
 
 ## 13. Changelog
+
+### Version 1.5.1 — Test-Pass Fixes and Responsiveness
+
+- Fixed ASCS being unresponsive for several seconds after showing, a 2–3 second command-palette delay, and sluggish hotkeys. CPU and RAM now come from `GetSystemTimes`/`GlobalMemoryStatusEx` instead of WMI's `Win32_Processor.LoadPercentage`, which blocked for about one second per query. Metric pushes are coalesced onto timers, and the one-time hardware inventory runs after the live metrics are shown.
+- Super+Space opens the palette immediately over the current view.
+- Tapping Super now shows the view that was last open during the session; the Command Center is the first view after startup.
+- Fixed Super+Shift+S opening the Start menu; it now opens the capture overlay through `ms-screenclip:`, as does the palette's Snipping Tool entry.
+- Fixed workspace saves failing with “Unable to identify the window's monitor.” Monitor lookup now uses `MonitorFromWindow`; cloaked, owned, and shell windows are excluded; and one bad window is skipped instead of cancelling the save.
+- Workspace restore reuses already-open windows (an exact match first, then any window of the same application) and launches only when none remain. Explorer reopens saved folders, and Windows Terminal relaunches through `wt.exe`.
+- “No saved workspace” and restore failures now appear as information dialogs instead of tooltips.
+- Switching or moving to a desktop number that does not exist shows a tooltip.
+- Replaced the browser confirmation with a styled in-app dialog for deleting notes.
+- Notes recovered from backup, converted from the legacy format, or reloaded after an outside change now show a notice when ASCS is next focused, rather than while hidden.
+- ASCS reloads `notes.json` when it is changed outside the app; unsaved edits take precedence. New installations start with an empty version 2 notes file.
+- Rejected Preferences now restore the form to the active values, and the messages name the shortcut and the conflicting letter.
+- Corrected the `SUPER COMMANDS` breadcrumb capitalization.
+- Security: disabled WebView2 host objects, closing a path through which page script could call any AutoHotkey function via WebViewToo's injected `global` object. Removed the unused `browser` launch identifier from the bridge allowlist.
+- Stopped logging the expected cancellation of WebViewToo's startup template on every launch.
 
 ### Version 1.5.0 — Performance, Launch Reuse, and Command Center Polish
 
