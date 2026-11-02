@@ -1100,7 +1100,6 @@ ShowView(view, thisHotkey := "") {
     ASCS_PendingView := view
 
     ASCS_App.Show()
-    ApplyWindowIcon()
     WinActivate("ahk_id " ASCS_App.Hwnd)
     StartDashboardPolling()
 
