@@ -1,11 +1,31 @@
 "use strict";
 
+// Page errors are written to the ASCS log (and so the Logs tab), at most ten
+// per session, so a problem in the page is never invisible.
+let reportedPageErrors = 0;
+function reportPageError(message, where) {
+    if (reportedPageErrors >= 10) return;
+    reportedPageErrors++;
+    const text = `${String(message ?? "unknown error")} ${where || ""}`.replace(/[\r\n]+/g, " ").slice(0, 300);
+    try {
+        window.chrome?.webview?.postMessage(`ClientError\n${text}`);
+    } catch {
+        // nothing more can be done
+    }
+}
+window.addEventListener("error", event =>
+    reportPageError(event.message, `(${String(event.filename || "").split("/").pop()}:${event.lineno || 0})`));
+window.addEventListener("unhandledrejection", event =>
+    reportPageError(event.reason?.message || event.reason, "(promise)"));
+
 const $ = id => document.getElementById(id);
-const validViews = new Set(["home", "notes", "dashboard", "commands", "settings"]);
+const validViews = new Set(["home", "notes", "games", "dashboard", "logs", "commands", "settings"]);
 const viewLabels = {
     home: "COMMAND CENTER",
     notes: "QUICK NOTES",
+    games: "GAMES",
     dashboard: "SYSTEM DASHBOARD",
+    logs: "LOGS",
     commands: "SUPER COMMANDS",
     settings: "PREFERENCES"
 };
@@ -128,6 +148,7 @@ function focusPrimaryInput(view) {
 
 function navigate(view) {
     if (!validViews.has(view)) return;
+    const previousView = document.querySelector(".view.active")?.id ?? null;
 
     document.querySelectorAll(".view").forEach(element => {
         element.classList.toggle("active", element.id === view);
@@ -150,6 +171,18 @@ function navigate(view) {
     if (view === "notes" && !notesLoaded) send("GetNotes");
     if (view === "dashboard" || view === "home") send("GetMetrics", view);
     if (view === "settings") send("GetSettings");
+    if (view === "home" && previousView !== null && previousView !== "home") advanceAlmanac();
+    if (view === "home") {
+        send("GetRecycleBin");
+        send("GetAudioDevices");
+    }
+    if (view === "logs") startLogPolling();
+    else stopLogPolling();
+    if (view === "games") startGamesPolling();
+    else stopGamesPolling();
+    if (view === "commands") startRunningPolling();
+    else stopRunningPolling();
+    if (view === "settings") send("GetGameSettings");
 
     requestAnimationFrame(() => {
         if ($(view)?.classList.contains("active")) {
@@ -180,6 +213,8 @@ const builtInCommands = [
     { id: "view:notes", label: "Quick Notes", description: "Open your notes and snippets", keywords: "notes scratchpad", view: "notes", hotkey: "notes" },
     { id: "view:dashboard", label: "System Dashboard", description: "View live system metrics and hardware", keywords: "dashboard metrics hardware", view: "dashboard", hotkey: "dashboard" },
     { id: "view:commands", label: "Shortcut Reference", description: "Browse the complete Super shortcut list", keywords: "commands shortcuts help", view: "commands" },
+    { id: "view:games", label: "Games", description: "Play time, recent games, and achievements", keywords: "play emulator retroarch dolphin pcsx2 pso achievements", view: "games" },
+    { id: "view:logs", label: "Logs", description: "ASCS, activity and Code key logs, newest first", keywords: "log diagnostics errors journal history", view: "logs" },
     { id: "view:settings", label: "Preferences", description: "Drives, snapping, shortcuts, custom commands, and workspaces", keywords: "settings options configure", view: "settings" },
     { id: "mode:snippets", label: "Paste a snippet…", description: "Type a saved snippet into the window you were using", keywords: "snippet paste insert text", mode: "snippets", shortcut: "Super+Shift+P" },
     { id: "mode:workspaces", label: "Restore a workspace…", description: "Choose a saved window layout", keywords: "workspace layout restore", mode: "workspaces", shortcut: "Super+Shift+R" },
@@ -189,7 +224,8 @@ const builtInCommands = [
     { id: "launch:vivaldi", label: "Vivaldi", description: "Focus Vivaldi here, switch to its desktop, or open it", keywords: "browser web internet", launch: "vivaldi", shortcut: "Super+B" },
     { id: "launch:terminal", label: "Windows Terminal", description: "Focus or open a terminal window", keywords: "console shell powershell", launch: "terminal", hotkey: "terminal" },
     { id: "launch:explorer", label: "File Explorer", description: "Browse files and folders", keywords: "explorer folders", launch: "explorer", hotkey: "explorer" },
-    { id: "launch:calculator", label: "Calculator", description: "Open the Windows calculator (or type math here)", keywords: "math", launch: "calculator", hotkey: "calculator" },
+    { id: "launch:claude", label: "Ask Claude", description: "Open Claude's quick-entry prompt", keywords: "ai assistant chat prompt anthropic", launch: "claude", hotkey: "claude" },
+    { id: "launch:calculator", label: "Calculator", description: "Open the Windows calculator (or type math here)", keywords: "math", launch: "calculator" },
     { id: "launch:taskmanager", label: "Task Manager", description: "Inspect running apps and processes", keywords: "performance processes", launch: "taskmanager", hotkey: "taskmanager" },
     { id: "launch:settings", label: "Windows Settings", description: "Open Windows system settings", keywords: "configuration control panel", launch: "settings" },
     { id: "launch:downloads", label: "Downloads", description: "Open your Downloads folder", keywords: "files", launch: "downloads" },
@@ -197,15 +233,20 @@ const builtInCommands = [
     { id: "launch:snipping", label: "Snipping Tool", description: "Capture a screen region", keywords: "screenshot capture snip", launch: "snipping" },
     { id: "launch:lock", label: "Lock workstation", description: "Lock your Windows session", keywords: "security", launch: "lock", shortcut: "Super+L" },
     { id: "launch:mute", label: "Toggle mute", description: "Mute or unmute system audio", keywords: "sound volume audio", launch: "mute", shortcut: "Super+M" },
+    { id: "view:toggle-sidebar", label: "Toggle sidebar", description: "Collapse or expand the navigation sidebar", keywords: "sidebar navigation collapse expand rail", run: () => toggleSidebar() },
     { id: "launch:reload", label: "Reload ASCS", description: "Save notes and restart ASCS to apply changes", keywords: "restart refresh script", launch: "reload", shortcut: "Ctrl+Alt+Shift+A" }
 ];
 
 const paletteModes = {
-    all: { chip: "", title: "What would you like to do?", placeholder: "Search commands, notes, snippets, windows… (= math, ? web)" },
+    all: { chip: "", title: "At your command.", placeholder: "Search commands, notes, snippets, windows… (= math, ? web)" },
     snippets: { chip: "Snippets", title: "Paste a snippet", placeholder: "Filter snippets…" },
     workspaces: { chip: "Workspaces", title: "Restore a workspace", placeholder: "Filter saved workspaces…" },
     windows: { chip: "Windows", title: "Switch to a window", placeholder: "Filter open windows…" },
-    "save-workspace": { chip: "Save workspace", title: "Save the current layout", placeholder: "Name this workspace (letters, numbers, spaces, - _)" }
+    "save-workspace": { chip: "Save workspace", title: "Save the current layout", placeholder: "Name this workspace (letters, numbers, spaces, - _)" },
+    pick: { chip: "Add quick action", title: "Pin a quick action", placeholder: "Search views, apps, commands, workspaces, snippets…" },
+    "games:retroarch": { chip: "RetroArch", title: "Recent RetroArch games", placeholder: "Filter games…" },
+    "games:dolphin": { chip: "Dolphin", title: "Recent Dolphin games", placeholder: "Filter games…" },
+    "games:pcsx2": { chip: "PCSX2", title: "Recent PCSX2 games", placeholder: "Filter games…" }
 };
 
 let launcherMode = "all";
@@ -248,7 +289,7 @@ function noteExcerpt(text) {
 // Items for the current mode and query, before ranking.
 function paletteSources(mode) {
     const items = [];
-    if (mode === "all") {
+    if (mode === "all" || mode === "pick") {
         builtInCommands.forEach(command => items.push({
             ...command, badge: command.view ? "VIEW" : command.mode ? "FIND" : "APP", hint: shortcutFor(command)
         }));
@@ -259,7 +300,7 @@ function paletteSources(mode) {
             run: () => send("RunCommand", String(command.id)), weight: 4
         }));
     }
-    if (mode === "all" || mode === "workspaces") {
+    if (mode === "all" || mode === "workspaces" || mode === "pick") {
         savedWorkspaces.forEach(workspace => items.push({
             id: `ws:${workspace.name.toLowerCase()}`, label: `Restore workspace “${workspace.name}”`,
             description: `${workspace.windows} window${workspace.windows === 1 ? "" : "s"} · saved ${formatSavedTime(workspace.saved)}`,
@@ -268,7 +309,7 @@ function paletteSources(mode) {
             run: () => send("RestoreWorkspace", workspace.name)
         }));
     }
-    if (mode === "all" || mode === "snippets") {
+    if (mode === "all" || mode === "snippets" || mode === "pick") {
         notesData.notes.forEach(note => {
             const isSnippet = note.type === "snippet";
             if (!isSnippet && mode === "snippets") return;
@@ -281,6 +322,18 @@ function paletteSources(mode) {
                 weight: isSnippet ? 2 : 0
             });
         });
+    }
+    if (mode === "all" || mode.startsWith("games:")) {
+        const emulator = mode.startsWith("games:") ? mode.slice(6) : "all";
+        const games = globalThis.ASCSGames
+            ? Games.sortGames(Games.filterGames(gamesState.items.filter(game => game.launchable && game.installed !== false), "", emulator), "recent")
+            : [];
+        games.slice(0, mode === "all" ? 300 : 60).forEach(game => items.push({
+            id: `game:${game.id}`, label: Games.displayTitle(game.title),
+            description: gameMeta(game, ["emulator", "system", "time", "last"]),
+            keywords: `game play ${game.title} ${game.system}`, badge: "GAME", searchOnly: mode === "all",
+            run: () => playGame(game), weight: -1
+        }));
     }
     if (mode === "all" || mode === "windows") {
         launcherWindows.forEach(win => items.push({
@@ -468,6 +521,7 @@ function openLauncher(mode = "all") {
         $("launcher").hidden = false;
     }
     if (!notesLoaded) send("GetNotes");
+    if (String(mode).startsWith("games:") || !gamesState.loaded) send("GetGames");
     setLauncherMode(mode || "all");
     requestAnimationFrame(() => $("launcherSearch").focus());
 }
@@ -482,6 +536,11 @@ function closeLauncher() {
 
 function executeLauncherCommand(command, alternate = false) {
     if (!command || command.disabled) return;
+    if (launcherMode === "pick") {
+        closeLauncher();
+        addQuickAction(command.id);
+        return;
+    }
     if (command.mode) {
         rememberUsage(command.id);
         setLauncherMode(command.mode);
@@ -573,6 +632,7 @@ $("settingsForm").addEventListener("submit", event => {
         $("snapGap").value,
         $("preserveWindowSize").checked ? "1" : "0",
         hotkeys.join(","),
+        $("claudeShortcut").value.trim(),
         $("searchTemplate").value.trim()
     ].join("|");
     $("settingsStatus").textContent = "Saving preferences…";
@@ -611,9 +671,9 @@ function noteLabel(note) {
 
 function renderNotesList() {
     const list = $("notesList");
-    const filter = $("notesFilter").value.trim().toLocaleLowerCase();
+    const query = $("notesFilter").value;
     const notes = [...notesData.notes]
-        .filter(note => `${note.title}\n${note.content}`.toLocaleLowerCase().includes(filter))
+        .filter(note => ASCSNotes.matchesNoteQuery(note, query))
         .sort((left, right) => Number(right.pinned) - Number(left.pinned)
             || right.updated.localeCompare(left.updated));
 
@@ -621,7 +681,8 @@ function renderNotesList() {
     $("notesEmpty").hidden = notes.length > 0;
     $("notesEmpty").textContent = notesData.notes.length
         ? "No notes match this filter."
-        : "No notes yet. Create one to get started.";
+        : "Nothing captured yet. Start a note, or press Super + Shift + C in any app.";
+    renderNoteTags();
 
     notes.forEach(note => {
         const item = document.createElement("button");
@@ -662,8 +723,14 @@ function renderActiveNote() {
     $("noteTitle").value = note?.title ?? "";
     $("noteType").value = note?.type ?? "note";
     $("noteText").value = note?.content ?? "";
-    $("noteKindLabel").textContent = note?.type === "snippet" ? "CODE SNIPPET" : "PERSONAL NOTE";
-    $("noteText").classList.toggle("snippet-editor", note?.type === "snippet");
+    const isSnippet = note?.type === "snippet";
+    $("noteKindLabel").textContent = isSnippet ? "SNIPPET" : "NOTE";
+    $("noteText").classList.toggle("snippet-editor", isSnippet);
+    document.querySelector(".editor-card").dataset.kind = isSnippet ? "snippet" : "note";
+    $("previewNoteButton").hidden = isSnippet;
+    $("previewNoteButton").disabled = !note;
+    updateNotePreview();
+    updateWordCount();
     $("pinNoteButton").setAttribute("aria-pressed", String(Boolean(note?.pinned)));
     $("pinNoteButton").textContent = note?.pinned ? "Unpin" : "Pin";
     $("copySnippetButton").hidden = note?.type !== "snippet";
@@ -778,6 +845,7 @@ function handleNoteInput() {
     if (!note) return;
     note.title = $("noteTitle").value;
     note.content = $("noteText").value;
+    updateWordCount();
     scheduleNoteSave();
 }
 
@@ -845,6 +913,36 @@ window.addEventListener("blur", flushPendingNotes);
 
 function handleWebMessage(event) {
     let data = event.data;
+    if (typeof data === "string" && data.startsWith("ALMANAC\n")) {
+        const [, kind, ...rest] = data.split("\n");
+        handleAlmanacFeed(kind, rest.join("\n"));
+        return;
+    }
+    if (typeof data === "string" && data.startsWith("COVER\n")) {
+        const [, id, ...rest] = data.split("\n");
+        handleCoverMessage(id, rest.join("\n"));
+        return;
+    }
+    if (typeof data === "string" && data.startsWith("RAIMG\n")) {
+        const [, token, ...rest] = data.split("\n");
+        handleRaImage(token, rest.join("\n"));
+        return;
+    }
+    if (typeof data === "string" && data.startsWith("RA\n")) {
+        const [, kind, ...rest] = data.split("\n");
+        if (kind === "summary" || kind === "recent") {
+            gamesState.ra[kind] = rest.join("\n");
+            gamesState.ra.state = "ok";
+            gamesState.ra.updatedAt = Date.now();
+            renderAchievements();
+        }
+        return;
+    }
+    if (typeof data === "string" && data.startsWith("LOG\n")) {
+        const [, source, status, ...rest] = data.split("\n");
+        handleLogMessage(source, status, rest.join("\n"));
+        return;
+    }
     if (typeof data === "string") {
         try {
             data = JSON.parse(data);
@@ -873,6 +971,14 @@ function handleWebMessage(event) {
             const view = document.querySelector(".view.active")?.id ?? "home";
             if (view === "home" || view === "dashboard") send("GetMetrics", view);
             if (view === "notes" && !notesLoaded) send("GetNotes");
+            if (view === "home") {
+                advanceAlmanac();
+                send("GetRecycleBin");
+                send("GetAudioDevices");
+            }
+            if (view === "logs") startLogPolling();
+            if (view === "games") startGamesPolling();
+            if (view === "commands") startRunningPolling();
             requestAnimationFrame(() => focusPrimaryInput(view));
             break;
         }
@@ -913,6 +1019,7 @@ function handleWebMessage(event) {
             customCommands = Array.isArray(data.items) ? data.items : [];
             renderCommandEditor();
             renderKeymap();
+            renderQuickActions();
             if (!$("launcher").hidden) renderLauncherResults();
             break;
         case "commandsSaved":
@@ -924,6 +1031,7 @@ function handleWebMessage(event) {
         case "workspaces":
             savedWorkspaces = Array.isArray(data.items) ? data.items : [];
             renderWorkspaceManager();
+            renderQuickActions();
             if (!$("launcher").hidden) renderLauncherResults();
             break;
         case "windows":
@@ -932,6 +1040,10 @@ function handleWebMessage(event) {
             break;
         case "browseResult":
             applyBrowseResult(data.row, data.path);
+            break;
+        case "quickActions":
+            quickActionIds = Array.isArray(data.items) ? data.items.filter(id => typeof id === "string") : null;
+            renderQuickActions();
             break;
         case "notice":
             if (typeof data.message === "string") showNotice(data.message);
@@ -946,18 +1058,94 @@ function handleWebMessage(event) {
         case "settings":
             loadSettings(data);
             break;
+        case "almanac":
+            loadAlmanacSettings(data);
+            break;
+        case "games":
+            gamesState.items = Array.isArray(data.items) ? data.items.filter(game =>
+                game && typeof game.id === "string" && typeof game.title === "string" && typeof game.emulator === "string"
+                && Number.isFinite(game.seconds)) : [];
+            gamesState.loaded = true;
+            gamesState.coversEnabled = data.covers === true;
+            renderGames();
+            if (!$("launcher").hidden && launcherMode.startsWith("games:")) renderLauncherResults();
+            break;
+        case "gamesLive":
+            renderGamesLive(data);
+            break;
+        case "gameDetails":
+            if (typeof data.id === "string" && Array.isArray(data.fields)) {
+                gamesState.details.set(data.id, {
+                    fields: data.fields.filter(pair => Array.isArray(pair) && pair.length === 2
+                        && typeof pair[0] === "string" && typeof pair[1] === "string").slice(0, 12),
+                    canShow: data.canShow === true,
+                    showLabel: typeof data.showLabel === "string" ? data.showLabel : "Show file"
+                });
+                if (gamesState.openId === data.id) renderGames();
+            }
+            break;
+        case "controllerInput":
+            renderControllerInput(data);
+            break;
+        case "powerArmed":
+            handlePowerArmed(data);
+            break;
+        case "powerPending":
+            if (typeof data.action === "string" && Number.isFinite(data.seconds)) showPowerBanner(data.action, data.seconds);
+            break;
+        case "powerCancelled":
+        case "powerDone":
+            hidePowerBanner();
+            if (typeof data.message === "string" && data.message) showNotice(data.message);
+            break;
+        case "recycleBin":
+            renderRecycleBin(data);
+            break;
+        case "audioDevices":
+            renderAudioDevices(data);
+            break;
+        case "running":
+            if (data.apps && typeof data.apps === "object") setRunningApps(data.apps);
+            break;
+        case "gameSettings":
+            loadGameSettings(data);
+            break;
+        case "gameSettingsSaved":
+            $("gamesStatus").textContent = typeof data.message === "string" ? data.message : "Saved.";
+            gamesState.covers.clear();
+            gamesState.requested.clear();
+            break;
+        case "retroAchievements":
+            gamesState.ra.state = typeof data.state === "string" ? data.state : "off";
+            gamesState.ra.message = typeof data.message === "string" ? data.message : "";
+            if (gamesState.ra.state === "loading") {
+                gamesState.ra.summary = "";
+                gamesState.ra.recent = "";
+            }
+            renderAchievements();
+            break;
+        case "almanacSaved":
+            setAlmanacStatus(typeof data.message === "string" ? data.message : "Saved.");
+            break;
         case "settingsSaved":
             updateShortcutReference(Object.fromEntries(
                 [...document.querySelectorAll("[data-hotkey]")].map(input =>
                     [input.dataset.hotkey, input.value.trim().toUpperCase()])
             ));
             $("settingsStatus").textContent = data.message || "Preferences saved.";
+            setSettingsDirty(false);
             showToast(data.message || "Preferences saved.");
             break;
         case "error":
             if (data.scope === "notes") {
                 pendingSaveData.shift();
                 setSaveStatus("SAVE FAILED", "error");
+            }
+            if (data.scope === "games") {
+                $("gamesStatus").textContent = typeof data.message === "string" ? data.message : "Games & apps could not be saved.";
+            }
+            if (data.scope === "almanac") {
+                setAlmanacStatus(typeof data.message === "string" ? data.message : "The almanac could not be saved.");
             }
             if (data.scope === "commands") {
                 $("commandsStatus").textContent = typeof data.message === "string" ? data.message : "Custom commands could not be saved.";
@@ -975,6 +1163,7 @@ window.chrome?.webview?.addEventListener("message", handleWebMessage);
 
 function loadSettings(data) {
     $("searchTemplate").value = typeof data.searchTemplate === "string" ? data.searchTemplate : "";
+    $("claudeShortcut").value = typeof data.claudeShortcut === "string" ? data.claudeShortcut : "";
     $("driveLetters").value = Array.isArray(data.drives) ? data.drives.join(", ") : "";
     $("snapGap").value = String(data.snapGap ?? 0);
     $("snapGapValue").value = `${$("snapGap").value} px`;
@@ -987,6 +1176,7 @@ function loadSettings(data) {
             : "";
     });
     updateShortcutReference(hotkeys);
+    setSettingsDirty(false);
 }
 
 function updateShortcutReference(hotkeys) {
@@ -1139,6 +1329,7 @@ function updateMetrics(data) {
     renderDrives(data.drives);
     updateHardware(data.hardware);
     updateSystemStatus(data);
+    renderHistory(data.history);
     $("metricsUpdated").textContent =
         `Last updated ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
 }
@@ -1571,6 +1762,10 @@ function activeKeymapLayer() {
     return keymapShiftHeld ? "shift" : keymapLayer;
 }
 
+// Macro keys whose app shows a running dot, and the latest running state.
+const KEYMAP_RUNNING_APPS = { m4: "pso", m5: "retroarch", m6: "dolphin", m7: "pcsx2" };
+let runningApps = {};
+
 function renderKeymap() {
     const container = $("keymap");
     if (!container || !globalThis.ASCSKeymap) return;
@@ -1604,7 +1799,7 @@ function renderKeymap() {
         const isModifier = key.id === "lshift" || key.id === "rshift";
         const category = binding ? binding.cat
             : key.special === "super" ? "super"
-                : key.special === "planned" ? "planned"
+                : key.special === "macro" ? "planned"
                     : layer === "shift" && isModifier ? "modifier" : "free";
         const group = svgElement("g", {
             class: "km-key",
@@ -1612,6 +1807,10 @@ function renderKeymap() {
             "data-cat": category,
             tabindex: binding || key.special ? 0 : -1
         });
+        if (keymapQuery) {
+            const haystack = binding ? `${chord}${key.label} ${binding.title} ${binding.desc}`.toLocaleLowerCase() : "";
+            group.setAttribute("data-match", String(Boolean(binding) && haystack.includes(keymapQuery)));
+        }
         if (binding) used++;
         group.append(keyShape(key));
         if (key.special === "super") {
@@ -1626,7 +1825,7 @@ function renderKeymap() {
         });
         label.textContent = key.label;
         group.append(label);
-        const specialCaption = key.special === "super" ? "Hold" : key.special === "planned" ? "Planned" : "";
+        const specialCaption = key.special === "super" ? "Hold" : key.special === "macro" ? key.caption : "";
         if (!binding && specialCaption) {
             const caption = svgElement("text", {
                 x: key.x * KEY_UNIT + 8,
@@ -1652,6 +1851,15 @@ function renderKeymap() {
             group.setAttribute("aria-label", `${chord}${key.label}: ${binding.title}`);
             group.setAttribute("role", "img");
         }
+        // Running indicator: a green dot on M4-M7 while that app runs
+        // (polled only while Super Commands is open).
+        const runningApp = KEYMAP_RUNNING_APPS[key.id];
+        if (runningApp && runningApps[runningApp]) {
+            group.append(svgElement("circle", {
+                cx: (key.x + key.w) * KEY_UNIT - 9, cy: key.y * KEY_UNIT + 10, r: 3.2, class: "km-running"
+            }));
+            group.dataset.running = "true";
+        }
         const describe = () => showKeymapDetail(key, binding, chord, bindings.passthrough[key.id], layer);
         group.addEventListener("mouseenter", describe);
         group.addEventListener("focus", describe);
@@ -1659,11 +1867,12 @@ function renderKeymap() {
     });
     container.replaceChildren(svg);
     container.dataset.layer = layer;
+    container.classList.toggle("is-searching", Boolean(keymapQuery));
     document.querySelectorAll(".keymap-layer").forEach(button => {
         button.setAttribute("aria-pressed", String(button.dataset.layer === layer));
     });
     $("keymapDetail").dataset.summary = layer === "shift"
-        ? `${used} keys have a Super + Shift action. Others keep their Super action, except S, which is deliberately unassigned.`
+        ? `${used} keys have a Super + Shift action. Other letters keep their Super action; macro keys have none with Shift.`
         : `${used} keys are assigned with Super. Hover or focus a key for its command; hold Shift to preview the second layer.`;
     $("keymapDetail").textContent = $("keymapDetail").dataset.summary;
 }
@@ -1675,7 +1884,8 @@ function showKeymapDetail(key, binding, chord, passthrough, layer) {
     keys.textContent = `${chord}${key.label}`;
     const text = document.createElement("span");
     if (binding) {
-        text.textContent = ` · ${binding.title}. ${binding.desc}${binding.configurable ? " (Change the letter in Preferences.)" : ""}`;
+        const running = KEYMAP_RUNNING_APPS[key.id] && runningApps[KEYMAP_RUNNING_APPS[key.id]] ? " Running now." : "";
+        text.textContent = ` · ${binding.title}. ${binding.desc}${binding.configurable ? " (Change the letter in Preferences.)" : ""}${running}`;
     } else if (key.note) {
         keys.textContent = key.label;
         text.textContent = ` · ${key.note.replace(/^[^:]+:\s*/, "")}`;
@@ -1685,10 +1895,12 @@ function showKeymapDetail(key, binding, chord, passthrough, layer) {
         text.textContent = layer === "shift" ? " · No Shift action; behaves like the Super layer." : " · Free.";
     }
     detail.append(keys, text);
+    detail.title = detail.textContent;
 }
 
 $("keymap").addEventListener("mouseleave", () => {
     $("keymapDetail").textContent = $("keymapDetail").dataset.summary || "";
+    $("keymapDetail").title = "";
 });
 document.querySelectorAll(".keymap-layer").forEach(button => {
     button.addEventListener("click", () => {
@@ -1714,8 +1926,6 @@ window.addEventListener("blur", () => {
     renderKeymap();
 });
 
-renderKeymap();
-updateClock();
 
 // Title bar: frosted band once the page scrolls, and room on the right for
 // the caption buttons, which are pinned to the window corner.
@@ -1729,3 +1939,2038 @@ function updateTopbar() {
 window.addEventListener("scroll", updateTopbar, { passive: true });
 window.addEventListener("resize", updateTopbar);
 updateTopbar();
+
+// ------------------------------------------------------------ quick actions (1.7.0)
+// Up to six pinned palette items. ASCS stores only their ids; they resolve
+// to palette items here, and run through the same validated messages.
+
+const DEFAULT_QUICK_ACTIONS = ["launch:terminal", "launch:explorer", "view:notes", "launch:taskmanager", "launch:calculator"];
+const MAX_QUICK_ACTIONS = 6;
+const QUICK_ACTION_ICONS = {
+    VIEW: '<path d="M4 5.5h16v13H4z"/><path d="M4 9.5h16"/>',
+    APP: '<path d="m5 7 5 5-5 5m7 0h7"/>',
+    FIND: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/>',
+    CUSTOM: '<path d="M12 3.5 14.4 9l5.9.5-4.5 3.9 1.4 5.8L12 16.2 6.8 19.2l1.4-5.8L3.7 9.5 9.6 9z"/>',
+    WORKSPACE: '<rect x="3.5" y="4.5" width="7" height="15" rx="1.5"/><rect x="13.5" y="4.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="6" rx="1.5"/>',
+    SNIPPET: '<path d="m9 8-4 4 4 4m6-8 4 4-4 4"/>',
+    NOTE: '<path d="M6.5 3.75h7l4 4v12.5h-11a2 2 0 0 1-2-2v-12a2.5 2.5 0 0 1 2-2.5Z"/><path d="M13.5 4v4h4m-9 4.5h6m-6 3.5h6"/>'
+};
+// Specific icons for common items; anything else uses its kind's icon.
+const ITEM_ICONS = {
+    "view:home": '<rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/>',
+    "view:notes": QUICK_ACTION_ICONS.NOTE,
+    "view:dashboard": '<path d="M4 19.5V12m5.3 7.5V5m5.4 14.5v-10m5.3 10V8"/>',
+    "view:commands": '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 9h2m3 0h2m3 0h.01M7 13h.01m3 0h.01m3 0h.01m3 0h.01M8 16h8"/>',
+    "view:games": '<path d="M7.5 8h9a4.5 4.5 0 0 1 4.3 5.8l-1 3.3a2.2 2.2 0 0 1-3.7.9L14 16h-4l-2.1 2a2.2 2.2 0 0 1-3.7-.9l-1-3.3A4.5 4.5 0 0 1 7.5 8Z"/><path d="M8 11v3m-1.5-1.5h3"/>',
+    "view:logs": '<path d="M5 6.5h.01M5 12h.01M5 17.5h.01M9 6.5h10M9 12h10M9 17.5h6"/>',
+    "view:settings": '<circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.5m0 13V21M3 12h2.5m13 0H21M5.6 5.6l1.8 1.8m9.2 9.2 1.8 1.8M5.6 18.4l1.8-1.8m9.2-9.2 1.8-1.8"/>',
+    "launch:terminal": '<path d="m5 7 5 5-5 5m7 0h7"/>',
+    "launch:explorer": '<path d="M3.5 7.5a2 2 0 0 1 2-2h5l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-10Z"/><path d="M3.75 10h16.5"/>',
+    "launch:calculator": '<rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8.5 7h7m-7 5h.01m3.5 0h.01m3.5 0h.01m-7 4h.01m3.5 0h.01m3.5 0h.01"/>',
+    "launch:claude": '<path d="M12 3.5v4m0 9v4M3.5 12h4m9 0h4M6 6l2.8 2.8m6.4 6.4L18 18M6 18l2.8-2.8m6.4-6.4L18 6"/>',
+    "launch:taskmanager": '<path d="M4 19V5m0 14h16"/><path d="m7 15 3-4 3 2 5-6"/>',
+    "launch:everything": QUICK_ACTION_ICONS.FIND,
+    "launch:vivaldi": '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.6 5.4 3.6 8.5s-1.1 5.9-3.6 8.5c-2.5-2.6-3.6-5.4-3.6-8.5S9.5 6.1 12 3.5Z"/>',
+    "launch:settings": '<circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.5m0 13V21M3 12h2.5m13 0H21M5.6 5.6l1.8 1.8m9.2 9.2 1.8 1.8M5.6 18.4l1.8-1.8m9.2-9.2 1.8-1.8"/>',
+    "launch:downloads": '<path d="M12 4v11m-4.5-4.5L12 15l4.5-4.5M5 19.5h14"/>',
+    "launch:projects": '<path d="M3.5 7.5a2 2 0 0 1 2-2h5l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-10Z"/>',
+    "launch:snipping": '<circle cx="6.5" cy="7" r="2.5"/><circle cx="6.5" cy="17" r="2.5"/><path d="m8.6 8.4 11 8.1m0-9-11 8.1"/>',
+    "launch:lock": '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
+    "launch:mute": '<path d="M4.5 9.5h3l4.5-4v13l-4.5-4h-3z"/><path d="m16 9.5 5 5m0-5-5 5"/>',
+    "launch:reload": '<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4.2h-4.2"/>'
+};
+let quickActionIds = null;      // null: never customized, so the defaults show
+let quickActionsEditing = false;
+
+function currentQuickActionIds() {
+    return Array.isArray(quickActionIds) ? quickActionIds : DEFAULT_QUICK_ACTIONS;
+}
+
+function quickActionCatalog() {
+    return new Map(paletteSources("pick").map(item => [item.id, item]));
+}
+
+function iconSvg(item) {
+    const paths = (item && ITEM_ICONS[item.id]) || QUICK_ACTION_ICONS[item?.badge] || QUICK_ACTION_ICONS.APP;
+    return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths}</svg>`;
+}
+
+function renderQuickActions() {
+    const container = $("quickActions");
+    if (!container) return;
+    const catalog = quickActionCatalog();
+    const ids = currentQuickActionIds();
+    container.replaceChildren();
+    container.classList.toggle("is-editing", quickActionsEditing);
+
+    ids.forEach(id => {
+        const item = catalog.get(id);
+        if (!item && !quickActionsEditing) return;
+        const wrap = document.createElement("div");
+        wrap.className = "action-card-wrap";
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = "action-card";
+        if (item?.badge) card.dataset.kind = item.badge.toLowerCase();
+        const icon = document.createElement("span");
+        icon.className = "action-icon";
+        icon.innerHTML = iconSvg(item);   // static, trusted markup only (never item text)
+        const copy = document.createElement("span");
+        copy.className = "action-copy";
+        const title = document.createElement("strong");
+        title.textContent = item ? item.label : "Unavailable";
+        const detail = document.createElement("small");
+        detail.textContent = item ? (item.description || "").slice(0, 60) : `${id} no longer exists`;
+        copy.append(title, detail);
+        const arrow = document.createElement("span");
+        arrow.className = "action-arrow";
+        arrow.setAttribute("aria-hidden", "true");
+        arrow.textContent = item?.view ? "→" : "↗";
+        card.append(icon, copy, arrow);
+        card.disabled = !item || quickActionsEditing;
+        if (item) card.addEventListener("click", () => runQuickAction(item));
+        wrap.append(card);
+        if (quickActionsEditing) {
+            const remove = document.createElement("button");
+            remove.type = "button";
+            remove.className = "action-remove";
+            remove.setAttribute("aria-label", `Remove ${item ? item.label : id}`);
+            remove.textContent = "×";
+            remove.addEventListener("click", () => saveQuickActions(currentQuickActionIds().filter(other => other !== id)));
+            wrap.append(remove);
+        }
+        container.append(wrap);
+    });
+
+    if (quickActionsEditing && ids.length < MAX_QUICK_ACTIONS) {
+        const add = document.createElement("button");
+        add.type = "button";
+        add.className = "action-card action-add";
+        add.innerHTML = '<span class="action-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>';
+        const label = document.createElement("span");
+        label.className = "action-copy";
+        label.innerHTML = "<strong>Add quick action</strong><small></small>";
+        label.querySelector("small").textContent = `${MAX_QUICK_ACTIONS - ids.length} of ${MAX_QUICK_ACTIONS} slots free`;
+        add.append(label);
+        add.addEventListener("click", () => openLauncher("pick"));
+        container.append(add);
+    }
+}
+
+function runQuickAction(item) {
+    if (item.mode) {
+        openLauncher(item.mode);
+        return;
+    }
+    rememberUsage(item.id);
+    if (item.run) item.run();
+    else if (item.view) navigate(item.view);
+    else if (item.launch) send("Launch", item.launch);
+}
+
+function saveQuickActions(ids) {
+    quickActionIds = ids;
+    renderQuickActions();
+    send("SaveQuickActions", ids.join("\n"));
+}
+
+function addQuickAction(id) {
+    const ids = currentQuickActionIds();
+    if (!id || id.startsWith("win:")) return;
+    if (ids.includes(id)) {
+        showToast("That is already a quick action.");
+        return;
+    }
+    if (ids.length >= MAX_QUICK_ACTIONS) {
+        showToast(`Quick actions hold up to ${MAX_QUICK_ACTIONS} items.`);
+        return;
+    }
+    saveQuickActions([...ids, id]);
+}
+
+$("editQuickActions").addEventListener("click", () => {
+    quickActionsEditing = !quickActionsEditing;
+    $("editQuickActions").setAttribute("aria-pressed", String(quickActionsEditing));
+    $("editQuickActions").textContent = quickActionsEditing ? "Done" : "Edit";
+    renderQuickActions();
+});
+
+// ------------------------------------------------------------ dashboard history (1.7.0)
+
+function renderHistory(history) {
+    if (!Array.isArray(history) || !globalThis.ASCSCharts) return;
+    [["cpu", 0], ["ram", 1]].forEach(([name, index]) => {
+        const values = history.map(sample => (Array.isArray(sample) ? sample[index] : null));
+        const graph = ASCSCharts.sparkline(values, 300, 56, 3);
+        const svg = $(`${name}Spark`);
+        if (!svg) return;
+        svg.querySelector(".sparkline-area").setAttribute("d", graph.area);
+        svg.querySelector(".sparkline-line").setAttribute("d", graph.line);
+        const minutes = Math.max(1, Math.round(graph.count * 10 / 60));
+        const summary = graph.count >= 2 ? `peak ${graph.peak}% · last ${minutes} min` : "";
+        if (name === "cpu") {
+            $("cpuHistory").textContent = summary ? `Average ${graph.average}% · ${summary}` : "History builds every 10 seconds";
+        } else {
+            $("ramHistory").textContent = summary ? `· ${summary}` : "";
+        }
+    });
+}
+
+// ------------------------------------------------------------ quick notes: tags, preview (1.7.0)
+
+let notePreviewOn = false;
+
+function renderNoteTags() {
+    const container = $("notesTags");
+    if (!container || !globalThis.ASCSNotes) return;
+    const counts = ASCSNotes.tagCounts(notesData.notes).slice(0, 14);
+    const active = new Set($("notesFilter").value.toLocaleLowerCase().split(/\s+/)
+        .filter(term => term.startsWith("#")).map(term => term.slice(1)));
+    container.replaceChildren();
+    container.hidden = counts.length === 0;
+    counts.forEach(({ tag, count }) => {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "note-tag";
+        chip.setAttribute("aria-pressed", String(active.has(tag)));
+        chip.textContent = `#${tag}`;
+        const badge = document.createElement("small");
+        badge.textContent = String(count);
+        chip.append(badge);
+        chip.addEventListener("click", () => toggleTagFilter(tag));
+        container.append(chip);
+    });
+}
+
+function toggleTagFilter(tag) {
+    const terms = $("notesFilter").value.split(/\s+/).filter(Boolean);
+    const term = `#${tag}`;
+    const index = terms.findIndex(existing => existing.toLocaleLowerCase() === term);
+    if (index >= 0) terms.splice(index, 1);
+    else terms.push(term);
+    $("notesFilter").value = terms.join(" ");
+    renderNotesList();
+}
+
+function updateWordCount() {
+    const note = activeNote();
+    const words = note ? ASCSNotes.wordCount(note.content) : 0;
+    $("noteWords").textContent = note ? `${words} ${words === 1 ? "word" : "words"}` : "";
+}
+
+// Builds the preview with elements and textContent only; note text is never
+// parsed as HTML. Links are displayed (with the address on hover), not opened.
+function appendInline(parent, nodes) {
+    nodes.forEach(node => {
+        let element;
+        switch (node.type) {
+            case "strong": element = document.createElement("strong"); break;
+            case "em": element = document.createElement("em"); break;
+            case "code": element = document.createElement("code"); break;
+            case "link":
+                element = document.createElement("span");
+                element.className = "md-link";
+                element.title = node.url;
+                break;
+            case "tag":
+                element = document.createElement("button");
+                element.type = "button";
+                element.className = "md-tag";
+                element.addEventListener("click", () => toggleTagFilter(node.text));
+                element.textContent = `#${node.text}`;
+                parent.append(element);
+                return;
+            default:
+                parent.append(document.createTextNode(node.text));
+                return;
+        }
+        element.textContent = node.text;
+        parent.append(element);
+    });
+}
+
+function renderMarkdown(container, blocks) {
+    container.replaceChildren();
+    blocks.forEach(block => {
+        let element;
+        if (block.type === "pre") {
+            element = document.createElement("pre");
+            element.textContent = block.text;
+        } else if (block.type === "hr") {
+            element = document.createElement("hr");
+        } else if (block.type === "ul" || block.type === "ol") {
+            element = document.createElement(block.type);
+            block.items.forEach(children => {
+                const item = document.createElement("li");
+                appendInline(item, children);
+                element.append(item);
+            });
+        } else if (["h1", "h2", "h3", "p", "blockquote"].includes(block.type)) {
+            element = document.createElement(block.type);
+            appendInline(element, block.children);
+        } else {
+            return;
+        }
+        container.append(element);
+    });
+    if (!blocks.length) {
+        const empty = document.createElement("p");
+        empty.className = "note-preview-empty";
+        empty.textContent = "Nothing to preview yet.";
+        container.append(empty);
+    }
+}
+
+function updateNotePreview() {
+    const note = activeNote();
+    const show = notePreviewOn && note && note.type !== "snippet";
+    $("previewNoteButton").setAttribute("aria-pressed", String(Boolean(show)));
+    $("previewNoteButton").textContent = show ? "Edit" : "Preview";
+    $("notePreview").hidden = !show;
+    $("noteText").hidden = Boolean(show);
+    if (show) renderMarkdown($("notePreview"), ASCSNotes.parseMarkdown(note.content));
+}
+
+$("previewNoteButton").addEventListener("click", () => {
+    notePreviewOn = !notePreviewOn;
+    updateNotePreview();
+    if (!notePreviewOn) focusPrimaryInput("notes");
+});
+
+// ------------------------------------------------------------ preferences: navigation, save bar (1.7.0)
+
+function setSettingsDirty(dirty) {
+    const bar = $("settingsSavebar");
+    if (!bar) return;
+    bar.dataset.state = dirty ? "dirty" : "clean";
+    if (dirty) $("settingsStatus").textContent = "Unsaved changes";
+}
+
+$("settingsForm").addEventListener("input", () => setSettingsDirty(true));
+$("settingsForm").addEventListener("change", () => setSettingsDirty(true));
+
+// Preferences tabs: one section at a time, like the sub-pages of Windows
+// Settings. The save bar belongs to the settings form, so it shows only on
+// the tabs it saves; unsaved edits survive switching between those tabs.
+const SETTINGS_TAB_KEY = "ascs.preferences.tab";
+
+function settingsTabs() {
+    return [...document.querySelectorAll(".settings-nav [role='tab']")]
+        .map(tab => ({ tab, panel: $(tab.dataset.section) }))
+        .filter(item => item.panel);
+}
+
+function selectSettingsTab(id, focus = false) {
+    const items = settingsTabs();
+    if (!items.length) return;
+    const chosen = items.find(item => item.panel.id === id) || items[0];
+    items.forEach(item => {
+        const selected = item === chosen;
+        item.tab.setAttribute("aria-selected", String(selected));
+        item.tab.tabIndex = selected ? 0 : -1;
+        item.panel.hidden = !selected;
+    });
+    $("settingsSavebar").hidden = !$("settingsForm").contains(chosen.panel);
+    try { localStorage.setItem(SETTINGS_TAB_KEY, chosen.panel.id); } catch { /* storage unavailable */ }
+    if (focus) chosen.tab.focus();
+}
+
+settingsTabs().forEach(({ tab, panel }) => {
+    tab.addEventListener("click", () => selectSettingsTab(panel.id));
+    tab.addEventListener("keydown", event => {
+        const items = settingsTabs();
+        const index = items.findIndex(item => item.tab === tab);
+        const moves = { ArrowRight: 1, ArrowLeft: -1, Home: -index, End: items.length - 1 - index };
+        if (!(event.key in moves)) return;
+        event.preventDefault();
+        const next = items[(index + moves[event.key] + items.length) % items.length];
+        selectSettingsTab(next.panel.id, true);
+    });
+});
+
+let savedSettingsTab = "";
+try { savedSettingsTab = localStorage.getItem(SETTINGS_TAB_KEY) || ""; } catch { /* storage unavailable */ }
+selectSettingsTab(savedSettingsTab);
+
+// ------------------------------------------------------------ super commands search (1.7.0)
+
+let keymapQuery = "";
+
+function filterShortcutRows() {
+    let anyVisible = false;
+    document.querySelectorAll("#commands .command-group").forEach(group => {
+        let groupVisible = false;
+        group.querySelectorAll(".shortcut-row").forEach(row => {
+            const match = !keymapQuery || row.textContent.toLocaleLowerCase().includes(keymapQuery);
+            row.hidden = !match;
+            if (match) groupVisible = true;
+        });
+        group.hidden = !groupVisible;
+        if (groupVisible) anyVisible = true;
+    });
+    $("commandSearchEmpty").hidden = anyVisible;
+}
+
+$("commandSearch").addEventListener("input", () => {
+    keymapQuery = $("commandSearch").value.trim().toLocaleLowerCase();
+    filterShortcutRows();
+    renderKeymap();
+});
+$("commandSearch").addEventListener("keydown", event => {
+    if (event.key === "Escape" && $("commandSearch").value) {
+        event.preventDefault();
+        $("commandSearch").value = "";
+        $("commandSearch").dispatchEvent(new Event("input"));
+    }
+});
+
+// ------------------------------------------------------------ collapsible sidebar (1.7.0)
+
+const SIDEBAR_KEY = "ascs.sidebar.collapsed";
+
+function applySidebar(collapsed) {
+    document.body.classList.toggle("sidebar-collapsed", collapsed);
+    const label = collapsed ? "Expand sidebar" : "Collapse sidebar";
+    $("sidebarToggle").setAttribute("aria-pressed", String(collapsed));
+    $("sidebarToggle").setAttribute("aria-label", label);
+    $("sidebarToggle").title = label;
+    updateTopbar();
+}
+
+function toggleSidebar() {
+    const collapsed = !document.body.classList.contains("sidebar-collapsed");
+    try {
+        localStorage.setItem(SIDEBAR_KEY, collapsed ? "1" : "0");
+    } catch {
+        // Remembering the choice is a convenience only.
+    }
+    applySidebar(collapsed);
+}
+
+$("sidebarToggle").addEventListener("click", toggleSidebar);
+
+// ------------------------------------------------------------ almanac (1.7.0)
+// The strip beneath the Command Center title. Moon, daylight, the quote of
+// the day and countdowns are worked out here; the Wikipedia feeds arrive
+// from ASCS as plain strings (only when enabled) and are parsed by
+// ASCSAlmanac, which keeps text and article titles only. Everything is
+// rendered with textContent. The line advances when the Command Center is
+// opened or ↻ is pressed, never on a timer.
+
+const Almanac = globalThis.ASCSAlmanac;
+const almanacState = {
+    settings: null,
+    history: [],
+    holidays: [],
+    featured: null,
+    step: 0,
+    day: ""
+};
+
+function svgNode(tag, attributes) {
+    const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    Object.entries(attributes).forEach(([key, value]) => node.setAttribute(key, value));
+    return node;
+}
+
+function almanacCell(icon, title, detail) {
+    const cell = document.createElement("div");
+    cell.className = "alm-cell";
+    const copy = document.createElement("div");
+    const strong = document.createElement("strong");
+    strong.append(...title);
+    const small = document.createElement("small");
+    small.textContent = detail;
+    copy.append(strong, small);
+    cell.append(icon, copy);
+    return cell;
+}
+
+function formatClockTime(date) {
+    return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+function renderAlmanac() {
+    const strip = $("homeAlmanac");
+    const settings = almanacState.settings;
+    if (!strip || !settings || !Almanac) return;
+    const now = new Date();
+    const today = now.toDateString();
+    if (almanacState.day && almanacState.day !== today) {
+        // A new day: yesterday's Wikipedia text no longer applies.
+        almanacState.history = [];
+        almanacState.holidays = [];
+        almanacState.featured = null;
+    }
+    almanacState.day = today;
+    strip.replaceChildren();
+
+    // Moon
+    const moon = Almanac.moonPhase(now);
+    const moonIcon = svgNode("svg", { class: "alm-moon", viewBox: "0 0 32 32", "aria-hidden": "true" });
+    moonIcon.append(svgNode("circle", { cx: 16, cy: 16, r: 12, class: "alm-moon-dark" }));
+    const lit = Almanac.moonPath(moon.age);
+    if (lit) moonIcon.append(svgNode("path", { d: lit, class: "alm-moon-lit" }));
+    strip.append(almanacCell(moonIcon, [moon.name],
+        `${Math.round(moon.illumination * 100)}% illuminated · ${moon.waxing ? "waxing" : "waning"}`));
+
+    // Sun
+    const sun = Almanac.sunTimes(now, settings.latitude, settings.longitude);
+    if (sun) {
+        const sunIcon = svgNode("svg", { class: "alm-sun", viewBox: "0 0 32 32", "aria-hidden": "true" });
+        sunIcon.append(svgNode("path", { d: "M6 22h20M10 22a6 6 0 0 1 12 0" }), svgNode("path", { d: "M16 9v3M9.2 12.2l2 2M22.8 12.2l-2 2" }));
+        const dash = document.createElement("i");
+        dash.textContent = " — ";
+        const hours = Math.floor(sun.daylightMinutes / 60);
+        strip.append(almanacCell(sunIcon, [formatClockTime(sun.sunrise), dash, formatClockTime(sun.sunset)],
+            `${settings.place} · ${hours} h ${sun.daylightMinutes % 60} m of daylight`));
+    }
+
+    // Countdown: the nearest one, with the rest in the tooltip.
+    const countdowns = Almanac.countdownItems(settings.countdowns, now);
+    if (countdowns.length) {
+        const next = countdowns[0];
+        const icon = svgNode("svg", { class: "alm-sun alm-countdown", viewBox: "0 0 32 32", "aria-hidden": "true" });
+        icon.append(svgNode("rect", { x: 7, y: 8, width: 18, height: 17, rx: 3 }), svgNode("path", { d: "M7 13h18M12 5.5v5M20 5.5v5" }));
+        const big = next.days === 0 ? "Today" : next.days === 1 ? "Tomorrow" : `${next.days} days`;
+        const cell = almanacCell(icon, [big], next.days <= 1 ? next.name : `until ${next.name}`);
+        cell.classList.add("alm-countdown-cell");
+        cell.title = countdowns.map(item => item.text).join("\n");
+        strip.append(cell);
+    }
+    strip.classList.toggle("has-countdown", countdowns.length > 0);
+
+    // The rotating line: a fixed stage (two lines of text, so the strip
+    // never changes height) with ‹ › controls and position dots.
+    const story = document.createElement("div");
+    story.className = "alm-cell alm-story";
+    const stage = document.createElement("div");
+    stage.className = "alm-stage";
+    stage.setAttribute("aria-live", "polite");
+    const controls = document.createElement("div");
+    controls.className = "alm-controls";
+    const dots = document.createElement("span");
+    dots.className = "alm-dots";
+    dots.setAttribute("aria-hidden", "true");
+    const arrow = (label, glyph, direction) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "alm-step";
+        button.textContent = glyph;
+        button.setAttribute("aria-label", label);
+        button.addEventListener("click", () => {
+            stepAlmanac(direction);
+            restartAlmanacTimer();
+        });
+        return button;
+    };
+    controls.append(arrow("Previous almanac item", "‹", -1), dots, arrow("Next almanac item", "›", 1));
+    story.append(stage, controls);
+    strip.append(story);
+    strip.hidden = false;
+    renderAlmanacStory(0);
+}
+
+function almanacSources(now = new Date()) {
+    return {
+        history: almanacState.history,
+        holidays: almanacState.holidays,
+        featured: almanacState.featured,
+        quote: Almanac.quoteFor(globalThis.ASCSQuotes, now)
+    };
+}
+
+// Draws the current item into the stage. direction 1 (next) slides the new
+// item in from the right and the old one out to the left; -1 reverses that;
+// 0 replaces it without animation.
+function renderAlmanacStory(direction) {
+    const stage = document.querySelector("#homeAlmanac .alm-stage");
+    if (!stage || !almanacState.settings) return;
+    const item = Almanac.rotationItem(almanacSources(), almanacState.step);
+    const story = stage.closest(".alm-story");
+    story.hidden = !item;
+    if (!item) return;
+
+    const copy = document.createElement(item.title && almanacState.settings.wikipedia ? "button" : "div");
+    copy.className = "alm-story-copy";
+    if (copy.tagName === "BUTTON") {
+        copy.type = "button";
+        copy.title = "Read on Wikipedia";
+        const title = item.title;
+        copy.addEventListener("click", () => send("OpenWikipedia", title));
+    }
+    const label = document.createElement("span");
+    label.className = "alm-label";
+    label.textContent = item.label.toUpperCase();
+    const text = document.createElement("p");
+    text.textContent = item.attribution ? `${item.text} — ${item.attribution}` : item.text;
+    if (copy.tagName !== "BUTTON") copy.title = text.textContent;
+    else copy.title = `${text.textContent}\n\nRead on Wikipedia`;
+    copy.append(label, text);
+
+    const dots = story.querySelector(".alm-dots");
+    dots.replaceChildren(...Array.from({ length: item.count }, (_, i) => {
+        const dot = document.createElement("b");
+        if (i === item.position) dot.className = "on";
+        return dot;
+    }));
+
+    const previous = [...stage.children].filter(child => !child.classList.contains("is-leaving"));
+    stage.querySelectorAll(".is-leaving").forEach(child => child.remove());
+    if (!direction || !previous.length) {
+        stage.replaceChildren(copy);
+        return;
+    }
+    const side = direction > 0 ? "next" : "prev";
+    previous.forEach(old => {
+        old.classList.remove("enter-next", "enter-prev");
+        old.classList.add("is-leaving", `leave-${side}`);
+        old.setAttribute("aria-hidden", "true");
+        old.tabIndex = -1;
+        const done = () => old.remove();
+        old.addEventListener("animationend", done, { once: true });
+        setTimeout(done, 600);
+    });
+    copy.classList.add(`enter-${side}`);
+    copy.addEventListener("animationend", () => copy.classList.remove(`enter-${side}`), { once: true });
+    stage.append(copy);
+}
+
+function stepAlmanac(direction) {
+    almanacState.step += direction;
+    renderAlmanacStory(direction);
+}
+
+// Rotates every 20 seconds while the Command Center is showing, pausing
+// while the pointer or keyboard focus is on the strip (so it never moves
+// while being read). Pressing ‹ or › restarts the 20 seconds.
+const ALMANAC_ROTATE_MS = 20000;
+let almanacTimer = null;
+let almanacHeld = false;
+
+function restartAlmanacTimer() {
+    if (almanacTimer !== null) clearInterval(almanacTimer);
+    almanacTimer = setInterval(() => {
+        if (almanacHeld || document.hidden || !$("home").classList.contains("active")) return;
+        if (!almanacState.settings || $("homeAlmanac").hidden) return;
+        stepAlmanac(1);
+    }, ALMANAC_ROTATE_MS);
+}
+
+["pointerenter", "focusin"].forEach(type =>
+    $("homeAlmanac").addEventListener(type, () => { almanacHeld = true; }));
+$("homeAlmanac").addEventListener("pointerleave", () => {
+    almanacHeld = $("homeAlmanac").contains(document.activeElement);
+});
+$("homeAlmanac").addEventListener("focusout", event => {
+    almanacHeld = $("homeAlmanac").matches(":hover") || $("homeAlmanac").contains(event.relatedTarget);
+});
+restartAlmanacTimer();
+
+// Called when the Command Center is opened again: next item, fresh feeds.
+function advanceAlmanac() {
+    if (!almanacState.settings) return;
+    almanacState.step++;
+    renderAlmanac();
+    restartAlmanacTimer();
+    send("GetAlmanac");
+}
+
+function handleAlmanacFeed(kind, raw) {
+    if (!Almanac) return;
+    if (kind === "featured") {
+        const parsed = Almanac.parseFeatured(raw);
+        almanacState.history = parsed.history;
+        almanacState.featured = parsed.featured;
+    } else if (kind === "holidays") {
+        almanacState.holidays = Almanac.parseHolidays(raw);
+    } else {
+        return;
+    }
+    renderAlmanac();
+}
+
+// ---- Preferences: almanac editor
+
+function countdownRow(item = { date: "", name: "" }) {
+    const row = document.createElement("div");
+    row.className = "countdown-row";
+    const date = document.createElement("input");
+    date.type = "text";
+    date.className = "countdown-date";
+    date.maxLength = 10;
+    date.placeholder = "12-25";
+    date.value = item.date;
+    date.setAttribute("aria-label", "Countdown date");
+    const name = document.createElement("input");
+    name.type = "text";
+    name.className = "countdown-name";
+    name.maxLength = 60;
+    name.placeholder = "Name, such as Christmas";
+    name.value = item.name;
+    name.setAttribute("aria-label", "Countdown name");
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "secondary danger";
+    remove.textContent = "Remove";
+    remove.addEventListener("click", () => {
+        row.remove();
+        updateCountdownsEmpty();
+    });
+    row.append(date, name, remove);
+    return row;
+}
+
+function updateCountdownsEmpty() {
+    const count = $("countdownRows").children.length;
+    $("countdownsEmpty").hidden = count > 0;
+    $("addCountdownButton").disabled = count >= 12;
+}
+
+function loadAlmanacSettings(data) {
+    almanacState.settings = {
+        wikipedia: data.wikipedia === true,
+        place: typeof data.place === "string" ? data.place : "New York City",
+        latitude: Number.isFinite(data.latitude) ? data.latitude : 40.7128,
+        longitude: Number.isFinite(data.longitude) ? data.longitude : -74.006,
+        countdowns: Array.isArray(data.countdowns)
+            ? data.countdowns.filter(item => typeof item?.date === "string" && typeof item?.name === "string")
+            : []
+    };
+    if (!almanacState.settings.wikipedia) {
+        almanacState.history = [];
+        almanacState.holidays = [];
+        almanacState.featured = null;
+    }
+    const s = almanacState.settings;
+    $("almanacWikipedia").checked = s.wikipedia;
+    const ns = s.latitude >= 0 ? "N" : "S";
+    const ew = s.longitude >= 0 ? "E" : "W";
+    $("almanacPlace").textContent = `${s.place} · ${Math.abs(s.latitude).toFixed(2)}° ${ns}, ${Math.abs(s.longitude).toFixed(2)}° ${ew}`;
+    $("countdownRows").replaceChildren(...s.countdowns.map(countdownRow));
+    updateCountdownsEmpty();
+    renderAlmanac();
+}
+
+$("addCountdownButton").addEventListener("click", () => {
+    const row = countdownRow();
+    $("countdownRows").append(row);
+    updateCountdownsEmpty();
+    row.querySelector("input").focus();
+});
+
+function setAlmanacStatus(text) {
+    $("almanacStatus").textContent = text;
+    $("countdownStatus").textContent = text;
+}
+
+// Almanac and Countdowns save together (one payload), from either tab.
+function saveAlmanacPreferences() {
+    const lines = [$("almanacWikipedia").checked ? "1" : "0"];
+    let problem = "";
+    $("countdownRows").querySelectorAll(".countdown-row").forEach(row => {
+        const date = row.querySelector(".countdown-date").value.trim();
+        const name = row.querySelector(".countdown-name").value.trim();
+        if (!date && !name) return;
+        if (/[|\r\n]/.test(date + name)) problem = "Countdowns cannot contain | or line breaks.";
+        lines.push(`${date}|${name}`);
+    });
+    if (problem) {
+        setAlmanacStatus(problem);
+        return;
+    }
+    setAlmanacStatus("Saving…");
+    if (!send("SaveAlmanac", lines.join("\n"))) setAlmanacStatus("Unable to contact ASCS.");
+}
+$("saveAlmanacButton").addEventListener("click", saveAlmanacPreferences);
+$("saveCountdownsButton").addEventListener("click", saveAlmanacPreferences);
+
+// ------------------------------------------------------------ logs (1.7.0)
+// Read-only tails of three fixed log files. ASCS sends the text as a plain
+// string; ASCSLogs parses it, and lines are rendered as text. While the tab
+// is visible it asks for a refresh every 3 seconds, which ASCS answers only
+// when the file has changed.
+
+const Logs = globalThis.ASCSLogs;
+const LOG_SOURCE_KEY = "ascs.logs.source";
+const LOG_RENDER_LIMIT = 600;
+const logState = { source: "ascs", level: "all", query: "", entries: [], missing: false, timer: null, loaded: false };
+
+function requestLog(refresh = false) {
+    send("GetLog", refresh ? `${logState.source}|refresh` : logState.source);
+}
+
+function renderLogs() {
+    const list = $("logList");
+    const all = logState.entries;
+    const total = Logs.counts(all);
+    document.querySelector('[data-count="all"]').textContent = all.length;
+    document.querySelector('[data-count="issues"]').textContent = total.warn + total.error;
+    document.querySelector('[data-count="errors"]').textContent = total.error;
+
+    const visible = Logs.filterEntries(all, logState.level, logState.query);
+    const shown = visible.slice(-LOG_RENDER_LIMIT);
+    list.dataset.kinds = String(all.some(entry => entry.kind));
+    list.replaceChildren();
+    Logs.groupByDay(shown).forEach(group => {
+        const day = document.createElement("section");
+        day.className = "log-day";
+        const heading = document.createElement("h2");
+        heading.textContent = Logs.dayLabel(group.day);
+        const lines = document.createElement("ol");
+        group.entries.forEach(entry => {
+            const line = document.createElement("li");
+            line.className = "log-line";
+            line.dataset.level = entry.level;
+            const time = document.createElement("time");
+            time.textContent = entry.clock;
+            const kind = document.createElement("span");
+            kind.className = "log-kind";
+            kind.textContent = entry.kind;
+            const text = document.createElement("span");
+            text.className = "log-text";
+            text.textContent = entry.text;
+            line.append(time, kind, text);
+            lines.append(line);
+        });
+        day.append(heading, lines);
+        list.append(day);
+    });
+
+    let meta;
+    if (logState.missing) meta = "This log doesn't exist yet; it appears after its first entry.";
+    else if (!logState.loaded) meta = "Loading…";
+    else if (!all.length) meta = "This log is empty.";
+    else if (!visible.length) meta = "No lines match.";
+    else meta = `Showing ${shown.length.toLocaleString()} of ${all.length.toLocaleString()} lines${visible.length > shown.length ? ` (the newest ${LOG_RENDER_LIMIT})` : ""} · refreshes while open`;
+    $("logMeta").textContent = meta;
+}
+
+function handleLogMessage(source, status, text) {
+    if (source !== logState.source || !Logs) return;
+    logState.loaded = true;
+    logState.missing = status === "missing";
+    logState.entries = Logs.parseLog(source, text);
+    renderLogs();
+}
+
+function selectLogSource(source) {
+    if (!["ascs", "activity", "codebutton"].includes(source)) source = "ascs";
+    logState.source = source;
+    logState.entries = [];
+    logState.loaded = false;
+    logState.missing = false;
+    document.querySelectorAll("[data-log-source]").forEach(button =>
+        button.setAttribute("aria-selected", String(button.dataset.logSource === source)));
+    try { localStorage.setItem(LOG_SOURCE_KEY, source); } catch { /* storage unavailable */ }
+    renderLogs();
+    requestLog();
+}
+
+function startLogPolling() {
+    stopLogPolling();
+    requestLog();
+    logState.timer = setInterval(() => {
+        if ($("logs").classList.contains("active") && !document.hidden) requestLog(true);
+        else stopLogPolling();
+    }, 3000);
+}
+
+function stopLogPolling() {
+    if (logState.timer !== null) clearInterval(logState.timer);
+    logState.timer = null;
+}
+
+document.querySelectorAll("[data-log-source]").forEach(button =>
+    button.addEventListener("click", () => selectLogSource(button.dataset.logSource)));
+document.querySelectorAll("[data-log-level]").forEach(button =>
+    button.addEventListener("click", () => {
+        logState.level = button.dataset.logLevel;
+        document.querySelectorAll("[data-log-level]").forEach(other =>
+            other.setAttribute("aria-pressed", String(other === button)));
+        renderLogs();
+    }));
+$("logSearch").addEventListener("input", () => {
+    logState.query = $("logSearch").value;
+    renderLogs();
+});
+$("logSearch").addEventListener("keydown", event => {
+    if (event.key === "Escape" && $("logSearch").value) {
+        event.stopPropagation();
+        $("logSearch").value = "";
+        logState.query = "";
+        renderLogs();
+    }
+});
+$("copyLogButton").addEventListener("click", async () => {
+    const visible = Logs.filterEntries(logState.entries, logState.level, logState.query);
+    const text = visible.map(entry => [entry.day, entry.clock, entry.kind, entry.text].filter(Boolean).join(" ")).join("\n");
+    try {
+        await navigator.clipboard.writeText(text);
+        showNotice(`Copied ${visible.length.toLocaleString()} lines.`);
+    } catch {
+        showNotice("The lines could not be copied.");
+    }
+});
+$("openLogButton").addEventListener("click", () => send("OpenLogFile", logState.source));
+
+try { logState.source = localStorage.getItem(LOG_SOURCE_KEY) || "ascs"; } catch { /* storage unavailable */ }
+document.querySelectorAll("[data-log-source]").forEach(button =>
+    button.setAttribute("aria-selected", String(button.dataset.logSource === logState.source)));
+
+// ------------------------------------------------------------ games (1.7.0)
+// The Games tab. ASCS sends the library (ids, titles, play time; never file
+// paths), live status while the tab is open, opt-in cover art as checked
+// data URIs, and RetroAchievements responses as plain strings parsed by
+// ASCSGames. Playing a game sends only its id back.
+
+const Games = globalThis.ASCSGames;
+const COVER_PATTERN = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/;
+const gamesState = {
+    items: [], loaded: false, filter: "all", sort: "recent", query: "",
+    covers: new Map(), requested: new Set(), coversEnabled: false,
+    openId: "", details: new Map(), pads: [], renaming: "", tester: null, testerTimer: null, testerBuilt: "",
+    ra: { state: "", summary: "", recent: "", message: "", updatedAt: 0 },
+    raImages: new Map(), raRequested: new Set(),
+    liveTimer: null, runningTimer: null, playing: [], nowTimer: null
+};
+
+function gameMonogram(game) {
+    const words = Games.displayTitle(game.title).split(/\s+/).filter(word => /^[\p{L}\p{N}]/u.test(word));
+    return (words.slice(0, 2).map(word => [...word][0]).join("") || "?").toUpperCase();
+}
+
+function gameCover(game, className) {
+    const holder = document.createElement("span");
+    holder.className = `game-cover ${className}`;
+    holder.dataset.emulator = game.emulator;
+    holder.dataset.gameId = game.id;
+    const data = gamesState.covers.get(game.id);
+    if (data) {
+        const image = document.createElement("img");
+        image.src = data;
+        image.alt = "";
+        image.decoding = "async";
+        holder.append(image);
+    } else {
+        const initials = document.createElement("b");
+        initials.textContent = gameMonogram(game);
+        holder.append(initials);
+    }
+    return holder;
+}
+
+function requestCovers(games) {
+    if (!gamesState.coversEnabled) return;
+    const wanted = games.filter(game => game.cover && !gamesState.covers.has(game.id) && !gamesState.requested.has(game.id))
+        .slice(0, 40).map(game => game.id);
+    if (!wanted.length) return;
+    wanted.forEach(id => gamesState.requested.add(id));
+    send("GetCovers", wanted.join(","));
+}
+
+function handleCoverMessage(id, data) {
+    if (!COVER_PATTERN.test(data) || data.length > 2200000) return;
+    if (!gamesState.items.some(game => game.id === id)) return;
+    gamesState.covers.set(id, data);
+    document.querySelectorAll(".game-cover").forEach(holder => {
+        if (holder.dataset.gameId !== id || holder.querySelector("img")) return;
+        const image = document.createElement("img");
+        image.src = data;
+        image.alt = "";
+        holder.replaceChildren(image);
+    });
+}
+
+function gameMeta(game, parts) {
+    return parts.map(part => ({
+        emulator: Games.EMULATORS[game.emulator] || "",
+        system: Games.systemName(game.system),
+        time: game.seconds ? Games.formatDuration(game.seconds) : "",
+        last: Games.formatLastPlayed(game.last)
+    })[part]).filter(Boolean).join(" · ");
+}
+
+function playGame(game) {
+    if (!game.launchable) return;
+    send("LaunchGame", game.id);
+    showNotice(game.installed === false
+        ? `Opening Steam to install ${Games.displayTitle(game.title)}…`
+        : `Starting ${Games.displayTitle(game.title)}…`);
+}
+
+function renderGames() {
+    if (!Games) return;
+    const items = gamesState.items;
+
+    // Continue playing: the twelve most recent games ASCS can start, in a
+    // row that scrolls sideways (thumb wheel, trackpad, or Shift + wheel).
+    const recent = Games.sortGames(items.filter(game => game.launchable && game.installed !== false && game.last), "recent").slice(0, 12);
+    const shelf = $("gamesContinue");
+    shelf.replaceChildren(...recent.map(game => {
+        const tile = document.createElement("button");
+        tile.type = "button";
+        tile.className = "game-tile";
+        tile.title = `Play ${game.title}`;
+        const name = document.createElement("strong");
+        name.textContent = Games.displayTitle(game.title);
+        const meta = document.createElement("small");
+        meta.textContent = gameMeta(game, ["emulator", "last"]);
+        const time = document.createElement("small");
+        time.className = "game-tile-time";
+        time.textContent = game.seconds ? Games.formatDuration(game.seconds) : "Not timed";
+        tile.append(gameCover(game, "game-cover-tile"), name, meta, time);
+        tile.addEventListener("click", () => playGame(game));
+        return tile;
+    }));
+    if (!recent.length) {
+        const empty = document.createElement("p");
+        empty.className = "settings-note";
+        empty.textContent = gamesState.loaded ? "No recent games yet. Games you play in RetroArch, Dolphin, or PCSX2 appear here." : "Loading…";
+        shelf.append(empty);
+    }
+    $("coversHint").hidden = gamesState.coversEnabled || !gamesState.loaded;
+    requestAnimationFrame(updateShelfFade);
+
+    // Play time by emulator.
+    const totals = Games.totalsByEmulator(items);
+    const max = Math.max(1, ...totals.map(total => total.seconds));
+    const all = totals.reduce((sum, total) => sum + total.seconds, 0);
+    const panel = $("gamesTotals");
+    panel.replaceChildren();
+    const heading = document.createElement("span");
+    heading.className = "games-panel-label";
+    heading.textContent = "PLAY TIME";
+    const sum = document.createElement("strong");
+    sum.className = "games-panel-value";
+    sum.textContent = Games.formatDuration(all);
+    const rows = document.createElement("div");
+    rows.className = "games-bars";
+    totals.filter(total => total.seconds > 0).forEach(total => {
+        const row = document.createElement("span");
+        const bar = document.createElement("b");
+        bar.style.width = `${Math.max(4, Math.round(total.seconds / max * 100))}%`;
+        const label = document.createElement("em");
+        label.textContent = Games.EMULATORS[total.emulator];
+        const value = document.createElement("small");
+        value.textContent = `${Games.formatDuration(total.seconds)} · ${total.games} game${total.games === 1 ? "" : "s"}`;
+        row.append(bar, label, value);
+        rows.append(row);
+    });
+    panel.append(heading, sum, rows);
+
+    // The library.
+    const visible = Games.sortGames(Games.filterGames(items, gamesState.query, gamesState.filter), gamesState.sort);
+    const shown = visible.slice(0, 300);
+    $("gamesLibrary").replaceChildren(...shown.map(libraryRow));
+    $("gamesMeta").textContent = !gamesState.loaded ? "Loading…"
+        : !items.length ? "No play time found yet. Check the programs in Preferences › Games & apps."
+            : !visible.length ? "No games match."
+                : `${visible.length} game${visible.length === 1 ? "" : "s"}${visible.length > shown.length ? ` (showing ${shown.length})` : ""}`;
+    requestCovers([...recent, ...shown.slice(0, 40)]);
+}
+
+function renderGamesLive(data) {
+    gamesState.playing = (Array.isArray(data.playing) ? data.playing : []).slice(0, 3)
+        .filter(item => item && typeof item === "object" && typeof item.emulator === "string")
+        .map(item => ({
+            emulator: item.emulator,
+            title: typeof item.title === "string" ? item.title : "",
+            id: typeof item.id === "string" && /^st:\d{1,10}$/.test(item.id) ? item.id : "",
+            since: Number.isFinite(item.since) && item.since > 0 ? item.since : 0
+        }));
+    renderNowPlaying();
+    tickNowPlaying();
+
+    renderControllers(Array.isArray(data.controllers) ? data.controllers : []);
+    updateRaTimestamp();
+
+    if (data.apps && typeof data.apps === "object") setRunningApps(data.apps);
+}
+
+// Now playing (1.7.0): the game in front, with its cover as a soft backdrop,
+// a live session timer, total play time, RetroAchievements progress, and
+// Show file; any other running games below it. With nothing running, the
+// last game played. Rebuilt only when something shown changes; the session
+// timer ticks on its own once a second while the Games tab is open.
+function renderNowPlaying() {
+    const panel = $("gamesNow");
+    const playing = gamesState.playing || [];
+    const matched = playing.map(item => Games.matchPlayingGame(gamesState.items, item));
+    const lead = playing[0];
+    const leadGame = matched[0];
+    const leadName = lead ? (lead.emulator === "steam" || lead.emulator === "pso" ? lead.title : Games.gameFromWindowTitle(lead.emulator, lead.title)) : "";
+    const last = !lead ? Games.sortGames(gamesState.items.filter(game => game.last && game.installed !== false), "recent")[0] : null;
+    const shownGame = leadGame || last;
+    const progress = leadGame ? raProgressFor(leadGame) : null;
+    const signature = JSON.stringify([playing, matched.map(game => game?.id || ""), leadGame?.seconds, last?.id,
+        shownGame ? gamesState.covers.has(shownGame.id) : false, gamesState.ra.updatedAt, progress?.achieved]);
+    if (panel.dataset.signature === signature) return;
+    panel.dataset.signature = signature;
+    if (shownGame) requestCovers([shownGame]);
+
+    panel.replaceChildren();
+    panel.classList.toggle("is-playing", Boolean(lead));
+    const cover = shownGame && gamesState.covers.get(shownGame.id);
+    if (cover && lead) {
+        const backdrop = element("div", "now-backdrop");
+        const image = element("img");
+        image.src = cover;
+        image.alt = "";
+        backdrop.append(image);
+        panel.append(backdrop);
+    }
+    panel.append(element("span", "games-panel-label", lead ? "NOW PLAYING" : "NOTHING RUNNING"));
+
+    if (!lead) {
+        if (!last) {
+            panel.append(element("strong", "games-panel-value games-panel-muted", "Nothing running"),
+                element("small", "games-panel-note", "Start a game from Continue playing or the library below."));
+            return;
+        }
+        const main = element("div", "now-main");
+        const copy = element("div", "now-copy");
+        copy.append(element("small", "now-kicker", "LAST PLAYED"),
+            element("strong", "now-title", Games.displayTitle(last.title)),
+            element("small", "", [gameMeta(last, ["emulator", "last"]), last.seconds ? `${Games.formatDuration(last.seconds)} in all` : ""].filter(Boolean).join(" · ")));
+        main.append(gameCover(last, "game-cover-now"), copy);
+        const actions = element("div", "now-actions");
+        if (last.launchable) actions.append(playButton(last, "secondary"));
+        panel.append(main, actions);
+        return;
+    }
+
+    const main = element("div", "now-main");
+    const copy = element("div", "now-copy");
+    const title = element("strong", "now-title", leadName ? Games.displayTitle(leadName) : "At the menu");
+    title.title = leadName;
+    copy.append(title, element("small", "", [Games.EMULATORS[lead.emulator] || lead.emulator,
+        leadGame ? Games.systemName(leadGame.system) : ""].filter(Boolean).join(" · ")));
+    main.append(leadGame ? gameCover(leadGame, "game-cover-now") : element("i", "now-dot"), copy);
+    panel.append(main);
+
+    const stats = element("div", "now-stats");
+    if (leadName) {
+        const session = element("span");
+        const clock = element("strong", "now-session");
+        clock.dataset.since = String(lead.since || "");
+        session.append(element("small", "", "THIS SESSION"), clock);
+        stats.append(session);
+        if (leadGame?.seconds) {
+            const total = element("span");
+            total.append(element("small", "", "IN ALL"), element("strong", "", Games.formatDuration(leadGame.seconds)));
+            total.title = "Play time recorded by the emulator or Steam (updated when it saves)";
+            stats.append(total);
+        }
+        panel.append(stats);
+    }
+
+    if (progress && progress.possible) {
+        const ra = element("div", "now-ra");
+        const head = element("div", "now-ra-head");
+        head.append(element("small", "", "ACHIEVEMENTS"),
+            element("strong", "", progress.mastered ? "Mastered" : progress.completed ? "Completed" : `${progress.achieved} of ${progress.possible} · ${progress.percent}%`));
+        const bar = element("span", "ra-bar");
+        const fill = element("b");
+        fill.style.width = `${progress.percent}%`;
+        bar.append(fill);
+        ra.append(head, bar);
+        const data = Games.parseRetroAchievements(gamesState.ra.summary, gamesState.ra.recent);
+        const key = Games.titleKey(leadGame.title);
+        const latest = data.achievements.find(item => Games.titleKey(item.game) === key);
+        if (latest) {
+            const line = element("small", "now-ra-latest", `Latest: ${latest.title}`);
+            line.title = latest.description;
+            ra.append(line);
+        }
+        if (data.presence && Games.titleKey(data.lastGame) === key) {
+            const presence = element("p", "now-presence", data.presence);
+            presence.title = "From the game's rich presence, as of the last RetroAchievements refresh";
+            ra.append(presence);
+        }
+        panel.append(ra);
+    }
+
+    // Show file sits at the end of the timer row (or on its own at the menu).
+    if (leadGame && lead.emulator !== "pso") {
+        const actions = element("div", "now-actions");
+        const show = element("button", "secondary", lead.emulator === "steam" ? "Open folder" : "Show file");
+        show.type = "button";
+        show.addEventListener("click", () => send("ShowGameFile", leadGame.id));
+        actions.append(show);
+        if (stats.isConnected) stats.append(actions);
+        else panel.append(actions);
+    }
+
+    playing.slice(1).forEach(item => {
+        const name = item.emulator === "steam" || item.emulator === "pso" ? item.title : Games.gameFromWindowTitle(item.emulator, item.title);
+        const line = element("div", "games-now-line");
+        const label = element("strong", "", name ? Games.displayTitle(name) : "At the menu");
+        label.title = name;
+        line.append(element("i"), label, element("small", "", Games.EMULATORS[item.emulator] || item.emulator));
+        panel.append(line);
+    });
+}
+
+function tickNowPlaying() {
+    const clocks = document.querySelectorAll("#gamesNow .now-session");
+    clocks.forEach(clock => {
+        const since = Number(clock.dataset.since);
+        clock.textContent = since ? Games.formatClock(Date.now() / 1000 - since) : "Just started";
+    });
+    if (clocks.length && gamesState.nowTimer === null) gamesState.nowTimer = setInterval(tickNowPlaying, 1000);
+    if (!clocks.length && gamesState.nowTimer !== null) {
+        clearInterval(gamesState.nowTimer);
+        gamesState.nowTimer = null;
+    }
+}
+
+function setRunningApps(apps) {
+    const next = {};
+    ["pso", "retroarch", "dolphin", "pcsx2"].forEach(name => { next[name] = apps[name] === true; });
+    const changed = JSON.stringify(next) !== JSON.stringify(runningApps);
+    runningApps = next;
+    if (changed && $("commands").classList.contains("active")) renderKeymap();
+}
+
+// ---- library rows and their details panels (1.7.0)
+// Clicking a row opens a panel beneath it; one is open at a time. Details
+// that need ASCS (core, serial, file name and size) are asked for once.
+
+function element(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+}
+
+function formatExactPlayed(iso) {
+    const date = Games.parseLocal(iso);
+    return date
+        ? date.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })
+        : "";
+}
+
+function raProgressFor(game) {
+    if (!gamesState.ra.summary && !gamesState.ra.recent) return null;
+    const key = Games.titleKey(game.title);
+    return Games.parseRetroAchievements(gamesState.ra.summary, gamesState.ra.recent).games
+        .find(entry => Games.titleKey(entry.title) === key) || null;
+}
+
+function libraryRow(game) {
+    const open = gamesState.openId === game.id;
+    const row = element("li", `game-row-item${open ? " is-open" : ""}`);
+    const main = element("div", "game-row");
+    const toggle = element("button", "game-row-toggle");
+    toggle.type = "button";
+    toggle.setAttribute("aria-expanded", String(open));
+    toggle.title = open ? "Hide details" : "Show details";
+    const copy = element("span", "game-row-copy");
+    const name = element("strong", "", Games.displayTitle(game.title));
+    copy.append(name, element("small", "", gameMeta(game, ["emulator", "system"])));
+    toggle.append(gameCover(game, "game-cover-thumb"), copy, element("i", "game-row-chevron", "›"));
+    toggle.addEventListener("click", () => {
+        gamesState.openId = open ? "" : game.id;
+        if (!open && !gamesState.details.has(game.id)) send("GetGameDetails", game.id);
+        renderGames();
+        requestAnimationFrame(() => document.querySelector(`.game-row-item.is-open .game-row-toggle`)?.focus());
+    });
+    const time = element("span", "game-row-time", game.seconds ? Games.formatDuration(game.seconds) : "—");
+    const last = element("span", "game-row-last", Games.formatLastPlayed(game.last) || "—");
+    main.append(toggle, time, last, playButton(game, "secondary game-play"));
+    row.append(main);
+    if (open) row.append(gameDetailsPanel(game));
+    return row;
+}
+
+function playButton(game, className) {
+    const installed = game.installed !== false;
+    const play = element("button", className, installed ? "Play" : "Install");
+    play.type = "button";
+    play.disabled = !game.launchable;
+    play.title = !game.launchable ? "ASCS doesn't know where this game is stored"
+        : installed ? `Play ${game.title}` : `Opens Steam's install prompt for ${game.title}`;
+    play.addEventListener("click", () => playGame(game));
+    return play;
+}
+
+function gameDetailsPanel(game) {
+    const panel = element("div", "game-details");
+    panel.append(gameCover(game, "game-cover-detail"));
+    const body = element("div", "game-details-body");
+    body.append(element("h3", "", game.title));
+    const facts = element("dl", "game-facts");
+    const fact = (label, value) => {
+        if (!value) return;
+        facts.append(element("dt", "", label), element("dd", "", value));
+    };
+    fact("Played on", [Games.EMULATORS[game.emulator], Games.systemName(game.system)].filter(Boolean).join(" · "));
+    fact("Play time", game.seconds ? Games.formatDuration(game.seconds) : "Not timed");
+    if (game.plays) fact("Sessions", String(game.plays));
+    fact("Last played", formatExactPlayed(game.last) || "Unknown");
+    const extra = gamesState.details.get(game.id);
+    if (extra) extra.fields.forEach(([label, value]) => fact(label, value));
+    else fact("Details", "Loading…");
+    const progress = raProgressFor(game);
+    if (progress && progress.possible) {
+        fact("Achievements", `${progress.achieved} of ${progress.possible} (${progress.percent}%)${progress.mastered ? " · mastered" : ""}`);
+    }
+    body.append(facts);
+    const actions = element("div", "game-details-actions");
+    actions.append(playButton(game, "primary"));
+    if (extra?.canShow) {
+        const show = element("button", "secondary", extra.showLabel || "Show file");
+        show.type = "button";
+        show.addEventListener("click", () => send("ShowGameFile", game.id));
+        actions.append(show);
+    }
+    body.append(actions);
+    panel.append(body);
+    return panel;
+}
+
+// ---- controllers: names, details, rename, and the input tester
+
+const XINPUT_BUTTONS = [
+    [0x1000, "A"], [0x2000, "B"], [0x4000, "X"], [0x8000, "Y"], [0x0100, "LB"], [0x0200, "RB"],
+    [0x0020, "Back"], [0x0010, "Start"], [0x0040, "LS"], [0x0080, "RS"],
+    [0x0001, "↑"], [0x0002, "↓"], [0x0004, "←"], [0x0008, "→"]
+];
+
+function powerText(power) {
+    return power === "wired" ? "Wired"
+        : power === "receiver" ? "Battery not reported through the receiver"
+            : power === "unreported" ? "Battery not reported in this mode"
+            : ["full", "medium", "low", "empty"].includes(power) ? `Battery ${power}` : "";
+}
+
+function renderControllers(pads) {
+    gamesState.pads = pads;
+    const card = $("gamesControllers");
+    if (card.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return; // renaming
+    card.replaceChildren(element("span", "games-panel-label", pads.length > 1 ? "CONTROLLERS" : "CONTROLLER"));
+    if (!pads.length) {
+        card.append(element("strong", "games-panel-value games-panel-muted", "None connected"),
+            element("small", "games-panel-note", "Wake the controller to see it here. X-input mode also reports its battery."));
+        return;
+    }
+    pads.slice(0, 3).forEach(pad => {
+        const item = element("div", "pad");
+        if (gamesState.renaming === pad.key) {
+            const form = element("form", "pad-rename");
+            const input = element("input");
+            input.type = "text";
+            input.maxLength = 48;
+            input.value = pad.name;
+            input.setAttribute("aria-label", "Controller name");
+            const save = element("button", "primary", "Save");
+            save.type = "submit";
+            const cancel = element("button", "secondary", "Cancel");
+            cancel.type = "button";
+            cancel.addEventListener("click", () => { gamesState.renaming = ""; renderControllers(gamesState.pads); });
+            form.addEventListener("submit", event => {
+                event.preventDefault();
+                const value = input.value.trim();
+                if (/[|\\<>]/.test(value) || value.length > 48) {
+                    showNotice("Use up to 48 characters, without | \\ < or >.");
+                    return;
+                }
+                gamesState.renaming = "";
+                send("RenameController", `${pad.key}|${value}`);
+            });
+            form.append(input, save, cancel);
+            const hint = element("small", "pad-hint", "Renames it in ASCS and in Windows' game controller list. Leave empty to restore the default. ");
+            const bluetooth = element("button", "link-button", "Bluetooth name…");
+            bluetooth.type = "button";
+            bluetooth.title = "Opens Devices and Printers: right-click the controller › Properties › Bluetooth, then type a name. Needed once per controller.";
+            bluetooth.addEventListener("click", () => send("OpenBluetoothRename"));
+            hint.append(bluetooth);
+            item.append(form, hint);
+            card.append(item);
+            requestAnimationFrame(() => { input.focus(); input.select(); });
+            return;
+        }
+        const head = element("div", "pad-head");
+        head.append(element("strong", "", pad.name));
+        const actions = element("span", "pad-actions");
+        const rename = element("button", "link-button", "Rename");
+        rename.type = "button";
+        rename.addEventListener("click", () => { gamesState.renaming = pad.key; renderControllers(gamesState.pads); });
+        actions.append(rename);
+        if (pad.rumble || pad.testable) {
+            const test = element("button", "link-button", "Test");
+            test.type = "button";
+            test.addEventListener("click", () => openTester(pad));
+            actions.append(test);
+        }
+        if (pad.rumble) {
+            // With two identical controllers, this tells you which entry is which.
+            const identify = element("button", "link-button", "Identify");
+            identify.type = "button";
+            identify.title = "Rumbles this controller so you can tell which one it is";
+            identify.addEventListener("click", () => send("RumbleController", pad.id));
+            actions.prepend(identify);
+        }
+        head.append(actions);
+        const meta = [`${pad.mode} mode`, pad.connection, pad.slot ? `Player ${pad.slot}` : ""].filter(Boolean).join(" · ");
+        item.append(head, element("small", "", meta));
+        if (!pad.rumble) item.append(element("small", "pad-hint", "Rumble and battery need X-input mode."));
+        const power = pad.rumble ? powerText(pad.power) : "";
+        if (power) {
+            const line = element("small", "pad-power", power);
+            line.dataset.power = pad.power;
+            item.append(line);
+        }
+        card.append(item);
+    });
+}
+
+function openTester(pad) {
+    gamesState.tester = pad;
+    $("controllerTester").hidden = false;
+    $("testerTitle").textContent = pad.name;
+    $("rumbleController").hidden = !pad.rumble;
+    $("testerNote").textContent = pad.rumble
+        ? "Sticks, triggers and buttons light up as you use them."
+        : `${pad.mode} mode: sticks, the D-pad and numbered buttons, as the controller reports them.`;
+    $("testerBody").replaceChildren(element("p", "settings-note", "Move a stick or press a button…"));
+    gamesState.testerBuilt = "";
+    stopTester();
+    if (!pad.rumble) {
+        // D-input and Switch modes: ASCS pushes input as it arrives.
+        gamesState.hidTester = pad.id;
+        send("StartControllerTester", pad.id);
+        $("controllerTester").scrollIntoView({ block: "nearest", behavior: "smooth" });
+        return;
+    }
+    gamesState.testerTimer = setInterval(() => {
+        if (!$("games").classList.contains("active") || document.hidden || $("controllerTester").hidden) return stopTester();
+        send("GetControllerInput", pad.id);
+    }, 60);
+    $("controllerTester").scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+function stopTester() {
+    if (gamesState.testerTimer) clearInterval(gamesState.testerTimer);
+    gamesState.testerTimer = null;
+    if (gamesState.hidTester) {
+        gamesState.hidTester = "";
+        send("StopControllerTester");
+    }
+}
+
+function stickElement(label) {
+    const wrap = element("div", "tester-stick");
+    const pad = element("div", "tester-stick-pad");
+    pad.append(element("i", "tester-stick-dot"));
+    wrap.append(pad, element("small", "", label));
+    return wrap;
+}
+
+function setStick(stick, x, y) {
+    const dot = stick.querySelector(".tester-stick-dot");
+    dot.style.transform = `translate(${(x * 26).toFixed(1)}px, ${(y * 26).toFixed(1)}px)`;
+}
+
+function barElement(label) {
+    const wrap = element("div", "tester-bar");
+    const track = element("span", "tester-bar-track");
+    track.append(element("b"));
+    wrap.append(element("small", "", label), track);
+    return wrap;
+}
+
+function setBar(bar, value) {
+    bar.querySelector("b").style.width = `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`;
+}
+
+function renderControllerInput(data) {
+    const pad = gamesState.tester;
+    if (!pad || data.id !== pad.id || $("controllerTester").hidden) return;
+    const body = $("testerBody");
+    if (data.connected !== true) {
+        body.replaceChildren(element("p", "settings-note", "The controller is not responding. Wake it or reconnect it."));
+        gamesState.testerBuilt = "";
+        return;
+    }
+    const number = value => (Number.isFinite(value) ? value : 0);
+    if (data.kind === "xinput") renderXInputTester(body, pad, data, number);
+    else if (data.kind === "hid") renderHidTester(body, pad, data, number);
+}
+
+function testerFrame(body, pad, kind, barLabels, buttonLabels) {
+    if (gamesState.testerBuilt === `${kind}:${pad.id}`) return;
+    body.replaceChildren();
+    const sticks = element("div", "tester-sticks");
+    sticks.append(stickElement("Left stick"), stickElement("Right stick"));
+    const bars = element("div", "tester-bars");
+    barLabels.forEach(label => bars.append(barElement(label)));
+    const buttons = element("div", "tester-buttons");
+    buttonLabels.forEach(([mask, label]) => {
+        const button = element("span", "tester-button", label);
+        button.dataset.mask = String(mask);
+        buttons.append(button);
+    });
+    body.append(sticks, bars, buttons);
+    gamesState.testerBuilt = `${kind}:${pad.id}`;
+}
+
+function lightButtons(body, pressed) {
+    body.querySelectorAll(".tester-button[data-mask]").forEach(button => {
+        button.classList.toggle("is-on", (pressed & Number(button.dataset.mask)) !== 0);
+    });
+}
+
+function renderXInputTester(body, pad, data, number) {
+    testerFrame(body, pad, "xinput", ["LT", "RT"], XINPUT_BUTTONS);
+    const [left, right] = body.querySelectorAll(".tester-stick");
+    const bars = body.querySelectorAll(".tester-bar");
+    setStick(left, number(data.lx) / 32767, -number(data.ly) / 32767);
+    setStick(right, number(data.rx) / 32767, -number(data.ry) / 32767);
+    setBar(bars[0], number(data.lt) / 255);
+    setBar(bars[1], number(data.rt) / 255);
+    lightButtons(body, number(data.buttons) >>> 0);
+}
+
+// HID usages: X 30, Y 31, Z 32, Rx 33, Ry 34, Rz 35. The right stick is Z/Rz
+// on most D-input pads and Rx/Ry on others; whichever pair isn't the right
+// stick shows as trigger bars.
+const HAT_ARROWS = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"];
+
+function renderHidTester(body, pad, data, number) {
+    const axes = data.axes && typeof data.axes === "object" ? data.axes : {};
+    const has = key => Number.isFinite(axes[key]);
+    const rightPair = has("32") && has("35") ? ["32", "35"] : ["33", "34"];
+    const barPair = rightPair[0] === "32" ? ["33", "34"] : ["32", "35"];
+    const buttonLabels = Array.from({ length: 16 }, (_, i) => [2 ** i, String(i + 1)]);
+    testerFrame(body, pad, "hid", ["L trigger axis", "R trigger axis", "D-pad"], buttonLabels);
+    const [left, right] = body.querySelectorAll(".tester-stick");
+    const bars = body.querySelectorAll(".tester-bar");
+    setStick(left, number(axes["30"]), number(axes["31"]));
+    setStick(right, number(axes[rightPair[0]]), number(axes[rightPair[1]]));
+    setBar(bars[0], (number(axes[barPair[0]]) + 1) / 2 * (has(barPair[0]) ? 1 : 0));
+    setBar(bars[1], (number(axes[barPair[1]]) + 1) / 2 * (has(barPair[1]) ? 1 : 0));
+    const hat = Number.isInteger(data.hat) && data.hat >= 0 && data.hat < 8 ? data.hat : -1;
+    setBar(bars[2], hat >= 0 ? 1 : 0);
+    bars[2].querySelector("small").textContent = hat >= 0 ? `D-pad ${HAT_ARROWS[hat]}` : "D-pad";
+    lightButtons(body, number(data.buttons) >>> 0);
+}
+
+$("closeTester").addEventListener("click", () => {
+    $("controllerTester").hidden = true;
+    gamesState.tester = null;
+    stopTester();
+});
+$("rumbleController").addEventListener("click", () => {
+    if (gamesState.tester?.rumble) send("RumbleController", gamesState.tester.id);
+});
+
+// ---- achievements
+
+function updateRaTimestamp() {
+    const at = gamesState.ra.updatedAt;
+    if (!at) {
+        $("raUpdated").textContent = "";
+        return;
+    }
+    const minutes = Math.floor((Date.now() - at) / 60000);
+    $("raUpdated").textContent = minutes < 1 ? "Updated just now" : `Updated ${minutes} m ago`;
+}
+
+function renderAchievements() {
+    const box = $("gamesAchievements");
+    const ra = gamesState.ra;
+    box.replaceChildren();
+    const live = ra.state === "ok" || ra.state === "error";
+    $("refreshAchievements").hidden = !live;
+    $("raProfile").hidden = ra.state !== "ok";
+    updateRaTimestamp();
+    if (ra.state === "off" || ra.state === "invalid" || !ra.state) {
+        box.append(element("p", "settings-note", ra.state === "invalid"
+            ? ra.message || "The RetroAchievements details in data\\secrets.ini aren't valid."
+            : "Connect RetroAchievements to see your points, rank, recent unlocks and progress here. Add your user name and Web API key to a local secrets file that is never committed."));
+        const setup = element("button", "secondary", "Open secrets file");
+        setup.type = "button";
+        setup.addEventListener("click", () => send("SetupRetroAchievements"));
+        box.append(setup);
+        return;
+    }
+    if (ra.state === "error") {
+        box.append(element("p", "settings-note", ra.message || "RetroAchievements is unavailable right now."));
+        return;
+    }
+    if (!ra.summary && !ra.recent) {
+        box.append(element("p", "settings-note", "Loading…"));
+        return;
+    }
+    const data = Games.parseRetroAchievements(ra.summary, ra.recent);
+
+    // Header: player and standing.
+    const stats = element("div", "ra-stats");
+    const stat = (label, value, note) => {
+        const item = element("span");
+        item.append(element("small", "", label), element("strong", "", value));
+        if (note) item.append(element("em", "", note));
+        stats.append(item);
+    };
+    stat("PLAYER", data.user || "—");
+    stat("HARDCORE POINTS", data.points.toLocaleString(), data.truePoints ? `${data.truePoints.toLocaleString()} true points` : "");
+    if (data.softcore) stat("SOFTCORE", data.softcore.toLocaleString());
+    stat("RANK", data.rank ? `#${data.rank.toLocaleString()}` : "—", Games.rankPercentile(data.rank, data.ranked));
+    box.append(stats);
+
+    // What's being played (rich presence comes from the game itself).
+    if (data.lastGame || data.presence) {
+        const now = element("div", "ra-now");
+        now.append(element("small", "", "LAST SEEN IN"));
+        now.append(element("strong", "", [data.lastGame, data.lastConsole].filter(Boolean).join(" · ") || "—"));
+        if (data.presence) now.append(element("p", "", data.presence));
+        box.append(now);
+    }
+
+    const columns = element("div", "ra-columns");
+    const progress = element("div", "ra-column");
+    progress.append(element("h3", "", "Progress"));
+    const progressList = element("ol", "ra-progress");
+    data.games.slice(0, 6).forEach(game => {
+        const item = element("li", `ra-with-image ${game.mastered ? "is-mastered" : game.completed ? "is-complete" : ""}`);
+        const body = element("div", "ra-item-body");
+        const head = element("div", "ra-progress-head");
+        head.append(element("strong", "", Games.displayTitle(game.title)));
+        head.append(element("span", "ra-percent", game.mastered ? "Mastered" : game.completed ? "Completed" : `${game.percent}%`));
+        const meta = element("small", "", [game.console, game.possible ? `${game.achieved} of ${game.possible}` : "No achievements",
+            game.hardcore && game.hardcore < game.achieved ? `${game.hardcore} hardcore` : ""].filter(Boolean).join(" · "));
+        const bar = element("span", "ra-bar");
+        const fill = element("b");
+        fill.style.width = `${game.percent}%`;
+        bar.append(fill);
+        body.append(head, meta, bar);
+        item.append(raImage(game.icon, "ra-icon"), body);
+        progressList.append(item);
+    });
+    if (!progressList.children.length) progressList.append(element("li", "settings-note", "No recently played games."));
+    progress.append(progressList);
+
+    const unlocks = element("div", "ra-column");
+    unlocks.append(element("h3", "", "Recent unlocks"));
+    const unlockList = element("ol", "ra-unlocks");
+    data.achievements.slice(0, 6).forEach(achievement => {
+        const item = element("li", "ra-with-image");
+        const body = element("div", "ra-item-body");
+        const head = element("div", "ra-unlock-head");
+        head.append(element("strong", "", achievement.title));
+        const points = element("span", `ra-points${achievement.hardcore ? " is-hardcore" : ""}`, `${achievement.points}`);
+        points.title = achievement.hardcore ? "Hardcore unlock" : "Softcore unlock";
+        head.append(points);
+        body.append(head);
+        if (achievement.description) body.append(element("p", "", achievement.description));
+        body.append(element("small", "", [achievement.game, Games.formatLastPlayed(achievement.date.replace(" ", "T"))].filter(Boolean).join(" · ")));
+        item.append(raImage(achievement.badge, `ra-badge${achievement.hardcore ? " is-hardcore" : ""}`), body);
+        unlockList.append(item);
+    });
+    if (!unlockList.children.length) unlockList.append(element("li", "settings-note", "No recent unlocks."));
+    unlocks.append(unlockList);
+    columns.append(progress, unlocks);
+    box.append(columns);
+    requestRaImages([...data.games.slice(0, 6).map(game => game.icon), ...data.achievements.slice(0, 6).map(item => item.badge)]);
+}
+
+// RetroAchievements badges and icons: requested by token once per session;
+// ASCS downloads each image once and keeps it in data\ra-images.
+const RA_IMAGE_PATTERN = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
+
+function raImage(token, className) {
+    const holder = element("span", `ra-image ${className}`);
+    holder.dataset.token = token || "";
+    const data = token ? gamesState.raImages.get(token) : "";
+    if (data) {
+        const image = element("img");
+        image.src = data;
+        image.alt = "";
+        holder.append(image);
+    }
+    return holder;
+}
+
+function requestRaImages(tokens) {
+    const wanted = [...new Set(tokens.filter(token => /^[bi]:\d{1,8}$/.test(token || "")))]
+        .filter(token => !gamesState.raImages.has(token) && !gamesState.raRequested.has(token));
+    if (!wanted.length) return;
+    wanted.forEach(token => gamesState.raRequested.add(token));
+    send("GetRaImages", wanted.join(","));
+}
+
+function handleRaImage(token, data) {
+    if (!/^[bi]:\d{1,8}$/.test(token) || !RA_IMAGE_PATTERN.test(data) || data.length > 400000) return;
+    gamesState.raImages.set(token, data);
+    document.querySelectorAll(".ra-image").forEach(holder => {
+        if (holder.dataset.token !== token || holder.querySelector("img")) return;
+        const image = element("img");
+        image.src = data;
+        image.alt = "";
+        holder.append(image);
+    });
+}
+
+$("raProfile").addEventListener("click", () => send("OpenRetroAchievementsProfile"));
+
+function startGamesPolling() {
+    stopGamesPolling();
+    send("GetGames");
+    send("GetGamesLive");
+    send("GetRetroAchievements");
+    gamesState.liveTimer = setInterval(() => {
+        if ($("games").classList.contains("active") && !document.hidden) send("GetGamesLive");
+        else stopGamesPolling();
+    }, 3000);
+}
+
+function stopGamesPolling() {
+    if (gamesState.liveTimer !== null) clearInterval(gamesState.liveTimer);
+    gamesState.liveTimer = null;
+    if (gamesState.nowTimer !== null) clearInterval(gamesState.nowTimer);
+    gamesState.nowTimer = null;
+    stopTester();
+}
+
+// Super Commands: running dots on M4-M7, polled only while it is open.
+function startRunningPolling() {
+    stopRunningPolling();
+    send("GetRunning");
+    gamesState.runningTimer = setInterval(() => {
+        if ($("commands").classList.contains("active") && !document.hidden) send("GetRunning");
+        else stopRunningPolling();
+    }, 3000);
+}
+
+function stopRunningPolling() {
+    if (gamesState.runningTimer !== null) clearInterval(gamesState.runningTimer);
+    gamesState.runningTimer = null;
+}
+
+document.querySelectorAll("[data-game-filter]").forEach(button => button.addEventListener("click", () => {
+    gamesState.filter = button.dataset.gameFilter;
+    document.querySelectorAll("[data-game-filter]").forEach(other => other.setAttribute("aria-pressed", String(other === button)));
+    renderGames();
+}));
+document.querySelectorAll("[data-game-sort]").forEach(button => button.addEventListener("click", () => {
+    gamesState.sort = button.dataset.gameSort;
+    document.querySelectorAll("[data-game-sort]").forEach(other => other.setAttribute("aria-pressed", String(other === button)));
+    renderGames();
+}));
+$("gameSearch").addEventListener("input", () => {
+    gamesState.query = $("gameSearch").value;
+    renderGames();
+});
+$("refreshAchievements").addEventListener("click", () => send("GetRetroAchievements", "refresh"));
+
+// ---- Preferences: Games & apps
+
+function loadGameSettings(data) {
+    const paths = data.paths && typeof data.paths === "object" ? data.paths : {};
+    document.querySelectorAll("[data-game-path]").forEach(input => {
+        const value = paths[input.dataset.gamePath];
+        input.value = typeof value === "string" ? value : "";
+    });
+    $("headphonesDevice").value = typeof data.headphones === "string" ? data.headphones : "";
+    $("soundSwitchKey").value = typeof data.soundSwitch === "string" ? data.soundSwitch : "";
+    $("showCovers").checked = data.covers === true;
+    $("psoVoiceChannel").value = typeof data.voiceChannel === "string" ? data.voiceChannel : "";
+    gamesState.coversEnabled = data.covers === true;
+    const devices = Array.isArray(data.devices) ? data.devices.filter(name => typeof name === "string").slice(0, 32) : [];
+    $("audioDevices").replaceChildren(...devices.map(name => {
+        const option = document.createElement("option");
+        option.value = name;
+        return option;
+    }));
+    const state = typeof data.retroAchievements === "string" ? data.retroAchievements : "off";
+    $("raStatusText").textContent = state === "ready"
+        ? "Set up: credentials found in data\\secrets.ini (kept on this PC, never committed). The key is never shown here."
+        : state === "invalid"
+            ? "data\\secrets.ini has a user name or key that isn't valid. Open it to fix them."
+            : "Not set up. Your user name and Web API key go in data\\secrets.ini, which stays on this PC and is never committed. The key is never shown in ASCS or sent anywhere except retroachievements.org.";
+}
+
+$("saveGamesButton").addEventListener("click", () => {
+    const fields = ["gamePathRetroarch", "gamePathDolphin", "gamePathPcsx2", "gamePathPso", "gamePathDiscord", "headphonesDevice", "soundSwitchKey"]
+        .map(id => $(id).value.trim());
+    if (fields.some(value => /[|\r\n]/.test(value))) {
+        $("gamesStatus").textContent = "Paths and names cannot contain | or line breaks.";
+        return;
+    }
+    fields.push($("showCovers").checked ? "1" : "0");
+    const voice = $("psoVoiceChannel").value.trim();
+    if (voice && !/^(https:\/\/((ptb|canary)\.)?discord(app)?\.com\/channels\/|discord:\/\/-\/channels\/)\d{15,21}\/\d{15,21}\/?$/i.test(voice)) {
+        $("gamesStatus").textContent = "The PSO voice channel must be a Discord channel link: https://discord.com/channels/<server>/<channel>.";
+        return;
+    }
+    fields.push(voice);
+    $("gamesStatus").textContent = "Saving…";
+    if (!send("SaveGameSettings", fields.join("|"))) $("gamesStatus").textContent = "Unable to contact ASCS.";
+});
+$("setupRetroAchievements").addEventListener("click", () => send("SetupRetroAchievements"));
+
+// ------------------------------------------------------------ power and system (1.7.0)
+// Guarded buttons need a 1.5-second press-and-hold (pointer, Space or
+// Enter); letting go early cancels. A completed hold asks ASCS to arm the
+// action, ASCS returns a single-use ticket (and any warnings, such as a game
+// running), and only then is the action sent, with that ticket. Restart and
+// shut down run on Windows' own 30-second timer; every countdown can be
+// cancelled from the banner on any tab.
+
+const POWER_HOLD_MS = 1500;
+const POWER_LABELS = {
+    restart: "Restart", shutdown: "Shut down", signout: "Sign out", sleep: "Sleep", recycle: "Empty the Recycle Bin"
+};
+const POWER_PROGRESS = {
+    restart: "Restarting", shutdown: "Shutting down", signout: "Signing out", sleep: "Sleeping"
+};
+const powerState = { armed: "", confirm: null, pending: null, bannerTimer: null };
+
+function startHold(button) {
+    if (button.dataset.holding) return;
+    button.dataset.holding = "1";
+    const started = performance.now();
+    const tick = now => {
+        if (!button.dataset.holding) return;
+        const progress = Math.min(1, (now - started) / POWER_HOLD_MS);
+        button.style.setProperty("--hold", progress.toFixed(3));
+        if (progress >= 1) {
+            endHold(button);
+            armPower(button.dataset.powerHold);
+            return;
+        }
+        button.holdFrame = requestAnimationFrame(tick);
+    };
+    button.holdFrame = requestAnimationFrame(tick);
+}
+
+function endHold(button) {
+    delete button.dataset.holding;
+    if (button.holdFrame) cancelAnimationFrame(button.holdFrame);
+    button.style.setProperty("--hold", "0");
+}
+
+function armPower(action) {
+    if (!POWER_LABELS[action]) return;
+    // A second hold after a warning confirms with the ticket already issued.
+    const confirm = powerState.confirm;
+    if (confirm && confirm.action === action && Date.now() - confirm.at < 9000) {
+        powerState.confirm = null;
+        $("powerConfirm").hidden = true;
+        send("PowerRun", `${action}|${confirm.ticket}`);
+        return;
+    }
+    powerState.confirm = null;
+    $("powerConfirm").hidden = true;
+    powerState.armed = action;
+    send("PowerArm", action);
+}
+
+function handlePowerArmed(data) {
+    if (typeof data.action !== "string" || data.action !== powerState.armed || typeof data.ticket !== "string") return;
+    powerState.armed = "";
+    const warnings = Array.isArray(data.warnings) ? data.warnings.filter(text => typeof text === "string").slice(0, 4) : [];
+    if (!warnings.length) {
+        send("PowerRun", `${data.action}|${data.ticket}`);
+        return;
+    }
+    powerState.confirm = { action: data.action, ticket: data.ticket, at: Date.now() };
+    const box = $("powerConfirm");
+    box.replaceChildren(
+        element("strong", "", `${warnings.join("; ")}.`),
+        element("span", "", ` Hold ${POWER_LABELS[data.action]} again within 9 seconds to go ahead anyway.`)
+    );
+    box.hidden = false;
+    setTimeout(() => {
+        if (powerState.confirm && Date.now() - powerState.confirm.at >= 9000) {
+            powerState.confirm = null;
+            box.hidden = true;
+        }
+    }, 9200);
+}
+
+function showPowerBanner(action, seconds) {
+    powerState.pending = { action, deadline: Date.now() + seconds * 1000 };
+    $("powerBanner").hidden = false;
+    const update = () => {
+        if (!powerState.pending) return;
+        const left = Math.max(0, Math.ceil((powerState.pending.deadline - Date.now()) / 1000));
+        $("powerBannerText").textContent = `${POWER_PROGRESS[action] || "Working"} in ${left} s`;
+    };
+    update();
+    clearInterval(powerState.bannerTimer);
+    powerState.bannerTimer = setInterval(update, 250);
+}
+
+function hidePowerBanner() {
+    powerState.pending = null;
+    clearInterval(powerState.bannerTimer);
+    $("powerBanner").hidden = true;
+}
+
+function formatBinSize(bytes) {
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    let value = Math.max(0, Number(bytes) || 0);
+    let unit = 0;
+    while (value >= 1024 && unit < units.length - 1) {
+        value /= 1024;
+        unit++;
+    }
+    return `${unit ? value.toFixed(value < 10 ? 1 : 0) : value} ${units[unit]}`;
+}
+
+function renderRecycleBin(data) {
+    const items = Number(data.items) || 0;
+    $("recycleSize").textContent = items ? `${items.toLocaleString()} · ${formatBinSize(data.bytes)}` : "Empty";
+    const button = document.querySelector('[data-power-hold="recycle"]');
+    button.disabled = items === 0;
+}
+
+function renderAudioDevices(data) {
+    const items = Array.isArray(data.items) ? data.items.filter(item => item && typeof item.name === "string").slice(0, 16) : [];
+    const current = items.find(item => item.current === true);
+    $("audioCurrent").textContent = current ? Games.displayTitle(current.name) : "Audio";
+    $("audioButton").title = current ? `Audio output: ${current.name}` : "Choose the audio output";
+    const menu = $("audioMenu");
+    menu.replaceChildren(...items.map(item => {
+        const option = element("button", `audio-option${item.current ? " is-current" : ""}`, item.name);
+        option.type = "button";
+        option.setAttribute("role", "menuitemradio");
+        option.setAttribute("aria-checked", String(item.current === true));
+        option.addEventListener("click", () => {
+            menu.hidden = true;
+            $("audioButton").setAttribute("aria-expanded", "false");
+            if (!item.current) send("SelectAudioDevice", item.name);
+        });
+        return option;
+    }));
+    if (data.soundSwitch !== true) {
+        menu.append(element("p", "settings-note", "SoundSwitch isn't running; ASCS switches outputs through it."));
+    }
+}
+
+document.querySelectorAll("[data-power-now]").forEach(button => {
+    button.addEventListener("click", () => send("PowerNow", button.dataset.powerNow));
+});
+document.querySelectorAll("[data-power-hold]").forEach(button => {
+    button.addEventListener("pointerdown", event => {
+        if (event.button !== 0 || button.disabled) return;
+        button.setPointerCapture?.(event.pointerId);
+        startHold(button);
+    });
+    ["pointerup", "pointercancel", "lostpointercapture"].forEach(type =>
+        button.addEventListener(type, () => endHold(button)));
+    button.addEventListener("keydown", event => {
+        if ((event.key === " " || event.key === "Enter") && !event.repeat) {
+            event.preventDefault();
+            startHold(button);
+        }
+    });
+    button.addEventListener("keyup", event => {
+        if (event.key === " " || event.key === "Enter") endHold(button);
+    });
+    button.addEventListener("blur", () => endHold(button));
+    // A plain click does nothing but remind how these work.
+    button.addEventListener("click", event => {
+        event.preventDefault();
+        if (!powerState.confirm) {
+            const hint = $("powerHint");
+            hint.classList.remove("is-flashing");
+            void hint.offsetWidth;
+            hint.classList.add("is-flashing");
+        }
+    });
+});
+$("powerCancel").addEventListener("click", () => send("PowerCancel"));
+$("audioButton").addEventListener("click", () => {
+    const menu = $("audioMenu");
+    menu.hidden = !menu.hidden;
+    $("audioButton").setAttribute("aria-expanded", String(!menu.hidden));
+    if (!menu.hidden) send("GetAudioDevices");
+});
+document.addEventListener("click", event => {
+    if (!$("audioMenu").hidden && !event.target.closest("#audioMenu, #audioButton")) {
+        $("audioMenu").hidden = true;
+        $("audioButton").setAttribute("aria-expanded", "false");
+    }
+});
+
+// ------------------------------------------------------------ horizontal wheel (1.7.0)
+// A thumb wheel (such as the MX Master's) or a sideways trackpad swipe steps
+// through tab strips: one tab per notch, with a short cooldown so a fast
+// spin doesn't skip past. Only gestures that are mostly sideways count, so
+// ordinary vertical scrolling is never taken over. The selected tab is kept
+// in view when a strip is narrower than its tabs.
+
+const WHEEL_STEP = 40;          // pixels of sideways movement per step
+const WHEEL_COOLDOWN = 160;     // ms between steps
+
+function selectedIndex(buttons) {
+    return buttons.findIndex(button =>
+        button.getAttribute("aria-selected") === "true" || button.getAttribute("aria-pressed") === "true");
+}
+
+function enableTabWheel(strip, selector) {
+    let travel = 0;
+    let lastStep = 0;
+    strip.addEventListener("wheel", event => {
+        // The thumb wheel's sign is flipped to match how it feels on the MX
+        // Master (rolling right steps right); Shift + wheel: down steps right.
+        const sideways = event.deltaX !== 0 && Math.abs(event.deltaX) > Math.abs(event.deltaY)
+            ? -event.deltaX
+            : (event.shiftKey ? event.deltaY : 0);
+        if (!sideways) return;
+        event.preventDefault();
+        const scale = event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? 400 : 1;
+        travel += sideways * scale;
+        const now = performance.now();
+        if (Math.abs(travel) < WHEEL_STEP || now - lastStep < WHEEL_COOLDOWN) return;
+        const direction = Math.sign(travel);
+        travel = 0;
+        lastStep = now;
+        const buttons = [...strip.querySelectorAll(selector)].filter(button => !button.disabled && !button.hidden);
+        const current = selectedIndex(buttons);
+        const next = buttons[Math.max(0, Math.min(buttons.length - 1, (current < 0 ? 0 : current) + direction))];
+        if (next && buttons.indexOf(next) !== current) {
+            next.click();
+            next.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+        }
+    }, { passive: false });
+}
+
+enableTabWheel(document.querySelector("#settings .settings-nav"), "[role='tab']");
+enableTabWheel(document.querySelector("#logs .logs-sources"), "[data-log-source]");
+enableTabWheel(document.querySelector("#logs .logs-levels"), "[data-log-level]");
+enableTabWheel(document.querySelector(".games-toolbar .logs-sources"), "[data-game-filter]");
+enableTabWheel(document.querySelector(".games-toolbar .logs-levels"), "[data-game-sort]");
+
+// The shelf fades at its right edge only while more games are off to the side.
+function updateShelfFade() {
+    const shelf = $("gamesContinue");
+    const more = shelf.scrollWidth - shelf.clientWidth - shelf.scrollLeft > 2;
+    shelf.classList.toggle("has-more", more);
+}
+$("gamesContinue").addEventListener("scroll", updateShelfFade, { passive: true });
+window.addEventListener("resize", updateShelfFade);
+
+// Keep the selected Preferences tab in view after any selection.
+document.querySelectorAll("#settings .settings-nav [role='tab']").forEach(tab =>
+    tab.addEventListener("click", () => tab.scrollIntoView({ block: "nearest", inline: "nearest" })));
+
+// ------------------------------------------------------------ start-up rendering
+// Runs last, after every declaration above, so nothing is used before it is
+// initialised.
+
+try {
+    applySidebar(localStorage.getItem(SIDEBAR_KEY) === "1");
+} catch {
+    applySidebar(false);
+}
+renderQuickActions();
+renderKeymap();
+updateClock();
+send("GetAlmanac");
+send("GetRecycleBin");
+send("GetAudioDevices");

@@ -6,7 +6,8 @@
 (function (global) {
     // ---------------------------------------------------------------- layout
     // Units are key widths (u). Each key: id, label, x, y, w (1), h (1), and
-    // optionally special ("super", "planned") and note (shown on hover).
+    // optionally special ("super", "macro") and note (shown on hover).
+    // Macro keys carry a short caption for what they do on their own.
     // This is the user's customized Keychron Q6 Max: a 100% board with a
     // full-width left Shift, a rectangular Enter with \| above it, seven macro keys
     // (M1-M3 in place of PrtSc/ScrLk/Pause, M4-M7 above the numpad), a Code
@@ -27,11 +28,21 @@
         ["f1", "f2", "f3", "f4"].forEach((id, i) => add(id, id.toUpperCase(), 2 + i, 0));
         ["f5", "f6", "f7", "f8"].forEach((id, i) => add(id, id.toUpperCase(), 6.5 + i, 0));
         ["f9", "f10", "f11", "f12"].forEach((id, i) => add(id, id.toUpperCase(), 11 + i, 0));
-        // Macro keys share the Code key's status: reserved for planned ASCS
+        // Macro keys and the Code key send F13-F23 to the keyboard macro
+        // scripts; on their own they belong to those scripts, not to ASCS.
         // functionality, with no current compatibility.
-        const macro = { special: "planned", note: "Macro key: reserved for planned ASCS functionality; no current compatibility." };
-        ["m1", "m2", "m3"].forEach((id, i) => add(id, id.toUpperCase(), 15.25 + i, 0, 1, 1, macro));
-        ["m4", "m5", "m6", "m7"].forEach((id, i) => add(id, id.toUpperCase(), 18.5 + i, 0, 1, 1, macro));
+        const macros = {
+            m1: ["Bambu", "M1 (F21): toggles Bambu Studio (keyboard macro script). Fn + M1 is Print Screen."],
+            m2: ["Audio", "M2: switches audio output through SoundSwitch (Ctrl + Alt + F11)."],
+            m3: ["Discord", "M3 (F22): toggles Discord (keyboard macro script)."],
+            m4: ["PSO", "M4 (F13): toggles the Ephinea PSO launcher (keyboard macro script); Fn + M4 opens its folder."],
+            m5: ["RetroArch", "M5 (F14): toggles RetroArch (keyboard macro script); Fn + M5 opens its folder."],
+            m6: ["Dolphin", "M6 (F15): toggles Dolphin (keyboard macro script); Fn + M6 opens its folder."],
+            m7: ["PCSX2", "M7 (F16): toggles PCSX2 (keyboard macro script); Fn + M7 opens its folder."]
+        };
+        const macro = id => ({ special: "macro", caption: macros[id][0], note: macros[id][1] });
+        ["m1", "m2", "m3"].forEach((id, i) => add(id, id.toUpperCase(), 15.25 + i, 0, 1, 1, macro(id)));
+        ["m4", "m5", "m6", "m7"].forEach((id, i) => add(id, id.toUpperCase(), 18.5 + i, 0, 1, 1, macro(id)));
 
         // Main block
         row(1.25, 0, [["grave", "`"], ["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"], ["5", "5"], ["6", "6"],
@@ -45,7 +56,7 @@
         row(5.25, 0, [["lctrl", "Ctrl", 1.25], ["code", "Code", 1.25], ["lalt", "Alt", 1.25], ["space", "Space", 6.25],
             ["ralt", "Alt", 1.25], ["super", "Super", 1.25], ["fn", "Fn", 1.25], ["rctrl", "Ctrl", 1.25]]);
         const special = {
-            code: { special: "planned", note: "Code: a custom key. Reserved for planned ASCS functionality; no current compatibility." },
+            code: { special: "macro", caption: "VS Code", note: "Code (F23): opens the selected files, the Explorer folder or the desktop in VS Code (Code key script)." },
             super: { special: "super", note: "Super (sends F24): the command key. Tap it to show or hide ASCS; hold it with another key to run a command." },
             fn: { note: "Fn: the keyboard's function layer, handled by the keyboard itself. Not used by ASCS." }
         };
@@ -76,7 +87,7 @@
         dashboard: { title: "System Dashboard", short: "Dash", cat: "apps", desc: "Live metrics and hardware inventory." },
         terminal: { title: "Windows Terminal", short: "Term", cat: "apps", desc: "Focuses an open Terminal (switching desktops if needed) or opens one." },
         explorer: { title: "File Explorer", short: "Files", cat: "apps", desc: "Focuses an open Explorer window or opens one." },
-        calculator: { title: "Calculator", short: "Calc", cat: "apps", desc: "Opens Calculator." },
+        claude: { title: "Claude", short: "Claude", cat: "apps", desc: "Opens Claude's quick-entry prompt (Ctrl+Alt+Space by default), or starts the Claude app." },
         taskmanager: { title: "Task Manager", short: "Tasks", cat: "apps", desc: "Opens Task Manager." }
     };
 
@@ -93,7 +104,12 @@
         left: { title: "Snap left", short: "Snap", cat: "windows", desc: "Left half of the monitor; then ↑ or ↓ for a quadrant." },
         right: { title: "Snap right", short: "Snap", cat: "windows", desc: "Right half of the monitor; then ↑ or ↓ for a quadrant." },
         up: { title: "Maximize", short: "Max", cat: "windows", desc: "Maximizes the active window." },
-        down: { title: "Restore / minimize", short: "Min", cat: "windows", desc: "Restores a maximized window, otherwise minimizes it." }
+        down: { title: "Restore / minimize", short: "Min", cat: "windows", desc: "Restores a maximized window, otherwise minimizes it." },
+        // Macro keys with Super (1.7.0); without Super they stay with the macro script.
+        m4: { title: "PSO session", short: "PSO", cat: "apps", desc: "Headphones on, Discord, then the Ephinea launcher; when the game closes, your audio comes back and ASCS offers to close Discord." },
+        m5: { title: "Recent RetroArch games", short: "Retro", cat: "apps", desc: "Opens the palette on your recent RetroArch games; Enter plays one." },
+        m6: { title: "Recent Dolphin games", short: "Dolphin", cat: "apps", desc: "Opens the palette on your recent Dolphin games; Enter plays one." },
+        m7: { title: "Recent PCSX2 games", short: "PCSX2", cat: "apps", desc: "Opens the palette on your recent PCSX2 games; Enter plays one." }
     };
 
     const FIXED_SHIFT = {
@@ -101,14 +117,20 @@
         p: { title: "Paste a snippet", short: "Paste", cat: "saved", desc: "Opens the palette on your snippets; Enter pastes into the window you were using." },
         d: { title: "New folder", short: "+Dir", cat: "saved", desc: "Creates a folder in the active File Explorer location." },
         f: { title: "New file", short: "+File", cat: "saved", desc: "Creates an empty file in the active File Explorer location." },
+        s: { title: "Save workspace as…", short: "Save as", cat: "saved", desc: "Opens the palette on name entry; Enter saves the current window layout under that name." },
         r: { title: "Choose a workspace", short: "Pick", cat: "saved", desc: "Opens the palette on your saved workspaces." },
         left: { title: "Move to monitor (left)", short: "Mon", cat: "windows", desc: "Moves the active window to the monitor on the left." },
         right: { title: "Move to monitor (right)", short: "Mon", cat: "windows", desc: "Moves the active window to the monitor on the right." }
     };
 
-    // Unassigned letters handled by ASCS pass the Windows shortcut through.
+    // ASCS owns C, D, F and P for the Shift layer. While one of them has no
+    // assigned action, Super + that letter passes the Windows shortcut through
+    // (Send("#" key) in HandleShiftLayerKey), so it is a live combination.
     const WINDOWS_PASSTHROUGH = {
-        c: "Win+C", d: "Win+D (Show desktop)", f: "Win+F", p: "Win+P (Project)"
+        c: { keys: "Win+C", title: "Copilot", short: "Copil" },
+        d: { keys: "Win+D", title: "Show desktop", short: "Desk" },
+        f: { keys: "Win+F", title: "Feedback Hub", short: "Feedb" },
+        p: { keys: "Win+P", title: "Project to a display", short: "Proj" }
     };
 
     const clone = binding => ({ ...binding });
@@ -146,8 +168,13 @@
             }
         });
         const passthrough = {};
-        Object.entries(WINDOWS_PASSTHROUGH).forEach(([key, text]) => {
-            if (!base[key]) passthrough[key] = text;
+        Object.entries(WINDOWS_PASSTHROUGH).forEach(([key, windows]) => {
+            if (base[key]) return;
+            passthrough[key] = `${windows.keys} (${windows.title})`;
+            base[key] = {
+                title: windows.title, short: windows.short, cat: "windows", passthrough: true,
+                desc: `Windows' own shortcut (${windows.keys}), passed through while ${key.toUpperCase()} has no ASCS action. Assigning ${key.toUpperCase()} in Preferences replaces it.`
+            };
         });
         return { super: base, shift, passthrough };
     }

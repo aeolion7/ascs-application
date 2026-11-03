@@ -24,27 +24,44 @@
           <strong>AEOLIONWARE</strong>
           <span>SUPER COMMAND SYSTEM</span>
         </span>
+        <span class="brand-short" aria-hidden="true">ASCS</span>
       </div>
 
       <div class="nav-label">WORKSPACE</div>
       <nav class="primary-nav" aria-label="Workspace">
-        <button class="nav active" type="button" data-view="home" aria-controls="home" aria-current="page">
+        <button class="nav active" type="button" data-view="home" aria-controls="home" title="Command Center" aria-current="page">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg>
           <span>Command Center</span>
         </button>
-        <button class="nav" type="button" data-view="notes" aria-controls="notes">
+        <button class="nav" type="button" data-view="notes" aria-controls="notes" title="Quick Notes">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.75h7l4.25 4.5v12H7a2 2 0 0 1-2-2v-12a2.5 2.5 0 0 1 2-2.5Z"/><path d="M14 4v5h4M8.5 13h7M8.5 16.5h7"/></svg>
           <span>Quick Notes</span>
         </button>
-        <button class="nav" type="button" data-view="dashboard" aria-controls="dashboard">
+        <button class="nav" type="button" data-view="games" aria-controls="games" title="Games">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8h9a4.5 4.5 0 0 1 4.3 5.8l-1 3.3a2.2 2.2 0 0 1-3.7.9L14 16h-4l-2.1 2a2.2 2.2 0 0 1-3.7-.9l-1-3.3A4.5 4.5 0 0 1 7.5 8Z"/><path d="M8 11v3m-1.5-1.5h3M15.5 12h.01M17.5 13.5h.01"/></svg>
+          <span>Games</span>
+        </button>
+      </nav>
+
+      <div class="nav-label nav-label-group">SYSTEM</div>
+      <nav class="primary-nav" aria-label="System">
+        <button class="nav" type="button" data-view="dashboard" aria-controls="dashboard" title="System Dashboard">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5V12m5.3 7.5V5m5.4 14.5v-10m5.3 10V8"/></svg>
           <span>System Dashboard</span>
         </button>
-        <button class="nav" type="button" data-view="commands" aria-controls="commands">
+        <button class="nav" type="button" data-view="logs" aria-controls="logs" title="Logs">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6.5h.01M5 12h.01M5 17.5h.01M9 6.5h10M9 12h10M9 17.5h6"/></svg>
+          <span>Logs</span>
+        </button>
+      </nav>
+
+      <div class="nav-label nav-label-group">REFERENCE</div>
+      <nav class="primary-nav" aria-label="Reference">
+        <button class="nav" type="button" data-view="commands" aria-controls="commands" title="Super Commands">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 9h2m3 0h2m3 0h.01M7 13h.01m3 0h.01m3 0h.01m3 0h.01M8 16h8"/></svg>
           <span>Super Commands</span>
         </button>
-        <button class="nav" type="button" data-view="settings" aria-controls="settings">
+        <button class="nav" type="button" data-view="settings" aria-controls="settings" title="Preferences">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="m19.4 15 .1.1a1.8 1.8 0 1 1-2.5 2.5l-.1-.1a1.8 1.8 0 0 0-3 .9v.2a1.8 1.8 0 1 1-3.6 0v-.2a1.8 1.8 0 0 0-3-.9l-.1.1a1.8 1.8 0 1 1-2.5-2.5l.1-.1a1.8 1.8 0 0 0-.9-3H3.7a1.8 1.8 0 1 1 0-3.6h.2a1.8 1.8 0 0 0 .9-3l-.1-.1a1.8 1.8 0 1 1 2.5-2.5l.1.1a1.8 1.8 0 0 0 3-.9v-.2a1.8 1.8 0 1 1 3.6 0v.2a1.8 1.8 0 0 0 3 .9l.1-.1a1.8 1.8 0 1 1 2.5 2.5l-.1.1a1.8 1.8 0 0 0 .9 3h.2a1.8 1.8 0 1 1 0 3.6h-.2a1.8 1.8 0 0 0-.9 3Z"/></svg>
           <span>Preferences</span>
         </button>
@@ -53,11 +70,14 @@
       <div class="sidebar-bottom">
         <span class="status-indicator" aria-hidden="true"></span>
         <span class="sidebar-status">
-          <strong>ASCS 1.6.0</strong>
+          <strong>ASCS 1.7.0</strong>
           <small>Standing by</small>
         </span>
         <span class="key-hint" aria-label="Super key">Super</span>
       </div>
+      <button class="sidebar-toggle" type="button" id="sidebarToggle" aria-pressed="false" aria-label="Collapse sidebar" title="Collapse sidebar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 7-5 5 5 5"/></svg>
+      </button>
     </aside>
 
     <main class="main">
@@ -93,25 +113,37 @@
         </div>
       </header>
 
+      <div class="power-banner" id="powerBanner" role="alert" hidden>
+        <span class="power-banner-dot" aria-hidden="true"></span>
+        <strong id="powerBannerText"></strong>
+        <button class="secondary" type="button" id="powerCancel">Cancel</button>
+      </div>
       <section class="view active" id="home" aria-labelledby="homeTitle">
-        <div class="hero">
-          <div class="hero-copy">
+        <header class="home-header">
+          <div class="home-header-copy">
             <span class="eyebrow"><span class="eyebrow-line"></span> <span id="homeDate">AT YOUR COMMAND</span></span>
             <h1 id="homeTitle">Command Center<span class="title-period">.</span></h1>
-            <p class="hero-tagline">AEOLIONWARE, at your command.</p>
-            <p class="hero-description">Every window, tool, and thought, one key away.</p>
+            <p class="home-tagline"><strong>AEOLIONWARE, at your command.</strong> <span>Every window, tool, and thought, one key away.</span></p>
           </div>
-          <div class="hero-emblem" aria-hidden="true">
-            <span class="emblem-ring emblem-ring-outer"></span>
-            <span class="emblem-ring emblem-ring-inner"></span>
-            <svg viewBox="0 0 80 80" fill="none">
-              <path d="M40 11 67 62H13L40 11Z" stroke="currentColor" stroke-width="2"/>
-              <path d="m40 29 17 31H23l17-31Z" fill="currentColor" opacity=".16"/>
-              <path d="M32 51h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-            <span class="emblem-glow"></span>
+          <div class="system-bar" aria-label="System">
+            <div class="system-group" role="group" aria-label="Instant">
+              <span class="system-group-label">CLICK</span>
+              <button class="system-button" type="button" data-power-now="lock" title="Lock"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg><span>Lock</span></button>
+              <button class="system-button" type="button" id="audioButton" aria-haspopup="true" aria-expanded="false" title="Choose the audio output"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 9.5h3l4-3.5v12l-4-3.5h-3z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg><span id="audioCurrent">Audio</span></button>
+            </div>
+            <div class="system-group is-guarded" role="group" aria-label="Press and hold to confirm">
+              <span class="system-group-label" id="powerHint" title="Press and hold for 1.5 seconds; let go to cancel"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" opacity=".35"/><path d="M12 4a8 8 0 0 1 8 8"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/></svg>HOLD</span>
+              <button class="system-button is-guarded" type="button" data-power-hold="recycle" title="Hold to recycle bin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12.5h8L17 7M10.5 10.5v6M13.5 10.5v6"/></svg><span>Recycle Bin</span><small id="recycleSize"></small></button>
+              <button class="system-button is-guarded" type="button" data-power-hold="sleep" title="Hold to sleep"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5Z"/></svg><span>Sleep</span></button>
+              <button class="system-button is-guarded" type="button" data-power-hold="restart" title="Hold to restart"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></svg><span>Restart</span></button>
+              <button class="system-button is-guarded" type="button" data-power-hold="shutdown" title="Hold to shut down"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v8"/><path d="M7.2 6.6a7.5 7.5 0 1 0 9.6 0"/></svg><span>Shut down</span></button>
+              <button class="system-button is-guarded" type="button" data-power-hold="signout" title="Hold to sign out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4.5h4.5a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H14"/><path d="M10 8l-4 4 4 4M6 12h9"/></svg><span>Sign out</span></button>
+            </div>
+            <div class="audio-menu" id="audioMenu" role="menu" aria-label="Audio output" hidden></div>
+            <div class="power-confirm" id="powerConfirm" role="alert" hidden></div>
           </div>
-        </div>
+          <div class="home-almanac" id="homeAlmanac" hidden></div>
+        </header>
 
         <section class="content-section" aria-labelledby="overviewHeading">
           <div class="section-title-row">
@@ -156,35 +188,12 @@
               <span class="section-overline">WITHIN REACH</span>
               <h2 id="actionsHeading">Quick actions</h2>
             </div>
-            <span class="section-shortcut"><kbd>Super + Space</kbd> to search commands</span>
+            <div class="section-actions">
+              <span class="section-shortcut"><kbd>Super + Space</kbd> to search</span>
+              <button class="secondary" type="button" id="editQuickActions" aria-pressed="false">Edit</button>
+            </div>
           </div>
-          <div class="actions">
-            <button class="action-card" type="button" data-launch="terminal">
-              <span class="action-icon">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 7 5 5-5 5m7 0h7"/></svg>
-              </span><span class="action-copy"><strong>Terminal</strong><small>Command line</small></span><span class="action-arrow" aria-hidden="true">↗</span>
-            </button>
-            <button class="action-card" type="button" data-launch="explorer">
-              <span class="action-icon">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5a2 2 0 0 1 2-2h5l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-10Z"/><path d="M3.75 10h16.5"/></svg>
-              </span><span class="action-copy"><strong>File Explorer</strong><small>Browse your files</small></span><span class="action-arrow" aria-hidden="true">↗</span>
-            </button>
-            <button class="action-card" type="button" data-view="notes">
-              <span class="action-icon">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3.75h7l4 4v12.5h-11a2 2 0 0 1-2-2v-12a2.5 2.5 0 0 1 2-2.5Z"/><path d="M13.5 4v4h4m-9 4.5h6m-6 3.5h6"/></svg>
-              </span><span class="action-copy"><strong>Quick Notes</strong><small>Capture a thought</small></span><span class="action-arrow" aria-hidden="true">→</span>
-            </button>
-            <button class="action-card" type="button" data-launch="taskmanager">
-              <span class="action-icon">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5m0 14h16"/><path d="m7 15 3-4 3 2 5-6"/></svg>
-              </span><span class="action-copy"><strong>Task Manager</strong><small>View running apps</small></span><span class="action-arrow" aria-hidden="true">↗</span>
-            </button>
-            <button class="action-card" type="button" data-launch="calculator">
-              <span class="action-icon">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8.5 7h7m-7 5h.01m3.5 0h.01m3.5 0h.01m-7 4h.01m3.5 0h.01m3.5 0h.01"/></svg>
-              </span><span class="action-copy"><strong>Calculator</strong><small>Quick calculations</small></span><span class="action-arrow" aria-hidden="true">↗</span>
-            </button>
-          </div>
+          <div class="actions" id="quickActions" aria-live="polite"></div>
           <div class="activity-block" aria-labelledby="activityHeading">
             <div class="activity-heading"><span class="section-overline" id="activityHeading">RECENT ACTIVITY</span></div>
             <ol id="activityList" class="activity-list"></ol>
@@ -203,9 +212,10 @@
           <aside class="notes-list-card" aria-label="Notes list">
             <div class="notes-list-toolbar">
               <label class="sr-only" for="notesFilter">Filter notes</label>
-              <input id="notesFilter" type="search" placeholder="Filter notes..." autocomplete="off">
+              <input id="notesFilter" type="search" placeholder="Filter notes or #tags…" autocomplete="off">
               <button class="primary" type="button" id="newNoteButton">New note</button>
             </div>
+            <div id="notesTags" class="notes-tags" aria-label="Filter by tag"></div>
             <div id="notesList" class="notes-list" role="list"></div>
             <p id="notesEmpty" class="notes-empty">Nothing captured yet. Start a note, or press Super + Shift + C in any app.</p>
           </aside>
@@ -215,7 +225,7 @@
                 <span class="editor-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24"><path d="M6.5 3.75h7l4 4v12.5h-11a2 2 0 0 1-2-2v-12a2.5 2.5 0 0 1 2-2.5Z"/><path d="M13.5 4v4h4m-9 4.5h6m-6 3.5h6"/></svg>
                 </span>
-                <span><strong id="noteKindLabel">PERSONAL NOTE</strong><small>Saved privately on this device</small></span>
+                <span><strong id="noteKindLabel">NOTE</strong><small>Saved privately on this machine</small></span>
               </div>
               <span class="save-status" id="saveStatus" role="status" aria-live="polite"><span class="save-status-dot"></span> ALL CHANGES SAVED</span>
             </div>
@@ -227,13 +237,86 @@
                 <option value="note">Note</option>
                 <option value="snippet">Snippet</option>
               </select>
+              <button class="secondary" type="button" id="previewNoteButton" aria-pressed="false" title="Show formatted Markdown">Preview</button>
               <button class="secondary" type="button" id="pinNoteButton" aria-pressed="false">Pin</button>
               <button class="secondary danger" type="button" id="deleteNoteButton">Delete</button>
             </div>
-            <textarea id="noteText" data-primary-input aria-label="Personal notes" placeholder="Begin with a thought, a reminder, or an idea..." spellcheck="true"></textarea>
-            <div class="editor-footer"><span id="noteUpdated">Changes save automatically</span><button class="secondary copy-snippet" type="button" id="copySnippetButton" hidden>Copy snippet</button><span class="editor-footer-mark">AEOLIONWARE <i>·</i> NOTES</span></div>
+            <textarea id="noteText" data-primary-input aria-label="Note text" placeholder="Begin with a thought, a reminder, or an idea. Markdown and #tags work here." spellcheck="true"></textarea>
+            <div id="notePreview" class="note-preview" hidden></div>
+            <div class="editor-footer"><span id="noteUpdated">Changes save automatically</span><span class="editor-footer-meta"><span id="noteWords"></span><button class="secondary copy-snippet" type="button" id="copySnippetButton" hidden>Copy snippet</button></span></div>
           </div>
         </div>
+      </section>
+
+      <section class="view" id="games" aria-labelledby="gamesTitle">
+        <div class="page-heading">
+          <span class="eyebrow"><span class="eyebrow-line"></span> PLAY</span>
+          <h1 id="gamesTitle">Games<span class="title-period">.</span></h1>
+          <p>Play time, recent games, and achievements across Steam, RetroArch, Dolphin, PCSX2, and Phantasy Star Online.</p>
+        </div>
+
+        <div class="games-top">
+          <article class="games-panel games-now" id="gamesNow" aria-live="polite"></article>
+          <article class="games-panel games-controllers" id="gamesControllers"></article>
+          <article class="games-panel games-totals" id="gamesTotals"></article>
+        </div>
+
+        <section class="games-panel controller-tester" id="controllerTester" hidden aria-labelledby="testerTitle">
+          <div class="controller-tester-head">
+            <div><span class="games-panel-label">INPUT TEST</span><h2 id="testerTitle">Controller</h2></div>
+            <span class="settings-action-buttons"><button class="secondary" type="button" id="rumbleController">Rumble</button><button class="secondary" type="button" id="closeTester">Done</button></span>
+          </div>
+          <div id="testerBody" class="controller-tester-body" aria-live="off"></div>
+          <p class="games-panel-note" id="testerNote"></p>
+        </section>
+
+        <section class="content-section" aria-labelledby="continueHeading">
+          <div class="section-title-row">
+            <div>
+              <span class="section-overline">PICK UP WHERE YOU LEFT OFF</span>
+              <h2 id="continueHeading">Continue playing</h2>
+            </div>
+            <p class="games-hint" id="coversHint" hidden>Cover art is off. Turn it on in Preferences › Games &amp; apps.</p>
+          </div>
+          <div id="gamesContinue" class="games-continue"></div>
+        </section>
+
+        <section class="content-section" aria-labelledby="achievementsHeading">
+          <div class="section-title-row">
+            <div>
+              <span class="section-overline">RETROACHIEVEMENTS</span>
+              <h2 id="achievementsHeading">Achievements</h2>
+            </div>
+            <span class="settings-action-buttons ra-actions"><small class="ra-updated" id="raUpdated"></small><button class="secondary" type="button" id="raProfile" hidden>Profile</button><button class="secondary" type="button" id="refreshAchievements" hidden>Refresh</button></span>
+          </div>
+          <div id="gamesAchievements" class="games-achievements"></div>
+        </section>
+
+        <section class="content-section" aria-labelledby="libraryHeading">
+          <div class="section-title-row">
+            <div>
+              <span class="section-overline">LIBRARY</span>
+              <h2 id="libraryHeading">Every game you've played</h2>
+            </div>
+          </div>
+          <div class="logs-toolbar games-toolbar">
+            <div class="logs-sources" role="group" aria-label="Emulator">
+              <button type="button" data-game-filter="all" aria-pressed="true">All</button>
+              <button type="button" data-game-filter="retroarch" aria-pressed="false">RetroArch</button>
+              <button type="button" data-game-filter="dolphin" aria-pressed="false">Dolphin</button>
+              <button type="button" data-game-filter="pcsx2" aria-pressed="false">PCSX2</button>
+              <button type="button" data-game-filter="steam" aria-pressed="false">Steam</button>
+            </div>
+            <div class="logs-levels" role="group" aria-label="Sort">
+              <button type="button" data-game-sort="recent" aria-pressed="true">Recent</button>
+              <button type="button" data-game-sort="time" aria-pressed="false">Most played</button>
+              <button type="button" data-game-sort="title" aria-pressed="false">A–Z</button>
+            </div>
+            <input id="gameSearch" class="logs-search" type="search" placeholder="Filter games" autocomplete="off" spellcheck="false" aria-label="Filter games">
+          </div>
+          <p class="logs-meta" id="gamesMeta" role="status">Loading…</p>
+          <ol id="gamesLibrary" class="games-library"></ol>
+        </section>
       </section>
 
       <section class="view" id="dashboard" aria-labelledby="dashboardTitle">
@@ -253,7 +336,8 @@
             </div>
             <div class="dashboard-value"><strong class="metric-value" id="cpu">--%</strong><span>utilization</span></div>
             <div class="metric-track" role="progressbar" aria-label="CPU utilization" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="cpuBar"></span></div>
-            <small class="metric-caption">Current processor load</small>
+            <svg class="sparkline" id="cpuSpark" viewBox="0 0 300 56" preserveAspectRatio="none" aria-hidden="true"><path class="sparkline-area"/><path class="sparkline-line"/></svg>
+            <small class="metric-caption" id="cpuHistory">History builds every 10 seconds</small>
           </article>
           <article class="metric-card dashboard-metric">
             <div class="metric-topline">
@@ -265,7 +349,8 @@
             </div>
             <div class="dashboard-value"><strong class="metric-value" id="ram">--%</strong><span>utilization</span></div>
             <div class="metric-track" role="progressbar" aria-label="RAM utilization" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="ramBar"></span></div>
-            <small class="metric-caption" id="ramDetail">Waiting for metrics</small>
+            <svg class="sparkline" id="ramSpark" viewBox="0 0 300 56" preserveAspectRatio="none" aria-hidden="true"><path class="sparkline-area"/><path class="sparkline-line"/></svg>
+            <small class="metric-caption"><span id="ramDetail">Waiting for metrics</span> <span id="ramHistory"></span></small>
           </article>
           <div id="dashboardDrives" class="drive-metrics" aria-label="Drive storage"></div>
         </div>
@@ -280,15 +365,15 @@
               <h2 id="hardwareHeading">Hardware &amp; system</h2>
             </div>
           </div>
-          <div class="hardware-grid">
-            <article class="hardware-card"><span>PROCESSOR</span><strong id="hardwareCpu">Detecting hardware…</strong><small id="hardwareCores"></small></article>
-            <article class="hardware-card"><span>GRAPHICS</span><strong id="hardwareGpu">Detecting hardware…</strong><small id="hardwareGpuDetail"></small></article>
-            <article class="hardware-card"><span>MEMORY</span><strong id="hardwareMemory">Detecting hardware…</strong></article>
-            <article class="hardware-card"><span>PHYSICAL DRIVES</span><strong id="hardwareDisks">Detecting hardware…</strong></article>
-            <article class="hardware-card"><span>DEVICE</span><strong id="hardwareDevice">Detecting hardware…</strong></article>
-            <article class="hardware-card"><span>MOTHERBOARD</span><strong id="hardwareBoard">Detecting hardware…</strong><small id="hardwareBios"></small></article>
-            <article class="hardware-card"><span>WINDOWS</span><strong id="hardwareWindows">Detecting system…</strong></article>
-          </div>
+          <dl class="spec-sheet">
+            <div class="spec-row"><dt>Processor</dt><dd><strong id="hardwareCpu">Detecting hardware…</strong><small id="hardwareCores"></small></dd></div>
+            <div class="spec-row"><dt>Graphics</dt><dd><strong id="hardwareGpu">Detecting hardware…</strong><small id="hardwareGpuDetail"></small></dd></div>
+            <div class="spec-row"><dt>Memory</dt><dd><strong id="hardwareMemory">Detecting hardware…</strong></dd></div>
+            <div class="spec-row"><dt>Storage</dt><dd><strong id="hardwareDisks">Detecting hardware…</strong></dd></div>
+            <div class="spec-row"><dt>Device</dt><dd><strong id="hardwareDevice">Detecting hardware…</strong></dd></div>
+            <div class="spec-row"><dt>Motherboard</dt><dd><strong id="hardwareBoard">Detecting hardware…</strong><small id="hardwareBios"></small></dd></div>
+            <div class="spec-row"><dt>Windows</dt><dd><strong id="hardwareWindows">Detecting system…</strong></dd></div>
+          </dl>
           <section class="physical-storage-section" aria-labelledby="physicalStorageTitle">
             <div class="section-title-row">
               <div><span class="section-overline">DISK LAYOUT</span><h3 id="physicalStorageTitle">Physical drives &amp; volumes</h3></div>
@@ -299,6 +384,33 @@
             </div>
           </section>
         </section>
+      </section>
+
+      <section class="view" id="logs" aria-labelledby="logsTitle">
+        <div class="page-heading">
+          <span class="eyebrow"><span class="eyebrow-line"></span> DIAGNOSTICS</span>
+          <h1 id="logsTitle">Logs<span class="title-period">.</span></h1>
+          <p>What ASCS and its helpers have been doing, newest first.</p>
+        </div>
+        <div class="logs-toolbar">
+          <div class="logs-sources" role="tablist" aria-label="Log source">
+            <button type="button" role="tab" data-log-source="ascs" aria-selected="true">ASCS</button>
+            <button type="button" role="tab" data-log-source="activity" aria-selected="false">Activity</button>
+            <button type="button" role="tab" data-log-source="codebutton" aria-selected="false">Code key</button>
+          </div>
+          <div class="logs-levels" role="group" aria-label="Show">
+            <button type="button" data-log-level="all" aria-pressed="true">All <span data-count="all"></span></button>
+            <button type="button" data-log-level="issues" aria-pressed="false">Issues <span data-count="issues"></span></button>
+            <button type="button" data-log-level="errors" aria-pressed="false">Errors <span data-count="errors"></span></button>
+          </div>
+          <input id="logSearch" class="logs-search" type="search" placeholder="Filter lines" autocomplete="off" spellcheck="false" aria-label="Filter log lines" data-primary-input>
+          <span class="logs-actions">
+            <button class="secondary" type="button" id="copyLogButton">Copy</button>
+            <button class="secondary" type="button" id="openLogButton">Open file</button>
+          </span>
+        </div>
+        <p class="logs-meta" id="logMeta" role="status">Loading…</p>
+        <div id="logList" class="log-list"></div>
       </section>
 
       <section class="view" id="commands" aria-labelledby="commandsTitle">
@@ -314,6 +426,8 @@
         <section class="keymap-panel" aria-labelledby="keymapTitle">
           <div class="keymap-heading">
             <div><span class="section-overline">AT A GLANCE</span><h2 id="keymapTitle">Keyboard map</h2></div>
+            <label class="sr-only" for="commandSearch">Search shortcuts</label>
+            <input class="command-search" id="commandSearch" type="search" placeholder="Search shortcuts, such as “workspace” or “desktop”" autocomplete="off" spellcheck="false">
             <div class="keymap-layers" role="group" aria-label="Layer">
               <button type="button" class="keymap-layer" data-layer="super" aria-pressed="true">Super</button>
               <button type="button" class="keymap-layer" data-layer="shift" aria-pressed="false">Super + Shift</button>
@@ -329,11 +443,12 @@
               <li data-cat="custom">Custom commands</li>
               <li data-cat="free">Free</li>
               <li data-cat="super">Super key</li>
-              <li data-cat="planned">Planned</li>
+              <li data-cat="planned">Macro keys</li>
             </ul>
           </div>
         </section>
 
+        <p class="command-search-empty" id="commandSearchEmpty" hidden>No shortcuts match.</p>
         <div class="command-groups">
           <section class="command-group" aria-labelledby="commandViewsTitle">
             <div class="command-group-heading">
@@ -359,7 +474,7 @@
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>B</kbd></span><span class="shortcut-description"><strong>Vivaldi</strong><small>Focuses Vivaldi on this desktop, switches to its desktop if needed, or opens the browser.</small></span><span class="shortcut-status">ACTIVE</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="terminal">T</kbd></span><span class="shortcut-description"><strong>Windows Terminal</strong><small>Focuses an existing window, switching desktops if needed; hold Shift for a new window (D/F create Explorer items).</small></span><span class="shortcut-status">ACTIVE</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="explorer">E</kbd></span><span class="shortcut-description"><strong>File Explorer</strong><small>Focuses an existing window, switching desktops if needed; hold Shift for a new window (D/F create Explorer items).</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="calculator">C</kbd></span><span class="shortcut-description"><strong>Calculator</strong><small>Opens Calculator (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="claude">C</kbd></span><span class="shortcut-description"><strong>Ask Claude</strong><small>Opens Claude's quick-entry prompt, or starts the Claude app (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="taskmanager">H</kbd></span><span class="shortcut-description"><strong>Task Manager</strong><small>Opens Task Manager (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
             </div>
           </section>
@@ -408,6 +523,8 @@
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>L</kbd></span><span class="shortcut-description"><strong>Lock workstation</strong><small>Locks the current Windows session.</small></span><span class="shortcut-status">ACTIVE</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>M</kbd></span><span class="shortcut-description"><strong>Toggle audio mute</strong><small>Mutes or unmutes system audio.</small></span><span class="shortcut-status">ACTIVE</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Ctrl</kbd><i>+</i><kbd>Alt</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>A</kbd></span><span class="shortcut-description"><strong>Start or reload ASCS</strong><small>Starts ASCS when it isn't running (via ASCS Launcher, set up by tools\Install-Shortcut.ps1); otherwise saves notes and reloads it.</small></span><span class="shortcut-status is-new">NEW</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>D</kbd></span><span class="shortcut-description"><strong>Show desktop</strong><small>Windows' own Win+D, passed through while D has no ASCS action.</small></span><span class="shortcut-status">WINDOWS</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>P</kbd></span><span class="shortcut-description"><strong>Project to a display</strong><small>Windows' own Win+P, passed through while P has no ASCS action.</small></span><span class="shortcut-status">WINDOWS</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>V</kbd></span><span class="shortcut-description"><strong>Clipboard History</strong><small>Opens the Windows clipboard history with Win+V.</small></span><span class="shortcut-status">ACTIVE</span></article>
             </div>
           </section>
@@ -431,11 +548,25 @@
             <div class="shortcut-list">
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>S</kbd></span><span class="shortcut-description"><strong>Save workspace</strong><small>Stores the visible app layout as the Default workspace.</small></span><span class="shortcut-status">ACTIVE</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>R</kbd></span><span class="shortcut-description"><strong>Restore workspace</strong><small>Restores the Default workspace: reuses open windows first, then relaunches missing apps.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>S</kbd></span><span class="shortcut-description"><strong>Save workspace as…</strong><small>Type a name and press Enter to save the current window layout under it; Super + S still saves the default workspace.</small></span><span class="shortcut-status is-new">NEW</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>R</kbd></span><span class="shortcut-description"><strong>Choose a workspace</strong><small>Opens the palette on your saved workspaces; “Save workspace as…” stores named layouts.</small></span><span class="shortcut-status is-new">NEW</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>P</kbd></span><span class="shortcut-description"><strong>Paste a snippet</strong><small>Opens the palette on your snippets; Enter pastes into the window you were using, Shift+Enter copies.</small></span><span class="shortcut-status is-new">NEW</span></article>
             </div>
           </section>
-          <p class="settings-note">Default letter assignments for apps and views can be changed in Preferences, where you can also give custom commands their own letters. B, S, R, L, M, V, J, and Y are reserved for fixed commands. With Shift, C, P, D, and F always perform their Shift-layer action (capture, paste a snippet, new folder, new file). When C, D, F, or P has no assignment, Super + that letter passes through to Windows (for example, Win + D shows the desktop). Super + Shift + S is deliberately unassigned; the Snipping Tool is in the command palette.</p>
+
+          <section class="command-group" aria-labelledby="commandGamesTitle">
+            <div class="command-group-heading">
+              <span class="command-group-index">09</span>
+              <div><h2 id="commandGamesTitle">Games and macro keys</h2><p>Super with the keyboard's M4 to M7</p></div>
+            </div>
+            <div class="shortcut-list">
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>M4</kbd></span><span class="shortcut-description"><strong>PSO session</strong><small>Headphones on through SoundSwitch, Discord, then the Ephinea launcher. When the game closes, your audio comes back and ASCS offers to close Discord.</small></span><span class="shortcut-status is-new">NEW</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>M5</kbd></span><span class="shortcut-description"><strong>Recent RetroArch games</strong><small>Opens the palette on your recent RetroArch games; Enter plays one.</small></span><span class="shortcut-status is-new">NEW</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>M6</kbd></span><span class="shortcut-description"><strong>Recent Dolphin games</strong><small>Opens the palette on your recent Dolphin games; Enter plays one.</small></span><span class="shortcut-status is-new">NEW</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>M7</kbd></span><span class="shortcut-description"><strong>Recent PCSX2 games</strong><small>Opens the palette on your recent PCSX2 games; Enter plays one.</small></span><span class="shortcut-status is-new">NEW</span></article>
+            </div>
+          </section>
+          <p class="settings-note">Default letter assignments for apps and views can be changed in Preferences, where you can also give custom commands their own letters. B, S, R, L, M, V, J, and Y are reserved for fixed commands. With Shift, C, P, D, and F always perform their Shift-layer action (capture, paste a snippet, new folder, new file). When C, D, F, or P has no assignment, Super + that letter passes through to Windows (for example, Win + D shows the desktop). Super + Shift + S saves the current layout under a name you type; the Snipping Tool is in the command palette. On their own, the macro keys (M1 to M7) and the Code key belong to the keyboard's macro scripts; with Super, M4 to M7 run the game commands above, and with Super + Shift they are deliberately vacant.</p>
         </div>
       </section>
 
@@ -445,14 +576,24 @@
           <h1 id="settingsTitle">Preferences<span class="title-period">.</span></h1>
           <p>Tuned to your displays, your keys, and the way you work.</p>
         </div>
+        <div class="settings-nav" role="tablist" aria-label="Preferences sections">
+          <button type="button" role="tab" id="tab-prefGeneral" data-section="prefGeneral" aria-controls="prefGeneral" aria-selected="false">General</button>
+          <button type="button" role="tab" id="tab-prefShortcuts" data-section="prefShortcuts" aria-controls="prefShortcuts" aria-selected="false">Shortcuts</button>
+          <button type="button" role="tab" id="tab-prefPalette" data-section="prefPalette" aria-controls="prefPalette" aria-selected="false">Palette</button>
+          <button type="button" role="tab" id="tab-prefAlmanac" data-section="prefAlmanac" aria-controls="prefAlmanac" aria-selected="false">Almanac</button>
+          <button type="button" role="tab" id="tab-prefCountdowns" data-section="prefCountdowns" aria-controls="prefCountdowns" aria-selected="false">Countdowns</button>
+          <button type="button" role="tab" id="tab-prefGames" data-section="prefGames" aria-controls="prefGames" aria-selected="false">Games &amp; apps</button>
+          <button type="button" role="tab" id="tab-prefCommands" data-section="prefCommands" aria-controls="prefCommands" aria-selected="false">Custom commands</button>
+          <button type="button" role="tab" id="tab-prefWorkspaces" data-section="prefWorkspaces" aria-controls="prefWorkspaces" aria-selected="false">Workspaces</button>
+        </div>
         <form id="settingsForm" class="settings-grid">
-          <section class="settings-card" aria-labelledby="driveSettingsTitle">
+          <section class="settings-card" id="prefGeneral" role="tabpanel" aria-labelledby="driveSettingsTitle">
             <div class="settings-heading"><h2 id="driveSettingsTitle">System overview</h2><p>Choose the drive letters shown in storage metrics.</p></div>
             <label class="settings-field" for="driveLetters"><span>Monitored drives</span><input id="driveLetters" name="drives" type="text" placeholder="C:, J:" autocomplete="off"><small>Comma-separated letters, such as C:, J:. Up to 12 drives.</small></label>
             <label class="settings-field" for="snapGap"><span>Snap gap <output id="snapGapValue">0 px</output></span><input id="snapGap" name="snapGap" type="range" min="0" max="48" step="2" value="0"><small>Space around snapped windows and between tiles.</small></label>
             <label class="settings-toggle" for="preserveWindowSize"><input id="preserveWindowSize" name="preserveSize" type="checkbox" checked><span><strong>Preserve size when moving monitors</strong><small>Keep the window's size and relative position on its new display.</small></span></label>
           </section>
-          <section class="settings-card" aria-labelledby="shortcutSettingsTitle">
+          <section class="settings-card" id="prefShortcuts" role="tabpanel" aria-labelledby="shortcutSettingsTitle">
             <div class="settings-heading"><h2 id="shortcutSettingsTitle">Super-key shortcuts</h2><p>Choose unique letters for these app and view commands. Changes apply immediately.</p></div>
             <div class="shortcut-settings">
               <label for="hotkeyNotes"><span>Quick Notes</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyNotes" data-hotkey="notes" type="text" maxlength="1" autocomplete="off" aria-label="Quick Notes shortcut"></span></label>
@@ -460,29 +601,65 @@
               <label for="hotkeyDashboard"><span>System Dashboard</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyDashboard" data-hotkey="dashboard" type="text" maxlength="1" autocomplete="off" aria-label="System Dashboard shortcut"></span></label>
               <label for="hotkeyTerminal"><span>Windows Terminal</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyTerminal" data-hotkey="terminal" type="text" maxlength="1" autocomplete="off" aria-label="Windows Terminal shortcut"></span></label>
               <label for="hotkeyExplorer"><span>File Explorer</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyExplorer" data-hotkey="explorer" type="text" maxlength="1" autocomplete="off" aria-label="File Explorer shortcut"></span></label>
-              <label for="hotkeyCalculator"><span>Calculator</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyCalculator" data-hotkey="calculator" type="text" maxlength="1" autocomplete="off" aria-label="Calculator shortcut"></span></label>
+              <label for="hotkeyClaude"><span>Ask Claude</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyClaude" data-hotkey="claude" type="text" maxlength="1" autocomplete="off" aria-label="Ask Claude shortcut"></span></label>
               <label for="hotkeyTaskManager"><span>Task Manager</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyTaskManager" data-hotkey="taskmanager" type="text" maxlength="1" autocomplete="off" aria-label="Task Manager shortcut"></span></label>
             </div>
+            <label class="settings-field" for="claudeShortcut"><span>Claude quick-entry shortcut</span><input id="claudeShortcut" name="claudeShortcut" type="text" placeholder="Ctrl+Alt+Space" autocomplete="off" spellcheck="false"><small>The shortcut set in the Claude app; ASCS presses it for Ask Claude. Ctrl, Alt, Shift or Win plus Space, a letter, a digit, or F1 to F12. Leave it empty to just open the app.</small></label>
             <p class="settings-note">Reserved keys: B, S, R, L, M, V, J, and Y. With Shift, the Terminal or Explorer key opens a new window, while C, P, D, and F always capture, paste a snippet, or create Explorer items. Number and arrow shortcuts are fixed.</p>
           </section>
-          <section class="settings-card" aria-labelledby="paletteSettingsTitle">
+          <section class="settings-card" id="prefPalette" role="tabpanel" aria-labelledby="paletteSettingsTitle">
             <div class="settings-heading"><h2 id="paletteSettingsTitle">Command palette</h2><p>Super + Space searches commands, notes, snippets, workspaces, and open windows.</p></div>
             <label class="settings-field" for="searchTemplate"><span>Web search address</span><input id="searchTemplate" name="searchTemplate" type="text" placeholder="https://duckduckgo.com/?q=%s" autocomplete="off" spellcheck="false"><small>Used by “Search the web” and queries starting with ?. Must start with https:// and contain %s where the search text goes.</small></label>
             <p class="settings-note">Start a query with = for the calculator (or just type math, such as 18*1.2) and ? for a web search. Backspace in an empty search leaves a mode such as Snippets.</p>
           </section>
-          <div class="settings-actions"><span id="settingsStatus" role="status">Settings are stored locally on this PC.</span><button class="primary" type="submit">Save preferences</button></div>
+          <div class="settings-actions settings-savebar" id="settingsSavebar"><span id="settingsStatus" role="status">Settings are stored locally on this PC.</span><button class="primary" type="submit">Save preferences</button></div>
         </form>
 
         <div class="settings-grid settings-grid-secondary">
-          <section class="settings-card settings-card-wide" aria-labelledby="commandsSettingsTitle">
+          <section class="settings-card settings-card-wide" id="prefAlmanac" role="tabpanel" aria-labelledby="almanacSettingsTitle">
+            <div class="settings-heading"><h2 id="almanacSettingsTitle">Almanac</h2><p>The strip beneath the Command Center title: moon, daylight, your next countdown, and a rotating line with the quote of the day and, if you allow it, Wikipedia's day.</p></div>
+            <label class="settings-toggle" for="almanacWikipedia"><input id="almanacWikipedia" type="checkbox"><span><strong>Wikipedia almanac</strong><small>On this day, today's observances, and the featured article. Once a day ASCS downloads two small feeds from en.wikipedia.org over HTTPS, identifying itself with your email address as Wikimedia asks. They are shown as plain text and cached in data\almanac. Off by default; turning it off deletes the cache.</small></span></label>
+            <div class="settings-row">
+              <span><strong>Location</strong><small>Used for sunrise and sunset, worked out on this PC.</small></span>
+              <span class="settings-value" id="almanacPlace">New York City</span>
+            </div>
+            <div class="settings-actions"><span id="almanacStatus" role="status">Stored in data\settings.ini.</span><span class="settings-action-buttons"><button class="primary" type="button" id="saveAlmanacButton">Save almanac</button></span></div>
+          </section>
+          <section class="settings-card settings-card-wide" id="prefCountdowns" role="tabpanel" aria-labelledby="countdownSettingsTitle">
+            <div class="settings-heading"><h2 id="countdownSettingsTitle">Countdowns</h2><p>The nearest one shows on the Command Center, beside daylight; hover it to see the rest.</p></div>
+            <div class="settings-row settings-row-stack">
+              <span><strong>Your dates</strong><small>MM-DD repeats every year; YYYY-MM-DD happens once. Up to 12. They are sorted when saved: yearly dates January to December, then one-off dates.</small></span>
+              <div id="countdownRows" class="countdown-rows"></div>
+              <p id="countdownsEmpty" class="settings-note">No countdowns yet.</p>
+            </div>
+            <div class="settings-actions"><span id="countdownStatus" role="status">Stored in data\settings.ini.</span><span class="settings-action-buttons"><button class="secondary" type="button" id="addCountdownButton">Add countdown</button><button class="primary" type="button" id="saveCountdownsButton">Save countdowns</button></span></div>
+          </section>
+          <section class="settings-card settings-card-wide" id="prefGames" role="tabpanel" aria-labelledby="gamesSettingsTitle">
+            <div class="settings-heading"><h2 id="gamesSettingsTitle">Games &amp; apps</h2><p>The programs behind the Games tab, the PSO session (Super + M4), and recent games (Super + M5, M6, M7). Prefilled from your keyboard macro script.</p></div>
+            <label class="settings-field" for="gamePathRetroarch"><span>RetroArch</span><input id="gamePathRetroarch" data-game-path="retroarch" type="text" autocomplete="off" spellcheck="false"><small>retroarch.exe. Play time comes from its runtime logs; recent games from its history.</small></label>
+            <label class="settings-field" for="gamePathDolphin"><span>Dolphin</span><input id="gamePathDolphin" data-game-path="dolphin" type="text" autocomplete="off" spellcheck="false"><small>Dolphin.exe. Play time comes from TimePlayed.ini.</small></label>
+            <label class="settings-field" for="gamePathPcsx2"><span>PCSX2</span><input id="gamePathPcsx2" data-game-path="pcsx2" type="text" autocomplete="off" spellcheck="false"><small>pcsx2-qt.exe. Play time comes from playtime.dat.</small></label>
+            <label class="settings-field" for="gamePathPso"><span>PSO launcher</span><input id="gamePathPso" data-game-path="pso" type="text" autocomplete="off" spellcheck="false"><small>Ephinea's online.exe, started by the PSO session.</small></label>
+            <label class="settings-field" for="gamePathDiscord"><span>Discord</span><input id="gamePathDiscord" data-game-path="discord" type="text" autocomplete="off" spellcheck="false"><small>Started by the PSO session if it isn't running.</small></label>
+            <label class="settings-field" for="psoVoiceChannel"><span>PSO voice channel</span><input id="psoVoiceChannel" type="text" placeholder="https://discord.com/channels/…" autocomplete="off" spellcheck="false"><small>Opened in Discord by the PSO session. In Discord, turn on Developer Mode (Settings › Advanced), right-click the channel › Copy Link. Leave empty for none.</small></label>
+            <label class="settings-field" for="headphonesDevice"><span>Headphones</span><input id="headphonesDevice" type="text" list="audioDevices" autocomplete="off" spellcheck="false"><datalist id="audioDevices"></datalist><small>The playback device for PSO sessions. Spacing, case and Windows' “2-” prefix don't matter.</small></label>
+            <label class="settings-field" for="soundSwitchKey"><span>SoundSwitch shortcut</span><input id="soundSwitchKey" type="text" placeholder="Ctrl+Alt+F11" autocomplete="off" spellcheck="false"><small>The shortcut SoundSwitch uses to cycle devices; ASCS presses it until the headphones are the default, checking after each press.</small></label>
+            <label class="settings-toggle" for="showCovers"><input id="showCovers" type="checkbox"><span><strong>Cover art</strong><small>Box art from RetroArch's thumbnails and PCSX2's covers folder, read from this PC only (PNG or JPEG, up to 1.5 MB). Nothing is downloaded. On by default.</small></span></label>
+            <div class="settings-row">
+              <span><strong>RetroAchievements</strong><small id="raStatusText">Not set up. Your user name and Web API key go in data\secrets.ini, which stays on this PC and is never committed. The key is never shown in ASCS or sent anywhere except retroachievements.org.</small></span>
+              <button class="secondary" type="button" id="setupRetroAchievements">Open secrets file</button>
+            </div>
+            <div class="settings-actions"><span id="gamesStatus" role="status">Stored in data\settings.ini.</span><span class="settings-action-buttons"><button class="primary" type="button" id="saveGamesButton">Save games &amp; apps</button></span></div>
+          </section>
+          <section class="settings-card settings-card-wide" id="prefCommands" role="tabpanel" aria-labelledby="commandsSettingsTitle">
             <div class="settings-heading"><h2 id="commandsSettingsTitle">Custom commands</h2><p>Add your own applications, folders, and web links to the command palette, with an optional Super-key letter.</p></div>
             <div id="commandRows" class="command-rows"></div>
             <p id="commandsEmpty" class="settings-note">No custom commands yet.</p>
-            <p class="settings-note">Applications must be .exe or .lnk files and start without arguments. Letters follow the same rules as the shortcuts above and must be unique.</p>
+            <p class="settings-note">Applications must be .exe or .lnk files and start without arguments. Letters follow the same rules as the Shortcuts tab and must be unique.</p>
             <div class="settings-actions"><span id="commandsStatus" role="status">Stored in data\commands.ini.</span><span class="settings-action-buttons"><button class="secondary" type="button" id="addCommandButton">Add command</button><button class="primary" type="button" id="saveCommandsButton">Save commands</button></span></div>
           </section>
-          <section class="settings-card settings-card-wide" aria-labelledby="workspaceSettingsTitle">
-            <div class="settings-heading"><h2 id="workspaceSettingsTitle">Workspaces</h2><p>Saved window layouts. Super + S and Super + R use “Default”; Super + Shift + R lists them all.</p></div>
+          <section class="settings-card settings-card-wide" id="prefWorkspaces" role="tabpanel" aria-labelledby="workspaceSettingsTitle">
+            <div class="settings-heading"><h2 id="workspaceSettingsTitle">Workspaces</h2><p>Saved window layouts. Super + S and Super + R use “Default”; Super + Shift + S saves under a new name; Super + Shift + R lists them all.</p></div>
             <ul id="workspaceList" class="workspace-list"></ul>
             <p id="workspacesEmpty" class="settings-note">No saved workspaces yet.</p>
             <form id="saveWorkspaceForm" class="workspace-save">
@@ -526,6 +703,12 @@
   </div>
   <script src="palette.js"></script>
   <script src="keymap.js"></script>
+  <script src="notes.js"></script>
+  <script src="charts.js"></script>
+  <script src="almanac.js"></script>
+  <script src="quotes.js"></script>
+  <script src="logs.js"></script>
+  <script src="games.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
