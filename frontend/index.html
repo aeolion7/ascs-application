@@ -53,8 +53,8 @@
       <div class="sidebar-bottom">
         <span class="status-indicator" aria-hidden="true"></span>
         <span class="sidebar-status">
-          <strong>ASCS READY</strong>
-          <small>Version 1.5.0</small>
+          <strong>ASCS 1.6.0</strong>
+          <small>Standing by</small>
         </span>
         <span class="key-hint" aria-label="Super key">Super</span>
       </div>
@@ -63,24 +63,31 @@
     <main class="main">
       <header class="topbar">
         <div class="titlebar-drag">
-          <span class="titlebar-icon" aria-hidden="true">
-            <svg viewBox="0 0 32 32"><path d="M16 4 28 26H4L16 4Z"/><path d="m16 12 7 13H9l7-13Z" class="titlebar-icon-inner"/><path d="M11.5 21h9"/></svg>
-          </span>
-          <span class="titlebar-brand"><strong>AEOLIONWARE</strong><small>SUPER COMMAND SYSTEM</small></span>
+          <span class="titlebar-context">ASCS</span>
           <span class="breadcrumb-divider" aria-hidden="true">/</span>
           <span id="breadcrumb">COMMAND CENTER</span>
         </div>
+        <button class="titlebar-command" type="button" id="titlebarCommand" aria-label="Open the command palette">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+          <span>Search or run a command</span>
+          <kbd>Super</kbd><kbd>Space</kbd>
+        </button>
         <div class="titlebar-actions">
-          <div class="top-status"><span class="status-indicator" aria-hidden="true"></span> SYSTEM READY</div>
+          <div class="top-status" id="topStatus" data-state="nominal" role="status" title="Live system status">
+            <span class="status-indicator" aria-hidden="true"></span>
+            <span id="topStatusText">ALL SYSTEMS NOMINAL</span>
+          </div>
+          <time class="top-clock" id="topClock"></time>
           <div class="window-controls" aria-label="Window controls">
             <button class="window-control" type="button" data-window-action="minimize" aria-label="Minimize window" title="Minimize">
-              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10"/></svg>
+              <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10"/></svg>
             </button>
-            <button class="window-control" type="button" data-window-action="maximize" aria-label="Maximize or restore window" title="Maximize or restore">
-              <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="3.5" width="9" height="9" rx=".7"/></svg>
+            <button class="window-control" type="button" data-window-action="maximize" id="maximizeControl" aria-label="Maximize window" title="Maximize">
+              <svg class="glyph-maximize" viewBox="0 0 10 10" aria-hidden="true"><rect x=".5" y=".5" width="9" height="9"/></svg>
+              <svg class="glyph-restore" viewBox="0 0 10 10" aria-hidden="true"><rect x=".5" y="2.5" width="7" height="7"/><path d="M2.5 2.5V.5h7v7H7.5"/></svg>
             </button>
-            <button class="window-control window-control-close" type="button" data-window-action="close" aria-label="Hide ASCS" title="Hide ASCS">
-              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg>
+            <button class="window-control window-control-close" type="button" data-window-action="close" aria-label="Hide ASCS" title="Hide (ASCS keeps running)">
+              <svg viewBox="0 0 10 10" aria-hidden="true"><path d="m.5.5 9 9m0-9-9 9"/></svg>
             </button>
           </div>
         </div>
@@ -89,10 +96,10 @@
       <section class="view active" id="home" aria-labelledby="homeTitle">
         <div class="hero">
           <div class="hero-copy">
-            <span class="eyebrow"><span class="eyebrow-line"></span> YOUR DESKTOP, IN FLOW</span>
+            <span class="eyebrow"><span class="eyebrow-line"></span> <span id="homeDate">AT YOUR COMMAND</span></span>
             <h1 id="homeTitle">Command Center<span class="title-period">.</span></h1>
             <p class="hero-tagline">AEOLIONWARE, at your command.</p>
-            <p class="hero-description">A quieter, quicker way to work with your Windows environment.</p>
+            <p class="hero-description">Every window, tool, and thought, one key away.</p>
           </div>
           <div class="hero-emblem" aria-hidden="true">
             <span class="emblem-ring emblem-ring-outer"></span>
@@ -146,7 +153,7 @@
         <section class="content-section quick-actions-section" aria-labelledby="actionsHeading">
           <div class="section-title-row">
             <div>
-              <span class="section-overline">READY WHEN YOU ARE</span>
+              <span class="section-overline">WITHIN REACH</span>
               <h2 id="actionsHeading">Quick actions</h2>
             </div>
             <span class="section-shortcut"><kbd>Super + Space</kbd> to search commands</span>
@@ -178,14 +185,19 @@
               </span><span class="action-copy"><strong>Calculator</strong><small>Quick calculations</small></span><span class="action-arrow" aria-hidden="true">↗</span>
             </button>
           </div>
+          <div class="activity-block" aria-labelledby="activityHeading">
+            <div class="activity-heading"><span class="section-overline" id="activityHeading">RECENT ACTIVITY</span></div>
+            <ol id="activityList" class="activity-list"></ol>
+            <p id="activityEmpty" class="activity-empty">Launches, captures, snippets, and workspace changes appear here.</p>
+          </div>
         </section>
       </section>
 
       <section class="view" id="notes" aria-labelledby="notesTitle">
         <div class="page-heading">
-          <span class="eyebrow"><span class="eyebrow-line"></span> PRODUCTIVITY</span>
+          <span class="eyebrow"><span class="eyebrow-line"></span> CAPTURE</span>
           <h1 id="notesTitle">Quick Notes<span class="title-period">.</span></h1>
-          <p>A calm space to collect the thoughts worth keeping.</p>
+          <p>Thoughts, references, and reusable text. Saved as you type, kept on this machine.</p>
         </div>
         <div class="notes-layout">
           <aside class="notes-list-card" aria-label="Notes list">
@@ -195,7 +207,7 @@
               <button class="primary" type="button" id="newNoteButton">New note</button>
             </div>
             <div id="notesList" class="notes-list" role="list"></div>
-            <p id="notesEmpty" class="notes-empty">No notes yet. Create one to get started.</p>
+            <p id="notesEmpty" class="notes-empty">Nothing captured yet. Start a note, or press Super + Shift + C in any app.</p>
           </aside>
           <div class="editor-card">
             <div class="editor-toolbar">
@@ -226,9 +238,9 @@
 
       <section class="view" id="dashboard" aria-labelledby="dashboardTitle">
         <div class="page-heading">
-          <span class="eyebrow"><span class="eyebrow-line"></span> PERFORMANCE</span>
+          <span class="eyebrow"><span class="eyebrow-line"></span> TELEMETRY</span>
           <h1 id="dashboardTitle">System Dashboard<span class="title-period">.</span></h1>
-          <p>A measured look at the resources your system is using.</p>
+          <p>Live readings and a complete inventory of the machine at your fingertips.</p>
         </div>
         <div class="dashboard-grid">
           <article class="metric-card dashboard-metric">
@@ -291,14 +303,37 @@
 
       <section class="view" id="commands" aria-labelledby="commandsTitle">
         <div class="page-heading commands-heading">
-          <span class="eyebrow"><span class="eyebrow-line"></span> COMPLETE SHORTCUT REFERENCE</span>
+          <span class="eyebrow"><span class="eyebrow-line"></span> THE KEYMAP</span>
           <h1 id="commandsTitle">Super Commands<span class="title-period">.</span></h1>
-          <p>Every Super key command in ASCS, including window tools and workspace actions.</p>
+          <p>Every command, one chord away. Hold Super; add Shift for the second layer.</p>
         </div>
         <div class="command-intro">
           <span class="command-intro-key" aria-hidden="true"><kbd>Super</kbd></span>
           <p><strong>Super is the dedicated command key.</strong><span>Tap it to show or hide ASCS (it reopens on the last view you used), or hold it while pressing a listed key.</span></p>
         </div>
+        <section class="keymap-panel" aria-labelledby="keymapTitle">
+          <div class="keymap-heading">
+            <div><span class="section-overline">AT A GLANCE</span><h2 id="keymapTitle">Keyboard map</h2></div>
+            <div class="keymap-layers" role="group" aria-label="Layer">
+              <button type="button" class="keymap-layer" data-layer="super" aria-pressed="true">Super</button>
+              <button type="button" class="keymap-layer" data-layer="shift" aria-pressed="false">Super + Shift</button>
+            </div>
+          </div>
+          <div id="keymap" class="keymap" aria-describedby="keymapDetail"></div>
+          <div class="keymap-footer">
+            <p id="keymapDetail" class="keymap-detail" aria-live="polite"></p>
+            <ul class="keymap-legend" aria-label="Legend">
+              <li data-cat="apps">Apps &amp; views</li>
+              <li data-cat="windows">Windows &amp; system</li>
+              <li data-cat="saved">Workspaces, notes &amp; text</li>
+              <li data-cat="custom">Custom commands</li>
+              <li data-cat="free">Free</li>
+              <li data-cat="super">Super key</li>
+              <li data-cat="planned">Planned</li>
+            </ul>
+          </div>
+        </section>
+
         <div class="command-groups">
           <section class="command-group" aria-labelledby="commandViewsTitle">
             <div class="command-group-heading">
@@ -307,8 +342,9 @@
             </div>
             <div class="shortcut-list">
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd></span><span class="shortcut-description"><strong>Show / hide ASCS</strong><small>Tap Super by itself. Opens on the Command Center after startup, then on the last view you used.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Space</kbd></span><span class="shortcut-description"><strong>Command launcher</strong><small>Search apps, ASCS views, and system actions.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Space</kbd></span><span class="shortcut-description"><strong>Command palette</strong><small>Search commands, custom commands, notes, snippets, workspaces, and open windows; = calculates, ? searches the web.</small></span><span class="shortcut-status">ACTIVE</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="notes">Q</kbd></span><span class="shortcut-description"><strong>Quick Notes</strong><small>Opens the persistent notes editor (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>C</kbd></span><span class="shortcut-description"><strong>Quick capture</strong><small>Saves the selected text (or the clipboard) as a new note without opening ASCS.</small></span><span class="shortcut-status is-new">NEW</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="dashboard">I</kbd></span><span class="shortcut-description"><strong>System Dashboard</strong><small>Shows live metrics and physical system details (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
             </div>
           </section>
@@ -371,6 +407,7 @@
             <div class="shortcut-list">
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>L</kbd></span><span class="shortcut-description"><strong>Lock workstation</strong><small>Locks the current Windows session.</small></span><span class="shortcut-status">ACTIVE</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>M</kbd></span><span class="shortcut-description"><strong>Toggle audio mute</strong><small>Mutes or unmutes system audio.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Ctrl</kbd><i>+</i><kbd>Alt</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>A</kbd></span><span class="shortcut-description"><strong>Start or reload ASCS</strong><small>Starts ASCS when it isn't running (via ASCS Launcher, set up by tools\Install-Shortcut.ps1); otherwise saves notes and reloads it.</small></span><span class="shortcut-status is-new">NEW</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>V</kbd></span><span class="shortcut-description"><strong>Clipboard History</strong><small>Opens the Windows clipboard history with Win+V.</small></span><span class="shortcut-status">ACTIVE</span></article>
             </div>
           </section>
@@ -389,23 +426,24 @@
           <section class="command-group" aria-labelledby="commandWorkspaceTitle">
             <div class="command-group-heading">
               <span class="command-group-index">08</span>
-              <div><h2 id="commandWorkspaceTitle">Workspace and capture</h2><p>Save and restore your visible app layout</p></div>
+              <div><h2 id="commandWorkspaceTitle">Workspaces and snippets</h2><p>Window layouts and reusable text</p></div>
             </div>
             <div class="shortcut-list">
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>S</kbd></span><span class="shortcut-description"><strong>Save workspace</strong><small>Stores the visible app layout locally. Hold Shift with S for Snipping Tool.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>S</kbd></span><span class="shortcut-description"><strong>Snipping Tool</strong><small>Opens the Windows screen-snipping overlay.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>R</kbd></span><span class="shortcut-description"><strong>Restore workspace</strong><small>Reuses open windows first, relaunches missing apps, and restores saved positions.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>S</kbd></span><span class="shortcut-description"><strong>Save workspace</strong><small>Stores the visible app layout as the Default workspace.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>R</kbd></span><span class="shortcut-description"><strong>Restore workspace</strong><small>Restores the Default workspace: reuses open windows first, then relaunches missing apps.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>R</kbd></span><span class="shortcut-description"><strong>Choose a workspace</strong><small>Opens the palette on your saved workspaces; “Save workspace as…” stores named layouts.</small></span><span class="shortcut-status is-new">NEW</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>P</kbd></span><span class="shortcut-description"><strong>Paste a snippet</strong><small>Opens the palette on your snippets; Enter pastes into the window you were using, Shift+Enter copies.</small></span><span class="shortcut-status is-new">NEW</span></article>
             </div>
           </section>
-          <p class="settings-note">Default letter assignments for apps and views can be changed in Preferences. S, R, L, M, V, J, and Y are reserved for fixed commands. Super + Shift + D/F create Explorer items when File Explorer is active; unassigned Super + D passes through to Windows Show Desktop.</p>
+          <p class="settings-note">Default letter assignments for apps and views can be changed in Preferences, where you can also give custom commands their own letters. B, S, R, L, M, V, J, and Y are reserved for fixed commands. With Shift, C, P, D, and F always perform their Shift-layer action (capture, paste a snippet, new folder, new file). When C, D, F, or P has no assignment, Super + that letter passes through to Windows (for example, Win + D shows the desktop). Super + Shift + S is deliberately unassigned; the Snipping Tool is in the command palette.</p>
         </div>
       </section>
 
       <section class="view" id="settings" aria-labelledby="settingsTitle">
         <div class="page-heading">
-          <span class="eyebrow"><span class="eyebrow-line"></span> PERSONALIZE ASCS</span>
+          <span class="eyebrow"><span class="eyebrow-line"></span> CONFIGURATION</span>
           <h1 id="settingsTitle">Preferences<span class="title-period">.</span></h1>
-          <p>Make ASCS fit your displays, shortcuts, and daily workflow.</p>
+          <p>Tuned to your displays, your keys, and the way you work.</p>
         </div>
         <form id="settingsForm" class="settings-grid">
           <section class="settings-card" aria-labelledby="driveSettingsTitle">
@@ -425,20 +463,48 @@
               <label for="hotkeyCalculator"><span>Calculator</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyCalculator" data-hotkey="calculator" type="text" maxlength="1" autocomplete="off" aria-label="Calculator shortcut"></span></label>
               <label for="hotkeyTaskManager"><span>Task Manager</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyTaskManager" data-hotkey="taskmanager" type="text" maxlength="1" autocomplete="off" aria-label="Task Manager shortcut"></span></label>
             </div>
-            <p class="settings-note">Reserved keys: B, S, R, L, M, V, J, and Y. Shift + Super + the configured Terminal or Explorer key opens a new window, except D/F, which create Explorer items. Super + Space opens the command launcher; number and arrow shortcuts remain fixed.</p>
+            <p class="settings-note">Reserved keys: B, S, R, L, M, V, J, and Y. With Shift, the Terminal or Explorer key opens a new window, while C, P, D, and F always capture, paste a snippet, or create Explorer items. Number and arrow shortcuts are fixed.</p>
+          </section>
+          <section class="settings-card" aria-labelledby="paletteSettingsTitle">
+            <div class="settings-heading"><h2 id="paletteSettingsTitle">Command palette</h2><p>Super + Space searches commands, notes, snippets, workspaces, and open windows.</p></div>
+            <label class="settings-field" for="searchTemplate"><span>Web search address</span><input id="searchTemplate" name="searchTemplate" type="text" placeholder="https://duckduckgo.com/?q=%s" autocomplete="off" spellcheck="false"><small>Used by “Search the web” and queries starting with ?. Must start with https:// and contain %s where the search text goes.</small></label>
+            <p class="settings-note">Start a query with = for the calculator (or just type math, such as 18*1.2) and ? for a web search. Backspace in an empty search leaves a mode such as Snippets.</p>
           </section>
           <div class="settings-actions"><span id="settingsStatus" role="status">Settings are stored locally on this PC.</span><button class="primary" type="submit">Save preferences</button></div>
         </form>
+
+        <div class="settings-grid settings-grid-secondary">
+          <section class="settings-card settings-card-wide" aria-labelledby="commandsSettingsTitle">
+            <div class="settings-heading"><h2 id="commandsSettingsTitle">Custom commands</h2><p>Add your own applications, folders, and web links to the command palette, with an optional Super-key letter.</p></div>
+            <div id="commandRows" class="command-rows"></div>
+            <p id="commandsEmpty" class="settings-note">No custom commands yet.</p>
+            <p class="settings-note">Applications must be .exe or .lnk files and start without arguments. Letters follow the same rules as the shortcuts above and must be unique.</p>
+            <div class="settings-actions"><span id="commandsStatus" role="status">Stored in data\commands.ini.</span><span class="settings-action-buttons"><button class="secondary" type="button" id="addCommandButton">Add command</button><button class="primary" type="button" id="saveCommandsButton">Save commands</button></span></div>
+          </section>
+          <section class="settings-card settings-card-wide" aria-labelledby="workspaceSettingsTitle">
+            <div class="settings-heading"><h2 id="workspaceSettingsTitle">Workspaces</h2><p>Saved window layouts. Super + S and Super + R use “Default”; Super + Shift + R lists them all.</p></div>
+            <ul id="workspaceList" class="workspace-list"></ul>
+            <p id="workspacesEmpty" class="settings-note">No saved workspaces yet.</p>
+            <form id="saveWorkspaceForm" class="workspace-save">
+              <label class="sr-only" for="workspaceName">Workspace name</label>
+              <input id="workspaceName" type="text" maxlength="40" placeholder="Name, such as Coding" autocomplete="off">
+              <button class="primary" type="submit">Save current layout</button>
+            </form>
+          </section>
+        </div>
       </section>
 
       <div class="launcher-backdrop" id="launcher" hidden>
         <section class="launcher-dialog" role="dialog" aria-modal="true" aria-labelledby="launcherTitle">
           <div class="launcher-heading"><span class="eyebrow">COMMAND PALETTE</span><button class="secondary" id="closeLauncher" type="button" aria-label="Close command launcher">Esc</button></div>
-          <h2 id="launcherTitle">What would you like to do?</h2>
+          <h2 id="launcherTitle">At your command.</h2>
           <label class="sr-only" for="launcherSearch">Search commands</label>
-          <input id="launcherSearch" type="search" placeholder="Search apps, views, and actions…" autocomplete="off">
+          <div class="launcher-search-row">
+            <span class="launcher-mode" id="launcherMode" hidden></span>
+            <input id="launcherSearch" type="search" placeholder="Search commands, notes, snippets, windows…" autocomplete="off" spellcheck="false">
+          </div>
           <div id="launcherResults" class="launcher-results" role="listbox" aria-label="Available commands"></div>
-          <p class="launcher-hint"><kbd>↑</kbd><kbd>↓</kbd> to navigate <kbd>Enter</kbd> to run <kbd>Esc</kbd> to close</p>
+          <p class="launcher-hint" id="launcherHint"></p>
         </section>
       </div>
 
@@ -455,9 +521,11 @@
       </div>
 
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
-      <footer class="app-footer"><span>AEOLIONWARE</span><i>·</i> ASCS <i>·</i> One Keystroke Away.</footer>
+      <footer class="app-footer"><span>AEOLIONWARE</span><i>·</i> Super Command System <i>·</i> Crafted for the keyboard.</footer>
     </main>
   </div>
+  <script src="palette.js"></script>
+  <script src="keymap.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

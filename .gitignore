@@ -1,1 +1,3 @@
 /data/*
+# Written when tests/core.tests.ahk is run directly
+tests/core.results.txt

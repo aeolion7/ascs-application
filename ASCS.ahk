@@ -8,10 +8,11 @@ SetWorkingDir(A_ScriptDir)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 1.5.1
+; Version 1.6.0
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
+#Include lib\ASCS.Core.ahk
 
 ; ==========================================
 ; GLOBAL VARIABLES
@@ -28,6 +29,9 @@ global ASCS_WebViewDataDir := ASCS_DataDir "\WebView2"
 global ASCS_VirtualDesktopDllPath := A_ScriptDir "\lib\VirtualDesktopAccessor.dll"
 global ASCS_SettingsFile := ASCS_DataDir "\settings.ini"
 global ASCS_WorkspaceFile := ASCS_DataDir "\workspace.ini"
+global ASCS_WorkspaceDir := ASCS_DataDir "\workspaces"
+global ASCS_CommandsFile := ASCS_DataDir "\commands.ini"
+global ASCS_ActivityFile := ASCS_DataDir "\activity.log"
 
 global ASCS_EverythingPath := ""
 global ASCS_PageReady := false
@@ -48,12 +52,22 @@ global ASCS_WorkspaceClaimed := Map()
 global ASCS_HardwareJson := ""
 global ASCS_CpuSample := 0
 global ASCS_NotesFileTime := ""
+global ASCS_PendingLauncherMode := ""
+global ASCS_PreviousWindow := 0
+global ASCS_Activity := []
+global ASCS_ActivityAppends := 0
+global ASCS_CustomCommands := []
+global ASCS_RegisteredKeys := []
+global ASCS_SearchTemplate := "https://duckduckgo.com/?q=%s"
 ; Defaults; user selections are persisted in settings.ini.
 global ASCS_Drives := ["C:", "J:"]
 
 DirCreate(ASCS_DataDir)
 DirCreate(ASCS_WebViewDataDir)
+DirCreate(ASCS_WorkspaceDir)
 LoadUserSettings()
+LoadCustomCommands()
+LoadActivity()
 
 ASCS_EverythingPath := FindEverything()
 
@@ -127,8 +141,10 @@ try {
 
     ; Keep the application hidden at startup.
     ASCS_App.Hide()
+    SetupTrayMenu()
 
-    WriteLog("ASCS 1.5.1 initialized.")
+    WriteLog("ASCS 1.6.0 initialized.")
+    RecordActivity("system", "ASCS 1.6.0 started")
 
 } catch as err {
     WriteLog("WebView2 initialization failed: " err.Message)
@@ -164,16 +180,14 @@ F24 & b::LaunchVivaldi()
 F24 & j::SendText(FormatTime(, "yyyy-MM-dd HH:mm:ss"))
 F24 & y::SendText(FormatTime(, "yyyy-MM-dd"))
 
+; Super+Shift+S is intentionally unassigned.
 F24 & s:: {
-    if GetKeyState("Shift", "P")
-        LaunchSnipping()
-    else
+    if !GetKeyState("Shift", "P")
         SaveWorkspace()
 }
 
-; Synthesizing Win+Shift+S while the physical Shift (and F24) are held can
-; leave Windows seeing a lone Win press, which opens Start. The screen-clip
-; URI opens the same capture overlay without sending any keystrokes.
+; Opens the Snipping Tool capture overlay (command palette only since 1.6.0).
+; The screen-clip URI avoids synthesizing Win+Shift+S, which can open Start.
 LaunchSnipping() {
     try {
         Run("ms-screenclip:")
@@ -183,7 +197,27 @@ LaunchSnipping() {
     }
 }
 
-F24 & r::RestoreWorkspace()
+; Ctrl+Alt+Shift+A: reload ASCS. ASCS.Launcher.ahk owns the same keys to start
+; ASCS when it is not running; whichever hook sees the keys first handles them,
+; and both paths end in the same notes-safe reload.
+$^!+a::ReloadASCS()
+
+; ASCS.Launcher.ahk posts this message to request the same notes-safe reload.
+OnMessage(
+    DllCall("RegisterWindowMessage", "Str", "Aeolionware.ASCS.Reload", "UInt"),
+    HandleReloadMessage
+)
+HandleReloadMessage(wParam, lParam, msg, hwnd) {
+    SetTimer(ReloadASCS, -1)
+    return 1
+}
+
+F24 & r:: {
+    if GetKeyState("Shift", "P")
+        ShowCommandLauncher("workspaces")
+    else
+        RestoreWorkspace()
+}
 
 F24 & Left::HandleHorizontalWindowShortcut(-1)
 F24 & Right::HandleHorizontalWindowShortcut(1)
@@ -211,8 +245,34 @@ RegisterDesktopHotkeys() {
     }
 }
 
+; Super + Shift layer for letters. These take precedence over whatever the
+; unshifted letter does; keep in sync with frontend/keymap.js.
+;   C  capture the selection into Quick Notes     P  paste a snippet (palette)
+;   D  new folder in the active Explorer folder   F  new empty file there
+; (R, S, digits, and arrows have their own fixed handlers; Shift with the
+; Terminal or Explorer key opens a new window via LaunchCommand.)
+SuperShiftLayer() {
+    static layer := Map(
+        "c", QuickCapture,
+        "p", ShowCommandLauncher.Bind("snippets"),
+        "d", CreateExplorerItem.Bind("folder"),
+        "f", CreateExplorerItem.Bind("file")
+    )
+    return layer
+}
+
+; Registers Super+letter hotkeys for configurable actions, custom commands,
+; and the Shift layer. Previously registered letters are turned off first, so
+; this also rebinds after Preferences or custom commands change.
 RegisterConfiguredHotkeys() {
     global ASCS_ActionHotkeys
+    global ASCS_CustomCommands
+    global ASCS_RegisteredKeys
+
+    for key in ASCS_RegisteredKeys {
+        try Hotkey("F24 & " key, "Off")
+    }
+    ASCS_RegisteredKeys := []
 
     callbacks := Map(
         "notes", ShowView.Bind("notes"),
@@ -224,34 +284,39 @@ RegisterConfiguredHotkeys() {
         "taskmanager", LaunchCommand.Bind("taskmanager")
     )
 
-    for action, key in ASCS_ActionHotkeys {
-        if (key = "d" || key = "f")
-            continue
-        Hotkey("F24 & " key, callbacks[action], "On")
+    keyCallbacks := Map()
+    for action, key in ASCS_ActionHotkeys
+        keyCallbacks[key] := callbacks[action]
+    for index, command in ASCS_CustomCommands {
+        if (command["key"] != "")
+            keyCallbacks[command["key"]] := RunCustomCommand.Bind(index)
     }
 
-    for key in ["d", "f"] {
-        callback := 0
-        for action, configuredKey in ASCS_ActionHotkeys {
-            if (configuredKey = key) {
-                callback := callbacks[action]
-                break
-            }
-        }
+    shiftLayer := SuperShiftLayer()
+    for key, callback in keyCallbacks {
+        if shiftLayer.Has(key)
+            continue
+        Hotkey("F24 & " key, callback, "On")
+        ASCS_RegisteredKeys.Push(key)
+    }
+
+    for key, shiftAction in shiftLayer {
         Hotkey(
             "F24 & " key,
-            HandleExplorerShortcut.Bind(key, callback),
+            HandleShiftLayerKey.Bind(key, shiftAction, keyCallbacks.Has(key) ? keyCallbacks[key] : 0),
             "On"
         )
+        ASCS_RegisteredKeys.Push(key)
     }
 }
 
-HandleExplorerShortcut(key, callback := 0, thisHotkey := "") {
+; With Shift: the layer action. Without: the letter's own action, or, when the
+; letter is unassigned, the Windows shortcut (for example, Win+D).
+HandleShiftLayerKey(key, shiftAction, callback := 0, thisHotkey := "") {
     if GetKeyState("Shift", "P") {
-        CreateExplorerItem(key = "d" ? "folder" : "file")
+        shiftAction.Call()
         return
     }
-
     if IsObject(callback)
         callback.Call()
     else
@@ -282,6 +347,7 @@ CreateExplorerItem(kind) {
             CreateNewExplorerDirectory(itemPath)
         else
             CreateNewExplorerFile(itemPath)
+        RecordActivity("file", "Created " kind " " name)
     } catch as err {
         itemType := kind = "folder" ? "Folder" : "File"
         WriteLog(itemType " creation error: " err.Message)
@@ -316,22 +382,6 @@ GetActiveExplorerFolder(kind) {
     throw Error("Could not identify the active File Explorer folder.")
 }
 
-ValidateExplorerItemName(name, kind) {
-    if (name = "" || Trim(name) = "")
-        throw Error("A name is required.")
-    if (StrLen(name) > 255)
-        throw Error("The name must be 255 characters or fewer.")
-    if RegExMatch(name, "[\x00-\x1F<>:`"/\\|?*]")
-        throw Error("The name contains a character that Windows does not allow.")
-    if RegExMatch(name, "[ .]$")
-        throw Error("Names cannot end with a space or period.")
-    if (name = "." || name = "..")
-        throw Error("That name is not allowed.")
-    if RegExMatch(name, "i)^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)")
-        throw Error("That name is reserved by Windows.")
-    if (kind = "file" && !RegExMatch(name, "^.+\.[^.]+$"))
-        throw Error("Enter a filename with an extension, such as notes.txt.")
-}
 
 CreateNewExplorerDirectory(path) {
     if !DllCall("CreateDirectoryW", "Str", path, "Ptr", 0, "Int") {
@@ -368,6 +418,7 @@ CreateNewExplorerFile(path) {
 
 LoadUserSettings() {
     global ASCS_SettingsFile
+    global ASCS_SearchTemplate
     global ASCS_Drives
     global ASCS_SnapGap
     global ASCS_PreserveWindowSize
@@ -404,48 +455,28 @@ LoadUserSettings() {
     used := Map()
     try {
         for action, defaultKey in defaults {
-            key := StrLower(IniRead(
-                ASCS_SettingsFile,
-                "Hotkeys",
+            keys[action] := CheckShortcutKey(
+                IniRead(ASCS_SettingsFile, "Hotkeys", action, defaultKey),
                 action,
-                defaultKey
-            ))
-            if !RegExMatch(key, "^[a-z]$")
-                throw Error("Hotkeys must be single letters.")
-            if InStr("bsrlmvjy", key)
-                throw Error("Hotkey conflicts with a reserved command.")
-            if used.Has(key)
-                throw Error("Hotkey assignments must be unique.")
-            used[key] := true
-            keys[action] := key
+                used
+            )
         }
         ASCS_ActionHotkeys := keys
     } catch as err {
         WriteLog("Invalid shortcut preferences; using defaults. " err.Message)
         ASCS_ActionHotkeys := defaults
     }
-}
 
-ParseDriveList(value) {
-    drives := []
-    seen := Map()
-
-    for candidate in StrSplit(value, ",") {
-        drive := StrUpper(Trim(candidate))
-        if !RegExMatch(drive, "^[A-Z]:$")
-            throw Error("Drive entries must be letters followed by a colon.")
-        if seen.Has(drive)
-            throw Error("Drive entries must be unique.")
-        seen[drive] := true
-        drives.Push(drive)
-        if (drives.Length > 12)
-            throw Error("At most 12 drives can be monitored.")
+    try {
+        ASCS_SearchTemplate := ValidateSearchTemplate(IniRead(
+            ASCS_SettingsFile, "Palette", "SearchUrl", ASCS_SearchTemplate
+        ))
+    } catch as err {
+        WriteLog("Invalid web search address; using DuckDuckGo. " err.Message)
+        ASCS_SearchTemplate := "https://duckduckgo.com/?q=%s"
     }
-
-    if !drives.Length
-        throw Error("At least one drive is required.")
-    return drives
 }
+
 
 SaveUserSettings(content) {
     global ASCS_SettingsFile
@@ -454,11 +485,15 @@ SaveUserSettings(content) {
     global ASCS_SnapGap
     global ASCS_PreserveWindowSize
     global ASCS_ActionHotkeys
+    global ASCS_CustomCommands
+    global ASCS_SearchTemplate
 
     try {
-        fields := StrSplit(content, "|")
-        if (fields.Length != 4)
+        ; The search address is last and may itself contain "|".
+        fields := StrSplit(content, "|",, 5)
+        if (fields.Length != 5)
             throw Error("Settings payload has an invalid shape.")
+        searchTemplate := ValidateSearchTemplate(fields[5])
 
         drives := ParseDriveList(fields[1])
         if !RegExMatch(fields[2], "^\d+$") || Integer(fields[2]) > 48
@@ -476,31 +511,21 @@ SaveUserSettings(content) {
             "Windows Terminal", "File Explorer", "Calculator", "Task Manager"]
         hotkeys := Map()
         used := Map()
-        Loop names.Length {
-            key := StrLower(Trim(keys[A_Index]))
-            label := labels[A_Index]
-            if !RegExMatch(key, "^[a-z]$")
-                throw Error(label " needs a single letter (A–Z).")
-            if InStr("bsrlmvjy", key)
-                throw Error(label ": Super+" StrUpper(key)
-                    " is reserved for a built-in command (B, S, R, L, M, V, J, Y).")
-            if used.Has(key)
-                throw Error(label ": Super+" StrUpper(key)
-                    " is already assigned to " used[key] ".")
-            used[key] := label
-            hotkeys[names[A_Index]] := key
+        for command in ASCS_CustomCommands {
+            if (command["key"] != "")
+                used[command["key"]] := "the custom command " command["name"]
         }
+        Loop names.Length
+            hotkeys[names[A_Index]] := CheckShortcutKey(keys[A_Index], labels[A_Index], used)
 
-        previousHotkeys := ASCS_ActionHotkeys
         IniWrite(JoinArray(drives, ","), ASCS_SettingsFile, "General", "Drives")
+        IniWrite(searchTemplate, ASCS_SettingsFile, "Palette", "SearchUrl")
         IniWrite(fields[2], ASCS_SettingsFile, "Window", "SnapGap")
         IniWrite(fields[3], ASCS_SettingsFile, "Window", "PreserveSize")
         for action, key in hotkeys
             IniWrite(key, ASCS_SettingsFile, "Hotkeys", action)
 
-        for action, key in previousHotkeys
-            Hotkey("F24 & " key, "Off")
-
+        ASCS_SearchTemplate := searchTemplate
         ASCS_Drives := drives
         ASCS_DriveCache.Clear()
         ASCS_SnapGap := Integer(fields[2])
@@ -522,14 +547,9 @@ SaveUserSettings(content) {
     }
 }
 
-JoinArray(items, separator) {
-    output := ""
-    for index, item in items
-        output .= (index > 1 ? separator : "") item
-    return output
-}
 
 SendSettings() {
+    global ASCS_SearchTemplate
     global ASCS_Drives
     global ASCS_SnapGap
     global ASCS_PreserveWindowSize
@@ -553,16 +573,18 @@ SendSettings() {
         '{"type":"settings","drives":' drives
         ',"snapGap":' ASCS_SnapGap
         ',"preserveSize":' (ASCS_PreserveWindowSize ? "true" : "false")
-        ',"hotkeys":' hotkeys '}'
+        ',"hotkeys":' hotkeys
+        ',"searchTemplate":' JsonQuote(ASCS_SearchTemplate) '}'
     )
 }
 
-SaveWorkspace() {
+SaveWorkspace(name := "") {
     global ASCS_App
-    global ASCS_WorkspaceFile
 
     try {
-        tempPath := ASCS_WorkspaceFile ".tmp"
+        displayName := IsDefaultWorkspaceName(name) ? "Default" : ValidateWorkspaceName(name)
+        workspacePath := GetWorkspacePath(displayName)
+        tempPath := workspacePath ".tmp"
         if FileExist(tempPath)
             FileDelete(tempPath)
 
@@ -609,20 +631,24 @@ SaveWorkspace() {
             throw Error("No windows could be captured.")
 
         IniWrite(windows.Length, tempPath, "Workspace", "WindowCount")
+        IniWrite(displayName, tempPath, "Workspace", "Name")
+        IniWrite(FormatTime(A_Now, "yyyy-MM-dd'T'HH:mm:ss"), tempPath, "Workspace", "Saved")
         for index, savedWindow in windows {
             section := "Window" index
             for key, value in savedWindow
                 IniWrite(value, tempPath, section, key)
         }
-        FileMove(tempPath, ASCS_WorkspaceFile, 1)
-        ShowDesktopTooltip(
-            "Workspace saved (" windows.Length " windows"
-            (skipped ? ", " skipped " skipped" : "") ")."
-        )
-        WriteLog("Workspace saved with " windows.Length " windows.")
+        FileMove(tempPath, workspacePath, 1)
+        summary := "Workspace “" displayName "” saved (" windows.Length " windows"
+            . (skipped ? ", " skipped " skipped" : "") ")."
+        ShowDesktopTooltip(summary)
+        NotifyFrontend(summary)
+        RecordActivity("workspace", "Saved workspace “" displayName "” (" windows.Length " windows)")
+        SendWorkspaces()
     } catch as err {
         WriteLog("Workspace save failed: " err.Message)
         ShowDesktopTooltip("Unable to save workspace: " err.Message)
+        NotifyFrontend("Unable to save workspace: " err.Message)
         try {
             if (IsSet(tempPath) && FileExist(tempPath))
                 FileDelete(tempPath)
@@ -692,15 +718,23 @@ GetExplorerFolderMap() {
     return folders
 }
 
-RestoreWorkspace() {
-    global ASCS_WorkspaceFile
+RestoreWorkspace(name := "") {
     global ASCS_WorkspaceRestorePending
     global ASCS_WorkspaceClaimed
 
-    if !FileExist(ASCS_WorkspaceFile) {
+    try {
+        displayName := IsDefaultWorkspaceName(name) ? "Default" : ValidateWorkspaceName(name)
+        workspacePath := GetWorkspacePath(displayName)
+    } catch as err {
+        ShowWorkspaceMessage(err.Message, "Icon!")
+        return
+    }
+
+    if !FileExist(workspacePath) {
         ShowWorkspaceMessage(
-            "No saved workspace was found.`n`n"
-            "Arrange your windows, then press Super+S to save a workspace.",
+            displayName = "Default"
+                ? "No saved workspace was found.`n`nArrange your windows, then press Super+S to save one, or use “Save workspace as…” in the command palette (Super+Space) to save a named layout."
+                : "The workspace “" displayName "” was not found.",
             "Iconi"
         )
         return
@@ -708,7 +742,7 @@ RestoreWorkspace() {
 
     try {
         count := Integer(IniRead(
-            ASCS_WorkspaceFile,
+            workspacePath,
             "Workspace",
             "WindowCount",
             "0"
@@ -719,8 +753,8 @@ RestoreWorkspace() {
         pending := []
         for index in Range(1, count) {
             section := "Window" index
-            path := IniRead(ASCS_WorkspaceFile, section, "path", "")
-            process := IniRead(ASCS_WorkspaceFile, section, "process", "")
+            path := IniRead(workspacePath, section, "path", "")
+            process := IniRead(workspacePath, section, "process", "")
             if !IsValidWorkspaceExecutable(path, process) {
                 WriteLog("Skipped an invalid or unavailable workspace executable: " path)
                 continue
@@ -729,14 +763,14 @@ RestoreWorkspace() {
             pending.Push(Map(
                 "path", path,
                 "process", process,
-                "title", IniRead(ASCS_WorkspaceFile, section, "title", ""),
-                "folder", IniRead(ASCS_WorkspaceFile, section, "folder", ""),
-                "monitor", Max(1, Integer(IniRead(ASCS_WorkspaceFile, section, "monitor", "1"))),
-                "x", Float(IniRead(ASCS_WorkspaceFile, section, "x", "0")),
-                "y", Float(IniRead(ASCS_WorkspaceFile, section, "y", "0")),
-                "width", Float(IniRead(ASCS_WorkspaceFile, section, "width", "0.8")),
-                "height", Float(IniRead(ASCS_WorkspaceFile, section, "height", "0.8")),
-                "maximized", IniRead(ASCS_WorkspaceFile, section, "maximized", "0") = "1",
+                "title", IniRead(workspacePath, section, "title", ""),
+                "folder", IniRead(workspacePath, section, "folder", ""),
+                "monitor", Max(1, Integer(IniRead(workspacePath, section, "monitor", "1"))),
+                "x", Float(IniRead(workspacePath, section, "x", "0")),
+                "y", Float(IniRead(workspacePath, section, "y", "0")),
+                "width", Float(IniRead(workspacePath, section, "width", "0.8")),
+                "height", Float(IniRead(workspacePath, section, "height", "0.8")),
+                "maximized", IniRead(workspacePath, section, "maximized", "0") = "1",
                 "deadline", A_TickCount + 20000,
                 "launched", false
             ))
@@ -752,7 +786,8 @@ RestoreWorkspace() {
 
         ASCS_WorkspaceRestorePending := pending
         ASCS_WorkspaceClaimed := Map()
-        ShowDesktopTooltip("Restoring saved workspace.")
+        ShowDesktopTooltip("Restoring workspace “" displayName "”.")
+        RecordActivity("workspace", "Restored workspace “" displayName "”")
         RestoreWorkspaceWindows()
         if ASCS_WorkspaceRestorePending.Length
             SetTimer(RestoreWorkspaceWindows, 500)
@@ -767,38 +802,6 @@ ShowWorkspaceMessage(message, icon) {
     SetTimer(() => MsgBox(message, "Aeolionware SCS: Workspace", icon " T15"), -1)
 }
 
-IsValidWorkspaceExecutable(path, process) {
-    if (path = "" || process = "" || InStr(path, '"')
-        || RegExMatch(path, "[\x00-\x1F]")
-        || !RegExMatch(path, "i)^[A-Z]:\\"))
-        return false
-
-    SplitPath(path, &fileName)
-    if (StrLower(fileName) != StrLower(process)
-        || !RegExMatch(fileName, "i)^[A-Z0-9_. -]+\.exe$"))
-        return false
-
-    ; Windows Terminal lives under WindowsApps, which is not always readable;
-    ; it is relaunched through its wt.exe alias instead of this path.
-    if (StrLower(process) = "windowsterminal.exe")
-        return true
-
-    attributes := FileExist(path)
-    return (attributes != "" && !InStr(attributes, "D"))
-}
-
-; Command used to open one additional window for a saved record.
-GetWorkspaceLaunchCommand(record) {
-    switch StrLower(record["process"]) {
-        case "explorer.exe":
-            if (record["folder"] != "" && DirExist(record["folder"]))
-                return 'explorer.exe "' record["folder"] '"'
-            return "explorer.exe"
-        case "windowsterminal.exe":
-            return "wt.exe -w new"
-    }
-    return '"' record["path"] '"'
-}
 
 ; Matches saved records to existing windows before launching anything:
 ;   1. exact match (same Explorer folder, or same title for other apps);
@@ -832,32 +835,13 @@ RestoreWorkspaceWindows(*) {
     }
     folders := needsFolders ? GetExplorerFolderMap() : Map()
 
-    matches := Map()
-    for pass in [1, 2] {
-        for index, record in pending {
-            if matches.Has(index)
-                continue
-            for hwnd in candidates[StrLower(record["process"])] {
-                if claimed.Has(hwnd)
-                    continue
-                if (pass = 1) {
-                    if (record["folder"] != "") {
-                        if !(folders.Has(hwnd) && folders[hwnd] = record["folder"])
-                            continue
-                    } else {
-                        try title := WinGetTitle("ahk_id " hwnd)
-                        catch
-                            continue
-                        if (title != record["title"])
-                            continue
-                    }
-                }
-                claimed[hwnd] := true
-                matches[index] := hwnd
-                break
-            }
-        }
-    }
+    matches := MatchWorkspaceRecords(
+        pending,
+        candidates,
+        claimed,
+        (hwnd) => WinGetTitle("ahk_id " hwnd),
+        folders
+    )
 
     remaining := []
     for index, record in pending {
@@ -910,12 +894,6 @@ PlaceWorkspaceWindow(hwnd, record) {
     }
 }
 
-Range(start, end) {
-    result := []
-    Loop end - start + 1
-        result.Push(start + A_Index - 1)
-    return result
-}
 
 SwitchVirtualDesktop(number, thisHotkey := "") {
     global ASCS_VirtualDesktopDllPath
@@ -1363,15 +1341,20 @@ MoveActiveWindowToAdjacentMonitor(direction) {
 ; VIEW NAVIGATION
 ; ==========================================
 
-ShowCommandLauncher() {
+; Opens the command palette. Modes: "" (everything), "snippets", "workspaces".
+ShowCommandLauncher(mode := "") {
     global ASCS_PendingLauncher
+    global ASCS_PendingLauncherMode
     global ASCS_PageReady
 
+    if !(mode = "" || mode = "snippets" || mode = "workspaces")
+        mode := ""
     ShowASCS()
     if ASCS_PageReady {
-        SendToFrontend('{"type":"openLauncher"}')
+        SendToFrontend('{"type":"openLauncher","mode":' JsonQuote(mode) '}')
     } else {
         ASCS_PendingLauncher := true
+        ASCS_PendingLauncherMode := mode
         SetTimer(DispatchPendingLauncher, -100)
     }
 }
@@ -1389,13 +1372,14 @@ ToggleCommandCenter() {
 
 DispatchPendingLauncher(*) {
     global ASCS_PendingLauncher
+    global ASCS_PendingLauncherMode
     global ASCS_PageReady
 
     if !ASCS_PendingLauncher
         return
     if ASCS_PageReady {
         ASCS_PendingLauncher := false
-        SendToFrontend('{"type":"openLauncher"}')
+        SendToFrontend('{"type":"openLauncher","mode":' JsonQuote(ASCS_PendingLauncherMode) '}')
     } else {
         SetTimer(DispatchPendingLauncher, -100)
     }
@@ -1412,9 +1396,16 @@ ShowASCS(view := "") {
     global ASCS_App
     global ASCS_PageReady
     global ASCS_PendingView
+    global ASCS_PreviousWindow
 
     if (view != "")
         ASCS_PendingView := view
+
+    ; Remember where the user was, so snippets paste into that window and
+    ; palette actions can return focus to it.
+    foreground := DllCall("GetForegroundWindow", "Ptr")
+    if (foreground && foreground != ASCS_App.Hwnd)
+        ASCS_PreviousWindow := foreground
 
     ASCS_App.Show()
     WinActivate("ahk_id " ASCS_App.Hwnd)
@@ -1498,6 +1489,10 @@ HandleClose(*) {
 HandleASCSSize(guiObj, minMax, width, height) {
     global ASCS_PageReady
 
+    ; Lets the title bar show the maximize or restore glyph.
+    if (minMax != -1)
+        SendToFrontend('{"type":"windowState","maximized":' (minMax = 1 ? "true" : "false") '}')
+
     if (minMax = -1) {
         SetTimer(PushDashboard, 0)
     } else if ASCS_PageReady {
@@ -1513,6 +1508,7 @@ HandleWebMessage(sender, args) {
     global ASCS_PageReady
     global ASCS_PendingView
     global ASCS_PendingLauncher
+    global ASCS_PendingLauncherMode
 
     try {
         if !IsTrustedWebViewUrl(args.Source) {
@@ -1558,9 +1554,12 @@ HandleWebMessage(sender, args) {
 
                 GetNotes()
                 SendSettings()
+                SendCustomCommands()
+                SendWorkspaces()
+                SendActivity()
                 if ASCS_PendingLauncher {
                     ASCS_PendingLauncher := false
-                    SendToFrontend('{"type":"openLauncher"}')
+                    SendToFrontend('{"type":"openLauncher","mode":' JsonQuote(ASCS_PendingLauncherMode) '}')
                 }
 
                 StartDashboardPolling()
@@ -1597,6 +1596,8 @@ HandleWebMessage(sender, args) {
                     || content = "projects" || content = "snipping"
                     || content = "lock" || content = "mute")
                     LaunchCommand(content)
+                else if (content = "reload")
+                    ReloadASCS()
                 else
                     WriteLog("Rejected invalid launcher identifier.")
 
@@ -1615,6 +1616,67 @@ HandleWebMessage(sender, args) {
                     WriteLog(content)
                 else
                     WriteLog("Rejected oversized frontend log message.")
+
+            case "GetActivity":
+                SendActivity()
+
+            case "GetCommands":
+                SendCustomCommands()
+
+            case "SaveCommands":
+                if (StrLen(content) <= 65536)
+                    SaveCustomCommands(content)
+                else
+                    WriteLog("Rejected oversized custom command payload.")
+
+            case "RunCommand":
+                if RegExMatch(content, "^\d{1,3}$")
+                    SetTimer(RunCustomCommand.Bind(Integer(content), "palette"), -1)
+                else
+                    WriteLog("Rejected invalid custom command index.")
+
+            case "BrowseCommandTarget":
+                if RegExMatch(content, "^\d{1,3}\|(app|folder)$")
+                    SetTimer(BrowseCommandTarget.Bind(content), -1)
+                else
+                    WriteLog("Rejected invalid browse request.")
+
+            case "GetWorkspaces":
+                SendWorkspaces()
+
+            case "SaveWorkspace":
+                if (StrLen(content) <= 64)
+                    SetTimer(SaveWorkspace.Bind(content), -1)
+
+            case "RestoreWorkspace":
+                if (StrLen(content) <= 64) {
+                    HandleClose()
+                    SetTimer(RestoreWorkspace.Bind(content), -150)
+                }
+
+            case "DeleteWorkspace":
+                if (StrLen(content) <= 64)
+                    DeleteWorkspace(content)
+
+            case "GetWindows":
+                SendWindowList()
+
+            case "FocusWindow":
+                FocusWindowFromPalette(content)
+
+            case "PasteSnippet":
+                if (StrLen(content) <= 262144)
+                    SetTimer(PasteSnippet.Bind(content), -1)
+                else
+                    SendToFrontend('{"type":"notice","message":"That snippet is too large to paste (256 KB limit)."}')
+
+            case "SearchWeb":
+                if (StrLen(content) <= 1000)
+                    SearchWeb(content)
+
+            case "SearchFiles":
+                if (StrLen(content) <= 1000)
+                    SearchFiles(content)
 
             default:
                 WriteLog("Rejected unknown frontend message type: " messageType)
@@ -2001,6 +2063,14 @@ ActivateLaunchedWindow(window, foregroundAtLaunch) {
 }
 
 LaunchCommand(command, thisHotkey := "", forceNew := false, *) {
+    static labels := Map(
+        "explorer", "File Explorer", "vivaldi", "Vivaldi",
+        "terminal", "Windows Terminal", "calculator", "Calculator",
+        "taskmanager", "Task Manager", "settings", "Windows Settings",
+        "downloads", "Downloads", "projects", "Documents",
+        "snipping", "Snipping Tool", "lock", "Lock workstation",
+        "mute", "Toggle mute"
+    )
     userProfile := EnvGet("USERPROFILE")
     if (
         !forceNew
@@ -2078,9 +2148,12 @@ LaunchCommand(command, thisHotkey := "", forceNew := false, *) {
             case "mute":
                 SoundSetMute(!SoundGetMute())
         }
+        if (command != "vivaldi" && labels.Has(command))
+            RecordActivity("launch", (forceNew ? "New window: " : "") labels[command])
 
     } catch as err {
         WriteLog("Launch failed: " command " | " err.Message)
+        RecordActivity("error", (labels.Has(command) ? labels[command] : command) ": " err.Message)
 
         SendToFrontend(
             '{"type":"error","message":"Unable to launch application."}'
@@ -2093,6 +2166,7 @@ LaunchVivaldi() {
         windows := GetVivaldiWindows()
         if windows.Length {
             FocusVivaldiWindow(windows)
+            RecordActivity("launch", "Vivaldi")
             return true
         }
 
@@ -2102,9 +2176,11 @@ LaunchVivaldi() {
         )
         if !launched
             throw Error("Vivaldi did not open or could not be activated.")
+        RecordActivity("launch", "Vivaldi")
         return true
     } catch as err {
         WriteLog("Vivaldi focus or launch failed: " err.Message)
+        RecordActivity("error", "Vivaldi: " err.Message)
         MsgBox(
             "Unable to focus or open Vivaldi.`n`n" err.Message,
             "Vivaldi",
@@ -2369,6 +2445,7 @@ LaunchEverything(thisHotkey := "") {
             '"' ASCS_EverythingPath '"',
             "ahk_exe Everything.exe"
         )
+        RecordActivity("launch", "Everything")
     } catch as err {
         WriteLog("Everything launch failed: " err.Message)
         MsgBox(
@@ -3014,265 +3091,522 @@ WriteLog(message := "ASCS activity") {
 ; JSON UTILITIES
 ; ==========================================
 
-JsonQuote(value) {
-    output := '"'
 
-    for char in StrSplit(value) {
-        code := Ord(char)
 
-        switch code {
-            case 34:
-                output .= '\"'
+; ==========================================
+; TRAY MENU (1.6.0)
+; ==========================================
 
-            case 92:
-                output .= "\\"
+SetupTrayMenu() {
+    global ASCS_DataDir
+    global ASCS_LogFile
 
-            case 8:
-                output .= "\b"
-
-            case 9:
-                output .= "\t"
-
-            case 10:
-                output .= "\n"
-
-            case 12:
-                output .= "\f"
-
-            case 13:
-                output .= "\r"
-
-            default:
-                if (code < 32)
-                    output .= Format("\u{:04X}", code)
-                else
-                    output .= char
-        }
-    }
-
-    return output '"'
+    tray := A_TrayMenu
+    tray.Delete()
+    tray.Add("Show ASCS", (*) => ShowASCS())
+    tray.Add("Command palette`tSuper+Space", (*) => ShowCommandLauncher())
+    tray.Add("Quick Notes", (*) => ShowView("notes"))
+    tray.Add("Preferences", (*) => ShowView("settings"))
+    tray.Add()
+    tray.Add("Save workspace", (*) => SaveWorkspace())
+    tray.Add("Restore workspace", (*) => RestoreWorkspace())
+    tray.Add()
+    tray.Add("Open data folder", (*) => Run('explorer.exe "' ASCS_DataDir '"'))
+    tray.Add("Open log file", (*) => Run('"' ASCS_LogFile '"'))
+    tray.Add()
+    tray.Add("Reload ASCS`tCtrl+Alt+Shift+A", (*) => ReloadASCS())
+    tray.Add("Exit ASCS", (*) => FlushNotesThen(() => ExitApp()))
+    tray.Default := "Show ASCS"
+    tray.ClickCount := 1
+    A_IconTip := "Aeolionware SCS 1.6.0"
 }
 
-JsonUnescape(value) {
-    output := ""
-    index := 1
-    length := StrLen(value)
-
-    while (index <= length) {
-        char := SubStr(value, index, 1)
-
-        if (char != "\") {
-            output .= char
-            index++
-            continue
-        }
-
-        index++
-
-        escaped := SubStr(value, index, 1)
-
-        switch escaped {
-            case '"':
-                output .= '"'
-
-            case "\":
-                output .= "\"
-
-            case "/":
-                output .= "/"
-
-            case "b":
-                output .= Chr(8)
-
-            case "f":
-                output .= Chr(12)
-
-            case "n":
-                output .= "`n"
-
-            case "r":
-                output .= "`r"
-
-            case "t":
-                output .= "`t"
-
-            case "u":
-                hex := SubStr(value, index + 1, 4)
-
-                if RegExMatch(hex, "^[0-9A-Fa-f]{4}$") {
-                    code := Integer("0x" hex)
-                    index += 4
-
-                    ; Handle UTF-16 surrogate pairs.
-                    if (
-                        code >= 0xD800
-                        && code <= 0xDBFF
-                        && SubStr(value, index + 1, 2) = "\u"
-                    ) {
-                        lowHex := SubStr(value, index + 3, 4)
-
-                        if RegExMatch(lowHex, "^[0-9A-Fa-f]{4}$") {
-                            lowCode := Integer("0x" lowHex)
-
-                            if (lowCode >= 0xDC00 && lowCode <= 0xDFFF) {
-                                code := 0x10000
-                                    + ((code - 0xD800) << 10)
-                                    + (lowCode - 0xDC00)
-
-                                index += 6
-                            }
-                        }
-                    }
-
-                    output .= Chr(code)
-                }
-
-            default:
-                output .= escaped
-        }
-
-        index++
-    }
-
-    return output
+; Saves pending note edits, then restarts the script (picks up code and
+; frontend changes). Used by Ctrl+Alt+Shift+A, the tray menu, and the palette.
+ReloadASCS(*) {
+    WriteLog("Reload requested.")
+    ShowDesktopTooltip("Reloading ASCS…")
+    FlushNotesThen(() => Reload())
 }
 
-IsValidJsonObject(text) {
-    position := 1
-    SkipJsonWhitespace(text, &position)
-    if (SubStr(text, position, 1) != "{")
-        return false
+; Asks the frontend to save pending note edits, then runs `action` once the
+; save round trip has had time to finish.
+FlushNotesThen(action) {
+    if SendToFrontend('{"type":"flushNotes"}')
+        SetTimer(action, -400)
+    else
+        action()
+}
+
+; Shows a toast in ASCS only while it is visible; hidden ASCS would show a
+; stale message later.
+NotifyFrontend(message) {
+    if IsDashboardWindowVisible()
+        SendToFrontend('{"type":"notice","message":' JsonQuote(message) '}')
+}
+
+; ==========================================
+; ACTIVITY FEED (1.6.0)
+; ==========================================
+
+; Records a user-visible event for the Command Center feed. Entries persist
+; in data\activity.log (the newest 50 are kept in memory).
+RecordActivity(kind, text) {
+    global ASCS_Activity
+    global ASCS_ActivityFile
+    global ASCS_ActivityAppends
+
+    line := FormatActivityLine(FormatTime(A_Now, "yyyy-MM-dd'T'HH:mm:ss"), kind, text)
+    item := ParseActivityLine(line)
+    if !IsObject(item)
+        return
+
+    ASCS_Activity.Push(item)
+    while (ASCS_Activity.Length > 50)
+        ASCS_Activity.RemoveAt(1)
 
     try {
-        ParseJsonValue(text, &position)
-        SkipJsonWhitespace(text, &position)
-        return (position > StrLen(text))
-    } catch {
-        return false
+        FileAppend(line "`n", ASCS_ActivityFile, "UTF-8")
+        ASCS_ActivityAppends++
+        if (ASCS_ActivityAppends >= 100)
+            CompactActivityFile()
+    } catch as err {
+        WriteLog("Activity log write failed: " err.Message)
+    }
+
+    SendToFrontend('{"type":"activityAdded","item":' ActivityJson(item) '}')
+}
+
+LoadActivity() {
+    global ASCS_Activity
+    global ASCS_ActivityFile
+
+    ASCS_Activity := []
+    if !FileExist(ASCS_ActivityFile)
+        return
+    lineCount := 0
+    try {
+        for line in StrSplit(FileRead(ASCS_ActivityFile, "UTF-8"), "`n", "`r") {
+            if (line = "")
+                continue
+            lineCount++
+            item := ParseActivityLine(line)
+            if IsObject(item)
+                ASCS_Activity.Push(item)
+        }
+    } catch as err {
+        WriteLog("Activity log read failed: " err.Message)
+    }
+    while (ASCS_Activity.Length > 50)
+        ASCS_Activity.RemoveAt(1)
+    if (lineCount > 100)
+        CompactActivityFile()
+}
+
+CompactActivityFile() {
+    global ASCS_Activity
+    global ASCS_ActivityFile
+    global ASCS_ActivityAppends
+
+    text := ""
+    for item in ASCS_Activity
+        text .= FormatActivityLine(item["time"], item["kind"], item["text"]) "`n"
+    try {
+        tempPath := ASCS_ActivityFile ".tmp"
+        if FileExist(tempPath)
+            FileDelete(tempPath)
+        FileAppend(text, tempPath, "UTF-8")
+        FileMove(tempPath, ASCS_ActivityFile, 1)
+        ASCS_ActivityAppends := 0
+    } catch as err {
+        WriteLog("Activity log compaction failed: " err.Message)
     }
 }
 
-ParseJsonValue(text, &position, depth := 0) {
-    if (depth > 128)
-        throw Error("JSON nesting exceeds the safety limit.")
-
-    SkipJsonWhitespace(text, &position)
-    char := SubStr(text, position, 1)
-
-    if (char = Chr(34)) {
-        ParseJsonString(text, &position)
-        return
-    }
-
-    if (char = "{") {
-        position++
-        SkipJsonWhitespace(text, &position)
-        if (SubStr(text, position, 1) = "}") {
-            position++
-            return
-        }
-
-        loop {
-            if (SubStr(text, position, 1) != Chr(34))
-                throw Error("Expected a JSON object key.")
-            ParseJsonString(text, &position)
-            SkipJsonWhitespace(text, &position)
-            if (SubStr(text, position, 1) != ":")
-                throw Error("Expected a JSON object colon.")
-            position++
-            ParseJsonValue(text, &position, depth + 1)
-            SkipJsonWhitespace(text, &position)
-            char := SubStr(text, position, 1)
-            if (char = "}") {
-                position++
-                return
-            }
-            if (char != ",")
-                throw Error("Expected a JSON object separator.")
-            position++
-            SkipJsonWhitespace(text, &position)
-        }
-    }
-
-    if (char = "[") {
-        position++
-        SkipJsonWhitespace(text, &position)
-        if (SubStr(text, position, 1) = "]") {
-            position++
-            return
-        }
-
-        loop {
-            ParseJsonValue(text, &position, depth + 1)
-            SkipJsonWhitespace(text, &position)
-            char := SubStr(text, position, 1)
-            if (char = "]") {
-                position++
-                return
-            }
-            if (char != ",")
-                throw Error("Expected a JSON array separator.")
-            position++
-        }
-    }
-
-    for literal in ["true", "false", "null"] {
-        if (SubStr(text, position, StrLen(literal)) = literal) {
-            position += StrLen(literal)
-            return
-        }
-    }
-
-    if RegExMatch(
-        SubStr(text, position),
-        "^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?",
-        &number
-    ) {
-        position += StrLen(number[0])
-        return
-    }
-
-    throw Error("Invalid JSON value.")
+ActivityJson(item) {
+    return '{"time":' JsonQuote(item["time"])
+        . ',"kind":' JsonQuote(item["kind"])
+        . ',"text":' JsonQuote(item["text"]) '}'
 }
 
-ParseJsonString(text, &position) {
-    position++
-    length := StrLen(text)
+SendActivity() {
+    global ASCS_Activity
 
-    while (position <= length) {
-        char := SubStr(text, position, 1)
-        if (char = Chr(34)) {
-            position++
-            return
+    json := "["
+    for index, item in ASCS_Activity
+        json .= (index > 1 ? "," : "") ActivityJson(item)
+    SendToFrontend('{"type":"activity","items":' json ']}')
+}
+
+; ==========================================
+; NAMED WORKSPACES (1.6.0)
+; ==========================================
+
+; "Default" (or "") is the original data\workspace.ini used by Super+S/R;
+; named layouts live in data\workspaces\<name>.ini.
+GetWorkspacePath(name) {
+    global ASCS_WorkspaceFile
+    global ASCS_WorkspaceDir
+
+    if IsDefaultWorkspaceName(name)
+        return ASCS_WorkspaceFile
+    return ASCS_WorkspaceDir "\" ValidateWorkspaceName(name) ".ini"
+}
+
+WorkspaceInfoJson(name, path) {
+    windows := 0
+    saved := ""
+    try windows := Integer(IniRead(path, "Workspace", "WindowCount", "0"))
+    try saved := IniRead(path, "Workspace", "Saved", "")
+    if (saved = "") {
+        try saved := FormatTime(FileGetTime(path, "M"), "yyyy-MM-dd'T'HH:mm:ss")
+    }
+    return '{"name":' JsonQuote(name) ',"windows":' windows ',"saved":' JsonQuote(saved) '}'
+}
+
+SendWorkspaces() {
+    global ASCS_WorkspaceFile
+    global ASCS_WorkspaceDir
+
+    items := []
+    if FileExist(ASCS_WorkspaceFile)
+        items.Push(WorkspaceInfoJson("Default", ASCS_WorkspaceFile))
+    try {
+        Loop Files ASCS_WorkspaceDir "\*.ini" {
+            name := IniRead(A_LoopFileFullPath, "Workspace", "Name", SubStr(A_LoopFileName, 1, -4))
+            try name := ValidateWorkspaceName(name)
+            catch
+                continue
+            if IsDefaultWorkspaceName(name)
+                continue
+            items.Push(WorkspaceInfoJson(name, A_LoopFileFullPath))
+        }
+    }
+    SendToFrontend('{"type":"workspaces","items":[' JoinArray(items, ",") ']}')
+}
+
+DeleteWorkspace(name) {
+    try {
+        displayName := IsDefaultWorkspaceName(name) ? "Default" : ValidateWorkspaceName(name)
+        path := GetWorkspacePath(displayName)
+        if FileExist(path)
+            FileDelete(path)
+        RecordActivity("workspace", "Deleted workspace “" displayName "”")
+        NotifyFrontend("Workspace “" displayName "” deleted.")
+    } catch as err {
+        WriteLog("Workspace delete failed: " err.Message)
+        NotifyFrontend("Unable to delete the workspace: " err.Message)
+    }
+    SendWorkspaces()
+}
+
+; ==========================================
+; CUSTOM COMMANDS (1.6.0)
+; ==========================================
+
+ActionLabels() {
+    return Map(
+        "notes", "Quick Notes", "everything", "Everything",
+        "dashboard", "System Dashboard", "terminal", "Windows Terminal",
+        "explorer", "File Explorer", "calculator", "Calculator",
+        "taskmanager", "Task Manager"
+    )
+}
+
+ActionKeysInUse() {
+    global ASCS_ActionHotkeys
+
+    labels := ActionLabels()
+    used := Map()
+    for action, key in ASCS_ActionHotkeys
+        used[key] := labels.Has(action) ? labels[action] : action
+    return used
+}
+
+LoadCustomCommands() {
+    global ASCS_CommandsFile
+    global ASCS_CustomCommands
+
+    ASCS_CustomCommands := []
+    if !FileExist(ASCS_CommandsFile)
+        return
+
+    count := 0
+    try count := Integer(IniRead(ASCS_CommandsFile, "Commands", "Count", "0"))
+    used := ActionKeysInUse()
+    Loop Min(Max(count, 0), 30) {
+        section := "Command" A_Index
+        try {
+            command := ValidateCustomCommand(
+                IniRead(ASCS_CommandsFile, section, "name", ""),
+                IniRead(ASCS_CommandsFile, section, "kind", ""),
+                IniRead(ASCS_CommandsFile, section, "target", ""),
+                IniRead(ASCS_CommandsFile, section, "key", "")
+            )
+            command["key"] := CheckShortcutKey(command["key"], command["name"], used, true)
+            ASCS_CustomCommands.Push(command)
+        } catch as err {
+            WriteLog("Skipped custom command " A_Index ": " err.Message)
+        }
+    }
+}
+
+SaveCustomCommands(content) {
+    global ASCS_CommandsFile
+    global ASCS_CustomCommands
+
+    try {
+        commands := []
+        used := ActionKeysInUse()
+        for fields in ParseCustomCommandsPayload(content) {
+            command := ValidateCustomCommand(fields[1], fields[2], fields[3], fields[4])
+            command["key"] := CheckShortcutKey(command["key"], command["name"], used, true)
+            commands.Push(command)
         }
 
-        if (char = "\") {
-            position++
-            escaped := SubStr(text, position, 1)
-            switch escaped {
-                case '"', "\", "/", "b", "f", "n", "r", "t":
-                    position++
-                case "u":
-                    hex := SubStr(text, position + 1, 4)
-                    if !RegExMatch(hex, "^[0-9A-Fa-f]{4}$")
-                        throw Error("Invalid JSON unicode escape.")
-                    position += 5
-                default:
-                    throw Error("Invalid JSON string escape.")
-            }
+        tempPath := ASCS_CommandsFile ".tmp"
+        if FileExist(tempPath)
+            FileDelete(tempPath)
+        IniWrite(commands.Length, tempPath, "Commands", "Count")
+        for index, command in commands {
+            for field in ["name", "kind", "target", "key"]
+                IniWrite(command[field], tempPath, "Command" index, field)
+        }
+        FileMove(tempPath, ASCS_CommandsFile, 1)
+
+        ASCS_CustomCommands := commands
+        RegisterConfiguredHotkeys()
+        SendCustomCommands()
+        SendToFrontend('{"type":"commandsSaved","message":"Custom commands saved and applied."}')
+    } catch as err {
+        WriteLog("Custom commands save failed: " err.Message)
+        SendToFrontend('{"type":"error","scope":"commands","message":' JsonQuote(err.Message) '}')
+        SendCustomCommands()
+    }
+}
+
+SendCustomCommands() {
+    global ASCS_CustomCommands
+
+    json := "["
+    for index, command in ASCS_CustomCommands {
+        json .= (index > 1 ? "," : "")
+            . '{"id":' index
+            . ',"name":' JsonQuote(command["name"])
+            . ',"kind":' JsonQuote(command["kind"])
+            . ',"target":' JsonQuote(command["target"])
+            . ',"key":' JsonQuote(command["key"]) '}'
+    }
+    SendToFrontend('{"type":"commands","items":' json ']}')
+}
+
+RunCustomCommand(index, source := "", *) {
+    global ASCS_CustomCommands
+
+    if (index < 1 || index > ASCS_CustomCommands.Length) {
+        WriteLog("Rejected unknown custom command " index ".")
+        return
+    }
+    command := ASCS_CustomCommands[index]
+    target := command["target"]
+    try {
+        switch command["kind"] {
+            case "app":
+                if RegExMatch(target, "i)\.lnk$")
+                    Run('"' target '"')
+                else
+                    RunAndActivate('"' target '"')
+            case "folder":
+                RunAndActivateExplorer('explorer.exe "' target '"', true)
+            case "url":
+                Run(target)
+        }
+        RecordActivity("command", command["name"])
+    } catch as err {
+        WriteLog("Custom command failed: " command["name"] " | " err.Message)
+        RecordActivity("error", command["name"] ": " err.Message)
+        ShowDesktopTooltip("Unable to run " command["name"] ".")
+    }
+}
+
+; Opens a file or folder picker for a custom command row in Preferences.
+BrowseCommandTarget(content, *) {
+    global ASCS_App
+
+    parts := StrSplit(content, "|")
+    row := Integer(parts[1])
+    kind := parts[2]
+    try ASCS_App.Opt("+OwnDialogs")
+    path := kind = "folder"
+        ? DirSelect(, 3, "Choose a folder for this command")
+        : FileSelect(3, , "Choose an application", "Applications (*.exe; *.lnk)")
+    if (path = "")
+        return
+    SendToFrontend('{"type":"browseResult","row":' row ',"path":' JsonQuote(path) '}')
+}
+
+; ==========================================
+; QUICK CAPTURE AND SNIPPETS (1.6.0)
+; ==========================================
+
+; Super + Shift + C: copies the selection in the active window (or
+; uses the current clipboard text when nothing is selected) into a new note
+; without showing ASCS. The clipboard is restored afterwards.
+QuickCapture() {
+    global ASCS_PageReady
+
+    if !ASCS_PageReady {
+        ShowDesktopTooltip("ASCS is still starting; try again in a moment.")
+        return
+    }
+
+    source := ""
+    try source := WinGetTitle("A")
+    previousText := A_Clipboard
+    saved := ClipboardAll()
+    A_Clipboard := ""
+    Send("^c")
+    captured := ClipWait(0.5) ? A_Clipboard : ""
+    A_Clipboard := saved
+
+    fromClipboard := false
+    if (Trim(captured, " `t`r`n") = "") {
+        captured := previousText
+        fromClipboard := true
+    }
+    if (Trim(captured, " `t`r`n") = "") {
+        ShowDesktopTooltip(
+            "Nothing to capture. Select or copy text, then press Super+Shift+C."
+        )
+        return
+    }
+    if (StrLen(captured) > 200000)
+        captured := SubStr(captured, 1, 200000)
+
+    SendToFrontend(
+        '{"type":"captureNote","text":' JsonQuote(captured)
+        ',"source":' JsonQuote(SubStr(source, 1, 120)) '}'
+    )
+    what := fromClipboard ? "clipboard" : "selection"
+    ShowDesktopTooltip("Captured " what " to Quick Notes.")
+    RecordActivity("note", "Captured " what (source != "" ? " from " SubStr(source, 1, 60) : ""))
+}
+
+; Pastes snippet text into the window that was active before ASCS opened.
+; The text is pasted through the clipboard, which is restored afterwards.
+PasteSnippet(text, *) {
+    global ASCS_PreviousWindow
+
+    if (text = "")
+        return
+    HandleClose()
+
+    target := ASCS_PreviousWindow
+    if !(target && WinExist("ahk_id " target)) {
+        A_Clipboard := text
+        ShowDesktopTooltip("Snippet copied to the clipboard.")
+        return
+    }
+
+    try {
+        WinActivate("ahk_id " target)
+        if !WinWaitActive("ahk_id " target, , 1)
+            throw Error("The previous window could not be focused.")
+        saved := ClipboardAll()
+        A_Clipboard := text
+        if !ClipWait(1)
+            throw Error("The clipboard did not accept the snippet.")
+        Send("^v")
+        SetTimer(() => (A_Clipboard := saved), -500)
+        title := ""
+        try title := WinGetTitle("ahk_id " target)
+        RecordActivity("snippet", "Pasted snippet" (title != "" ? " into " SubStr(title, 1, 60) : ""))
+    } catch as err {
+        A_Clipboard := text
+        WriteLog("Snippet paste failed: " err.Message)
+        ShowDesktopTooltip("Snippet copied to the clipboard; paste it with Ctrl+V.")
+    }
+}
+
+; ==========================================
+; PALETTE: WINDOWS AND SEARCH (1.6.0)
+; ==========================================
+
+SendWindowList() {
+    json := "["
+    count := 0
+    for hwnd in WinGetList() {
+        if !IsWorkspaceWindow(hwnd, true)
+            continue
+        try {
+            title := WinGetTitle("ahk_id " hwnd)
+            process := WinGetProcessName("ahk_id " hwnd)
+            minimized := WinGetMinMax("ahk_id " hwnd) = -1
+        } catch {
             continue
         }
-
-        if (Ord(char) < 32)
-            throw Error("Invalid control character in JSON string.")
-        position++
+        json .= (count ? "," : "")
+            . '{"id":"' hwnd '","title":' JsonQuote(title)
+            . ',"app":' JsonQuote(RegExReplace(process, "i)\.exe$"))
+            . ',"minimized":' (minimized ? "true" : "false") '}'
+        count++
+        if (count >= 40)
+            break
     }
-
-    throw Error("Unterminated JSON string.")
+    SendToFrontend('{"type":"windows","items":' json ']}')
 }
 
-SkipJsonWhitespace(text, &position) {
-    while (position <= StrLen(text)
-        && InStr(" `t`r`n", SubStr(text, position, 1)))
-        position++
+FocusWindowFromPalette(content) {
+    if !RegExMatch(content, "^\d{1,20}$") {
+        WriteLog("Rejected invalid window identifier.")
+        return
+    }
+    hwnd := Integer(content)
+    if !IsWorkspaceWindow(hwnd, true) {
+        NotifyFrontend("That window is no longer open.")
+        return
+    }
+    HandleClose()
+    try {
+        if (WinGetMinMax("ahk_id " hwnd) = -1)
+            WinRestore("ahk_id " hwnd)
+        WinActivate("ahk_id " hwnd)
+    } catch as err {
+        WriteLog("Window focus failed: " err.Message)
+    }
+}
+
+SearchWeb(query) {
+    global ASCS_SearchTemplate
+
+    query := Trim(RegExReplace(query, "[\x00-\x1F]+", " "))
+    if (query = "")
+        return
+    try {
+        Run(BuildSearchUrl(ASCS_SearchTemplate, query))
+        RecordActivity("search", "Web: " query)
+    } catch as err {
+        WriteLog("Web search failed: " err.Message)
+        NotifyFrontend("Unable to open the web search.")
+    }
+}
+
+SearchFiles(query) {
+    global ASCS_EverythingPath
+
+    query := SanitizeSearchQuery(query)
+    if (query = "") {
+        LaunchEverything()
+        return
+    }
+    try {
+        RunAndActivate(
+            '"' ASCS_EverythingPath '" -search "' query '"',
+            "ahk_exe Everything.exe"
+        )
+        RecordActivity("search", "Files: " query)
+    } catch as err {
+        WriteLog("Everything search failed: " err.Message)
+        NotifyFrontend("Unable to open Everything. Check its installation.")
+    }
 }
