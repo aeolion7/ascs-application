@@ -29,7 +29,7 @@
         return { age, illumination, name, waxing: age < SYNODIC / 2 };
     }
 
-    // SVG path for the lit part of the moon, centred at (c, c) with radius r.
+    // SVG path for the lit part of the moon, centered at (c, c) with radius r.
     // The terminator is an ellipse whose width follows the phase.
     function moonPath(age, r = 12, c = 16) {
         const fraction = (((age % SYNODIC) + SYNODIC) % SYNODIC) / SYNODIC;
@@ -169,6 +169,72 @@
             .sort((a, b) => a.days - b.days);
     }
 
+    // ------------------------------------------------------------- US holidays
+    // Worked out here (1.8.0), with nothing downloaded: the 11 federal
+    // holidays on their actual dates (not the observed weekday), plus common
+    // observances. Each is {date: "YYYY-MM-DD", name}.
+    const pad2 = value => String(value).padStart(2, "0");
+    const isoDay = (year, month, day) => `${year}-${pad2(month)}-${pad2(day)}`;
+
+    // The nth weekday (0 = Sunday) of a month; n = -1 for the last.
+    function nthWeekday(year, month, weekday, n) {
+        if (n < 0) {
+            const last = new Date(year, month, 0);
+            return last.getDate() - ((last.getDay() - weekday + 7) % 7);
+        }
+        const first = new Date(year, month - 1, 1).getDay();
+        return 1 + ((weekday - first + 7) % 7) + (n - 1) * 7;
+    }
+
+    // Easter Sunday (Gregorian), by the anonymous algorithm: [month, day].
+    function easterDate(year) {
+        const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+        const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+        const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+        const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7;
+        const m = Math.floor((a + 11 * h + 22 * l) / 451);
+        return [Math.floor((h + l - 7 * m + 114) / 31), ((h + l - 7 * m + 114) % 31) + 1];
+    }
+
+    function usHolidays(year) {
+        const [easterMonth, easterDay] = easterDate(year);
+        return [
+            [1, 1, "New Year's Day"],
+            [1, nthWeekday(year, 1, 1, 3), "Martin Luther King Jr. Day"],
+            [2, 14, "Valentine's Day"],
+            [2, nthWeekday(year, 2, 1, 3), "Presidents' Day"],
+            [easterMonth, easterDay, "Easter"],
+            [5, nthWeekday(year, 5, 0, 2), "Mother's Day"],
+            [5, nthWeekday(year, 5, 1, -1), "Memorial Day"],
+            [6, nthWeekday(year, 6, 0, 3), "Father's Day"],
+            [6, 19, "Juneteenth"],
+            [7, 4, "Independence Day"],
+            [9, nthWeekday(year, 9, 1, 1), "Labor Day"],
+            [10, nthWeekday(year, 10, 1, 2), "Columbus Day"],
+            [10, 31, "Halloween"],
+            [11, 11, "Veterans Day"],
+            [11, nthWeekday(year, 11, 4, 4), "Thanksgiving"],
+            [12, 24, "Christmas Eve"],
+            [12, 25, "Christmas"],
+            [12, 31, "New Year's Eve"]
+        ].map(([month, day, name]) => ({ date: isoDay(year, month, day), name }))
+            .sort((x, y) => x.date.localeCompare(y.date));
+    }
+
+    // Your countdowns plus this year's and next year's holidays, each as a
+    // one-off date. A holiday is left out when one of yours has the same
+    // name, or falls on the same day, so "Christmas" isn't counted twice.
+    function withHolidays(countdowns, today = new Date()) {
+        const own = Array.isArray(countdowns) ? countdowns : [];
+        const names = new Set(own.map(item => clean(item?.name, 60).toLowerCase()));
+        const days = new Set(own.map(item => nextOccurrence(String(item?.date ?? ""), today))
+            .filter(Boolean).map(date => isoDay(date.getFullYear(), date.getMonth() + 1, date.getDate())));
+        const year = today.getFullYear();
+        const holidays = [...usHolidays(year), ...usHolidays(year + 1)]
+            .filter(item => !names.has(item.name.toLowerCase()) && !days.has(item.date));
+        return [...own, ...holidays];
+    }
+
     // ------------------------------------------------------------- rotation
     // One line, advanced only when the Command Center opens or ↻ is pressed.
     // Kinds rotate in a fixed order; history cycles through today's events.
@@ -215,6 +281,6 @@
 
     global.ASCSAlmanac = {
         moonPhase, moonPath, sunTimes, parseFeatured, parseHolidays,
-        countdownItems, nextOccurrence, rotationItem, quoteFor, clean
+        countdownItems, nextOccurrence, rotationItem, quoteFor, clean, usHolidays, withHolidays
     };
 })(globalThis);

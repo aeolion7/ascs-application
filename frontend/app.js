@@ -19,11 +19,13 @@ window.addEventListener("unhandledrejection", event =>
     reportPageError(event.reason?.message || event.reason, "(promise)"));
 
 const $ = id => document.getElementById(id);
-const validViews = new Set(["home", "notes", "games", "dashboard", "logs", "commands", "settings"]);
+const validViews = new Set(["home", "notes", "calendar", "games", "sounds", "dashboard", "logs", "commands", "settings"]);
 const viewLabels = {
     home: "COMMAND CENTER",
     notes: "QUICK NOTES",
+    calendar: "CALENDAR",
     games: "GAMES",
+    sounds: "SOUNDS",
     dashboard: "SYSTEM DASHBOARD",
     logs: "LOGS",
     commands: "SUPER COMMANDS",
@@ -177,6 +179,8 @@ function navigate(view) {
         send("GetAudioDevices");
     }
     if (view === "logs") startLogPolling();
+    if (view === "sounds") openSoundsView();
+    if (view === "calendar") openCalendarView();
     else stopLogPolling();
     if (view === "games") startGamesPolling();
     else stopGamesPolling();
@@ -201,8 +205,8 @@ document.querySelectorAll("[data-launch]").forEach(button => {
 
 // ------------------------------------------------------------------ palette
 // Super+Space. Sources: built-in commands, custom commands, workspaces,
-// notes, snippets, open windows, an inline calculator, and file/web search.
-// Modes narrow the list: snippets (Super+Shift+P), workspaces
+// notes, open windows, an inline calculator, and file/web search.
+// Modes narrow the list: snippets (paste a note, Super+Shift+P), workspaces
 // (Super+Shift+R), windows, and save-workspace (name entry).
 
 const Palette = globalThis.ASCSPalette;
@@ -210,13 +214,16 @@ const USAGE_KEY = "ascs.palette.usage";
 
 const builtInCommands = [
     { id: "view:home", label: "Command Center", description: "Open the ASCS home view", keywords: "home overview activity", view: "home" },
-    { id: "view:notes", label: "Quick Notes", description: "Open your notes and snippets", keywords: "notes scratchpad", view: "notes", hotkey: "notes" },
+    { id: "view:notes", label: "Quick Notes", description: "Open your notes", keywords: "notes scratchpad snippets", view: "notes", hotkey: "notes" },
+    { id: "view:calendar", label: "Calendar", description: "Your calendars: day, week, month and agenda", keywords: "calendar events schedule agenda appointments", view: "calendar" },
+    { id: "calendar:new", label: "New calendar event", description: "Opens the event editor (Ctrl + E). Or type + and the event: +Dentist tue 3pm", keywords: "calendar event add appointment meeting new", shortcut: "Ctrl+E", run: () => newEventFromShortcut() },
+    { id: "view:sounds", label: "Sounds", description: "Every Windows sound; levels; set Windows and ASCS sounds", keywords: "sounds audio wav windows startup chimes level", view: "sounds" },
     { id: "view:dashboard", label: "System Dashboard", description: "View live system metrics and hardware", keywords: "dashboard metrics hardware", view: "dashboard", hotkey: "dashboard" },
     { id: "view:commands", label: "Shortcut Reference", description: "Browse the complete Super shortcut list", keywords: "commands shortcuts help", view: "commands" },
     { id: "view:games", label: "Games", description: "Play time, recent games, and achievements", keywords: "play emulator retroarch dolphin pcsx2 pso achievements", view: "games" },
     { id: "view:logs", label: "Logs", description: "ASCS, activity and Code key logs, newest first", keywords: "log diagnostics errors journal history", view: "logs" },
     { id: "view:settings", label: "Preferences", description: "Drives, snapping, shortcuts, custom commands, and workspaces", keywords: "settings options configure", view: "settings" },
-    { id: "mode:snippets", label: "Paste a snippet…", description: "Type a saved snippet into the window you were using", keywords: "snippet paste insert text", mode: "snippets", shortcut: "Super+Shift+P" },
+    { id: "mode:snippets", label: "Paste a note…", description: "Paste a note into the window you were using", keywords: "snippet paste insert text note", mode: "snippets", shortcut: "Super+Shift+P" },
     { id: "mode:workspaces", label: "Restore a workspace…", description: "Choose a saved window layout", keywords: "workspace layout restore", mode: "workspaces", shortcut: "Super+Shift+R" },
     { id: "mode:save-workspace", label: "Save workspace as…", description: "Save the current window layout under a name", keywords: "workspace layout save name", mode: "save-workspace" },
     { id: "mode:windows", label: "Switch to window…", description: "Jump to an open window on this desktop", keywords: "window switch focus alt tab", mode: "windows" },
@@ -238,12 +245,13 @@ const builtInCommands = [
 ];
 
 const paletteModes = {
-    all: { chip: "", title: "At your command.", placeholder: "Search commands, notes, snippets, windows… (= math, ? web)" },
-    snippets: { chip: "Snippets", title: "Paste a snippet", placeholder: "Filter snippets…" },
+    all: { chip: "", title: "At your command.", placeholder: "Search commands, notes, windows… (= math, ? web, + event)" },
+    snippets: { chip: "Paste", title: "Paste a note", placeholder: "Filter notes…" },
+    ask: { chip: "Fill in", title: "Fill in the blanks", placeholder: "" },
     workspaces: { chip: "Workspaces", title: "Restore a workspace", placeholder: "Filter saved workspaces…" },
     windows: { chip: "Windows", title: "Switch to a window", placeholder: "Filter open windows…" },
     "save-workspace": { chip: "Save workspace", title: "Save the current layout", placeholder: "Name this workspace (letters, numbers, spaces, - _)" },
-    pick: { chip: "Add quick action", title: "Pin a quick action", placeholder: "Search views, apps, commands, workspaces, snippets…" },
+    pick: { chip: "Add quick action", title: "Pin a quick action", placeholder: "Search views, apps, commands, workspaces, notes…" },
     "games:retroarch": { chip: "RetroArch", title: "Recent RetroArch games", placeholder: "Filter games…" },
     "games:dolphin": { chip: "Dolphin", title: "Recent Dolphin games", placeholder: "Filter games…" },
     "games:pcsx2": { chip: "PCSX2", title: "Recent PCSX2 games", placeholder: "Filter games…" }
@@ -310,17 +318,24 @@ function paletteSources(mode) {
         }));
     }
     if (mode === "all" || mode === "snippets" || mode === "pick") {
+        // Every note can be opened, pasted or copied. In the palette Enter
+        // opens it (Alt + Enter pastes); Super + Shift + P lists them to paste.
+        // "snippet:" ids paste (quick actions kept from when these were snippets).
         notesData.notes.forEach(note => {
-            const isSnippet = note.type === "snippet";
-            if (!isSnippet && mode === "snippets") return;
-            items.push({
-                id: `${isSnippet ? "snippet" : "note"}:${note.id}`, label: noteLabel(note),
-                description: noteExcerpt(note.content), keywords: `${isSnippet ? "snippet" : "note"} ${note.content.slice(0, 2000)}`,
-                badge: isSnippet ? "SNIPPET" : "NOTE", searchOnly: mode === "all",
-                run: isSnippet ? () => send("PasteSnippet", note.content) : () => openNote(note.id),
-                copy: () => copyText(note.content, isSnippet ? "Snippet copied." : "Note copied."),
-                weight: isSnippet ? 2 : 0
-            });
+            const code = note.type === "code";
+            const base = {
+                label: ASCSNotes.groupedLabel(note, noteLabel(note)), description: noteExcerpt(note.content),
+                keywords: `${code ? "code snippet" : "note"} ${note.content.slice(0, 2000)}`,
+                badge: code ? "CODE" : "NOTE",
+                paste: () => useNote(note, "paste"), copy: () => useNote(note, "copy"),
+                weight: (note.pinned ? 2 : 0) + (mode === "snippets" && code ? 1 : 0)
+            };
+            if (mode === "snippets") {
+                items.push({ ...base, id: `snippet:${note.id}`, run: base.paste });
+                return;
+            }
+            items.push({ ...base, id: `note:${note.id}`, searchOnly: mode === "all", run: () => openNote(note.id) });
+            if (mode === "pick") items.push({ ...base, id: `snippet:${note.id}`, label: `Paste “${base.label}”`, run: base.paste });
         });
     }
     if (mode === "all" || mode.startsWith("games:")) {
@@ -360,6 +375,21 @@ function buildLauncherResults() {
         }];
     }
 
+    if (launcherMode === "ask" && askState) {
+        const ask = askState.asks[askState.index];
+        const answers = { ...askState.answers, [ask.name]: raw };
+        const preview = ASCSNotes.fillPlaceholders(askState.note.content, { answers, uuid: () => "…" })
+            .replace(new RegExp(`[${ASCSNotes.MARK_CLIPBOARD}${ASCSNotes.MARK_CURSOR}]`, "g"), "")
+            .replace(/\s+/g, " ").trim().slice(0, 160);
+        const last = askState.index === askState.asks.length - 1;
+        return [{
+            id: "fill", label: `${ASCSNotes.askLabel(ask.name)}: ${raw || "(empty)"}`,
+            description: `${askState.asks.length > 1 ? `${askState.index + 1} of ${askState.asks.length} · ` : ""}${preview}`,
+            badge: last ? (askState.action === "copy" ? "COPY" : "PASTE") : "NEXT",
+            run: () => answerAsk(raw)
+        }];
+    }
+
     const query = launcherMode === "all" ? Palette.parseQuery(raw) : { kind: "text", text: raw.trim() };
     const results = [];
 
@@ -375,6 +405,11 @@ function buildLauncherResults() {
             results.push({ id: "calc", label: "Keep typing an expression", description: "Supports + − × ÷ % ^, parentheses, sqrt(), round(), pi, e", badge: "RESULT", disabled: true });
         }
         if (raw.trim().startsWith("=")) return results;
+    }
+
+    if (query.kind === "event") {
+        results.push(quickAddOption(query.text));
+        return results;
     }
 
     if (query.kind === "web") {
@@ -419,7 +454,7 @@ function renderLauncherResults() {
         const empty = document.createElement("p");
         empty.className = "launcher-empty";
         empty.textContent = launcherMode === "snippets"
-            ? "No snippets yet. In Quick Notes, set a note's type to Snippet."
+            ? "No notes yet. Start one in Quick Notes."
             : launcherMode === "workspaces"
                 ? "No saved workspaces. Use “Save workspace as…” or Super+S."
                 : "No matches.";
@@ -468,7 +503,7 @@ function renderLauncherResults() {
             launcherSelection = index;
             updateLauncherSelection();
         });
-        option.addEventListener("click", event => executeLauncherCommand(command, event.shiftKey));
+        option.addEventListener("click", event => executeLauncherCommand(command, launcherAction(command, event)));
         results.append(option);
     });
     updateLauncherHint();
@@ -478,11 +513,14 @@ function updateLauncherHint() {
     const selected = launcherCommands[launcherSelection];
     const kind = selected?.badge;
     const parts = ["<kbd>↑</kbd><kbd>↓</kbd> navigate"];
-    if (kind === "SNIPPET") parts.push("<kbd>Enter</kbd> paste", "<kbd>Shift</kbd>+<kbd>Enter</kbd> copy");
-    else if (kind === "NOTE") parts.push("<kbd>Enter</kbd> open", "<kbd>Shift</kbd>+<kbd>Enter</kbd> copy");
+    if ((kind === "NOTE" || kind === "CODE") && launcherMode === "snippets") parts.push("<kbd>Enter</kbd> paste", "<kbd>Shift</kbd>+<kbd>Enter</kbd> copy");
+    else if (kind === "NOTE" || kind === "CODE") parts.push("<kbd>Enter</kbd> open", "<kbd>Alt</kbd>+<kbd>Enter</kbd> paste", "<kbd>Shift</kbd>+<kbd>Enter</kbd> copy");
+    else if (kind === "NEXT") parts.push("<kbd>Enter</kbd> next");
+    else if (kind === "PASTE") parts.push("<kbd>Enter</kbd> paste");
+    else if (kind === "COPY") parts.push("<kbd>Enter</kbd> copy");
     else if (kind === "RESULT") parts.push("<kbd>Enter</kbd> copy result");
     else parts.push("<kbd>Enter</kbd> run");
-    parts.push(launcherMode === "all" ? "<kbd>Esc</kbd> close" : "<kbd>Backspace</kbd> all commands");
+    parts.push(launcherMode === "all" ? "<kbd>Esc</kbd> close" : launcherMode === "ask" ? "<kbd>Esc</kbd> cancel" : "<kbd>Backspace</kbd> all commands");
     $("launcherHint").innerHTML = parts.join(" <i>·</i> ");
 }
 
@@ -528,14 +566,25 @@ function openLauncher(mode = "all") {
 
 function closeLauncher() {
     $("launcher").hidden = true;
+    if (launcherMode === "ask" && askState?.index < askState?.asks.length) askState = null;
     launcherMode = "all";
     if (launcherPreviousFocus instanceof HTMLElement && launcherPreviousFocus.isConnected) {
         launcherPreviousFocus.focus();
     }
 }
 
-function executeLauncherCommand(command, alternate = false) {
+// Enter runs; Shift copies; Alt pastes (for notes).
+function launcherAction(command, event) {
+    if (event.altKey && command?.paste) return "paste";
+    return event.shiftKey ? "copy" : "run";
+}
+
+function executeLauncherCommand(command, action = "run") {
     if (!command || command.disabled) return;
+    if (command.id === "fill") {
+        command.run();
+        return;
+    }
     if (launcherMode === "pick") {
         closeLauncher();
         addQuickAction(command.id);
@@ -546,9 +595,10 @@ function executeLauncherCommand(command, alternate = false) {
         setLauncherMode(command.mode);
         return;
     }
-    if (command.id && !["calc", "web", "files", "save-workspace"].includes(command.id)) rememberUsage(command.id);
+    if (command.id && !["calc", "web", "files", "save-workspace", "event"].includes(command.id)) rememberUsage(command.id);
     closeLauncher();
-    if (alternate && command.copy) command.copy();
+    if (action === "copy" && command.copy) command.copy();
+    else if (action === "paste" && command.paste) command.paste();
     else if (command.run) command.run();
     else if (command.view) navigate(command.view);
     else if (command.launch) send("Launch", command.launch);
@@ -563,8 +613,62 @@ async function copyText(text, message) {
     }
 }
 
+// ---- pasting and copying notes, with placeholders (1.8.0)
+// A note that fills placeholders asks for each {ask:name} in the palette
+// first, then is filled here; ASCS fills {clipboard} and places {cursor}.
+let askState = null;
+
+function useNote(note, action) {
+    if (!ASCSNotes.fillsPlaceholders(note)) {
+        finishNote(note.content.replace(new RegExp(`[${ASCSNotes.MARK_CLIPBOARD}${ASCSNotes.MARK_CURSOR}]`, "g"), ""), action);
+        return;
+    }
+    const asks = ASCSNotes.placeholderAsks(note.content);
+    if (!asks.length) {
+        finishNote(ASCSNotes.fillPlaceholders(note.content), action);
+        return;
+    }
+    askState = { note, action, asks, index: 0, answers: {} };
+    showAsk();
+}
+
+function showAsk() {
+    const ask = askState.asks[askState.index];
+    openLauncher("ask");
+    $("launcherTitle").textContent = `Fill in “${noteLabel(askState.note)}”`;
+    $("launcherSearch").placeholder = ASCSNotes.askLabel(ask.name);
+    $("launcherSearch").value = askState.answers[ask.name] ?? ask.fallback;
+    $("launcherSearch").select();
+    renderLauncherResults();
+}
+
+function answerAsk(value) {
+    if (!askState) return;
+    askState.answers[askState.asks[askState.index].name] = value;
+    askState.index++;
+    if (askState.index < askState.asks.length) {
+        showAsk();
+        return;
+    }
+    const { note, action, answers } = askState;
+    askState = null;
+    closeLauncher();
+    finishNote(ASCSNotes.fillPlaceholders(note.content, { answers }), action);
+}
+
+function finishNote(text, action) {
+    if (!text) return;
+    if (action === "paste") {
+        send("PasteNote", text);
+    } else if (send("CopyNote", text)) {
+        showToast("Copied.");
+    }
+}
+
 function openNote(id) {
-    if (!notesData.notes.some(note => note.id === id)) return;
+    const note = notesData.notes.find(item => item.id === id);
+    if (!note) return;
+    if (noteGroupPrefs.collapsed.delete(ASCSNotes.groupKey(note.group))) saveNoteGroupPrefs();
     notesData.activeId = id;
     navigate("notes");
     renderActiveNote();
@@ -585,8 +689,8 @@ $("launcherSearch").addEventListener("keydown", event => {
         updateLauncherSelection();
     } else if (event.key === "Enter") {
         event.preventDefault();
-        executeLauncherCommand(launcherCommands[launcherSelection], event.shiftKey);
-    } else if (event.key === "Backspace" && launcherMode !== "all" && $("launcherSearch").value === "") {
+        executeLauncherCommand(launcherCommands[launcherSelection], launcherAction(launcherCommands[launcherSelection], event));
+    } else if (event.key === "Backspace" && launcherMode !== "all" && launcherMode !== "ask" && $("launcherSearch").value === "") {
         event.preventDefault();
         setLauncherMode("all");
     } else if (event.key === "Escape") {
@@ -633,6 +737,8 @@ $("settingsForm").addEventListener("submit", event => {
         $("preserveWindowSize").checked ? "1" : "0",
         hotkeys.join(","),
         $("claudeShortcut").value.trim(),
+        $("powerDelay").value,
+        $("ascsSounds").value,
         $("searchTemplate").value.trim()
     ].join("|");
     $("settingsStatus").textContent = "Saving preferences…";
@@ -649,7 +755,7 @@ document.querySelectorAll("[data-window-action]").forEach(button => {
 
 window.addEventListener("focus", () => {
     flushNotices();
-    if (!$("confirmDialog").hidden || !$("launcher").hidden) return;
+    if (!$("confirmDialog").hidden || !$("launcher").hidden || !$("helpDialog").hidden) return;
     const activeView = document.querySelector(".view.active")?.id;
     if (activeView) requestAnimationFrame(() => focusPrimaryInput(activeView));
 });
@@ -677,63 +783,304 @@ function renderNotesList() {
         .sort((left, right) => Number(right.pinned) - Number(left.pinned)
             || right.updated.localeCompare(left.updated));
 
-    list.replaceChildren();
     $("notesEmpty").hidden = notes.length > 0;
     $("notesEmpty").textContent = notesData.notes.length
         ? "No notes match this filter."
         : "Nothing captured yet. Start a note, or press Super + Shift + C in any app.";
     renderNoteTags();
 
-    notes.forEach(note => {
-        const item = document.createElement("button");
-        item.type = "button";
-        item.className = "note-list-item";
-        item.setAttribute("role", "listitem");
-        item.setAttribute("aria-current", String(note.id === notesData.activeId));
-
-        const title = document.createElement("strong");
-        title.textContent = noteLabel(note);
-        if (note.pinned) {
-            const mark = document.createElement("span");
-            mark.className = "pin-mark";
-            mark.setAttribute("aria-label", "Pinned");
-            mark.textContent = "◆ ";
-            title.prepend(mark);
-        }
-        item.classList.toggle("is-pinned", Boolean(note.pinned));
-        const updated = document.createElement("small");
-        updated.textContent = new Date(note.updated).toLocaleString([], {
-            dateStyle: "medium",
-            timeStyle: "short"
-        });
-
-        item.append(title, updated);
-        item.addEventListener("click", () => {
-            if (notesData.activeId === note.id) return;
-            notesData.activeId = note.id;
-            renderActiveNote();
-            scheduleNoteSave(false);
-        });
-        list.append(item);
-    });
+    // Pinned notes first, then groups (pinned groups first), then Ungrouped.
+    // While filtering, every group with a match shows open; what was left open
+    // or closed is kept for later.
+    const filtering = Boolean(query.trim());
+    const sections = ASCSNotes.groupNotes(notes, noteGroupPrefs.pinned);
+    const fragment = document.createDocumentFragment();
+    if (sections.pinned.length) fragment.append(noteItems(sections.pinned, "Pinned notes"));
+    sections.groups.forEach(group => fragment.append(noteGroupSection(group, filtering)));
+    if (sections.ungrouped.length) {
+        fragment.append(sections.groups.length
+            ? noteGroupSection({ key: "", name: "Ungrouped", notes: sections.ungrouped, ungrouped: true }, filtering)
+            : noteItems(sections.ungrouped, "Notes"));
+    }
+    list.replaceChildren(fragment);
 }
+
+function noteItems(notes, label) {
+    const items = element("div", "note-items");
+    items.setAttribute("role", "list");
+    items.setAttribute("aria-label", label);
+    items.append(...notes.map(noteListItem));
+    return items;
+}
+
+function noteListItem(note) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "note-list-item";
+    item.setAttribute("role", "listitem");
+    item.setAttribute("aria-current", String(note.id === notesData.activeId));
+
+    const title = document.createElement("strong");
+    title.textContent = noteLabel(note);
+    if (note.pinned) {
+        const mark = document.createElement("span");
+        mark.className = "pin-mark";
+        mark.setAttribute("aria-label", "Pinned");
+        mark.textContent = "◆ ";
+        title.prepend(mark);
+    }
+    item.classList.toggle("is-pinned", Boolean(note.pinned));
+    const updated = document.createElement("small");
+    updated.textContent = new Date(note.updated).toLocaleString([], {
+        dateStyle: "medium",
+        timeStyle: "short"
+    });
+
+    item.append(title, updated);
+    item.addEventListener("click", () => {
+        if (notesData.activeId === note.id) return;
+        notesData.activeId = note.id;
+        renderActiveNote();
+        scheduleNoteSave(false);
+    });
+    return item;
+}
+
+// ---- Quick Notes groups (1.8.0)
+// One level, from each note's optional `group`. Which groups are left closed,
+// and which are pinned, is kept on this PC (not in notes.json).
+const NOTE_GROUP_PREFS = "ascs.notes.groups";
+const noteGroupPrefs = (() => {
+    try {
+        const saved = JSON.parse(localStorage.getItem(NOTE_GROUP_PREFS) || "{}") || {};
+        const keys = value => new Set(Array.isArray(value) ? value.filter(key => typeof key === "string").map(ASCSNotes.groupKey) : []);
+        return { collapsed: keys(saved.collapsed), pinned: keys(saved.pinned) };
+    } catch {
+        return { collapsed: new Set(), pinned: new Set() };
+    }
+})();
+
+function saveNoteGroupPrefs() {
+    try {
+        localStorage.setItem(NOTE_GROUP_PREFS, JSON.stringify({ collapsed: [...noteGroupPrefs.collapsed], pinned: [...noteGroupPrefs.pinned] }));
+    } catch { /* not kept */ }
+}
+
+// A group's header (open or close it, and a menu) and, when open, its notes.
+// Ungrouped has no menu.
+function noteGroupSection(group, filtering) {
+    const key = group.ungrouped ? ":ungrouped" : group.key;
+    const open = filtering || !noteGroupPrefs.collapsed.has(key);
+    const section = element("section", `note-group${group.pinned ? " is-pinned" : ""}${open ? " is-open" : ""}`);
+    const head = element("div", "note-group-head");
+    const toggle = element("button", "note-group-toggle");
+    toggle.type = "button";
+    toggle.dataset.groupKey = key;
+    toggle.setAttribute("aria-expanded", String(open));
+    toggle.title = open ? `Close ${group.name}` : `Open ${group.name}`;
+    const chevron = svgNode("svg", { viewBox: "0 0 12 12", "aria-hidden": "true" });
+    chevron.append(svgNode("path", { d: "M4.5 2.5 8 6l-3.5 3.5" }));
+    const name = element("span", "note-group-name", group.name);
+    if (group.pinned) name.prepend(element("span", "pin-mark", "◆ "));
+    toggle.append(chevron, name, element("small", "note-group-count", String(group.notes.length)));
+    toggle.addEventListener("click", () => {
+        if (filtering) return;                   // a filter shows every match
+        if (noteGroupPrefs.collapsed.has(key)) noteGroupPrefs.collapsed.delete(key); else noteGroupPrefs.collapsed.add(key);
+        saveNoteGroupPrefs();
+        renderNotesList();
+        $("notesList").querySelector(`.note-group-toggle[data-group-key="${CSS.escape(key)}"]`)?.focus();
+    });
+    head.append(toggle);
+    if (!group.ungrouped) {
+        const more = element("button", "note-group-more", "⋯");
+        more.type = "button";
+        more.title = `${group.name}: pin, rename or delete`;
+        more.setAttribute("aria-haspopup", "menu");
+        more.addEventListener("click", event => {
+            event.stopPropagation();
+            openNoteGroupMenu(group, more);
+        });
+        head.append(more);
+    }
+    section.append(head);
+    if (open) section.append(noteItems(group.notes, group.name));
+    return section;
+}
+
+function openNoteGroupMenu(group, anchor) {
+    const menu = $("noteGroupMenu");
+    const item = (label, action, danger = false) => {
+        const button = element("button", `note-group-menu-item${danger ? " is-danger" : ""}`, label);
+        button.type = "button";
+        button.setAttribute("role", "menuitem");
+        button.addEventListener("click", () => {
+            closeNoteGroupMenu();
+            action();
+        });
+        return button;
+    };
+    const pinned = noteGroupPrefs.pinned.has(group.key);
+    menu.replaceChildren(
+        item(pinned ? "Unpin group" : "Pin group", () => {
+            if (pinned) noteGroupPrefs.pinned.delete(group.key); else noteGroupPrefs.pinned.add(group.key);
+            saveNoteGroupPrefs();
+            renderNotesList();
+        }),
+        item("Rename…", () => startGroupRename(group)),
+        item("Delete group…", () => deleteNoteGroup(group), true)
+    );
+    menu.hidden = false;                        // shown first: a hidden element has no offsetParent
+    const card = menu.offsetParent || document.body;
+    const box = anchor.getBoundingClientRect();
+    const frame = card.getBoundingClientRect();
+    menu.style.top = `${box.bottom - frame.top + 4}px`;
+    menu.style.right = `${frame.right - box.right}px`;
+    menu.querySelector("button")?.focus();
+}
+
+function closeNoteGroupMenu() {
+    $("noteGroupMenu").hidden = true;
+}
+
+document.addEventListener("click", event => {
+    if (!$("noteGroupMenu").hidden && !$("noteGroupMenu").contains(event.target)) closeNoteGroupMenu();
+});
+$("noteGroupMenu").addEventListener("keydown", event => {
+    const items = [...$("noteGroupMenu").querySelectorAll("button")];
+    const index = items.indexOf(document.activeElement);
+    if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        closeNoteGroupMenu();
+    } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        items[(index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
+    }
+});
+
+// Rename in place: the header's name becomes a text box. Enter keeps it, Esc
+// cancels; a name another group has merges the two, after asking.
+function startGroupRename(group) {
+    const toggle = $("notesList").querySelector(`.note-group-toggle[data-group-key="${CSS.escape(group.key)}"]`);
+    if (!toggle) return;
+    const input = element("input", "note-group-rename");
+    input.type = "text";
+    input.maxLength = 60;
+    input.value = group.name;
+    input.setAttribute("aria-label", `Rename ${group.name}`);
+    toggle.replaceWith(input);
+    input.focus();
+    input.select();
+    let done = false;
+    const finish = async commit => {
+        if (done) return;
+        done = true;
+        const name = ASCSNotes.normalizeGroup(input.value);
+        if (!commit || !name || name === group.name) {
+            renderNotesList();
+            return;
+        }
+        const key = ASCSNotes.groupKey(name);
+        const existing = ASCSNotes.groupNames(notesData.notes).find(other => ASCSNotes.groupKey(other) === key && key !== group.key);
+        if (existing && !(await confirmDialog({
+            title: `Merge into ${existing}?`,
+            message: `${existing} already exists. The notes in ${group.name} join it.`,
+            confirmLabel: "Merge"
+        }))) {
+            renderNotesList();
+            return;
+        }
+        ASCSNotes.renameGroup(notesData.notes, group.name, existing || name);
+        for (const set of [noteGroupPrefs.collapsed, noteGroupPrefs.pinned]) {
+            if (set.delete(group.key)) set.add(key);
+        }
+        saveNoteGroupPrefs();
+        renderActiveNote();
+        scheduleNoteSave(false);
+    };
+    input.addEventListener("keydown", event => {
+        if (event.key === "Enter") { event.preventDefault(); finish(true); }
+        if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); finish(false); }
+    });
+    input.addEventListener("blur", () => finish(true));
+}
+
+async function deleteNoteGroup(group) {
+    const count = notesData.notes.filter(note => ASCSNotes.groupKey(note.group) === group.key).length;
+    const confirmed = await confirmDialog({
+        title: `Delete the ${group.name} group?`,
+        message: `Its ${count} note${count === 1 ? "" : "s"} move${count === 1 ? "s" : ""} to Ungrouped. No notes are deleted.`,
+        confirmLabel: "Delete group", danger: true
+    });
+    if (!confirmed) return;
+    ASCSNotes.deleteGroup(notesData.notes, group.name);
+    noteGroupPrefs.collapsed.delete(group.key);
+    noteGroupPrefs.pinned.delete(group.key);
+    saveNoteGroupPrefs();
+    renderActiveNote();
+    scheduleNoteSave(false);
+}
+
+// The editor's Group field: suggestions from the groups in use; the change
+// applies when it's committed (Enter or leaving the field), not per letter.
+function commitNoteGroup() {
+    const note = activeNote();
+    if (!note) return;
+    const name = ASCSNotes.normalizeGroup($("noteGroup").value);
+    if (name === ASCSNotes.normalizeGroup(note.group)) {
+        $("noteGroup").value = name;
+        return;
+    }
+    if (name) note.group = name; else delete note.group;
+    noteGroupPrefs.collapsed.delete(ASCSNotes.groupKey(name));   // show where it went
+    saveNoteGroupPrefs();
+    renderActiveNote();
+    scheduleNoteSave(false);
+}
+$("noteGroup").addEventListener("change", commitNoteGroup);
+$("noteGroup").addEventListener("keydown", event => {
+    if (event.key === "Enter") {
+        event.preventDefault();
+        commitNoteGroup();
+        $("noteText").focus();
+    }
+});
 
 function renderActiveNote() {
     const note = activeNote();
     $("noteTitle").value = note?.title ?? "";
-    $("noteType").value = note?.type ?? "note";
+    $("noteType").value = note?.type === "code" ? "code" : "note";
+    if (document.activeElement !== $("noteGroup")) $("noteGroup").value = ASCSNotes.normalizeGroup(note?.group);
+    $("noteGroup").disabled = !note;
+    $("noteGroupNames").replaceChildren(...ASCSNotes.groupNames(notesData.notes).map(name => {
+        const option = document.createElement("option");
+        option.value = name;
+        return option;
+    }));
     $("noteText").value = note?.content ?? "";
-    const isSnippet = note?.type === "snippet";
-    $("noteKindLabel").textContent = isSnippet ? "SNIPPET" : "NOTE";
-    $("noteText").classList.toggle("snippet-editor", isSnippet);
-    document.querySelector(".editor-card").dataset.kind = isSnippet ? "snippet" : "note";
-    $("previewNoteButton").hidden = isSnippet;
+    const isCode = note?.type === "code";
+    $("noteKindLabel").textContent = isCode ? "CODE" : "NOTE";
+    $("noteText").classList.toggle("code-editor", isCode);
+    $("noteText").spellcheck = notesSpellcheck() && !isCode;
+    document.querySelector(".editor-card").dataset.kind = isCode ? "code" : "note";
+    $("previewNoteButton").hidden = isCode;
+    const fills = ASCSNotes.fillsPlaceholders(note);
+    $("noteFillButton").classList.toggle("is-on", Boolean(note) && fills);
+    $("noteFillButton").disabled = !note;
+    $("noteFillButton").title = fills
+        ? "Insert a placeholder. They're filled in when this note is pasted or copied from the palette."
+        : "Insert a placeholder. This note is pasted exactly as written until filling is turned on.";
+    $("noteFillToggle").checked = Boolean(note) && fills;
+    $("noteFillHint").textContent = isCode
+        ? "Off by default for code notes, so braces paste exactly"
+        : "From the palette: Alt + Enter, or Super + Shift + P";
+    if (!note) closePlaceholderMenu();
     $("previewNoteButton").disabled = !note;
     updateNotePreview();
     updateWordCount();
     $("pinNoteButton").setAttribute("aria-pressed", String(Boolean(note?.pinned)));
     $("pinNoteButton").textContent = note?.pinned ? "Unpin" : "Pin";
-    $("copySnippetButton").hidden = note?.type !== "snippet";
+    $("copySnippetButton").hidden = !note;
     $("deleteNoteButton").disabled = !note;
     $("noteTitle").disabled = !note;
     $("noteType").disabled = !note;
@@ -813,7 +1160,9 @@ function loadNotes(raw, recovered) {
     const validNotes = parsed.notes.every(note =>
         note && typeof note.id === "string"
         && typeof note.title === "string"
-        && ["note", "snippet"].includes(note.type)
+        && ["note", "code", "snippet"].includes(note.type)
+        && (note.fill === undefined || typeof note.fill === "boolean")
+        && (note.group === undefined || typeof note.group === "string")
         && typeof note.content === "string"
         && typeof note.pinned === "boolean"
         && typeof note.created === "string"
@@ -823,11 +1172,20 @@ function loadNotes(raw, recovered) {
         return;
     }
 
+    // 1.8.0: snippets became notes in the Code style.
+    let migrated = false;
+    parsed.notes.forEach(note => {
+        if (note.type === "snippet") {
+            note.type = "code";
+            migrated = true;
+        }
+    });
     notesData = {
         version: 2,
         activeId: typeof parsed.activeId === "string" ? parsed.activeId : null,
         notes: parsed.notes
     };
+    if (migrated) scheduleNoteSave(false);
     if (!notesData.notes.some(note => note.id === notesData.activeId)) {
         notesData.activeId = notesData.notes[0]?.id ?? null;
     }
@@ -835,7 +1193,10 @@ function loadNotes(raw, recovered) {
     notesLoaded = true;
     renderActiveNote();
     applyPendingCaptures();
-    if ($("notes").classList.contains("active")) {
+    if (newNoteWhenLoaded) {
+        newNoteWhenLoaded = false;
+        $("newNoteButton").click();
+    } else if ($("notes").classList.contains("active")) {
         requestAnimationFrame(() => focusPrimaryInput("notes"));
     }
 }
@@ -848,6 +1209,9 @@ function handleNoteInput() {
     updateWordCount();
     scheduleNoteSave();
 }
+
+// Set by Ctrl + N before the notes have loaded: the note is made once they arrive.
+let newNoteWhenLoaded = false;
 
 $("newNoteButton").addEventListener("click", () => {
     if (!notesLoaded) {
@@ -900,10 +1264,119 @@ $("pinNoteButton").addEventListener("click", () => {
 $("copySnippetButton").addEventListener("click", async () => {
     try {
         await navigator.clipboard.writeText($("noteText").value);
-        showToast("Snippet copied.");
+        showToast("Copied, as written.");
     } catch (error) {
-        showToast(`Unable to copy snippet: ${error.message}`);
+        showToast(`Unable to copy: ${error.message}`);
     }
+});
+// ---- the placeholder menu: insert at the cursor instead of memorizing
+// them, with a live example of each; filling is switched at the bottom.
+function renderPlaceholderItems() {
+    const container = $("placeholderItems");
+    container.replaceChildren();
+    let group = "";
+    ASCSNotes.PLACEHOLDER_MENU.forEach(item => {
+        if (item.group !== group) {
+            group = item.group;
+            container.append(element("p", "placeholder-group", group));
+        }
+        const button = element("button", "placeholder-item");
+        button.type = "button";
+        button.setAttribute("role", "menuitem");
+        const example = /^\{(ask|clipboard|cursor)/.test(item.text) ? (item.note || "") : ASCSNotes.fillPlaceholders(item.text);
+        button.append(element("span", "", item.label), element("code", "", item.text), element("small", "", example));
+        if (item.note) button.title = item.note;
+        button.addEventListener("click", () => insertPlaceholder(item));
+        container.append(button);
+    });
+}
+
+function openPlaceholderMenu() {
+    if (!activeNote()) return;
+    renderPlaceholderItems();
+    $("placeholderMenu").hidden = false;
+    $("noteFillButton").setAttribute("aria-expanded", "true");
+    $("placeholderItems").querySelector(".placeholder-item")?.focus();
+}
+
+function closePlaceholderMenu(focusButton = false) {
+    if ($("placeholderMenu").hidden) return;
+    $("placeholderMenu").hidden = true;
+    $("noteFillButton").setAttribute("aria-expanded", "false");
+    if (focusButton) $("noteFillButton").focus();
+}
+
+function insertPlaceholder(item) {
+    const note = activeNote();
+    if (!note) return;
+    closePlaceholderMenu();
+    if (notePreviewOn) {
+        notePreviewOn = false;
+        updateNotePreview();
+    }
+    const editor = $("noteText");
+    const start = editor.selectionStart ?? editor.value.length;
+    editor.setRangeText(item.text, start, editor.selectionEnd ?? start, "end");
+    editor.focus();
+    if (item.select) editor.setSelectionRange(start + item.select[0], start + item.select[1]);
+    if (!ASCSNotes.fillsPlaceholders(note)) {
+        note.fill = true;
+        showToast("Filling placeholders is now on for this note.");
+    }
+    handleNoteInput();
+    renderActiveNote();
+    if (item.select) editor.setSelectionRange(start + item.select[0], start + item.select[1]);
+    else editor.setSelectionRange(start + item.text.length, start + item.text.length);
+}
+
+$("noteFillButton").addEventListener("click", () => {
+    if ($("placeholderMenu").hidden) openPlaceholderMenu();
+    else closePlaceholderMenu();
+});
+$("noteFillToggle").addEventListener("change", () => {
+    const note = activeNote();
+    if (!note) return;
+    note.fill = $("noteFillToggle").checked;
+    renderActiveNote();
+    scheduleNoteSave();
+});
+$("placeholderMenu").addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        closePlaceholderMenu(true);
+    } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const items = [...$("placeholderMenu").querySelectorAll(".placeholder-item, #noteFillToggle")];
+        const index = items.indexOf(document.activeElement);
+        items[(index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
+    }
+});
+document.addEventListener("pointerdown", event => {
+    if (!$("placeholderMenu").hidden && !event.target.closest(".note-fill-wrap")) closePlaceholderMenu();
+});
+
+// Spell-check in Quick Notes (Preferences › General): on by default, and
+// never in code notes. Kept on this PC with the page's other preferences.
+const NOTES_SPELLCHECK = "ascs.notes.spellcheck";
+// US holidays as countdowns (1.8.0), on unless turned off; kept on this PC.
+const HOLIDAY_COUNTDOWNS = "ascs.holidayCountdowns";
+function holidayCountdowns() {
+    try { return localStorage.getItem(HOLIDAY_COUNTDOWNS) !== "0"; } catch { return true; }
+}
+$("holidayCountdowns").checked = holidayCountdowns();
+$("holidayCountdowns").addEventListener("change", () => {
+    try { localStorage.setItem(HOLIDAY_COUNTDOWNS, $("holidayCountdowns").checked ? "1" : "0"); } catch { /* not kept */ }
+    if (almanacState.settings) renderAlmanac();
+});
+
+function notesSpellcheck() {
+    try { return localStorage.getItem(NOTES_SPELLCHECK) !== "0"; } catch { return true; }
+}
+$("notesSpellcheck").checked = notesSpellcheck();
+$("notesSpellcheck").addEventListener("change", () => {
+    try { localStorage.setItem(NOTES_SPELLCHECK, $("notesSpellcheck").checked ? "1" : "0"); } catch { /* not kept */ }
+    renderActiveNote();
 });
 
 document.addEventListener("visibilitychange", () => {
@@ -921,6 +1394,21 @@ function handleWebMessage(event) {
     if (typeof data === "string" && data.startsWith("COVER\n")) {
         const [, id, ...rest] = data.split("\n");
         handleCoverMessage(id, rest.join("\n"));
+        return;
+    }
+    if (typeof data === "string" && data.startsWith("ICS\n")) {
+        const [, fileName, ...rest] = data.split("\n");
+        handleIcsFile(fileName, rest.join("\n"));
+        return;
+    }
+    if (typeof data === "string" && data.startsWith("CAL\n")) {
+        const [, id, status, etag, ...rest] = data.split("\n");
+        handleCalReply(id, status, etag, rest.join("\n"));
+        return;
+    }
+    if (typeof data === "string" && data.startsWith("SOUND\n")) {
+        const [, id, ...rest] = data.split("\n");
+        handleSoundBytes(id, rest.join("\n"));
         return;
     }
     if (typeof data === "string" && data.startsWith("RAIMG\n")) {
@@ -977,6 +1465,8 @@ function handleWebMessage(event) {
                 send("GetAudioDevices");
             }
             if (view === "logs") startLogPolling();
+            if (view === "sounds") openSoundsView();
+            if (view === "calendar") openCalendarView();
             if (view === "games") startGamesPolling();
             if (view === "commands") startRunningPolling();
             requestAnimationFrame(() => focusPrimaryInput(view));
@@ -1093,7 +1583,10 @@ function handleWebMessage(event) {
         case "powerPending":
             if (typeof data.action === "string" && Number.isFinite(data.seconds)) showPowerBanner(data.action, data.seconds);
             break;
-        case "powerCancelled":
+        case "powerHeld":
+            if (typeof data.action === "string") showPowerHeld(data.action, data.apps);
+            break;
+        case "powerCanceled":
         case "powerDone":
             hidePowerBanner();
             if (typeof data.message === "string" && data.message) showNotice(data.message);
@@ -1109,6 +1602,24 @@ function handleWebMessage(event) {
             break;
         case "gameSettings":
             loadGameSettings(data);
+            break;
+        case "calendarState":
+            handleCalendarState(data);
+            break;
+        case "soundLibrary":
+            handleSoundLibrary(data);
+            break;
+        case "windowsSounds":
+            handleWindowsSounds(data);
+            break;
+        case "soundsDeleted":
+            handleSoundsDeleted(data);
+            break;
+        case "soundSaved":
+            handleSoundSaved(data);
+            break;
+        case "soundMatched":
+            handleSoundMatched(data);
             break;
         case "gameSettingsSaved":
             $("gamesStatus").textContent = typeof data.message === "string" ? data.message : "Saved.";
@@ -1164,6 +1675,8 @@ window.chrome?.webview?.addEventListener("message", handleWebMessage);
 function loadSettings(data) {
     $("searchTemplate").value = typeof data.searchTemplate === "string" ? data.searchTemplate : "";
     $("claudeShortcut").value = typeof data.claudeShortcut === "string" ? data.claudeShortcut : "";
+    $("powerDelay").value = [0, 5, 30].includes(data.powerDelay) ? String(data.powerDelay) : "5";
+    $("ascsSounds").value = ["off", "start", "show"].includes(data.ascsSounds) ? data.ascsSounds : "show";
     $("driveLetters").value = Array.isArray(data.drives) ? data.drives.join(", ") : "";
     $("snapGap").value = String(data.snapGap ?? 0);
     $("snapGapValue").value = `${$("snapGap").value} px`;
@@ -1509,7 +2022,7 @@ function applyPendingCaptures() {
 // ------------------------------------------------------------ activity feed
 
 const activityLabels = {
-    launch: "Opened", workspace: "Workspace", note: "Notes", snippet: "Snippet",
+    launch: "Opened", workspace: "Workspace", note: "Notes", snippet: "Pasted",
     file: "Explorer", command: "Custom", search: "Search", error: "Problem", system: "ASCS"
 };
 
@@ -1952,7 +2465,7 @@ const QUICK_ACTION_ICONS = {
     FIND: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/>',
     CUSTOM: '<path d="M12 3.5 14.4 9l5.9.5-4.5 3.9 1.4 5.8L12 16.2 6.8 19.2l1.4-5.8L3.7 9.5 9.6 9z"/>',
     WORKSPACE: '<rect x="3.5" y="4.5" width="7" height="15" rx="1.5"/><rect x="13.5" y="4.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="6" rx="1.5"/>',
-    SNIPPET: '<path d="m9 8-4 4 4 4m6-8 4 4-4 4"/>',
+    CODE: '<path d="m9 8-4 4 4 4m6-8 4 4-4 4"/>',
     NOTE: '<path d="M6.5 3.75h7l4 4v12.5h-11a2 2 0 0 1-2-2v-12a2.5 2.5 0 0 1 2-2.5Z"/><path d="M13.5 4v4h4m-9 4.5h6m-6 3.5h6"/>'
 };
 // Specific icons for common items; anything else uses its kind's icon.
@@ -2223,7 +2736,7 @@ function renderMarkdown(container, blocks) {
 
 function updateNotePreview() {
     const note = activeNote();
-    const show = notePreviewOn && note && note.type !== "snippet";
+    const show = notePreviewOn && note && note.type !== "code";
     $("previewNoteButton").setAttribute("aria-pressed", String(Boolean(show)));
     $("previewNoteButton").textContent = show ? "Edit" : "Preview";
     $("notePreview").hidden = !show;
@@ -2427,7 +2940,7 @@ function renderAlmanac() {
     }
 
     // Countdown: the nearest one, with the rest in the tooltip.
-    const countdowns = Almanac.countdownItems(settings.countdowns, now);
+    const countdowns = Almanac.countdownItems(holidayCountdowns() ? Almanac.withHolidays(settings.countdowns, now) : settings.countdowns, now);
     if (countdowns.length) {
         const next = countdowns[0];
         const icon = svgNode("svg", { class: "alm-sun alm-countdown", viewBox: "0 0 32 32", "aria-hidden": "true" });
@@ -2650,6 +3163,8 @@ function loadAlmanacSettings(data) {
     $("countdownRows").replaceChildren(...s.countdowns.map(countdownRow));
     updateCountdownsEmpty();
     renderAlmanac();
+    // Countdowns also show in the Calendar (calendarview.js).
+    if (typeof renderCalendar === "function") renderCalendar();
 }
 
 $("addCountdownButton").addEventListener("click", () => {
@@ -3717,7 +4232,7 @@ $("setupRetroAchievements").addEventListener("click", () => send("SetupRetroAchi
 // action, ASCS returns a single-use ticket (and any warnings, such as a game
 // running), and only then is the action sent, with that ticket. Restart and
 // shut down run on Windows' own 30-second timer; every countdown can be
-// cancelled from the banner on any tab.
+// canceled from the banner on any tab.
 
 const POWER_HOLD_MS = 1500;
 const POWER_LABELS = {
@@ -3778,9 +4293,10 @@ function handlePowerArmed(data) {
     }
     powerState.confirm = { action: data.action, ticket: data.ticket, at: Date.now() };
     const box = $("powerConfirm");
+    // Each warning as its own sentence, then what to do.
     box.replaceChildren(
-        element("strong", "", `${warnings.join("; ")}.`),
-        element("span", "", ` Hold ${POWER_LABELS[data.action]} again within 9 seconds to go ahead anyway.`)
+        element("strong", "", warnings.map(text => `${text[0].toUpperCase()}${text.slice(1)}.`).join(" ")),
+        element("span", "", `Hold ${POWER_LABELS[data.action]} again within 9 seconds to continue anyway.`)
     );
     box.hidden = false;
     setTimeout(() => {
@@ -3797,17 +4313,44 @@ function showPowerBanner(action, seconds) {
     const update = () => {
         if (!powerState.pending) return;
         const left = Math.max(0, Math.ceil((powerState.pending.deadline - Date.now()) / 1000));
-        $("powerBannerText").textContent = `${POWER_PROGRESS[action] || "Working"} in ${left} s`;
+        $("powerBannerText").textContent = `${POWER_PROGRESS[action] || "Working"} ${left ? `in ${left} s` : "now"}`;
     };
     update();
     clearInterval(powerState.bannerTimer);
     powerState.bannerTimer = setInterval(update, 250);
 }
 
+// The countdown ended but apps still show unsaved work: ASCS holds until
+// they're saved or closed, or "Restart anyway" is pressed.
+const POWER_HELD_NOUN = { restart: "the restart", shutdown: "the shutdown", signout: "signing out" };
+
+function showPowerHeld(action, apps) {
+    if (!POWER_PROGRESS[action] || !POWER_HELD_NOUN[action]) return;
+    const names = (Array.isArray(apps) ? apps : []).filter(name => typeof name === "string").slice(0, 6);
+    powerState.pending = null;
+    clearInterval(powerState.bannerTimer);
+    $("powerBanner").hidden = false;
+    $("powerBanner").classList.add("is-held");
+    $("powerBannerText").replaceChildren(
+        element("span", "power-held-title", `${POWER_LABELS[action]} on hold`),
+        element("span", "power-held-text", `Unsaved work in ${listNames(names)}. Once it's saved or closed, ${POWER_HELD_NOUN[action]} continues on its own.`)
+    );
+    const anyway = $("powerAnyway");
+    anyway.textContent = `${POWER_LABELS[action]} anyway`;
+    anyway.hidden = false;
+}
+
+function listNames(names) {
+    if (names.length < 2) return names[0] || "an open app";
+    return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
 function hidePowerBanner() {
     powerState.pending = null;
     clearInterval(powerState.bannerTimer);
     $("powerBanner").hidden = true;
+    $("powerBanner").classList.remove("is-held");
+    $("powerAnyway").hidden = true;
 }
 
 function formatBinSize(bytes) {
@@ -3884,6 +4427,7 @@ document.querySelectorAll("[data-power-hold]").forEach(button => {
     });
 });
 $("powerCancel").addEventListener("click", () => send("PowerCancel"));
+$("powerAnyway").addEventListener("click", () => send("PowerAnyway"));
 $("audioButton").addEventListener("click", () => {
     const menu = $("audioMenu");
     menu.hidden = !menu.hidden;
@@ -3938,6 +4482,44 @@ function enableTabWheel(strip, selector) {
             next.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
         }
     }, { passive: false });
+    enableDragScroll(strip);
+}
+
+// Click and drag moves a horizontal strip that overflows. A press only
+// becomes a drag after 6 px of movement, so ordinary clicks still work; the
+// click that ends a drag is swallowed so it doesn't choose what it landed on.
+function enableDragScroll(strip) {
+    let drag = null;
+    strip.addEventListener("pointerdown", event => {
+        if (event.pointerType !== "mouse" || event.button !== 0 || strip.scrollWidth <= strip.clientWidth) return;
+        drag = { id: event.pointerId, x: event.clientX, scroll: strip.scrollLeft, moved: false };
+    });
+    strip.addEventListener("pointermove", event => {
+        if (!drag || event.pointerId !== drag.id) return;
+        const dx = event.clientX - drag.x;
+        if (!drag.moved) {
+            if (Math.abs(dx) < 6) return;
+            drag.moved = true;
+            // Keeps the drag going when the pointer leaves the strip; a pointer
+            // that is no longer active can't be captured, and dragging still works.
+            try { strip.setPointerCapture(drag.id); } catch { /* not capturable */ }
+            strip.classList.add("is-dragging");
+        }
+        strip.scrollLeft = drag.scroll - dx;
+    });
+    const end = event => {
+        if (!drag || event.pointerId !== drag.id) return;
+        if (drag.moved) {
+            strip.classList.remove("is-dragging");
+            // Swallow only the click this drag produces (if any arrives).
+            const swallow = click => { click.stopPropagation(); click.preventDefault(); };
+            strip.addEventListener("click", swallow, { capture: true, once: true });
+            setTimeout(() => strip.removeEventListener("click", swallow, { capture: true }), 0);
+        }
+        drag = null;
+    };
+    strip.addEventListener("pointerup", end);
+    strip.addEventListener("pointercancel", end);
 }
 
 enableTabWheel(document.querySelector("#settings .settings-nav"), "[role='tab']");
@@ -3961,7 +4543,7 @@ document.querySelectorAll("#settings .settings-nav [role='tab']").forEach(tab =>
 
 // ------------------------------------------------------------ start-up rendering
 // Runs last, after every declaration above, so nothing is used before it is
-// initialised.
+// initialized.
 
 try {
     applySidebar(localStorage.getItem(SIDEBAR_KEY) === "1");
@@ -3974,3 +4556,141 @@ updateClock();
 send("GetAlmanac");
 send("GetRecycleBin");
 send("GetAudioDevices");
+
+// ---- help and shortcuts inside ASCS (1.8.0)
+// The shortcuts work only while ASCS has focus. Ctrl + 1-9 follow the
+// sidebar's order, so new views take the next number. F1 (or the ? button in
+// the title bar) toggles the help.
+const HELP_INSIDE = [
+    [["Ctrl", "1–9"], "Go to a page"],
+    [["Ctrl", "N"], "New note"],
+    [["Ctrl", "E"], "New calendar event"],
+    [["Ctrl", "F"], "Search this page"],
+    [["F1"], "Open or close this help"],
+    [["Esc"], "Close a dialog or the palette"]
+];
+const VIEW_SEARCH = { notes: "notesFilter", games: "gameSearch", sounds: "soundSearch", logs: "logSearch", commands: "commandSearch" };
+
+function sidebarViews() {
+    return [...document.querySelectorAll(".nav[data-view]")].map(button => button.dataset.view).filter(view => validViews.has(view));
+}
+
+function helpAnywhere() {
+    const letter = (action, fallback) => (currentHotkeys[action] || fallback).toUpperCase();
+    return [
+        [["Super"], "Show or hide ASCS"],
+        [["Super", "Space"], "Command palette"],
+        [["Super", letter("notes", "q")], "Quick Notes"],
+        [["Super", "Shift", "C"], "Capture the selection as a note"],
+        [["Super", "Shift", "P"], "Paste a note"],
+        [["Super", letter("claude", "c")], "Ask Claude"]
+    ];
+}
+
+function keyRow([keys, action]) {
+    const term = element("dt");
+    keys.forEach((key, index) => {
+        if (index) term.append(element("span", "help-plus", "+"));
+        term.append(element("kbd", "", key));
+    });
+    return [term, element("dd", "", action)];
+}
+
+function toggleHelp(show = $("helpDialog").hidden) {
+    const dialog = $("helpDialog");
+    if (!show) {
+        dialog.hidden = true;
+        if (helpPreviousFocus instanceof HTMLElement && helpPreviousFocus.isConnected) helpPreviousFocus.focus();
+        return;
+    }
+    helpPreviousFocus = document.activeElement;
+    $("helpMeta").textContent = `${$("sidebarVersion")?.textContent || "ASCS"} · F1 opens and closes this`;
+    $("helpInside").replaceChildren(...HELP_INSIDE.flatMap(keyRow));
+    $("helpAnywhere").replaceChildren(...helpAnywhere().flatMap(keyRow));
+    const current = document.querySelector(".view.active")?.id;
+    $("helpPages").replaceChildren(...sidebarViews().slice(0, 9).map((view, index) => {
+        const page = element("button", `help-page${view === current ? " is-current" : ""}`);
+        page.type = "button";
+        page.append(element("kbd", "", String(index + 1)),
+            element("span", "", document.querySelector(`.nav[data-view="${view}"]`)?.title || view));
+        if (view === current) page.setAttribute("aria-current", "page");
+        page.addEventListener("click", () => { toggleHelp(false); navigate(view); });
+        return page;
+    }));
+    dialog.hidden = false;
+    requestAnimationFrame(() => $("helpClose").focus());
+}
+let helpPreviousFocus = null;
+$("helpClose").addEventListener("click", () => toggleHelp(false));
+$("helpAllShortcuts").addEventListener("click", () => { toggleHelp(false); navigate("commands"); });
+$("helpDialog").addEventListener("click", event => { if (event.target === $("helpDialog")) toggleHelp(false); });
+$("titlebarHelp").addEventListener("click", () => toggleHelp());
+
+document.addEventListener("keydown", event => {
+    const plainF1 = event.key === "F1" && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey;
+    if (!$("helpDialog").hidden) {
+        if (event.key === "Escape" || plainF1) {
+            event.preventDefault();
+            toggleHelp(false);
+        } else if (event.key === "Tab") {
+            // Keep focus inside the help.
+            const focusable = [...$("helpDialog").querySelectorAll("button")];
+            const index = focusable.indexOf(document.activeElement);
+            event.preventDefault();
+            focusable[(index + (event.shiftKey ? -1 : 1) + focusable.length) % focusable.length].focus();
+        }
+        return;
+    }
+    if (plainF1) {                          // works even while typing
+        event.preventDefault();
+        if ($("launcher").hidden && ![...document.querySelectorAll(".confirm-backdrop")].some(dialog => !dialog.hidden)) toggleHelp(true);
+        return;
+    }
+    // The palette and any dialog (confirm, event, calendar) handle their own keys.
+    if (!$("launcher").hidden || [...document.querySelectorAll(".confirm-backdrop")].some(dialog => !dialog.hidden)) return;
+    const ctrlOnly = event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey;
+
+    if (ctrlOnly && /^[1-9]$/.test(event.key)) {
+        const view = sidebarViews()[Number(event.key) - 1];
+        if (!view) return;
+        event.preventDefault();
+        navigate(view);
+        return;
+    }
+    if (ctrlOnly && event.key.toLowerCase() === "n") {
+        event.preventDefault();
+        if (!$("notes").classList.contains("active")) navigate("notes");
+        if (notesLoaded) $("newNoteButton").click();
+        else newNoteWhenLoaded = true;      // navigate() has asked for them
+        return;
+    }
+    if (ctrlOnly && event.key.toLowerCase() === "e") {
+        event.preventDefault();
+        newEventFromShortcut();
+        return;
+    }
+    if (ctrlOnly && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        const view = document.querySelector(".view.active")?.id;
+        const search = VIEW_SEARCH[view] ? $(VIEW_SEARCH[view]) : null;
+        if (search) {           // only ever "search this page"; Super + Space is the palette
+            search.focus();
+            search.select();
+        }
+    }
+});
+
+// Each sidebar item shows its Ctrl number, worked out from the sidebar's
+// order so it stays right when views are added.
+function numberSidebar() {
+    document.querySelectorAll(".nav[data-view]").forEach((button, index) => {
+        button.querySelector(".nav-key")?.remove();
+        if (index >= 9) return;
+        const key = element("kbd", "nav-key", String(index + 1));
+        key.setAttribute("aria-hidden", "true");
+        key.title = `Ctrl + ${index + 1}`;
+        button.append(key);
+        button.setAttribute("aria-keyshortcuts", `Control+${index + 1}`);
+    });
+}
+numberSidebar();

@@ -9,7 +9,7 @@
                   running and asks it to reload when it is. The launcher is
                   also started immediately, so the hotkey works right away.
 
-    Windows 11 does not reliably honour hotkeys on Start Menu shortcuts, which
+    Windows 11 does not reliably honor hotkeys on Start Menu shortcuts, which
     is why the hotkey lives in the launcher rather than on the shortcut.
 
     -Startup also starts ASCS itself at sign-in.

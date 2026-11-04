@@ -116,4 +116,19 @@
     check("every quote has text and a source", quotes.every(q => q.text && q.source));
     equal("same quote all day", A.quoteFor(quotes, new Date(2026, 10, 3, 8)), A.quoteFor(quotes, new Date(2026, 10, 3, 23)));
     check("next day differs", A.quoteFor(quotes, new Date(2026, 10, 3)) !== A.quoteFor(quotes, new Date(2026, 10, 4)));
+
+    // US holidays (1.8.0), against published dates.
+    const on = (year, name) => A.usHolidays(year).find(item => item.name === name)?.date;
+    equal("holidays: 18 a year", A.usHolidays(2026).length, 18);
+    equal("holidays: 2026 floating dates", ["Martin Luther King Jr. Day", "Presidents' Day", "Easter", "Mother's Day", "Memorial Day", "Father's Day", "Labor Day", "Columbus Day", "Thanksgiving"].map(name => on(2026, name)).join(" "),
+        "2026-01-19 2026-02-16 2026-04-05 2026-05-10 2026-05-25 2026-06-21 2026-09-07 2026-10-12 2026-11-26");
+    equal("holidays: 2027 floating dates", ["Martin Luther King Jr. Day", "Easter", "Memorial Day", "Thanksgiving"].map(name => on(2027, name)).join(" "), "2027-01-18 2027-03-28 2027-05-31 2027-11-25");
+    equal("holidays: Easter in other years", `${on(2024, "Easter")} ${on(2025, "Easter")} ${on(2038, "Easter")}`, "2024-03-31 2025-04-20 2038-04-25");
+    equal("holidays: fixed dates", `${on(2026, "Juneteenth")} ${on(2026, "Independence Day")} ${on(2026, "Veterans Day")} ${on(2026, "Christmas")}`, "2026-06-19 2026-07-04 2026-11-11 2026-12-25");
+    check("holidays: in date order", A.usHolidays(2027).every((item, i, all) => !i || all[i - 1].date <= item.date));
+    const merged = A.withHolidays([{ date: "12-25", name: "Christmas" }, { date: "2026-11-26", name: "Turkey day" }], new Date(2026, 10, 4));
+    check("holidays: yours replace one with the same name", merged.filter(item => /^christmas$/i.test(item.name)).length === 1);
+    check("holidays: yours replace one on the same day", !merged.some(item => item.name === "Thanksgiving" && item.date === "2026-11-26"));
+    check("holidays: next year's still counted", merged.some(item => item.name === "Thanksgiving" && item.date === "2027-11-25"));
+    equal("holidays: nearest countdown includes them", A.countdownItems(A.withHolidays([], new Date(2026, 10, 4)), new Date(2026, 10, 4))[0].text, "7 days until Veterans Day");
 })();

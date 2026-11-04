@@ -29,6 +29,7 @@
     equal("? starts a web search", P.parseQuery("?  cats ").kind, "web");
     equal("web query text", P.parseQuery("?  cats ").text, "cats");
     equal("text query", P.parseQuery(" term ").kind, "text");
+    equal("+ starts a calendar event", P.parseQuery("+ Dentist tue 3pm").kind + " " + P.parseQuery("+ Dentist tue 3pm").text, "event Dentist tue 3pm");
 
     // Matching
     check("prefix match", P.scoreMatch("term", "Terminal") > 0);

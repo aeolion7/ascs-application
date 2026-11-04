@@ -18,7 +18,7 @@ SetWorkingDir(A_ScriptDir)
 ; GLOBAL VARIABLES
 ; ==========================================
 
-global ASCS_Version := "1.7.0"
+global ASCS_Version := "1.8.0"
 global ASCS_App := ""
 global ASCS_WindowIcon := 0
 global ASCS_IconPath := A_ScriptDir "\frontend\assets\ascs.ico"
@@ -78,6 +78,26 @@ global ASCS_RaImageQueue := []
 ; The D-input tester's device, report description and axes while it is open.
 global ASCS_HidTester := 0
 global ASCS_RaImageFolder := ASCS_DataDir "\ra-images"
+; 1.8.0: power actions' delay (seconds, counted down by ASCS) and ASCS's own
+; sounds (off / start / show) with the two files they play.
+global ASCS_PowerDelay := 5
+; 1.8.0: the sound library behind the Sounds view, and its index.
+global ASCS_SoundLibrary := "C:\Sounds\all-windows-sounds-main"
+global ASCS_SoundIndex := Map()
+; 1.8.0: the calendar server's state, its process, requests in flight, and
+; reminders (pending, and fired in the last day).
+global ASCS_CalendarState := Map("state", "starting", "message", "")
+global ASCS_CalendarPid := 0
+global ASCS_CalendarRequests := Map()
+global ASCS_CalendarReminders := []
+global ASCS_CalendarFired := Map()
+global ASCS_ReminderBalloonAt := 0      ; when the last reminder pop-up showed (A_TickCount)
+global ASCS_SoundLengthQueue := []
+global ASCS_SoundLengthsFile := ASCS_DataDir "\sound-lengths.txt"
+global ASCS_AscsSoundMode := "show"
+global ASCS_AscsSoundFiles := Map(
+    "show", "C:\Sounds\all-windows-sounds-main\Aeolionware Startup\ASCS Sound Files\Windows XP Logon.wav",
+    "hide", "C:\Sounds\all-windows-sounds-main\Aeolionware Startup\ASCS Sound Files\Windows XP Logoff.wav")
 ; The PSO session's Discord voice channel (a validated discord:// link, or "").
 global ASCS_PsoVoiceChannel := ""
 ; Now playing's sessions: source -> Map(owner, title, since in Unix seconds).
@@ -130,12 +150,16 @@ DirCreate(ASCS_WorkspaceDir)
 LoadUserSettings()
 LoadAlmanacSettings()
 LoadGameSettings()
+LoadSoundSettings()
 LoadCustomCommands()
 LoadActivity()
 
 ASCS_EverythingPath := FindEverything()
 SetTimer(PruneRaImageCache, -60000)             ; trim the image cache once, off the start-up path
 SetTimer(TrackPlaySessions, 10000)              ; Now playing's session timer
+SetTimer(AscsStartupSound, -1500)               ; "on start" sound, unless Windows just signed in
+SetTimer(StartCalendarServer, -2000)            ; the calendar's Radicale server, off the start-up path
+OnExit(StopCalendarServer)
 
 if !FileExist(ASCS_NotesFile)
     FileAppend('{"version":2,"activeId":null,"notes":[]}', ASCS_NotesFile, "UTF-8")
@@ -171,6 +195,7 @@ try {
         )
         TraySetIcon(ASCS_IconPath)
         ApplyWindowIcon()
+        OnMessage(0x404, ReminderBalloonClicked)   ; AHK_NOTIFYICON: the tray icon's messages
     } catch as err {
         WriteLog("Application icon setup failed: " err.Message)
     }
@@ -326,7 +351,7 @@ RegisterDesktopHotkeys() {
 
 ; Super + Shift layer for letters. These take precedence over whatever the
 ; unshifted letter does; keep in sync with frontend/keymap.js.
-;   C  capture the selection into Quick Notes     P  paste a snippet (palette)
+;   C  capture the selection into Quick Notes     P  paste a note (palette)
 ;   D  new folder in the active Explorer folder   F  new empty file there
 ; (R, S, digits, and arrows have their own fixed handlers; Shift with the
 ; Terminal or Explorer key opens a new window via LaunchCommand.)
@@ -503,6 +528,8 @@ LoadUserSettings() {
     global ASCS_SnapGap
     global ASCS_PreserveWindowSize
     global ASCS_ActionHotkeys
+    global ASCS_ClaudeShortcut          ; 1.8.0: was missing, so a saved shortcut was dropped at start-up
+    global ASCS_PowerDelay, ASCS_AscsSoundMode
 
     try {
         ASCS_Drives := ParseDriveList(
@@ -571,6 +598,13 @@ LoadUserSettings() {
         ASCS_ClaudeShortcut := ParseKeyCombo("Ctrl+Alt+Space")
     }
 
+    try ASCS_PowerDelay := ValidatePowerDelay(IniRead(ASCS_SettingsFile, "Power", "Delay", "5"))
+    catch as err
+        WriteLog("Invalid power delay; using 5 s. " err.Message)
+    try ASCS_AscsSoundMode := ValidateAscsSoundMode(IniRead(ASCS_SettingsFile, "Sounds", "AscsSounds", "show"))
+    catch as err
+        WriteLog("Invalid ASCS sounds preference; using on show. " err.Message)
+
     ; Quick actions are only stored once customized; until then the frontend
     ; shows its defaults.
     try {
@@ -598,14 +632,18 @@ SaveUserSettings(content) {
     global ASCS_CustomCommands
     global ASCS_SearchTemplate
     global ASCS_ClaudeShortcut
+    global ASCS_PowerDelay, ASCS_AscsSoundMode
 
     try {
+        ; drives|gap|preserve|hotkeys|claude|powerDelay|ascsSounds|search.
         ; The search address is last and may itself contain "|".
-        fields := StrSplit(content, "|",, 6)
-        if (fields.Length != 6)
+        fields := StrSplit(content, "|",, 8)
+        if (fields.Length != 8)
             throw Error("Settings payload has an invalid shape.")
-        searchTemplate := ValidateSearchTemplate(fields[6])
+        searchTemplate := ValidateSearchTemplate(fields[8])
         claudeShortcut := ParseKeyCombo(fields[5])
+        powerDelay := ValidatePowerDelay(fields[6])
+        ascsSounds := ValidateAscsSoundMode(fields[7])
 
         drives := ParseDriveList(fields[1])
         if !RegExMatch(fields[2], "^\d+$") || Integer(fields[2]) > 48
@@ -637,7 +675,11 @@ SaveUserSettings(content) {
         IniWrite(fields[3], ASCS_SettingsFile, "Window", "PreserveSize")
         for action, key in hotkeys
             IniWrite(key, ASCS_SettingsFile, "Hotkeys", action)
+        IniWrite(powerDelay, ASCS_SettingsFile, "Power", "Delay")
+        IniWrite(ascsSounds, ASCS_SettingsFile, "Sounds", "AscsSounds")
 
+        ASCS_PowerDelay := powerDelay
+        ASCS_AscsSoundMode := ascsSounds
         ASCS_SearchTemplate := searchTemplate
         ASCS_ClaudeShortcut := claudeShortcut
         ASCS_Drives := drives
@@ -665,6 +707,7 @@ SaveUserSettings(content) {
 SendSettings() {
     global ASCS_SearchTemplate
     global ASCS_ClaudeShortcut
+    global ASCS_PowerDelay, ASCS_AscsSoundMode
     global ASCS_Drives
     global ASCS_SnapGap
     global ASCS_PreserveWindowSize
@@ -690,6 +733,8 @@ SendSettings() {
         ',"preserveSize":' (ASCS_PreserveWindowSize ? "true" : "false")
         ',"hotkeys":' hotkeys
         ',"claudeShortcut":' JsonQuote(ASCS_ClaudeShortcut["display"])
+        ',"powerDelay":' ASCS_PowerDelay
+        ',"ascsSounds":' JsonQuote(ASCS_AscsSoundMode)
         ',"searchTemplate":' JsonQuote(ASCS_SearchTemplate) '}'
     )
 }
@@ -1457,7 +1502,8 @@ MoveActiveWindowToAdjacentMonitor(direction) {
 ; VIEW NAVIGATION
 ; ==========================================
 
-; Opens the command palette. Modes: "" (everything), "snippets", "workspaces".
+; Opens the command palette. Modes: "" (everything), "snippets" (paste a
+; note; the name is kept from when these were snippets), "workspaces".
 ShowCommandLauncher(mode := "") {
     global ASCS_PendingLauncher
     global ASCS_PendingLauncherMode
@@ -1511,6 +1557,7 @@ ShowView(view, thisHotkey := "") {
 ; metrics are scheduled on timers so the window responds immediately.
 ShowASCS(view := "") {
     global ASCS_App
+    global ASCS_AscsSoundMode
     global ASCS_PageReady
     global ASCS_PendingView
     global ASCS_PreviousWindow
@@ -1518,7 +1565,7 @@ ShowASCS(view := "") {
     if (view != "")
         ASCS_PendingView := view
 
-    ; Remember where the user was, so snippets paste into that window and
+    ; Remember where the user was, so notes paste into that window and
     ; palette actions can return focus to it.
     foreground := DllCall("GetForegroundWindow", "Ptr")
     if (foreground && foreground != ASCS_App.Hwnd)
@@ -1527,11 +1574,14 @@ ShowASCS(view := "") {
     ; WebViewToo's Show() re-applies the current client size, which for a
     ; minimized window is the tiny stub's (then clamped to the minimum size).
     ; So a minimized window is restored first, to its normal size.
+    wasVisible := DllCall("IsWindowVisible", "Ptr", ASCS_App.Hwnd, "Int")
     if DllCall("IsIconic", "Ptr", ASCS_App.Hwnd, "Int") {
         DllCall("ShowWindow", "Ptr", ASCS_App.Hwnd, "Int", 9)      ; SW_RESTORE
         WriteLog("Window was minimized when shown; restored to its normal size.")
     }
     ASCS_App.Show()
+    if (!wasVisible && ASCS_AscsSoundMode = "show")
+        PlayAscsSound("show")
     EnsureWindowUsable()
     WinActivate("ahk_id " ASCS_App.Hwnd)
 
@@ -1558,7 +1608,7 @@ ShowASCS(view := "") {
 ; tiny minimized stub, which can't be resized; a stale maximized state after
 ; a display change can do the same. So every show checks the window: a
 ; minimized one is restored, and one that is too small or off every monitor
-; is put back at the default size, centred on the monitor under the pointer.
+; is put back at the default size, centered on the monitor under the pointer.
 EnsureWindowUsable() {
     global ASCS_App
     hwnd := "ahk_id " ASCS_App.Hwnd
@@ -1622,7 +1672,7 @@ HandleNavigationStarting(sender, args) {
     if !IsTrustedWebViewUrl(uri) {
         args.Cancel := true
         ; WebViewToo loads its own data: template before ASCS navigates;
-        ; cancelling that is expected and is not worth logging.
+        ; canceling that is expected and is not worth logging.
         if !RegExMatch(uri, "i)^data:")
             WriteLog("Blocked navigation outside the ASCS origin.")
         return
@@ -1645,10 +1695,45 @@ HandleNavigationCompleted(sender, args) {
         )
 }
 
+; ---- ASCS's own sounds (1.8.0)
+; Off, on start (logon when ASCS starts, logoff on Exit), or on show (logon
+; when the window appears, logoff when it is hidden). Never at Windows sign-in
+; (ASCS starts then) or shutdown (ASCS is closed, not exited, then).
+
+PlayAscsSound(kind, wait := false) {
+    global ASCS_AscsSoundFiles
+    file := ASCS_AscsSoundFiles[kind]
+    if !FileExist(file)
+        return
+    try SoundPlay(file, wait)
+    catch as err
+        WriteLog("ASCS sound not played: " err.Message)
+}
+
+; Windows' shell host (sihost.exe) starts at sign-in; ASCS starting within two
+; minutes of it is part of the sign-in, where the startup sound already plays.
+SignedInMomentsAgo() {
+    started := ProcessStartUnix(ProcessExist("sihost.exe"))
+    return started && DateDiff(A_NowUTC, "19700101000000", "Seconds") - started < 120
+}
+
+AscsStartupSound() {
+    global ASCS_AscsSoundMode
+    if (ASCS_AscsSoundMode = "start" && !SignedInMomentsAgo())
+        PlayAscsSound("show")
+}
+
+ExitASCS(*) {
+    global ASCS_AscsSoundMode
+    FlushNotesThen(() => (ASCS_AscsSoundMode = "start" ? PlayAscsSound("hide", true) : 0, ExitApp()))
+}
+
 HandleClose(*) {
-    global ASCS_App
+    global ASCS_App, ASCS_AscsSoundMode
 
     SendToFrontend('{"type":"flushNotes"}')
+    if (ASCS_AscsSoundMode = "show" && DllCall("IsWindowVisible", "Ptr", ASCS_App.Hwnd, "Int"))
+        PlayAscsSound("hide")
     ASCS_App.Hide()
     SetTimer(PushDashboard, 0)
 }
@@ -1860,6 +1945,9 @@ HandleWebMessage(sender, args) {
             case "PowerCancel":
                 CancelPowerAction()
 
+            case "PowerAnyway":
+                PowerAnyway()
+
             case "PowerNow":
                 if (content = "lock")
                     DllCall("LockWorkStation")
@@ -1901,6 +1989,89 @@ HandleWebMessage(sender, args) {
             case "GetRaImages":
                 if (StrLen(content) <= 600)
                     SendRaImages(content)
+
+            case "GetCalendarState":
+                SendCalendarState()
+
+            case "CalDav":
+                if (StrLen(content) <= 600000)
+                    CalendarRequest(content)
+
+            case "ExportCalendarFile":
+                if (StrLen(content) <= 5300000)
+                    ExportCalendarFile(content)
+
+            case "ImportCalendarFile":
+                ImportCalendarFile()
+
+            case "SetReminders":
+                if (StrLen(content) <= 60000)
+                    SetCalendarReminders(content)
+
+            case "GetSoundLibrary":
+                SendSoundLibrary(content = "refresh")
+
+            case "GetSound":
+                SendSound(content)
+
+            case "PlaySoundNative":
+                PlaySoundNative(content)
+
+            case "StopSoundNative":
+                StopSoundNative()
+
+            case "ShowSoundFile":
+                ShowSoundFile(content)
+
+            case "DeleteLeveledSound":
+                if (StrLen(content) <= 500)
+                    DeleteLeveledSound(content)
+
+            case "DeleteLeveledSounds":
+                if (StrLen(content) <= 6000)
+                    DeleteLeveledSounds(content)
+
+            case "RestoreAllSounds":
+                RestoreAllSounds()
+
+            case "SaveLeveledSound":
+                if (StrLen(content) <= 48000000)
+                    SaveLeveledSound(content)
+
+            case "GetInUseSound":
+                if (StrLen(content) <= 100)
+                    SendInUseSound(content)
+
+            case "UseLeveledSound":
+                if (StrLen(content) <= 48000000)
+                    UseLeveledSound(content)
+
+            case "RestoreAscsSound":
+                if (StrLen(content) <= 20)
+                    RestoreAscsSound(content)
+
+            case "GetWindowsSounds":
+                SendWindowsSounds()
+
+            case "SetWindowsSound":
+                if (StrLen(content) <= 600)
+                    SetWindowsSound(content)
+
+            case "RestoreWindowsSound":
+                if (StrLen(content) <= 64)
+                    RestoreWindowsSound(content)
+
+            case "PreviewWindowsSound":
+                if (StrLen(content) <= 64)
+                    PreviewWindowsSound(content)
+
+            case "SetAscsSound":
+                if (StrLen(content) <= 600)
+                    SetAscsSound(content)
+
+            case "SetSoundLibrary":
+                if (StrLen(content) <= 400)
+                    SetSoundLibrary(content)
 
             case "SetupRetroAchievements":
                 SetupRetroAchievements()
@@ -1965,11 +2136,17 @@ HandleWebMessage(sender, args) {
             case "FocusWindow":
                 FocusWindowFromPalette(content)
 
-            case "PasteSnippet":
+            case "PasteNote":
                 if (StrLen(content) <= 262144)
-                    SetTimer(PasteSnippet.Bind(content), -1)
+                    SetTimer(PasteNote.Bind(content), -1)
                 else
-                    SendToFrontend('{"type":"notice","message":"That snippet is too large to paste (256 KB limit)."}')
+                    SendToFrontend('{"type":"notice","message":"That note is too large to paste (256 KB limit)."}')
+
+            case "CopyNote":
+                if (StrLen(content) <= 262144)
+                    CopyNote(content)
+                else
+                    SendToFrontend('{"type":"notice","message":"That note is too large to copy (256 KB limit)."}')
 
             case "SearchWeb":
                 if (StrLen(content) <= 1000)
@@ -2706,6 +2883,12 @@ SaveNotes(content) {
         if (byteCount > 5 * 1024 * 1024 || Trim(content) = ""
             || SubStr(LTrim(content), 1, 1) != "{") {
             SendNotesError("Notes payload is invalid or exceeds 5 MB.")
+            return
+        }
+        try CheckNoteGroups(content)            ; 1.8.0: groups are checked here too
+        catch as err {
+            WriteLog("Notes not saved: " err.Message)
+            SendNotesError("Notes weren't saved: " err.Message " The previous file was kept.")
             return
         }
 
@@ -3489,7 +3672,7 @@ SetupTrayMenu() {
     tray.Add("Open log file", (*) => Run('"' ASCS_LogFile '"'))
     tray.Add()
     tray.Add("Reload ASCS`tCtrl+Alt+Shift+A", (*) => ReloadASCS())
-    tray.Add("Exit ASCS", (*) => FlushNotesThen(() => ExitApp()))
+    tray.Add("Exit ASCS", ExitASCS)
     tray.Default := "Show ASCS"
     tray.ClickCount := 1
     A_IconTip := "Aeolionware SCS " ASCS_Version
@@ -3652,6 +3835,17 @@ SendAlmanacSettings() {
     global ASCS_AlmanacLatitude
     global ASCS_AlmanacLongitude
 
+    ; One-off countdowns go once their day has passed (1.8.0).
+    kept := ActiveCountdowns(ASCS_Countdowns, FormatTime(, "yyyy-MM-dd"))
+    if (kept.Length != ASCS_Countdowns.Length) {
+        try {
+            WriteCountdowns(kept)
+            WriteLog("Countdowns: removed " (ASCS_Countdowns.Length - kept.Length) " that had passed.")
+        } catch as err {
+            WriteLog("Countdowns: couldn't remove passed ones. " err.Message)
+        }
+        ASCS_Countdowns := kept
+    }
     items := "["
     for index, item in ASCS_Countdowns
         items .= (index > 1 ? "," : "") '{"date":' JsonQuote(item["date"]) ',"name":' JsonQuote(item["name"]) '}'
@@ -3690,10 +3884,7 @@ SaveAlmanac(content) {
     try {
         almanac := ParseAlmanacPayload(content)
         IniWrite(almanac["wikipedia"] ? "1" : "0", ASCS_SettingsFile, "Almanac", "Wikipedia")
-        try IniDelete(ASCS_SettingsFile, "Countdowns")
-        IniWrite(almanac["countdowns"].Length, ASCS_SettingsFile, "Countdowns", "Count")
-        for index, item in almanac["countdowns"]
-            IniWrite(item["date"] "|" item["name"], ASCS_SettingsFile, "Countdowns", "Item" index)
+        WriteCountdowns(almanac["countdowns"])
 
         wasEnabled := ASCS_AlmanacWikipedia
         ASCS_AlmanacWikipedia := almanac["wikipedia"]
@@ -3708,6 +3899,14 @@ SaveAlmanac(content) {
         SendToFrontend('{"type":"error","scope":"almanac","message":' JsonQuote(err.Message) '}')
         SendAlmanacSettings()
     }
+}
+
+WriteCountdowns(countdowns) {
+    global ASCS_SettingsFile
+    try IniDelete(ASCS_SettingsFile, "Countdowns")
+    IniWrite(countdowns.Length, ASCS_SettingsFile, "Countdowns", "Count")
+    for index, item in countdowns
+        IniWrite(item["date"] "|" item["name"], ASCS_SettingsFile, "Countdowns", "Item" index)
 }
 
 AlmanacCachePath(kind, date) {
@@ -4652,7 +4851,7 @@ ControllerDisplayName(key, vid) {
 }
 
 ; The device's own name in Windows (the system-wide OEM name, ignoring the
-; per-user name ASCS may have set), used to recognise receivers.
+; per-user name ASCS may have set), used to recognize receivers.
 ControllerWindowsName(key, vid, includeUser := true) {
     oem := "System\CurrentControlSet\Control\MediaProperties\PrivateProperties\Joystick\OEM\VID_"
         . SubStr(key, 1, 4) "&PID_" SubStr(key, 6, 4)
@@ -4923,7 +5122,7 @@ HandleRawInput(wParam, lParam, msg, hwnd) {
         if (DllCall("hid\HidP_GetUsageValue", "Int", 0, "UShort", 1, "UShort", 0, "UShort", usage, "UInt*", &value,
             "Ptr", preparsed, "Ptr", report, "UInt", reportSize, "UInt") != 0x110000)
             continue
-        if (usage = 0x39) {                                     ; hat switch: 8 directions, else centred
+        if (usage = 0x39) {                                     ; hat switch: 8 directions, else centered
             hat := value >= range["min"] && value <= range["max"] && range["max"] - range["min"] >= 7 ? value - range["min"] : -1
             continue
         }
@@ -5365,6 +5564,945 @@ SendRaImage(token, path) {
         try ASCS_App.PostWebMessageAsString("RAIMG`n" token "`n" data)
 }
 
+; ==========================================
+; SOUNDS (1.8.0)
+; ==========================================
+; The Sounds view plays the user's sound library (C:\Sounds\all-windows-
+; sounds-main by default). ASCS indexes it and the page asks for a sound by
+; its index entry; nothing else in the folder is ever sent. Sounds are sent as
+; base64 and decoded in the page (Web Audio), so the page's security policy
+; needs no new sources. MIDI and WMA play through Windows instead. Leveled
+; copies are written by ASCS into "ASCS Leveled" inside the library, never
+; over an existing file. Windows sounds are set only for allowlisted events
+; (WindowsSoundEvents) and only to WAV files in the library, with the
+; original value kept so it can be restored.
+
+LoadSoundSettings() {
+    global ASCS_SettingsFile, ASCS_SoundLibrary, ASCS_AscsSoundFiles
+    try ASCS_SoundLibrary := ValidateSoundLibrary(IniRead(ASCS_SettingsFile, "Sounds", "Library", ASCS_SoundLibrary))
+    catch as err
+        WriteLog("Sounds: " err.Message)
+    reminder := ExpandEnvironment(ReadWindowsSound([".Default", "Notification.Reminder", ""])["value"])
+    ASCS_AscsSoundFiles["reminder"] := reminder != "" ? reminder : A_WinDir "\Media\Windows Notify Calendar.wav"
+    for kind in ["show", "hide", "reminder"] {
+        path := IniRead(ASCS_SettingsFile, "Sounds", AscsSoundKey(kind), "")
+        if (path != "" && FileExist(path) && RegExMatch(path, "i)\.wav$"))
+            ASCS_AscsSoundFiles[kind] := path
+    }
+}
+
+; The library index: id (path relative to the library) -> Map of its details.
+; Listing the folder is quick; reading a thousand WAV headers from a cold disk
+; took 4 s, so lengths come from data\sound-lengths.txt (keyed by size and
+; date) and any that are missing are read in the background (FillSoundLengths).
+SoundIndex(refresh := false) {
+    global ASCS_SoundLibrary, ASCS_SoundIndex, ASCS_SoundLengthQueue
+    static builtFor := ""
+    if (!refresh && builtFor = ASCS_SoundLibrary && ASCS_SoundIndex.Count)
+        return ASCS_SoundIndex
+    index := Map()
+    root := ASCS_SoundLibrary
+    lengths := SoundLengths()
+    queue := []
+    if DirExist(root) {
+        Loop Files root "\*.*", "FR" {
+            if (index.Count >= 5000)
+                break
+            kind := SoundKind(A_LoopFileExt)
+            if (kind = "" || InStr(A_LoopFileAttrib, "H"))
+                continue
+            id := SubStr(A_LoopFileFullPath, StrLen(root) + 2)
+            parts := StrSplit(id, "\")
+            SplitPath(A_LoopFileName, , , , &stem)
+            group := ""
+            Loop parts.Length - 2
+                group .= (group = "" ? "" : " › ") parts[A_Index + 1]
+            stamp := A_LoopFileSize "|" A_LoopFileTimeModified
+            seconds := 0
+            if (StrLower(A_LoopFileExt) = "wav") {
+                known := lengths.Has(A_LoopFileFullPath) ? lengths[A_LoopFileFullPath] : ""
+                if (known != "" && known[1] = stamp)
+                    seconds := known[2]
+                else
+                    queue.Push(id)
+            }
+            index[id] := Map("id", id, "path", A_LoopFileFullPath, "era", parts.Length > 1 ? parts[1] : "",
+                "group", group, "name", stem, "ext", StrLower(A_LoopFileExt), "kind", kind,
+                "size", A_LoopFileSize, "seconds", seconds, "stamp", stamp)
+        }
+    }
+    ASCS_SoundIndex := index
+    builtFor := root
+    ASCS_SoundLengthQueue := queue
+    if queue.Length
+        SetTimer(FillSoundLengths, 10)
+    return index
+}
+
+; Remembered lengths: full path -> [size|modified, seconds].
+SoundLengths() {
+    global ASCS_SoundLengthsFile
+    static lengths := 0
+    if IsObject(lengths)
+        return lengths
+    lengths := Map()
+    try {
+        Loop Parse FileRead(ASCS_SoundLengthsFile, "UTF-8"), "`n", "`r" {
+            fields := StrSplit(A_LoopField, "`t")
+            if (fields.Length = 3 && RegExMatch(fields[3], "^\d+(\.\d+)?$"))
+                lengths[fields[1]] := [fields[2], Float(fields[3])]
+        }
+    }
+    return lengths
+}
+
+; Reads 25 missing WAV lengths per tick; when done, saves them and sends the
+; library again so the lengths appear.
+FillSoundLengths() {
+    global ASCS_SoundIndex, ASCS_SoundLengthQueue, ASCS_SoundLengthsFile
+    static header := Buffer(4096)
+    lengths := SoundLengths()
+    Loop 25 {
+        if !ASCS_SoundLengthQueue.Length
+            break
+        id := ASCS_SoundLengthQueue.RemoveAt(1)
+        if !ASCS_SoundIndex.Has(id)
+            continue
+        sound := ASCS_SoundIndex[id]
+        seconds := 0
+        try {
+            file := FileOpen(sound["path"], "r")
+            read := file.RawRead(header, 4096)
+            file.Close()
+            seconds := WavSeconds(header, read)
+        }
+        sound["seconds"] := seconds
+        lengths[sound["path"]] := [sound["stamp"], seconds]
+    }
+    if ASCS_SoundLengthQueue.Length
+        return
+    SetTimer(FillSoundLengths, 0)
+    text := ""
+    for path, entry in lengths
+        if (StrLen(text) < 2000000)
+            text .= path "`t" entry[1] "`t" entry[2] "`n"
+    try {
+        file := FileOpen(ASCS_SoundLengthsFile ".tmp", "w", "UTF-8")
+        file.Write(text)
+        file.Close()
+        FileMove(ASCS_SoundLengthsFile ".tmp", ASCS_SoundLengthsFile, 1)
+    }
+    SendSoundLibrary(false, false)
+}
+
+; refresh re-reads the folder; changed tells the page cached sounds may be
+; stale (false when only lengths were filled in).
+SendSoundLibrary(refresh := false, changed := true) {
+    global ASCS_SoundLibrary
+    t := A_TickCount
+    index := SoundIndex(refresh)
+    eras := Map()
+    sounds := ""
+    for id, sound in index {
+        eras[sound["era"]] := true
+        sounds .= (sounds = "" ? "" : ",") '{"id":' JsonQuote(id) ',"name":' JsonQuote(sound["name"])
+            . ',"era":' JsonQuote(sound["era"]) ',"group":' JsonQuote(sound["group"])
+            . ',"kind":' JsonQuote(sound["kind"]) ',"ext":' JsonQuote(sound["ext"])
+            . ',"size":' sound["size"] ',"seconds":' sound["seconds"] '}'
+    }
+    eraJson := ""
+    for folder in eras {
+        era := ParseSoundEra(folder = "" ? "Loose sounds" : folder)
+        eraJson .= (eraJson = "" ? "" : ",") '{"folder":' JsonQuote(folder) ',"year":' era["year"] ',"label":' JsonQuote(era["label"]) '}'
+    }
+    SendToFrontend('{"type":"soundLibrary","root":' JsonQuote(ASCS_SoundLibrary) ',"exists":' (DirExist(ASCS_SoundLibrary) ? "true" : "false")
+        . ',"changed":' (changed ? "true" : "false")
+        . ',"eras":[' eraJson '],"sounds":[' sounds '],"ascsSounds":' AscsSoundsJson() '}')
+    if refresh
+        WriteLog("Sounds: library indexed, " index.Count " sounds in " (A_TickCount - t) " ms.")
+}
+
+; The file behind an indexed sound, or throws.
+IndexedSound(id) {
+    index := SoundIndex()
+    if (StrLen(id) > 500 || !index.Has(id))
+        throw Error("That sound isn't in the library.")
+    return index[id]
+}
+
+SendSound(id) {
+    global ASCS_App
+    try {
+        sound := IndexedSound(id)
+        if (sound["kind"] != "web")
+            throw Error("This one plays through Windows.")
+        data := FileToBase64(sound["path"], 16 * 1024 * 1024)
+        ASCS_App.PostWebMessageAsString("SOUND`n" id "`n" data)
+    } catch as err {
+        try ASCS_App.PostWebMessageAsString("SOUND`n" id "`n")
+        WriteLog("Sounds: not sent: " err.Message)
+    }
+}
+
+FileToBase64(path, maxBytes) {
+    size := FileGetSize(path)
+    if (size <= 0 || size > maxBytes)
+        throw Error("The file is empty or too large.")
+    bytes := Buffer(size)
+    file := FileOpen(path, "r")
+    read := file.RawRead(bytes, size)
+    file.Close()
+    flags := 0x40000001                         ; CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF
+    DllCall("Crypt32\CryptBinaryToStringW", "Ptr", bytes, "UInt", read, "UInt", flags, "Ptr", 0, "UInt*", &chars := 0)
+    text := Buffer(chars * 2)
+    if !DllCall("Crypt32\CryptBinaryToStringW", "Ptr", bytes, "UInt", read, "UInt", flags, "Ptr", text, "UInt*", &chars)
+        throw Error("The file could not be encoded.")
+    return StrGet(text, chars, "UTF-16")
+}
+
+Base64ToBuffer(text, maxBytes) {
+    if !RegExMatch(text, "^[A-Za-z0-9+/]+={0,2}$")
+        throw Error("The data isn't valid.")
+    DllCall("Crypt32\CryptStringToBinaryW", "Str", text, "UInt", StrLen(text), "UInt", 1, "Ptr", 0, "UInt*", &size := 0, "Ptr", 0, "Ptr", 0)
+    if (size <= 0 || size > maxBytes)
+        throw Error("The data is empty or too large.")
+    bytes := Buffer(size)
+    if !DllCall("Crypt32\CryptStringToBinaryW", "Str", text, "UInt", StrLen(text), "UInt", 1, "Ptr", bytes, "UInt*", &size, "Ptr", 0, "Ptr", 0)
+        throw Error("The data could not be decoded.")
+    bytes.Size := size
+    return bytes
+}
+
+; MIDI and WMA: Windows plays them (one at a time).
+PlaySoundNative(id) {
+    try {
+        sound := IndexedSound(id)
+        SoundPlay(sound["path"])
+    } catch as err {
+        SendToFrontend('{"type":"notice","message":' JsonQuote("Windows couldn't play that sound: " err.Message) '}')
+    }
+}
+
+StopSoundNative() {
+    try SoundPlay(A_ScriptDir "\nothing-to-play.wav")   ; playing a missing file stops the current one
+}
+
+ShowSoundFile(id) {
+    try {
+        sound := IndexedSound(id)
+        Run('explorer.exe /select,"' sound["path"] '"')
+    }
+}
+
+; Payload: id|gain dB|base64 WAV. The page made the copy (Web Audio maths);
+; ASCS checks it is a WAV and writes it next to nothing it could overwrite.
+SaveLeveledSound(content) {
+    global ASCS_SoundLibrary
+    try {
+        parts := StrSplit(content, "|", , 3)
+        if (parts.Length != 3)
+            throw Error("The leveled copy was malformed.")
+        sound := IndexedSound(parts[1])
+        path := WriteLeveledCopy(sound["name"], ValidateLeveledGain(parts[2]), parts[3])
+        id := SubStr(path, StrLen(ASCS_SoundLibrary) + 2)
+        SendSoundLibrary(true)
+        SendToFrontend('{"type":"soundSaved","id":' JsonQuote(id) '}')
+    } catch as err {
+        WriteLog("Sounds: leveled copy not saved: " err.Message)
+        SendToFrontend('{"type":"notice","message":' JsonQuote("The leveled copy wasn't saved: " err.Message) '}')
+    }
+}
+
+; Writes a leveled copy (base64 WAV, made by the page) into the library's
+; ASCS Leveled folder under a new name, never over an existing file, and
+; returns its path.
+WriteLeveledCopy(stem, gainDb, base64) {
+    global ASCS_SoundLibrary
+    bytes := Base64ToBuffer(base64, 32 * 1024 * 1024)
+    if (bytes.Size < 44 || StrGet(bytes, 4, "CP0") != "RIFF" || StrGet(bytes.Ptr + 8, 4, "CP0") != "WAVE")
+        throw Error("The leveled copy isn't a WAV file.")
+    folder := ASCS_SoundLibrary "\ASCS Leveled"
+    DirCreate(folder)
+    name := LeveledSoundName(stem, gainDb)
+    path := folder "\" name
+    n := 1
+    while FileExist(path)
+        path := folder "\" SubStr(name, 1, -4) " " (++n) ".wav"
+    file := FileOpen(path ".tmp", "w")
+    file.RawWrite(bytes, bytes.Size)
+    file.Close()
+    FileMove(path ".tmp", path)
+    WriteLog("Sounds: saved a leveled copy, " path ".")
+    RecordActivity("system", "Leveled copy saved: " name)
+    return path
+}
+
+; ---- the notification level board (1.8.0)
+
+; The WAV a sound in use plays now, from the registry or ASCS's settings.
+InUseSoundPath(key) {
+    global ASCS_AscsSoundFiles
+    parsed := ParseInUseKey(key)
+    path := parsed[1] = "windows"
+        ? ResolveSoundPath(ExpandEnvironment(ReadWindowsSound(WindowsSoundEvent(parsed[2]))["value"]), A_WinDir)
+        : ASCS_AscsSoundFiles[parsed[2]]
+    if (path = "" || !RegExMatch(path, "i)\.wav$") || !FileExist(path))
+        throw Error("It has no WAV file to measure.")
+    return path
+}
+
+; Sends a sound in use to the page to measure (reply id "use:<key>").
+SendInUseSound(key) {
+    global ASCS_App
+    try {
+        data := FileToBase64(InUseSoundPath(key), 16 * 1024 * 1024)
+        ASCS_App.PostWebMessageAsString("SOUND`nuse:" key "`n" data)
+    } catch as err {
+        try ASCS_App.PostWebMessageAsString("SOUND`nuse:" key "`n")
+        WriteLog("Sounds: in-use sound not sent: " err.Message)
+    }
+}
+
+; Payload: target|source|gain dB|base64 WAV. Saves the page's leveled copy
+; and makes the target (a Windows event or ASCS sound) play it. The source
+; names the copy: "current" (what the target plays now) or "lib:<id>".
+; Restore brings back what played before ASCS first changed the target.
+UseLeveledSound(content) {
+    global ASCS_SoundLibrary
+    target := ""
+    try {
+        parts := StrSplit(content, "|", , 4)
+        if (parts.Length != 4)
+            throw Error("The leveled copy was malformed.")
+        target := parts[1]
+        parsed := ParseInUseKey(target)
+        gain := ValidateLeveledGain(parts[3])
+        if (parts[2] = "current") {
+            SplitPath(InUseSoundPath(target), , , , &stem)
+        } else if (SubStr(parts[2], 1, 4) = "lib:") {
+            stem := IndexedSound(SubStr(parts[2], 5))["name"]
+        } else {
+            throw Error("The leveled copy was malformed.")
+        }
+        path := WriteLeveledCopy(stem, gain, parts[4])
+        SplitPath(path, &file)
+        if (parsed[1] = "windows")
+            ApplyWindowsSound(WindowsSoundEvent(parsed[2]), path, file)
+        else
+            ApplyAscsSound(parsed[2], path)
+        SendToFrontend('{"type":"soundMatched","target":' JsonQuote(target) ',"ok":true,"file":' JsonQuote(file) '}')
+    } catch as err {
+        WriteLog("Sounds: leveled copy not used: " err.Message)
+        SendToFrontend('{"type":"soundMatched","target":' JsonQuote(target) ',"ok":false,"message":' JsonQuote(err.Message) '}')
+    }
+    SendWindowsSounds()
+}
+
+; ---- Windows sounds
+
+WindowsSoundKey(event) => "HKCU\AppEvents\Schemes\Apps\" event[1] "\" event[2] "\.Current"
+
+; The current value of an event's .Current key: Map(kind: none/sz/expand, value).
+ReadWindowsSound(event) {
+    kind := "none", value := ""
+    try {
+        Loop Reg WindowsSoundKey(event), "V" {
+            if (A_LoopRegName = "") {
+                kind := A_LoopRegType = "REG_EXPAND_SZ" ? "expand" : "sz"
+                value := RegRead()
+                break
+            }
+        }
+    }
+    return Map("kind", kind, "value", value)
+}
+
+ExpandEnvironment(text) {
+    if !InStr(text, "%")
+        return text
+    size := DllCall("ExpandEnvironmentStringsW", "Str", text, "Ptr", 0, "UInt", 0, "UInt")
+    out := Buffer(size * 2)
+    DllCall("ExpandEnvironmentStringsW", "Str", text, "Ptr", out, "UInt", size, "UInt")
+    return StrGet(out, "UTF-16")
+}
+
+SendWindowsSounds() {
+    global ASCS_SettingsFile, ASCS_SoundLibrary
+    json := ""
+    for event in WindowsSoundEvents() {
+        key := event[1] "/" event[2]
+        current := ReadWindowsSound(event)
+        path := ExpandEnvironment(current["value"])
+        SplitPath(path, &file)
+        inLibrary := path != "" && InStr(path, ASCS_SoundLibrary "\") = 1
+        backup := IniRead(ASCS_SettingsFile, "WindowsSoundBackup", key, "")
+        json .= (json = "" ? "" : ",") '{"key":' JsonQuote(key) ',"label":' JsonQuote(event[3])
+            . ',"file":' JsonQuote(file) ',"id":' JsonQuote(inLibrary ? SubStr(path, StrLen(ASCS_SoundLibrary) + 2) : "")
+            . ',"exists":' (path != "" && FileExist(path) ? "true" : "false")
+            . ',"changed":' (backup != "" ? "true" : "false") '}'
+    }
+    SendToFrontend('{"type":"windowsSounds","events":[' json '],"ascsSounds":' AscsSoundsJson() '}')
+}
+
+; Payload: app/event|sound id.
+SetWindowsSound(content) {
+    global ASCS_SettingsFile
+    try {
+        parts := StrSplit(content, "|", , 2)
+        if (parts.Length != 2)
+            throw Error("Malformed request.")
+        event := WindowsSoundEvent(parts[1])
+        sound := IndexedSound(parts[2])
+        if (sound["ext"] != "wav")
+            throw Error("Windows plays only WAV files for its sounds.")
+        ApplyWindowsSound(event, sound["path"], sound["name"])
+        SendToFrontend('{"type":"notice","message":' JsonQuote(event[3] " now plays " sound["name"] ".") '}')
+    } catch as err {
+        SendToFrontend('{"type":"notice","message":' JsonQuote(err.Message) '}')
+    }
+    SendWindowsSounds()
+}
+
+; Makes a Windows event play a file, keeping what it played before ASCS
+; first changed it (for Restore).
+ApplyWindowsSound(event, path, name) {
+    global ASCS_SettingsFile
+    key := event[1] "/" event[2]
+    if (IniRead(ASCS_SettingsFile, "WindowsSoundBackup", key, "") = "") {
+        current := ReadWindowsSound(event)
+        IniWrite(current["kind"] "|" current["value"], ASCS_SettingsFile, "WindowsSoundBackup", key)
+    }
+    RegWrite(path, "REG_SZ", WindowsSoundKey(event), "")
+    WriteLog("Sounds: Windows sound " key " set to " path ".")
+    RecordActivity("system", event[3] " sound: " name)
+}
+
+RestoreWindowsSound(content) {
+    try {
+        event := WindowsSoundEvent(content)
+        if !RestoreWindowsSoundValue(event)
+            throw Error("Nothing to restore for " event[3] ".")
+        SendToFrontend('{"type":"notice","message":' JsonQuote(event[3] " is back to its previous sound.") '}')
+    } catch as err {
+        SendToFrontend('{"type":"notice","message":' JsonQuote(err.Message) '}')
+    }
+    SendWindowsSounds()
+}
+
+; Puts back what an event played before ASCS first changed it. Returns false
+; when ASCS never changed it.
+RestoreWindowsSoundValue(event) {
+    global ASCS_SettingsFile
+    key := event[1] "/" event[2]
+    backup := IniRead(ASCS_SettingsFile, "WindowsSoundBackup", key, "")
+    if (backup = "")
+        return false
+    parts := StrSplit(backup, "|", , 2)
+    if (parts[1] = "none") {
+        try RegDelete(WindowsSoundKey(event), "")
+    } else {
+        RegWrite(parts.Length > 1 ? parts[2] : "", parts[1] = "expand" ? "REG_EXPAND_SZ" : "REG_SZ", WindowsSoundKey(event), "")
+    }
+    IniDelete(ASCS_SettingsFile, "WindowsSoundBackup", key)
+    WriteLog("Sounds: Windows sound " key " restored.")
+    return true
+}
+
+; Restore all (1.8.0): every Windows event and ASCS sound that ASCS changed
+; goes back to what it played before.
+RestoreAllSounds() {
+    restored := 0, failed := 0
+    for event in WindowsSoundEvents() {
+        try restored += RestoreWindowsSoundValue(event)
+        catch as err {
+            failed++
+            WriteLog("Sounds: couldn't restore " event[3] ": " err.Message)
+        }
+    }
+    for kind in ["show", "hide", "reminder"] {
+        try restored += RestoreAscsSoundValue(kind)
+        catch as err {
+            failed++
+            WriteLog("Sounds: couldn't restore the ASCS " kind " sound: " err.Message)
+        }
+    }
+    if restored
+        RecordActivity("system", "Sounds restored: " restored)
+    message := !restored && !failed ? "Nothing to restore: ASCS hasn't changed any sounds."
+        : restored " sound" (restored = 1 ? "" : "s") " restored" (failed ? "; " failed " couldn't be (see Logs)." : ".")
+    SendToFrontend('{"type":"notice","message":' JsonQuote(message) '}')
+    SendWindowsSounds()
+}
+
+; Deletes a leveled copy (1.8.0): only a WAV directly in the library's ASCS
+; Leveled folder (IsLeveledCopyId), never one a Windows event or ASCS sound
+; plays now, and to the Recycle Bin, so it can be brought back.
+DeleteLeveledSound(id) {
+    try {
+        file := RecycleLeveledCopy(id)
+        RecordActivity("system", "Leveled copy deleted: " file)
+        SendSoundLibrary(true)
+        SendToFrontend('{"type":"notice","message":' JsonQuote("Moved " file " to the Recycle Bin.") '}')
+    } catch as err {
+        WriteLog("Sounds: leveled copy not deleted: " err.Message)
+        SendToFrontend('{"type":"notice","message":' JsonQuote("Not deleted: " err.Message) '}')
+    }
+}
+
+; Moves one leveled copy to the Recycle Bin and returns its file name; throws
+; (with the reason) for anything that isn't a leveled copy in the index, or
+; one a Windows event or ASCS sound plays now.
+RecycleLeveledCopy(id) {
+    global ASCS_AscsSoundFiles
+    if !IsLeveledCopyId(id)
+        throw Error("Only leveled copies in ASCS Leveled can be deleted here.")
+    path := IndexedSound(id)["path"]
+    if !FileExist(path)
+        throw Error("It's already gone.")
+    for event in WindowsSoundEvents()
+        if (ResolveSoundPath(ExpandEnvironment(ReadWindowsSound(event)["value"]), A_WinDir) = path)
+            throw Error(event[3] " plays it now. Restore or change that first.")
+    for kind, label in Map("show", "ASCS show", "hide", "ASCS hide", "reminder", "Calendar reminder")
+        if (ASCS_AscsSoundFiles[kind] = path)
+            throw Error(label " plays it now. Restore or change that first.")
+    FileRecycle(path)
+    SplitPath(path, &file)
+    WriteLog("Sounds: leveled copy moved to the Recycle Bin, " path ".")
+    return file
+}
+
+; Select › Delete (1.8.0): a batch of up to 10 ids, one per line. The page
+; sends the next batch when this one's reply arrives, so ASCS never works for
+; long between messages, and asks for the library once at the end. Each copy
+; gets the same checks as a single Delete; one that fails is skipped with its
+; reason, and the rest go ahead.
+DeleteLeveledSounds(content) {
+    deleted := 0, skipped := ""
+    try {
+        for id in ParseDeleteList(content, 10) {
+            try {
+                RecycleLeveledCopy(id)
+                deleted++
+            } catch as err {
+                skipped .= (skipped = "" ? "" : ",") '{"id":' JsonQuote(id) ',"reason":' JsonQuote(err.Message) '}'
+                WriteLog("Sounds: leveled copy not deleted (" id "): " err.Message)
+            }
+        }
+        if deleted
+            RecordActivity("system", "Leveled copies deleted: " deleted)
+        SendToFrontend('{"type":"soundsDeleted","ok":true,"deleted":' deleted ',"skipped":[' skipped ']}')
+    } catch as err {
+        WriteLog("Sounds: delete request refused: " err.Message)
+        SendToFrontend('{"type":"soundsDeleted","ok":false,"deleted":' deleted ',"skipped":[],"message":' JsonQuote(err.Message) '}')
+    }
+}
+
+PreviewWindowsSound(content) {
+    try {
+        event := WindowsSoundEvent(content)
+        path := ExpandEnvironment(ReadWindowsSound(event)["value"])
+        if (path != "" && FileExist(path) && RegExMatch(path, "i)\.wav$"))
+            SoundPlay(path)
+    }
+}
+
+; ---- ASCS's own show/hide sounds, chosen from the library
+
+AscsSoundKey(kind) => Map("show", "ShowFile", "hide", "HideFile", "reminder", "ReminderFile")[kind]
+
+AscsSoundsJson() {
+    global ASCS_AscsSoundFiles, ASCS_SoundLibrary, ASCS_SettingsFile
+    json := ""
+    for kind in ["show", "hide", "reminder"] {
+        path := ASCS_AscsSoundFiles[kind]
+        SplitPath(path, &file)
+        id := InStr(path, ASCS_SoundLibrary "\") = 1 ? SubStr(path, StrLen(ASCS_SoundLibrary) + 2) : ""
+        changed := IniRead(ASCS_SettingsFile, "AscsSoundBackup", kind, "") != ""
+        json .= (json = "" ? "" : ",") JsonQuote(kind) ':{"file":' JsonQuote(file) ',"id":' JsonQuote(id)
+            . ',"exists":' (FileExist(path) ? "true" : "false") ',"changed":' (changed ? "true" : "false") '}'
+    }
+    return "{" json "}"
+}
+
+; Makes one of ASCS's sounds play a file, keeping the one from before ASCS
+; first changed it (1.8.0, for Restore).
+ApplyAscsSound(kind, path) {
+    global ASCS_SettingsFile, ASCS_AscsSoundFiles
+    if (IniRead(ASCS_SettingsFile, "AscsSoundBackup", kind, "") = "")
+        IniWrite("file|" ASCS_AscsSoundFiles[kind], ASCS_SettingsFile, "AscsSoundBackup", kind)
+    ASCS_AscsSoundFiles[kind] := path
+    IniWrite(path, ASCS_SettingsFile, "Sounds", AscsSoundKey(kind))
+    WriteLog("Sounds: ASCS " kind " sound set to " path ".")
+}
+
+RestoreAscsSound(kind) {
+    try {
+        if !(kind = "show" || kind = "hide" || kind = "reminder")
+            throw Error("Malformed request.")
+        if !RestoreAscsSoundValue(kind)
+            throw Error("Nothing to restore.")
+        SendToFrontend('{"type":"notice","message":' JsonQuote(Map("show", "ASCS show", "hide", "ASCS hide", "reminder", "Calendar reminder")[kind] " sound restored.") '}')
+    } catch as err {
+        SendToFrontend('{"type":"notice","message":' JsonQuote(err.Message) '}')
+    }
+    SendWindowsSounds()
+}
+
+; Puts back the file an ASCS sound played before ASCS first changed it.
+; Returns false when it was never changed.
+RestoreAscsSoundValue(kind) {
+    global ASCS_SettingsFile, ASCS_AscsSoundFiles
+    backup := IniRead(ASCS_SettingsFile, "AscsSoundBackup", kind, "")
+    if (SubStr(backup, 1, 5) != "file|")
+        return false
+    path := SubStr(backup, 6)
+    ASCS_AscsSoundFiles[kind] := path
+    IniWrite(path, ASCS_SettingsFile, "Sounds", AscsSoundKey(kind))
+    IniDelete(ASCS_SettingsFile, "AscsSoundBackup", kind)
+    WriteLog("Sounds: ASCS " kind " sound restored.")
+    return true
+}
+
+; Payload: show|id or hide|id.
+SetAscsSound(content) {
+    global ASCS_SettingsFile, ASCS_AscsSoundFiles
+    try {
+        parts := StrSplit(content, "|", , 2)
+        if (parts.Length != 2 || !(parts[1] = "show" || parts[1] = "hide" || parts[1] = "reminder"))
+            throw Error("Malformed request.")
+        sound := IndexedSound(parts[2])
+        if (sound["ext"] != "wav")
+            throw Error("ASCS's own sounds must be WAV files.")
+        ApplyAscsSound(parts[1], sound["path"])
+        SendToFrontend('{"type":"notice","message":' JsonQuote(Map("show", "ASCS show", "hide", "ASCS hide", "reminder", "Calendar reminder")[parts[1]] " sound: " sound["name"] ".") '}')
+    } catch as err {
+        SendToFrontend('{"type":"notice","message":' JsonQuote(err.Message) '}')
+    }
+    SendWindowsSounds()
+}
+
+SetSoundLibrary(content) {
+    global ASCS_SettingsFile, ASCS_SoundLibrary
+    try {
+        path := ValidateSoundLibrary(content)
+        if !DirExist(path)
+            throw Error("That folder doesn't exist.")
+        ASCS_SoundLibrary := path
+        IniWrite(path, ASCS_SettingsFile, "Sounds", "Library")
+        SendSoundLibrary(true)
+    } catch as err {
+        SendToFrontend('{"type":"notice","message":' JsonQuote(err.Message) '}')
+    }
+}
+
+; ==========================================
+; CALENDAR (1.8.0)
+; ==========================================
+; The Calendar page's data lives in Radicale, a CalDAV server installed by
+; tools\Install-Radicale.ps1 into data\radicale. ASCS starts it (listening on
+; 127.0.0.1 only), stops it on exit, and adopts one it left running across a
+; reload. The page never talks to the server and never sees its password: it
+; asks for an operation, ASCS builds exactly one request (CalDavRequest in
+; Core), adds the password, and returns the status, ETag and body. Reminders
+; for the next three days come from the page; ASCS fires them as Windows
+; notifications with the chosen reminder sound, even while hidden.
+
+CalendarPaths() {
+    global ASCS_DataDir
+    dir := ASCS_DataDir "\radicale"
+    return Map("dir", dir, "pythonw", dir "\venv\Scripts\pythonw.exe", "config", dir "\config", "users", dir "\users")
+}
+
+CalendarCredentials() {
+    global ASCS_SecretsFile
+    user := Trim(IniRead(ASCS_SecretsFile, "Calendar", "User", ""))
+    password := Trim(IniRead(ASCS_SecretsFile, "Calendar", "Password", ""))
+    if !RegExMatch(user, "^[a-z][a-z0-9]{0,31}$") || StrLen(password) < 24
+        return 0
+    return Map("user", user, "password", password)
+}
+
+; The process (if any) listening on 127.0.0.1:5232, and its command line.
+CalendarPortOwner() {
+    size := 0
+    DllCall("Iphlpapi\GetExtendedTcpTable", "Ptr", 0, "UInt*", &size, "Int", false, "UInt", 2, "UInt", 3, "UInt", 0)  ; TCP_TABLE_OWNER_PID_LISTENER
+    table := Buffer(size + 64, 0)
+    if DllCall("Iphlpapi\GetExtendedTcpTable", "Ptr", table, "UInt*", &size, "Int", false, "UInt", 2, "UInt", 3, "UInt", 0)
+        return 0
+    Loop NumGet(table, 0, "UInt") {
+        row := 4 + (A_Index - 1) * 24             ; MIB_TCPROW_OWNER_PID: state, local addr, local port, remote addr, remote port, pid
+        port := ((NumGet(table, row + 8, "UInt") & 0xFF) << 8) | ((NumGet(table, row + 8, "UInt") >> 8) & 0xFF)
+        if (port = 5232)
+            return NumGet(table, row + 20, "UInt")
+    }
+    return 0
+}
+
+ProcessCommandLine(pid) {
+    try {
+        for process in ComObjGet("winmgmts:").ExecQuery("SELECT CommandLine FROM Win32_Process WHERE ProcessId=" Integer(pid))
+            return process.CommandLine
+    }
+    return ""
+}
+
+StartCalendarServer() {
+    global ASCS_CalendarState, ASCS_CalendarPid
+    paths := CalendarPaths()
+    if !FileExist(paths["pythonw"]) || !FileExist(paths["config"]) || !FileExist(paths["users"]) || !CalendarCredentials() {
+        SetCalendarState("notInstalled", "The calendar server isn't installed. Run tools\Install-Radicale.ps1, then reload ASCS.")
+        return
+    }
+    if (owner := CalendarPortOwner()) {
+        if InStr(ProcessCommandLine(owner), paths["config"]) {
+            ASCS_CalendarPid := owner
+            SetCalendarState("running", "")
+            WriteLog("Calendar: adopted the running server (pid " owner ").")
+        } else {
+            SetCalendarState("failed", "Port 5232 is in use by another program, so the calendar server can't start.")
+            WriteLog("Calendar: port 5232 is taken by pid " owner "; not starting.")
+        }
+        return
+    }
+    try {
+        Run('"' paths["pythonw"] '" -I -m radicale --config "' paths["config"] '"', paths["dir"], "Hide", &pid)
+        ASCS_CalendarPid := pid
+        SetCalendarState("starting", "")
+        SetTimer(CheckCalendarServer, -1500)
+    } catch as err {
+        SetCalendarState("failed", "The calendar server couldn't start: " err.Message)
+    }
+}
+
+CheckCalendarServer() {
+    static tries := 0
+    if CalendarPortOwner() {
+        tries := 0
+        SetCalendarState("running", "")
+        WriteLog("Calendar: server started.")
+        return
+    }
+    if (++tries < 8) {
+        SetTimer(CheckCalendarServer, -1000)
+        return
+    }
+    tries := 0
+    SetCalendarState("failed", "The calendar server didn't start. Try tools\Install-Radicale.ps1 -Reinstall.")
+    WriteLog("Calendar: server didn't start within 9 s.")
+}
+
+; On exit (not on reload: the new ASCS adopts it). The venv's pythonw is a
+; launcher with the real server as its child, so both are stopped, and only
+; processes whose command line points at ASCS's own config.
+StopCalendarServer(reason, *) {
+    global ASCS_CalendarPid
+    if (reason = "Reload")
+        return
+    config := CalendarPaths()["config"]
+    pids := []
+    if ASCS_CalendarPid
+        pids.Push(ASCS_CalendarPid)
+    if (owner := CalendarPortOwner())
+        pids.Push(owner)
+    for pid in pids
+        if ProcessExist(pid) && InStr(ProcessCommandLine(pid), config)
+            try ProcessClose(pid)
+}
+
+SetCalendarState(state, message) {
+    global ASCS_CalendarState
+    ASCS_CalendarState := Map("state", state, "message", message)
+    SendCalendarState()
+}
+
+SendCalendarState() {
+    global ASCS_CalendarState
+    SendToFrontend('{"type":"calendarState","state":' JsonQuote(ASCS_CalendarState["state"]) ',"message":' JsonQuote(ASCS_CalendarState["message"]) '}')
+}
+
+; Payload: "id|op|calendar|uid|etag" then a newline and the body (if any).
+; The reply is a string: CAL, id, status, ETag, body, one per line.
+CalendarRequest(content) {
+    global ASCS_CalendarState, ASCS_CalendarRequests
+    split := InStr(content, "`n")
+    head := split ? SubStr(content, 1, split - 1) : content
+    body := split ? SubStr(content, split + 1) : ""
+    fields := StrSplit(head, "|")
+    if (fields.Length != 5 || !RegExMatch(fields[1], "^\d{1,9}$"))
+        return
+    id := fields[1]
+    try {
+        if (ASCS_CalendarState["state"] != "running")
+            throw Error(ASCS_CalendarState["message"] != "" ? ASCS_CalendarState["message"] : "The calendar server isn't running yet.")
+        if (ASCS_CalendarRequests.Count >= 8)
+            throw Error("Too many calendar requests at once.")
+        credentials := CalendarCredentials()
+        spec := CalDavRequest(credentials["user"], fields[2], fields[3], fields[4], fields[5], body)
+        request := ComObject("WinHttp.WinHttpRequest.5.1")
+        request.Option[6] := false                       ; no redirects
+        request.SetTimeouts(2000, 2000, 10000, 15000)
+        request.Open(spec["method"], "http://127.0.0.1:5232" spec["path"], true)
+        request.SetRequestHeader("Authorization", "Basic " Base64Text(credentials["user"] ":" credentials["password"]))
+        for name, value in spec["headers"]
+            request.SetRequestHeader(name, value)
+        request.Send(spec["body"] = "" ? "" : Utf8Bytes(spec["body"]))
+        ASCS_CalendarRequests[id] := Map("request", request, "started", A_TickCount)
+        SetTimer(PollCalendarRequests, 50)
+    } catch as err {
+        ReplyCalendar(id, 0, "", err.Message)
+    }
+}
+
+PollCalendarRequests() {
+    global ASCS_CalendarRequests
+    for id in [ASCS_CalendarRequests*] {
+        entry := ASCS_CalendarRequests[id]
+        try {
+            if !entry["request"].WaitForResponse(0) {
+                if (A_TickCount - entry["started"] < 20000)
+                    continue
+                try entry["request"].Abort()
+                throw Error("The calendar server didn't answer.")
+            }
+            ASCS_CalendarRequests.Delete(id)
+            request := entry["request"]
+            etag := ""
+            try etag := request.GetResponseHeader("ETag")
+            text := ""
+            try text := HttpResponseText(request, 20000000)     ; empty replies (201, 204) have no body
+            ReplyCalendar(id, request.Status, etag, text)
+        } catch as err {
+            if ASCS_CalendarRequests.Has(id)
+                ASCS_CalendarRequests.Delete(id)
+            ReplyCalendar(id, 0, "", err.Message)
+        }
+    }
+    if !ASCS_CalendarRequests.Count
+        SetTimer(PollCalendarRequests, 0)
+}
+
+ReplyCalendar(id, status, etag, body) {
+    global ASCS_App
+    try ASCS_App.PostWebMessageAsString("CAL`n" id "`n" status "`n" RegExReplace(etag, "[\r\n]") "`n" body)
+}
+
+Base64Text(text) {
+    size := StrPut(text, "UTF-8") - 1
+    bytes := Buffer(size + 1)
+    StrPut(text, bytes, "UTF-8")
+    flags := 0x40000001                              ; CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF
+    DllCall("Crypt32\CryptBinaryToStringW", "Ptr", bytes, "UInt", size, "UInt", flags, "Ptr", 0, "UInt*", &chars := 0)
+    out := Buffer(chars * 2)
+    DllCall("Crypt32\CryptBinaryToStringW", "Ptr", bytes, "UInt", size, "UInt", flags, "Ptr", out, "UInt*", &chars)
+    return StrGet(out, chars, "UTF-16")
+}
+
+; UTF-8 bytes (no terminator) as a SAFEARRAY for WinHttp's Send.
+Utf8Bytes(text) {
+    size := StrPut(text, "UTF-8") - 1
+    safeArray := ComObjArray(0x11, Max(size, 1))         ; VT_UI1
+    if (size > 0) {
+        temp := Buffer(size + 1)
+        StrPut(text, temp, "UTF-8")
+        DllCall("RtlMoveMemory", "Ptr", NumGet(ComObjValue(safeArray), 8 + A_PtrSize, "Ptr"), "Ptr", temp, "UPtr", size)
+    }
+    return safeArray
+}
+
+; ---- .ics import and export, through Windows' own file dialogs (the page
+; never names a path)
+
+ExportCalendarFile(content) {
+    global ASCS_App
+    try {
+        split := InStr(content, "`n")
+        name := Trim(RegExReplace(SubStr(content, 1, split - 1), '[<>:"/\\|?*\x00-\x1F]', ""))
+        ics := ValidateCalendarFile(SubStr(content, split + 1))
+        ASCS_App.Opt("+OwnDialogs")
+        path := FileSelect("S16", A_MyDocuments "\" (name = "" ? "Calendar" : SubStr(name, 1, 60)) ".ics", "Export calendar", "iCalendar (*.ics)")
+        if (path = "")
+            return
+        if !RegExMatch(path, "i)\.ics$")
+            path .= ".ics"
+        file := FileOpen(path, "w", "UTF-8-RAW")
+        file.Write(ics)
+        file.Close()
+        SplitPath(path, &fileName)
+        RecordActivity("system", "Calendar exported: " fileName)
+        SendToFrontend('{"type":"notice","message":' JsonQuote("Saved " fileName ".") '}')
+    } catch as err {
+        SendToFrontend('{"type":"notice","message":' JsonQuote("The calendar wasn't exported: " err.Message) '}')
+    }
+}
+
+ImportCalendarFile() {
+    global ASCS_App
+    try {
+        ASCS_App.Opt("+OwnDialogs")
+        path := FileSelect(1, A_MyDocuments, "Import a calendar file", "iCalendar (*.ics)")
+        if (path = "")
+            return
+        if (FileGetSize(path) > 5 * 1024 * 1024)
+            throw Error("The file is larger than 5 MB.")
+        text := ValidateCalendarFile(FileRead(path, "UTF-8"))
+        SplitPath(path, &fileName)
+        ASCS_App.PostWebMessageAsString("ICS`n" fileName "`n" text)
+    } catch as err {
+        SendToFrontend('{"type":"notice","message":' JsonQuote("That file couldn't be imported: " err.Message) '}')
+    }
+}
+
+; ---- reminders
+
+SetCalendarReminders(content) {
+    global ASCS_CalendarReminders
+    now := DateDiff(A_NowUTC, "19700101000000", "Seconds")
+    ASCS_CalendarReminders := ParseReminderList(content, now)
+    SetTimer(FireCalendarReminders, ASCS_CalendarReminders.Length ? 15000 : 0)
+}
+
+; Every 15 s while any are pending: reminders that are due fire once; any
+; more than 15 minutes late (the PC was asleep) are dropped quietly.
+FireCalendarReminders() {
+    global ASCS_CalendarReminders, ASCS_CalendarFired, ASCS_ReminderBalloonAt
+    now := DateDiff(A_NowUTC, "19700101000000", "Seconds")
+    keep := []
+    for reminder in ASCS_CalendarReminders {
+        key := reminder["at"] "|" reminder["title"]
+        if (reminder["at"] > now) {
+            keep.Push(reminder)
+            continue
+        }
+        if ASCS_CalendarFired.Has(key) || now - reminder["at"] > 900
+            continue
+        ASCS_CalendarFired[key] := now
+        PlayAscsSound("reminder")
+        ; ASCS's own icon, large (0x4 | 0x20), muted (0x10): ASCS plays its
+        ; reminder sound itself. Clicking the pop-up opens the Calendar.
+        ASCS_ReminderBalloonAt := A_TickCount
+        TrayTip(ReminderBalloonText(reminder, now), reminder["title"], 0x34)
+        NotifyFrontend(reminder["title"] " · " reminder["when"])
+        RecordActivity("system", "Reminder: " reminder["title"])
+    }
+    ASCS_CalendarReminders := keep
+    for key, at in ASCS_CalendarFired.Clone()
+        if (now - at > 86400)
+            ASCS_CalendarFired.Delete(key)
+    if !keep.Length
+        SetTimer(FireCalendarReminders, 0)
+}
+
+; A click on a reminder pop-up (NIN_BALLOONUSERCLICK) within a minute of it
+; showing opens the Calendar. Returns nothing, so the tray icon's own
+; handling of every message carries on as before.
+ReminderBalloonClicked(wParam, lParam, *) {
+    global ASCS_ReminderBalloonAt
+    if ((lParam & 0xFFFF) = 0x405 && ASCS_ReminderBalloonAt && A_TickCount - ASCS_ReminderBalloonAt < 60000) {
+        ASCS_ReminderBalloonAt := 0
+        SetTimer(() => ShowASCS("calendar"), -1)
+    }
+}
+
 ; ---- audio: headphones through SoundSwitch
 ; SoundSwitch cycles the default device on its hotkey. ASCS presses it until
 ; the wanted device is the default (read back from Windows after each press),
@@ -5558,16 +6696,26 @@ ShowRecentGames(emulator, *) {
 ;   2. ASCS answers with a single-use ticket valid for 10 seconds, plus any
 ;      warnings (games running), and the page must send the ticket back with
 ;      PowerRun; a stray, repeated or late message does nothing;
-;   3. restart and shut down use Windows' own timed shutdown (30 seconds,
-;      never forced, so apps with unsaved work still ask), sign out waits 15
-;      seconds and sleep 5, all cancellable from the banner (shutdown /a for
-;      Windows' timer);
+;   3. ASCS counts down (none, 5 or 30 seconds, from Preferences; Cancel on
+;      the banner stops it), then runs the action. Restart and shut down use
+;      shutdown /t 0 without /f, so apps with unsaved work still ask. (1.7.0
+;      used Windows' own 30-second timer, but any /t above 0 implies /f.)
+;      Before restart, shut down or sign out, ASCS holds while any window
+;      title marks unsaved work, because Windows' own prompt comes only after
+;      other apps have closed. If ASCS closes during a countdown, nothing happens;
 ;   4. notes are saved first, and every step is logged.
 ; None of these is bound to a hotkey, a quick action or the palette.
 
 PowerGuarded() {
-    static actions := Map("restart", 30, "shutdown", 30, "signout", 15, "sleep", 5, "recycle", 0)
+    static actions := Map("restart", 1, "shutdown", 1, "signout", 1, "sleep", 1, "recycle", 0)
     return actions
+}
+
+; The countdown for an action: the Preferences delay (none, 5 or 30 s) for
+; everything but the Recycle Bin.
+PowerDelayFor(action) {
+    global ASCS_PowerDelay
+    return PowerGuarded()[action] ? ASCS_PowerDelay : 0
 }
 
 PowerLabel(action) {
@@ -5591,7 +6739,65 @@ PowerWarnings(action) {
             warnings.Push(names[name] " is running")
     if SteamRunningAppId()
         warnings.Push("a Steam game is running")
+    if (action != "sleep") {
+        unsaved := UnsavedWork()
+        if unsaved.Length
+            warnings.InsertAt(1, "unsaved work in " UnsavedWorkSummary(unsaved))
+    }
     return warnings
+}
+
+; Apps whose windows mark unsaved work in their titles (see UnsavedWorkApp),
+; each named once. Visible, non-tool windows only; ASCS's own are skipped.
+UnsavedWork() {
+    apps := [], seen := Map()
+    own := ProcessExist()
+    for hwnd in WinGetList() {
+        try {
+            if (WinGetPID(hwnd) = own || (WinGetExStyle(hwnd) & 0x80))   ; WS_EX_TOOLWINDOW
+                continue
+            app := UnsavedWorkApp(WinGetTitle(hwnd), WinGetProcessName(hwnd))
+            if (app != "" && !seen.Has(app)) {
+                seen[app] := true
+                apps.Push(app)
+            }
+        }
+    }
+    if (!seen.Has("Visual Studio Code") && VSCodeHasUnsavedWork())
+        apps.Push("Visual Studio Code")
+    return apps
+}
+
+; VS Code's title marks only the active tab, so its own backups of unsaved
+; buffers count too (IsVSCodeBackupFolder): any written since the running VS
+; Code started. Only names and dates are read, never contents. Earlier ones
+; belong to buffers VS Code restores itself after a restart.
+VSCodeHasUnsavedWork() {
+    if !(hwnd := WinExist("ahk_exe Code.exe ahk_class Chrome_WidgetWin_1"))
+        return false
+    started := ProcessStartStamp(WinGetPID(hwnd))   ; the window belongs to VS Code's main process
+    if (started = "")
+        return false
+    checked := 0
+    Loop Files EnvGet("APPDATA") "\Code\Backups\*", "FR" {
+        if (++checked > 2000)
+            break
+        if (IsVSCodeBackupFolder(A_LoopFileDir) && A_LoopFileTimeModified >= started)
+            return true
+    }
+    return false
+}
+
+; When a process started, as local YYYYMMDDHH24MISS ("" if it can't be read).
+ProcessStartStamp(pid) {
+    handle := DllCall("OpenProcess", "UInt", 0x1000, "Int", 0, "UInt", pid, "Ptr")   ; PROCESS_QUERY_LIMITED_INFORMATION
+    if !handle
+        return ""
+    times := Buffer(32, 0)                      ; creation, exit, kernel and user FILETIMEs
+    ok := DllCall("GetProcessTimes", "Ptr", handle, "Ptr", times.Ptr, "Ptr", times.Ptr + 8,
+        "Ptr", times.Ptr + 16, "Ptr", times.Ptr + 24, "Int")
+    DllCall("CloseHandle", "Ptr", handle)
+    return ok ? FileTimeToLocalStamp(NumGet(times, 0, "Int64"), DateDiff(A_Now, A_NowUTC, "Seconds")) : ""
 }
 
 PowerArm(action) {
@@ -5629,36 +6835,15 @@ PowerRun(content) {
         SendToFrontend('{"type":"notice","message":"Another power action is already counting down."}')
         return
     }
-    seconds := PowerGuarded()[action]
+    seconds := PowerDelayFor(action)
     ASCS_PowerPending := Map("action", action, "deadline", A_TickCount + seconds * 1000)
-    RecordActivity("system", PowerLabel(action) " scheduled in " seconds " s")
+    RecordActivity("system", PowerLabel(action) (seconds ? " scheduled in " seconds " s" : ""))
     WriteLog("Power: " action " in " seconds " s.")
-    if (action = "restart" || action = "shutdown") {
-        FlushNotesThen(StartWindowsShutdown.Bind(action, seconds))
-        ; If Windows' timer is cancelled elsewhere (shutdown /a), clear the banner.
-        SetTimer(ExpirePowerPending, -((seconds + 15) * 1000))
-    } else {
-        SetTimer(FinishPowerAction, -(seconds * 1000))
-    }
     SendToFrontend('{"type":"powerPending","action":' JsonQuote(action) ',"seconds":' seconds '}')
-}
-
-StartWindowsShutdown(action, seconds) {
-    global ASCS_PowerPending
-    ; Notes are saved first, so this runs a moment later; if Cancel was
-    ; pressed in between, the shutdown must not be scheduled at all.
-    if !IsObject(ASCS_PowerPending) || ASCS_PowerPending["action"] != action {
-        WriteLog("Power: " action " was cancelled before Windows' timer started.")
-        return
-    }
-    flag := action = "restart" ? "/r" : "/s"
-    message := "ASCS: " (action = "restart" ? "restarting" : "shutting down") " in " seconds " seconds. Cancel in ASCS or run shutdown /a."
-    try {
-        Run('"' ShutdownExe() '" ' flag ' /t ' seconds ' /c "' message '"', , "Hide")
-    } catch as err {
-        WriteLog("Power: shutdown.exe failed: " err.Message)
-        ClearPowerPending("Windows refused: " err.Message)
-    }
+    ; ASCS counts down every action itself (1.8.0). Windows' own timer
+    ; (shutdown /t with more than 0 s) implies /f, closing apps without letting
+    ; them save, so it is never used.
+    SetTimer(FinishPowerAction, -Max(1, seconds * 1000))
 }
 
 FinishPowerAction() {
@@ -5666,21 +6851,59 @@ FinishPowerAction() {
     pending := ASCS_PowerPending
     if !IsObject(pending)
         return
+    ; Hold here, before Windows closes anything, while any app shows unsaved
+    ; work: Windows asks apps one at a time, so by the time an app asks,
+    ; others have already closed. Looks again every 2 s and goes ahead once
+    ; they're saved or closed; "anyway" (PowerAnyway) skips the check.
+    if (pending["action"] != "sleep" && !pending.Has("anyway")) {
+        unsaved := UnsavedWork()
+        if unsaved.Length {
+            if !pending.Has("held") {
+                pending["held"] := true
+                WriteLog("Power: " pending["action"] " held for unsaved work in " UnsavedWorkSummary(unsaved) ".")
+            }
+            apps := ""
+            for app in unsaved
+                apps .= (apps = "" ? "" : ",") JsonQuote(app)
+            SendToFrontend('{"type":"powerHeld","action":' JsonQuote(pending["action"]) ',"apps":[' apps ']}')
+            SetTimer(FinishPowerAction, -2000)
+            return
+        }
+    }
     ASCS_PowerPending := 0
     SendToFrontend('{"type":"powerDone"}')
     switch pending["action"] {
+        case "restart", "shutdown":
+            ; /t 0 and no /f: apps with unsaved work can still ask, and the
+            ; user can cancel there.
+            flag := pending["action"] = "restart" ? "/r" : "/s"
+            FlushNotesThen(() => RunShutdown(flag " /t 0"))
         case "signout":
-            FlushNotesThen(() => Run('"' ShutdownExe() '" /l', , "Hide"))
+            FlushNotesThen(() => RunShutdown("/l"))
         case "sleep":
             ; SetSuspendState(hibernate = no, force = no, wake events allowed)
             DllCall("PowrProf\SetSuspendState", "Int", 0, "Int", 0, "Int", 0)
     }
 }
 
-ExpirePowerPending() {
+RunShutdown(arguments) {
+    try Run('"' ShutdownExe() '" ' arguments, , "Hide")
+    catch as err {
+        WriteLog("Power: shutdown.exe failed: " err.Message)
+        SendToFrontend('{"type":"notice","message":' JsonQuote("Windows refused: " err.Message) '}')
+    }
+}
+
+; "Restart anyway" on a held action: only valid while it is held.
+PowerAnyway() {
     global ASCS_PowerPending
-    if IsObject(ASCS_PowerPending) && A_TickCount > ASCS_PowerPending["deadline"]
-        ClearPowerPending("")
+    pending := ASCS_PowerPending
+    if !IsObject(pending) || !pending.Has("held")
+        return
+    pending["anyway"] := true
+    WriteLog("Power: " pending["action"] " confirmed despite unsaved work.")
+    SetTimer(FinishPowerAction, 0)
+    FinishPowerAction()
 }
 
 CancelPowerAction() {
@@ -5688,20 +6911,16 @@ CancelPowerAction() {
     pending := ASCS_PowerPending
     if !IsObject(pending)
         return
-    if (pending["action"] = "restart" || pending["action"] = "shutdown") {
-        try Run('"' ShutdownExe() '" /a', , "Hide")
-    } else {
-        SetTimer(FinishPowerAction, 0)
-    }
+    SetTimer(FinishPowerAction, 0)
     ClearPowerPending("")
-    RecordActivity("system", PowerLabel(pending["action"]) " cancelled")
-    WriteLog("Power: " pending["action"] " cancelled.")
+    RecordActivity("system", PowerLabel(pending["action"]) " canceled")
+    WriteLog("Power: " pending["action"] " canceled.")
 }
 
 ClearPowerPending(message) {
     global ASCS_PowerPending
     ASCS_PowerPending := 0
-    SendToFrontend('{"type":"powerCancelled","message":' JsonQuote(message) '}')
+    SendToFrontend('{"type":"powerCanceled","message":' JsonQuote(message) '}')
 }
 
 ; Recycle Bin: its size for the button, and emptying after the hold.
@@ -6036,11 +7255,15 @@ QuickCapture() {
     RecordActivity("note", "Captured " what (source != "" ? " from " SubStr(source, 1, 60) : ""))
 }
 
-; Pastes snippet text into the window that was active before ASCS opened.
-; The text is pasted through the clipboard, which is restored afterwards.
-PasteSnippet(text, *) {
+; Pastes a note into the window that was active before ASCS opened (1.8.0;
+; snippets before). The page has filled its placeholders; {clipboard} and
+; {cursor} arrive as marks that PrepareNoteText resolves here. The text is
+; pasted through the clipboard, which is restored afterwards.
+PasteNote(text, *) {
     global ASCS_PreviousWindow
 
+    prepared := PrepareNoteText(text, A_Clipboard)
+    text := prepared["text"]
     if (text = "")
         return
     HandleClose()
@@ -6048,7 +7271,7 @@ PasteSnippet(text, *) {
     target := ASCS_PreviousWindow
     if !(target && WinExist("ahk_id " target)) {
         A_Clipboard := text
-        ShowDesktopTooltip("Snippet copied to the clipboard.")
+        ShowDesktopTooltip("Note copied to the clipboard.")
         return
     }
 
@@ -6059,17 +7282,32 @@ PasteSnippet(text, *) {
         saved := ClipboardAll()
         A_Clipboard := text
         if !ClipWait(1)
-            throw Error("The clipboard did not accept the snippet.")
+            throw Error("The clipboard did not accept the note.")
         Send("^v")
+        ; {cursor}: walk back from the end of what was pasted, once the
+        ; target has taken the paste.
+        if (prepared["left"] > 0) {
+            Sleep(120)
+            Send("{Left " prepared["left"] "}")
+        }
         SetTimer(() => (A_Clipboard := saved), -500)
         title := ""
         try title := WinGetTitle("ahk_id " target)
-        RecordActivity("snippet", "Pasted snippet" (title != "" ? " into " SubStr(title, 1, 60) : ""))
+        RecordActivity("snippet", "Pasted a note" (title != "" ? " into " SubStr(title, 1, 60) : ""))
     } catch as err {
         A_Clipboard := text
-        WriteLog("Snippet paste failed: " err.Message)
-        ShowDesktopTooltip("Snippet copied to the clipboard; paste it with Ctrl+V.")
+        WriteLog("Note paste failed: " err.Message)
+        ShowDesktopTooltip("Note copied to the clipboard; paste it with Ctrl+V.")
     }
+}
+
+; Copies a note with its placeholders filled ({clipboard} becomes the
+; clipboard's current text; {cursor} is dropped).
+CopyNote(text) {
+    text := PrepareNoteText(text, A_Clipboard)["text"]
+    if (text = "")
+        return
+    A_Clipboard := text
 }
 
 ; ==========================================

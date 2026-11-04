@@ -36,7 +36,7 @@
     equal("Q opens notes", b.super.q.title, "Quick Notes");
     equal("C asks Claude without Shift", b.super.c.title, "Claude");
     equal("Shift+C captures", b.shift.c.title, "Quick capture");
-    equal("Shift+P pastes a snippet", b.shift.p.title, "Paste a snippet");
+    equal("Shift+P pastes a note", b.shift.p.title, "Paste a note");
     equal("Shift+S saves a named workspace", b.shift.s.title, "Save workspace as…");
     check("Shift+Q no longer captures", !b.shift.q);
     equal("Super+M4 starts a PSO session", b.super.m4.title, "PSO session");
@@ -57,7 +57,7 @@
 
     // A Terminal letter that collides with the Shift layer keeps the layer action.
     b = K.buildBindings({ ...defaults, terminal: "p" }, []);
-    equal("Shift+P stays snippets when Terminal is P", b.shift.p.title, "Paste a snippet");
+    equal("Shift+P stays paste-a-note when Terminal is P", b.shift.p.title, "Paste a note");
     equal("Super+P is Terminal then", b.super.p.title, "Windows Terminal");
     check("old T letter is free", !b.super.t);
     equal("P assigned to Terminal is no longer a passthrough", b.super.p.passthrough, undefined);

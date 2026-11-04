@@ -80,7 +80,7 @@
 
     // -------------------------------------------------------------- bindings
     // Categories map to the theme: apps (violet), windows (steel),
-    // saved (burgundy: workspaces, snippets, notes, files, text), custom (gold).
+    // saved (burgundy: workspaces, notes, files, text), custom (gold).
     const ACTIONS = {
         notes: { title: "Quick Notes", short: "Notes", cat: "apps", desc: "Opens the notes editor." },
         everything: { title: "Everything", short: "Find", cat: "apps", desc: "Opens Everything to search files." },
@@ -92,7 +92,7 @@
     };
 
     const FIXED_SUPER = {
-        space: { title: "Command palette", short: "Cmd", cat: "apps", desc: "Search commands, notes, snippets, workspaces, and windows. = calculates, ? searches the web." },
+        space: { title: "Command palette", short: "Cmd", cat: "apps", desc: "Search commands, notes, workspaces, and windows. = calculates, ? searches the web, + adds an event." },
         b: { title: "Vivaldi", short: "Web", cat: "apps", desc: "Focuses Vivaldi on this desktop, switches to its desktop, or opens it." },
         l: { title: "Lock workstation", short: "Lock", cat: "windows", desc: "Locks the Windows session." },
         m: { title: "Toggle mute", short: "Mute", cat: "windows", desc: "Mutes or unmutes system audio." },
@@ -114,7 +114,7 @@
 
     const FIXED_SHIFT = {
         c: { title: "Quick capture", short: "Grab", cat: "saved", desc: "Saves the selected text (or the clipboard) as a new note without opening ASCS." },
-        p: { title: "Paste a snippet", short: "Paste", cat: "saved", desc: "Opens the palette on your snippets; Enter pastes into the window you were using." },
+        p: { title: "Paste a note", short: "Paste", cat: "saved", desc: "Opens the palette on your notes; Enter pastes into the window you were using, filling placeholders." },
         d: { title: "New folder", short: "+Dir", cat: "saved", desc: "Creates a folder in the active File Explorer location." },
         f: { title: "New file", short: "+File", cat: "saved", desc: "Creates an empty file in the active File Explorer location." },
         s: { title: "Save workspace as…", short: "Save as", cat: "saved", desc: "Opens the palette on name entry; Enter saves the current window layout under that name." },

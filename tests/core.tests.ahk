@@ -342,8 +342,8 @@ Equal("X-input mode", ControllerMode(0x045E, 0x028E), "X-input")
 Equal("Switch mode", ControllerMode(0x057E, 0x2009), "Switch")
 Equal("8BitDo D-input mode", ControllerMode(0x2DC8, 0x6009), "D-input")
 Equal("maker name", ControllerMaker(0x2DC8), "8BitDo controller")
-Equal("receiver recognised", IsReceiverName("Controller (8BitDo Pro 3 Receiver)"), true)
-Equal("adapter recognised", IsReceiverName("8BitDo USB Wireless Adapter 2"), true)
+Equal("receiver recognized", IsReceiverName("Controller (8BitDo Pro 3 Receiver)"), true)
+Equal("adapter recognized", IsReceiverName("8BitDo USB Wireless Adapter 2"), true)
 Equal("a controller is not a receiver", IsReceiverName("8BitDo Pro 3"), false)
 Equal("controller name trimmed", ValidateControllerName("  Lion's Pro 3  "), "Lion's Pro 3")
 Equal("empty name resets", ValidateControllerName(""), "")
@@ -405,6 +405,102 @@ Equal("cache over the cap: least recently used go first, down to the target", Jo
 Equal("cache far over the cap", JoinList(RaImagesToPrune(cacheFiles, 100, 0)), "b-9.png.tmp,b-1.png,i-2.png,b-3.png")
 Equal("empty cache", RaImagesToPrune([], 100, 50).Length, 0)
 
+; ------------------------------------------------------------ Sounds
+Equal("sound kind: wav plays in the page", SoundKind("WAV"), "web")
+Equal("sound kind: MIDI plays through Windows", SoundKind("mid"), "windows")
+Equal("sound kind: raw data isn't listed", SoundKind("raw"), "")
+era := ParseSoundEra("(1998) Windows 98")
+Equal("era: year and label", era["year"] " " era["label"], "1998 Windows 98")
+Equal("era: long label kept", ParseSoundEra("(2015) Windows 10 (Beta) (Insider Preview builds 10074 - 10127)")["label"], "Windows 10 (Beta) (Insider Preview builds 10074 - 10127)")
+Equal("era: your own folder", ParseSoundEra("Aeolionware Startup")["year"], 0)
+WavHeader(dataSize, byteRate, withList := false) {
+    hex := "52494646" "00000000" "57415645" (withList ? "4C495354" "04000000" "494E464F" : "")
+        . "666D7420" "10000000" "0100" "0100" "401F0000" NumHex(byteRate) "0200" "1000"
+        . "64617461" NumHex(dataSize)
+    return HexToBuffer(hex)
+}
+NumHex(n) => Format("{:02X}{:02X}{:02X}{:02X}", n & 255, (n >> 8) & 255, (n >> 16) & 255, (n >> 24) & 255)
+hdr := WavHeader(16000, 16000)
+Equal("wav length: one second", WavSeconds(hdr, hdr.Size), 1)
+hdr := WavHeader(88200, 176400, true)
+Equal("wav length: after a LIST chunk", WavSeconds(hdr, hdr.Size), 0.5)
+hdr := HexToBuffer("4944330300000000000000000000000000000000000000000000000000000000000000000000000000000000")
+Equal("wav length: not a WAV", WavSeconds(hdr, hdr.Size), 0)
+Equal("library: a normal folder", ValidateSoundLibrary("C:\Sounds\all-windows-sounds-main\"), "C:\Sounds\all-windows-sounds-main")
+Throws("library: a drive root", () => ValidateSoundLibrary("C:\"), "Choose a folder")
+Throws("library: the Windows folder", () => ValidateSoundLibrary("C:\Windows"), "system or profile")
+Throws("library: a profile folder", () => ValidateSoundLibrary("C:\Users\lions"), "system or profile")
+Throws("library: relative", () => ValidateSoundLibrary("Sounds"), "Choose a folder")
+Throws("library: parent hops", () => ValidateSoundLibrary("C:\Sounds\..\Windows"), "Choose a folder")
+Equal("leveled name", LeveledSoundName("CHIMES", -7.6), "CHIMES (-7.6 dB).wav")
+Equal("leveled name: positive, odd characters dropped", LeveledSoundName('Ding: "loud"?', 3.04), "Ding loud (+3.0 dB).wav")
+Equal("windows sound: allowlisted", WindowsSoundEvent("Explorer/EmptyRecycleBin")[3], "Empty Recycle Bin")
+Throws("windows sound: anything else refused", () => WindowsSoundEvent(".Default/..\..\Run"), "can't be changed")
+Throws("windows sound: case must match", () => WindowsSoundEvent(".default/windowslogon"), "can't be changed")
+
+; ------------------------------------------------------------ Calendar
+Equal("calendar id", ValidateCalendarId("personal"), "personal")
+Throws("calendar id: a path", () => ValidateCalendarId("../ascs"), "calendar id")
+Throws("calendar id: uppercase", () => ValidateCalendarId("Work"), "calendar id")
+Throws("calendar id: empty", () => ValidateCalendarId(""), "calendar id")
+Equal("event uid", ValidateEventUid("ascs-20261103-ab12@ascs"), "ascs-20261103-ab12@ascs")
+Throws("event uid: slash", () => ValidateEventUid("a/b"), "event id")
+Throws("event uid: parent hops", () => ValidateEventUid("a..b"), "event id")
+Throws("event uid: leading dot", () => ValidateEventUid(".hidden"), "event id")
+Equal("etag", ValidateEtag('"1a2b3c"'), '"1a2b3c"')
+Equal("etag: none", ValidateEtag(""), "")
+Throws("etag: header injection", () => ValidateEtag('"x"' "`r`nX-Evil: 1"), "event version")
+Equal("color", ValidateCalendarColor("#8b6ff5"), "#8B6FF5")
+Throws("color: not a color", () => ValidateCalendarColor("red"), "color")
+Throws("calendar name: too long", () => ValidateCalendarName(StrRepeat("a", 61)), "1 to 60")
+ics := "BEGIN:VCALENDAR`r`nVERSION:2.0`r`nBEGIN:VEVENT`r`nUID:x`r`nEND:VEVENT`r`nEND:VCALENDAR`r`n"
+Equal("ics: accepted", ValidateIcs(ics), ics)
+Throws("ics: not a calendar", () => ValidateIcs("<html></html>"), "iCalendar")
+Throws("ics: two calendars", () => ValidateIcs(ics ics), "one calendar")
+Throws("ics: control characters", () => ValidateIcs(StrReplace(ics, "UID:x", "UID:x" Chr(1))), "control")
+r := CalDavRequest("ascs", "calendars")
+Equal("caldav: list calendars", r["method"] " " r["path"] " depth " r["headers"]["Depth"], "PROPFIND /ascs/ depth 1")
+r := CalDavRequest("ascs", "createCalendar", "gaming", , , "Gaming & <Retro>`n#E3C072")
+Equal("caldav: create calendar", r["method"] " " r["path"], "MKCOL /ascs/gaming/")
+Equal("caldav: names are escaped", InStr(r["body"], "Gaming &amp; &lt;Retro&gt;") > 0 && !InStr(r["body"], "<Retro>"), true)
+Equal("caldav: color with alpha", InStr(r["body"], "#E3C072FF") > 0, true)
+r := CalDavRequest("ascs", "putEvent", "personal", "abc@ascs", "", ics)
+Equal("caldav: a new event never overwrites", r["method"] " " r["path"] " " r["headers"]["If-None-Match"], "PUT /ascs/personal/abc@ascs.ics *")
+r := CalDavRequest("ascs", "putEvent", "personal", "abc@ascs", '"e1"', ics)
+Equal("caldav: an edit needs the shown version", r["headers"]["If-Match"] (r["headers"].Has("If-None-Match") ? " and none-match" : ""), '"e1"')
+r := CalDavRequest("ascs", "deleteEvent", "work", "abc", '"e2"')
+Equal("caldav: delete an event", r["method"] " " r["path"] " " r["headers"]["If-Match"], 'DELETE /ascs/work/abc.ics "e2"')
+Throws("caldav: unknown operation", () => CalDavRequest("ascs", "propfindEverything"), "Unknown")
+Throws("caldav: another account", () => CalDavRequest("../root", "calendars"), "account")
+Throws("caldav: a path as calendar", () => CalDavRequest("ascs", "events", "../../etc"), "calendar id")
+calFile := "BEGIN:VCALENDAR`r`nVERSION:2.0`r`nBEGIN:VEVENT`r`nUID:a`r`nEND:VEVENT`r`nBEGIN:VEVENT`r`nUID:b`r`nEND:VEVENT`r`nEND:VCALENDAR`r`n"
+Equal("calendar file: two events, a leading BOM dropped", SubStr(ValidateCalendarFile(Chr(0xFEFF) calFile), 1, 15), "BEGIN:VCALENDAR")
+Throws("calendar file: not iCalendar", () => ValidateCalendarFile("<html>"), "iCalendar")
+Throws("calendar file: control characters", () => ValidateCalendarFile(StrReplace(calFile, "UID:a", "UID:" Chr(1))), "control")
+reminders := ParseReminderList("1762200000`tDentist`tTue 3:00 PM`n1762200000`tbad`r`nnot-a-time`tx`ty`n1999999999`tToo far`tx`n1762203600`t`tlater", 1762190000)
+Equal("reminders: valid lines kept, others dropped", reminders.Length, 2)
+Equal("reminders: empty title", reminders[2]["title"], "(No title)")
+Equal("reminders: no start or location in the old form", reminders[1]["start"] reminders[1]["location"], "0")
+reminders := ParseReminderList("1762200000`tDentist`tToday 3:00 PM`t1762200300`tMain St`n1762200000`tTrip`tToday (all day)`t`t", 1762190000)
+Equal("reminders: start and location read", reminders[1]["start"] "|" reminders[1]["location"], "1762200300|Main St")
+Equal("reminders: all-day has no start", reminders[2]["start"], 0)
+Equal("reminder text: minutes and place", ReminderBalloonText(reminders[1], 1762200000), "Starts in 5 minutes · Today 3:00 PM`nMain St")
+Equal("reminder text: one minute", ReminderBalloonText(Map("start", 1762200060, "when", "Today 3:00 PM", "location", ""), 1762200000), "Starts in 1 minute · Today 3:00 PM")
+Equal("reminder text: now", ReminderBalloonText(Map("start", 1762200000, "when", "Today 3:00 PM", "location", ""), 1762200010), "Starting now · Today 3:00 PM")
+Equal("reminder text: hours", ReminderBalloonText(Map("start", 1762207200, "when", "Today 5:00 PM", "location", ""), 1762200000), "Starts in 2 hours · Today 5:00 PM")
+Equal("reminder text: days", ReminderBalloonText(Map("start", 1762200000 + 86400, "when", "Tomorrow 3:00 PM", "location", ""), 1762200000), "Starts in 1 day · Tomorrow 3:00 PM")
+Equal("reminder text: all day", ReminderBalloonText(reminders[2], 1762190000), "Today (all day)")
+
+; ------------------------------------------------------------ 1.8.0 preferences
+Equal("power delay none", ValidatePowerDelay("0"), 0)
+Equal("power delay 5", ValidatePowerDelay(" 5 "), 5)
+Equal("power delay 30", ValidatePowerDelay(30), 30)
+Throws("power delay 10 rejected", () => ValidatePowerDelay("10"), "power action delay")
+Throws("power delay junk rejected", () => ValidatePowerDelay("5; shutdown"), "power action delay")
+Equal("ASCS sounds on show", ValidateAscsSoundMode("Show"), "show")
+Equal("ASCS sounds off", ValidateAscsSoundMode("off"), "off")
+Throws("ASCS sounds junk rejected", () => ValidateAscsSoundMode("always"), "ASCS sounds")
+
 ; ------------------------------------------------------------ PSO voice channel
 Equal("voice channel from Copy Link", DiscordChannelUri("https://discord.com/channels/866374224574545931/866374225501749313"), "discord://-/channels/866374224574545931/866374225501749313")
 Equal("voice channel from a PTB link, trailing slash", DiscordChannelUri(" https://ptb.discord.com/channels/866374224574545931/866374225501749313/ "), "discord://-/channels/866374224574545931/866374225501749313")
@@ -438,6 +534,110 @@ Equal("session: a start time in the future is ignored", PlaySessionSince(0, 4120
 Equal("session: same instance and game carries on", PlaySessionSince(seen, 4120, "RetroArch Mupen64Plus || Paper Mario (USA)", 5000, 900), 1000)
 Equal("session: a new game in the same instance starts now", PlaySessionSince(seen, 4120, "RetroArch Mupen64Plus || Super Mario 64 (USA)", 5000, 900), 5000)
 Equal("session: a restarted emulator uses its new start time", PlaySessionSince(seen, 7777, "RetroArch Mupen64Plus || Paper Mario (USA)", 5000, 4800), 4800)
+
+; ------------------------------------------------------------ notification level board
+Equal("in use: a Windows event", JoinArray(ParseInUseKey("windows:.Default/SystemAsterisk"), "|"), "windows|.Default/SystemAsterisk")
+Equal("in use: an ASCS sound", JoinArray(ParseInUseKey("ascs:reminder"), "|"), "ascs|reminder")
+for bad in ["windows:Explorer/Nope", "ascs:other", "C:\Windows\Media\ding.wav", "windows:", "lib:x"] {
+    threw := false
+    try ParseInUseKey(bad)
+    catch
+        threw := true
+    Check("in use: refused " bad, threw)
+}
+Equal("sound path: full path kept", ResolveSoundPath("C:\Windows\media\Windows Ding.wav", "C:\Windows"), "C:\Windows\media\Windows Ding.wav")
+Equal("sound path: bare name is in Media", ResolveSoundPath("ding.wav", "C:\Windows"), "C:\Windows\Media\ding.wav")
+Equal("sound path: a relative folder is not followed", ResolveSoundPath("..\x\ding.wav", "C:\Windows"), "")
+Equal("sound path: none", ResolveSoundPath("", "C:\Windows"), "")
+Equal("leveled gain", ValidateLeveledGain("-6.25"), -6.25)
+for bad in ["100", "1.234", "-", "6;", ""] {
+    threw := false
+    try ValidateLeveledGain(bad)
+    catch
+        threw := true
+    Check("leveled gain refused: " bad, threw)
+}
+
+; ------------------------------------------------------------ note placeholders
+prepared := PrepareNoteText("Dear " Chr(0xE000) ",`r`n" Chr(0xE001) "`r`nThanks", "Sam")
+Equal("note text: clipboard filled, cursor mark removed", prepared["text"], "Dear Sam,`r`n`r`nThanks")
+Equal("note text: Left presses count a line break as one", prepared["left"], 7)
+Equal("note text: no cursor mark, no Left presses", PrepareNoteText("plain", "x")["left"], 0)
+Equal("note text: marks inside the clipboard are dropped", PrepareNoteText(Chr(0xE000), "a" Chr(0xE001) "b")["text"], "ab")
+Equal("note text: a second cursor mark is removed too", PrepareNoteText("a" Chr(0xE001) "b" Chr(0xE001) "c", "")["text"], "abc")
+Equal("note text: the first cursor mark counts", PrepareNoteText("a" Chr(0xE001) "b" Chr(0xE001) "c", "")["left"], 2)
+Equal("note text: too far from the end to walk back", PrepareNoteText(Chr(0xE001) StrRepeat("x", 2001), "")["left"], 0)
+
+; ------------------------------------------------------------ unsaved work before power actions
+Equal("unsaved: Notepad star", UnsavedWorkApp("*notes.txt - Notepad", "notepad.exe"), "Notepad")
+Equal("unsaved: VS Code dot", UnsavedWorkApp(Chr(0x25CF) " app.js - ASCS - Visual Studio Code", "Code.exe"), "Visual Studio Code")
+Equal("unsaved: bullet, no dash, process name", UnsavedWorkApp(Chr(0x2022) " draft", "Typora.exe"), "Typora")
+Equal("unsaved: en dash separator", UnsavedWorkApp("*Untitled " Chr(0x2013) " Paint", "mspaint.exe"), "Paint")
+Equal("unsaved: saved title ignored", UnsavedWorkApp("notes.txt - Notepad", "notepad.exe"), "")
+Equal("unsaved: a star later in the title ignored", UnsavedWorkApp("Search * - Explorer", "explorer.exe"), "")
+Equal("unsaved: empty title", UnsavedWorkApp("", "x.exe"), "")
+Equal("unsaved summary: none", UnsavedWorkSummary([]), "")
+Equal("unsaved summary: one", UnsavedWorkSummary(["A"]), "A")
+Equal("unsaved summary: two", UnsavedWorkSummary(["A", "B"]), "A and B")
+Equal("unsaved summary: four", UnsavedWorkSummary(["A", "B", "C", "D"]), "A, B, C and D")
+Equal("unsaved summary: six", UnsavedWorkSummary(["A", "B", "C", "D", "E", "F"]), "A, B, C and 3 more")
+
+; ------------------------------------------------------------ countdowns that have passed
+countdownsBefore := [Map("date", "2026-11-03", "name", "Gone"), Map("date", "2026-11-04", "name", "Today"),
+    Map("date", "12-25", "name", "Yearly"), Map("date", "2027-01-01", "name", "Ahead")]
+countdownsKept := ActiveCountdowns(countdownsBefore, "2026-11-04")
+Equal("countdowns: a past one-off is dropped", countdownsKept.Length, 3)
+Equal("countdowns: today's one-off stays", countdownsKept[1]["name"], "Today")
+Equal("countdowns: yearly stays", countdownsKept[2]["name"], "Yearly")
+Equal("countdowns: order kept", countdownsKept[3]["name"], "Ahead")
+Equal("countdowns: none", ActiveCountdowns([], "2026-11-04").Length, 0)
+
+; ------------------------------------------------------------ deleting leveled copies
+Check("leveled id: a copy in ASCS Leveled", IsLeveledCopyId("ASCS Leveled\CHIMES (-7.6 dB).wav"))
+Check("leveled id: any case", IsLeveledCopyId("ascs leveled\ding (+2.0 dB).WAV"))
+for bad in ["(1998) Windows 98\CHIMES.wav", "ASCS Leveled\sub\x.wav", "ASCS Leveled\..\x.wav", "ASCS Leveled\x.mid", "ASCS Leveled\", "C:\ASCS Leveled\x.wav", "My ASCS Leveled\x.wav"]
+    Check("leveled id: refused " bad, !IsLeveledCopyId(bad))
+
+; ------------------------------------------------------------ Select › Delete lists
+deleteIds := ParseDeleteList("ASCS Leveled\a (+1.0 dB).wav`r`n`nascs leveled\A (+1.0 dB).WAV`nASCS Leveled\b (-2.0 dB).wav`n", 10)
+Equal("delete list: blanks and repeats (any case) dropped", deleteIds.Length, 2)
+Equal("delete list: order kept", deleteIds[2], "ASCS Leveled\b (-2.0 dB).wav")
+Throws("delete list: an original refuses the request", () => ParseDeleteList("ASCS Leveled\a.wav`n(1998) Windows 98\CHIMES.wav", 10), "leveled copies")
+Throws("delete list: a subfolder refuses the request", () => ParseDeleteList("ASCS Leveled\..\x.wav", 10), "leveled copies")
+Throws("delete list: empty", () => ParseDeleteList("`n  `n", 10), "Nothing")
+deleteMany := ""
+Loop 11
+    deleteMany .= "ASCS Leveled\s" A_Index ".wav`n"
+Throws("delete list: more than the limit", () => ParseDeleteList(deleteMany, 10), "Too many")
+Equal("delete list: exactly the limit", ParseDeleteList(StrReplace(deleteMany, "ASCS Leveled\s11.wav`n"), 10).Length, 10)
+
+; ------------------------------------------------------------ VS Code's unsaved buffers
+Check("vscode backup: file", IsVSCodeBackupFolder("C:\Users\me\AppData\Roaming\Code\Backups\af46\file"))
+Check("vscode backup: untitled", IsVSCodeBackupFolder("C:\Users\me\AppData\Roaming\Code\Backups\1712345678901\untitled"))
+Check("vscode backup: other folders refused", !IsVSCodeBackupFolder("C:\Users\me\AppData\Roaming\Code\Backups\af46")
+    && !IsVSCodeBackupFolder("C:\Users\me\AppData\Roaming\Code\Backups\af46\file\deeper")
+    && !IsVSCodeBackupFolder("C:\Users\me\AppData\Roaming\Code - Insiders\Backups\af46\file\x"))
+Equal("filetime: 1601 epoch", FileTimeToLocalStamp(0, 0), "16010101000000")
+Equal("filetime: a known instant in UTC", FileTimeToLocalStamp(134382792210000000, 0), "20261104152021")
+Equal("filetime: shifted to local", FileTimeToLocalStamp(134382792210000000, -5 * 3600), "20261104102021")
+
+; ------------------------------------------------------------ Quick Notes groups
+groupNote(group) => '{"version":2,"notes":[{"id":"a","title":"t","group":' group ',"content":"x"}]}'
+CheckNoteGroups('{"version":2,"notes":[{"id":"a","title":"t","content":"x"}]}')
+Check("groups: none is fine", true)
+CheckNoteGroups(groupNote('"Claude"'))
+Check("groups: a name is fine", true)
+CheckNoteGroups(groupNote('"' StrRepeat("g", 60) '"'))
+Check("groups: 60 characters is fine", true)
+CheckNoteGroups(groupNote('"' StrRepeat(Chr(92) "u00e9", 60) '"'))
+Check("groups: escapes count as one character each", true)
+CheckNoteGroups('{"notes":[{"content":"say ' Chr(92) '"group' Chr(92) '": ' Chr(92) '"' StrRepeat("x", 80) Chr(92) '""}]}')
+Check("groups: the word in a note's text isn't a group", true)
+Throws("groups: 61 characters", () => CheckNoteGroups(groupNote('"' StrRepeat("g", 61) '"')), "60 characters")
+Throws("groups: a control character", () => CheckNoteGroups(groupNote('"a' Chr(92) 'u0001b"')), "control")
+Throws("groups: a tab", () => CheckNoteGroups(groupNote('"a' Chr(92) 'tb"')), "control")
+Throws("groups: not text", () => CheckNoteGroups(groupNote("42")), "must be text")
+Throws("groups: the second note checked too", () => CheckNoteGroups('{"notes":[{"group":"ok"},{"group" : "' StrRepeat("g", 61) '"}]}'), "60 characters")
 
 ; ------------------------------------------------------------ report
 StrRepeat(text, count) {

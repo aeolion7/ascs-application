@@ -215,12 +215,13 @@
     }
 
     // Splits a raw query into a mode-relevant form: "=expr" (calculator),
-    // "?text" (web search), or plain text.
+    // "?text" (web search), "+text" (a calendar event), or plain text.
     function parseQuery(raw) {
         const text = String(raw ?? "");
         const trimmed = text.trim();
         if (trimmed.startsWith("=")) return { kind: "calc", text: trimmed.slice(1).trim() };
         if (trimmed.startsWith("?")) return { kind: "web", text: trimmed.slice(1).trim() };
+        if (trimmed.startsWith("+")) return { kind: "event", text: trimmed.slice(1).trim() };
         if (looksLikeExpression(trimmed)) return { kind: "calc", text: trimmed };
         return { kind: "text", text: trimmed };
     }

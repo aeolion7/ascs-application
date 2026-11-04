@@ -2,3 +2,13 @@
 # Written when tests/core.tests.ahk is run directly
 tests/core.results.txt
 *.code-workspace
+# Local Claude Code instructions
+CLAUDE.md
+
+# Copy made by the AHK parse check; left behind only if a check is interrupted
+_syntaxcheck.ahk
+# Windows Explorer files (frontend/assets/windows holds images)
+Thumbs.db
+desktop.ini
+# Personal Claude Code settings (a shared .claude/settings.json can still be committed)
+.claude/settings.local.json

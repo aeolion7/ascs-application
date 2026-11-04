@@ -37,6 +37,10 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.75h7l4.25 4.5v12H7a2 2 0 0 1-2-2v-12a2.5 2.5 0 0 1 2-2.5Z"/><path d="M14 4v5h4M8.5 13h7M8.5 16.5h7"/></svg>
           <span>Quick Notes</span>
         </button>
+        <button class="nav" type="button" data-view="calendar" aria-controls="calendar" title="Calendar">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 9.5h17M8 3v4M16 3v4M7.5 13.5h2M11 13.5h2M14.5 13.5h2M7.5 16.75h2M11 16.75h2"/></svg>
+          <span>Calendar</span>
+        </button>
         <button class="nav" type="button" data-view="games" aria-controls="games" title="Games">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8h9a4.5 4.5 0 0 1 4.3 5.8l-1 3.3a2.2 2.2 0 0 1-3.7.9L14 16h-4l-2.1 2a2.2 2.2 0 0 1-3.7-.9l-1-3.3A4.5 4.5 0 0 1 7.5 8Z"/><path d="M8 11v3m-1.5-1.5h3M15.5 12h.01M17.5 13.5h.01"/></svg>
           <span>Games</span>
@@ -48,6 +52,10 @@
         <button class="nav" type="button" data-view="dashboard" aria-controls="dashboard" title="System Dashboard">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5V12m5.3 7.5V5m5.4 14.5v-10m5.3 10V8"/></svg>
           <span>System Dashboard</span>
+        </button>
+        <button class="nav" type="button" data-view="sounds" aria-controls="sounds" title="Sounds">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 9.5h3l4.5-4v13l-4.5-4h-3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1Z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+          <span>Sounds</span>
         </button>
         <button class="nav" type="button" data-view="logs" aria-controls="logs" title="Logs">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6.5h.01M5 12h.01M5 17.5h.01M9 6.5h10M9 12h10M9 17.5h6"/></svg>
@@ -68,10 +76,9 @@
       </nav>
 
       <div class="sidebar-bottom">
-        <span class="status-indicator" aria-hidden="true"></span>
         <span class="sidebar-status">
-          <strong>ASCS 1.7.0</strong>
-          <small>Standing by</small>
+          <strong id="sidebarVersion">ASCS <span>1.8.0</span></strong>
+          <small><span class="status-indicator" aria-hidden="true"></span>Standing by</small>
         </span>
         <span class="key-hint" aria-label="Super key">Super</span>
       </div>
@@ -93,6 +100,7 @@
           <kbd>Super</kbd><kbd>Space</kbd>
         </button>
         <div class="titlebar-actions">
+          <button class="titlebar-help" type="button" id="titlebarHelp" aria-label="Help" title="Help (F1)">?</button>
           <div class="top-status" id="topStatus" data-state="nominal" role="status" title="Live system status">
             <span class="status-indicator" aria-hidden="true"></span>
             <span id="topStatusText">ALL SYSTEMS NOMINAL</span>
@@ -116,6 +124,7 @@
       <div class="power-banner" id="powerBanner" role="alert" hidden>
         <span class="power-banner-dot" aria-hidden="true"></span>
         <strong id="powerBannerText"></strong>
+        <button class="secondary danger" type="button" id="powerAnyway" hidden></button>
         <button class="secondary" type="button" id="powerCancel">Cancel</button>
       </div>
       <section class="view active" id="home" aria-labelledby="homeTitle">
@@ -180,6 +189,14 @@
             </article>
             <div id="homeDrives" class="drive-metrics" aria-label="Drive storage"></div>
           </div>
+          <section class="today-card" id="homeToday" aria-labelledby="todayHeading" hidden>
+            <div class="today-head">
+              <span class="section-overline" id="todayHeading">TODAY</span>
+              <span class="today-date" id="todayDate"></span>
+              <button class="link-button" type="button" id="todayOpen">Open calendar</button>
+            </div>
+            <ol class="today-list" id="todayList"></ol>
+          </section>
         </section>
 
         <section class="content-section quick-actions-section" aria-labelledby="actionsHeading">
@@ -197,7 +214,7 @@
           <div class="activity-block" aria-labelledby="activityHeading">
             <div class="activity-heading"><span class="section-overline" id="activityHeading">RECENT ACTIVITY</span></div>
             <ol id="activityList" class="activity-list"></ol>
-            <p id="activityEmpty" class="activity-empty">Launches, captures, snippets, and workspace changes appear here.</p>
+            <p id="activityEmpty" class="activity-empty">Launches, captures, pasted notes, and workspace changes appear here.</p>
           </div>
         </section>
       </section>
@@ -216,7 +233,8 @@
               <button class="primary" type="button" id="newNoteButton">New note</button>
             </div>
             <div id="notesTags" class="notes-tags" aria-label="Filter by tag"></div>
-            <div id="notesList" class="notes-list" role="list"></div>
+            <div id="notesList" class="notes-list" aria-label="Notes"></div>
+            <div class="note-group-menu" id="noteGroupMenu" role="menu" aria-label="Group" hidden></div>
             <p id="notesEmpty" class="notes-empty">Nothing captured yet. Start a note, or press Super + Shift + C in any app.</p>
           </aside>
           <div class="editor-card">
@@ -232,19 +250,64 @@
             <div class="note-controls">
               <label class="sr-only" for="noteTitle">Note title</label>
               <input id="noteTitle" type="text" placeholder="Untitled note" maxlength="160">
-              <label class="sr-only" for="noteType">Note type</label>
-              <select id="noteType">
-                <option value="note">Note</option>
-                <option value="snippet">Snippet</option>
+              <label class="sr-only" for="noteType">Note style</label>
+              <select id="noteType" title="Text: Markdown preview and spell-check. Code: monospace, pasted exactly as written.">
+                <option value="note">Text</option>
+                <option value="code">Code</option>
               </select>
+              <label class="sr-only" for="noteGroup">Group</label>
+              <input id="noteGroup" class="note-group-field" type="text" list="noteGroupNames" placeholder="No group" maxlength="60" autocomplete="off" spellcheck="false" title="Group: pick one or type a new name. Empty means Ungrouped.">
+              <datalist id="noteGroupNames"></datalist>
+              <span class="note-fill-wrap">
+                <button class="secondary note-fill" type="button" id="noteFillButton" aria-haspopup="menu" aria-expanded="false" aria-controls="placeholderMenu">{ } Placeholders</button>
+                <div class="placeholder-menu" id="placeholderMenu" role="menu" aria-label="Insert a placeholder" hidden>
+                  <div class="placeholder-items" id="placeholderItems"></div>
+                  <label class="placeholder-fill" for="noteFillToggle"><input id="noteFillToggle" type="checkbox"><span><strong>Fill in when pasting</strong><small id="noteFillHint"></small></span></label>
+                </div>
+              </span>
               <button class="secondary" type="button" id="previewNoteButton" aria-pressed="false" title="Show formatted Markdown">Preview</button>
               <button class="secondary" type="button" id="pinNoteButton" aria-pressed="false">Pin</button>
               <button class="secondary danger" type="button" id="deleteNoteButton">Delete</button>
             </div>
             <textarea id="noteText" data-primary-input aria-label="Note text" placeholder="Begin with a thought, a reminder, or an idea. Markdown and #tags work here." spellcheck="true"></textarea>
             <div id="notePreview" class="note-preview" hidden></div>
-            <div class="editor-footer"><span id="noteUpdated">Changes save automatically</span><span class="editor-footer-meta"><span id="noteWords"></span><button class="secondary copy-snippet" type="button" id="copySnippetButton" hidden>Copy snippet</button></span></div>
+            <div class="editor-footer"><span id="noteUpdated">Changes save automatically</span><span class="editor-footer-meta"><span id="noteWords"></span><button class="secondary copy-snippet" type="button" id="copySnippetButton" title="Copy the text exactly as written" hidden>Copy</button></span></div>
           </div>
+        </div>
+      </section>
+
+      <section class="view" id="calendar" aria-labelledby="calendarTitle">
+        <div class="page-heading">
+          <span class="eyebrow"><span class="eyebrow-line"></span> PLAN</span>
+          <h1 id="calendarTitle">Calendar<span class="title-period">.</span></h1>
+          <p>Your calendars, kept on this PC. Click a day to see its hours, a time to add an event, and an event to change it.</p>
+        </div>
+        <div class="cal-toolbar">
+          <div class="cal-nav">
+            <button class="secondary" type="button" id="calToday">Today</button>
+            <button class="secondary cal-step" type="button" id="calPrev" aria-label="Previous">‹</button>
+            <button class="secondary cal-step" type="button" id="calNext" aria-label="Next">›</button>
+            <h2 id="calTitle" aria-live="polite"></h2>
+          </div>
+          <div class="cal-modes" aria-label="Calendar view">
+            <button type="button" data-cal-mode="day" aria-pressed="false">Day</button>
+            <button type="button" data-cal-mode="week" aria-pressed="false">Week</button>
+            <button type="button" data-cal-mode="month" aria-pressed="true">Month</button>
+            <button type="button" data-cal-mode="agenda" aria-pressed="false">Agenda</button>
+          </div>
+          <button class="primary" type="button" id="calNewEvent">New event</button>
+        </div>
+        <p class="cal-status" id="calStatus" role="status" hidden></p>
+        <div class="cal-layout">
+          <aside class="games-panel cal-side" aria-label="Calendars">
+            <span class="games-panel-label">CALENDARS</span>
+            <ul class="cal-calendars" id="calCalendars"></ul>
+            <div class="cal-side-actions">
+              <button class="link-button" type="button" id="calNewCalendar">New calendar</button>
+              <button class="link-button" type="button" id="calImport" title="Add the events from an .ics file (from another calendar app, or an export) to a calendar">Import .ics…</button>
+            </div>
+          </aside>
+          <div class="cal-main" id="calMain"></div>
         </div>
       </section>
 
@@ -317,6 +380,65 @@
           <p class="logs-meta" id="gamesMeta" role="status">Loading…</p>
           <ol id="gamesLibrary" class="games-library"></ol>
         </section>
+      </section>
+
+      <section class="view" id="sounds" aria-labelledby="soundsTitle">
+        <div class="page-heading">
+          <span class="eyebrow"><span class="eyebrow-line"></span> LISTEN</span>
+          <h1 id="soundsTitle">Sounds<span class="title-period">.</span></h1>
+          <p>Every Windows sound from 3.x to 11, as the originals. Click one to play it; level it or put it to use on the right.</p>
+        </div>
+        <div class="sounds-toolbar">
+          <div class="sounds-find">
+            <label class="sr-only" for="soundSearch">Search sounds</label>
+            <input id="soundSearch" type="search" placeholder="Search every version…" autocomplete="off" spellcheck="false">
+            <button class="secondary" type="button" id="soundFavoritesOnly" aria-pressed="false">♥ Favorites</button>
+            <span class="sound-own-folders" id="soundOwnFolders" hidden></span>
+          </div>
+          <div class="sounds-playback">
+            <button class="secondary" type="button" id="soundRandom">Play random</button>
+            <button class="secondary" type="button" id="soundStop">Stop all</button>
+            <label class="sounds-volume" for="soundVolume"><span>Volume</span><input id="soundVolume" type="range" min="0" max="100" step="1" value="70"></label>
+          </div>
+        </div>
+        <div class="sound-eras" id="soundEras" aria-label="Windows versions"></div>
+        <div class="sounds-layout">
+          <div class="sounds-main">
+            <div class="sounds-meta-row">
+              <div class="sounds-meta-left">
+                <button class="sound-back" type="button" id="soundBack" title="Back to every version" hidden><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M7.5 2.5 4 6l3.5 3.5"/></svg>All versions</button>
+                <p class="sounds-meta" id="soundsMeta"></p>
+              </div>
+              <div class="sounds-meta-actions">
+                <button class="link-button" type="button" id="soundSelect" title="Choose leveled copies to delete together" hidden>Select</button>
+                <button class="link-button" type="button" id="soundMeasureAll" title="Measure the RMS level of every sound shown; levels appear on the tiles">Measure all levels</button>
+              </div>
+            </div>
+            <div class="sound-select-bar" id="soundSelectBar" role="toolbar" aria-label="Selected sounds" hidden></div>
+            <div id="soundGroups"></div>
+            <form class="sound-library" id="soundLibraryForm">
+              <span class="sound-library-label">Library</span>
+              <code id="soundLibraryShown"></code>
+              <button class="link-button" type="button" id="soundLibraryChange">Change</button>
+              <button class="link-button" type="button" id="soundReindex" title="Look for new or removed files">Re-read</button>
+              <span class="sound-library-edit" id="soundLibraryEdit" hidden>
+                <label class="sr-only" for="soundLibraryPath">Sound library folder</label>
+                <input id="soundLibraryPath" type="text" autocomplete="off" spellcheck="false">
+                <button class="secondary" type="submit">Use this folder</button>
+                <button class="link-button" type="button" id="soundLibraryCancel">Cancel</button>
+              </span>
+              <small>Each version is a folder named like "(1998) Windows 98"; other folders are your own, with buttons beside Favorites. Leveled copies go into "ASCS Leveled".</small>
+            </form>
+          </div>
+          <aside class="sounds-side">
+            <div class="sound-side-tabs" role="tablist" aria-label="Sound panel">
+              <button type="button" role="tab" id="soundTabSelected" aria-controls="soundDetail" aria-selected="true">Selected sound</button>
+              <button type="button" role="tab" id="soundTabInUse" aria-controls="soundAssignments" aria-selected="false">In use <span id="soundInUseCount"></span></button>
+            </div>
+            <section class="games-panel sound-detail" id="soundDetail" role="tabpanel" aria-labelledby="soundTabSelected" aria-live="polite"></section>
+            <section class="games-panel sound-in-use" id="soundAssignments" role="tabpanel" aria-labelledby="soundTabInUse" hidden></section>
+          </aside>
+        </div>
       </section>
 
       <section class="view" id="dashboard" aria-labelledby="dashboardTitle">
@@ -457,7 +579,7 @@
             </div>
             <div class="shortcut-list">
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd></span><span class="shortcut-description"><strong>Show / hide ASCS</strong><small>Tap Super by itself. Opens on the Command Center after startup, then on the last view you used.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Space</kbd></span><span class="shortcut-description"><strong>Command palette</strong><small>Search commands, custom commands, notes, snippets, workspaces, and open windows; = calculates, ? searches the web.</small></span><span class="shortcut-status">ACTIVE</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Space</kbd></span><span class="shortcut-description"><strong>Command palette</strong><small>Search commands, custom commands, notes, workspaces, and open windows; = calculates, ? searches the web, + adds an event.</small></span><span class="shortcut-status">ACTIVE</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="notes">Q</kbd></span><span class="shortcut-description"><strong>Quick Notes</strong><small>Opens the persistent notes editor (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>C</kbd></span><span class="shortcut-description"><strong>Quick capture</strong><small>Saves the selected text (or the clipboard) as a new note without opening ASCS.</small></span><span class="shortcut-status is-new">NEW</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="dashboard">I</kbd></span><span class="shortcut-description"><strong>System Dashboard</strong><small>Shows live metrics and physical system details (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
@@ -543,14 +665,14 @@
           <section class="command-group" aria-labelledby="commandWorkspaceTitle">
             <div class="command-group-heading">
               <span class="command-group-index">08</span>
-              <div><h2 id="commandWorkspaceTitle">Workspaces and snippets</h2><p>Window layouts and reusable text</p></div>
+              <div><h2 id="commandWorkspaceTitle">Workspaces and notes</h2><p>Window layouts and reusable text</p></div>
             </div>
             <div class="shortcut-list">
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>S</kbd></span><span class="shortcut-description"><strong>Save workspace</strong><small>Stores the visible app layout as the Default workspace.</small></span><span class="shortcut-status">ACTIVE</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>R</kbd></span><span class="shortcut-description"><strong>Restore workspace</strong><small>Restores the Default workspace: reuses open windows first, then relaunches missing apps.</small></span><span class="shortcut-status">ACTIVE</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>S</kbd></span><span class="shortcut-description"><strong>Save workspace as…</strong><small>Type a name and press Enter to save the current window layout under it; Super + S still saves the default workspace.</small></span><span class="shortcut-status is-new">NEW</span></article>
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>R</kbd></span><span class="shortcut-description"><strong>Choose a workspace</strong><small>Opens the palette on your saved workspaces; “Save workspace as…” stores named layouts.</small></span><span class="shortcut-status is-new">NEW</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>P</kbd></span><span class="shortcut-description"><strong>Paste a snippet</strong><small>Opens the palette on your snippets; Enter pastes into the window you were using, Shift+Enter copies.</small></span><span class="shortcut-status is-new">NEW</span></article>
+              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>P</kbd></span><span class="shortcut-description"><strong>Paste a note</strong><small>Opens the palette on your notes; Enter pastes into the window you were using (filling placeholders), Shift+Enter copies.</small></span><span class="shortcut-status is-new">NEW</span></article>
             </div>
           </section>
 
@@ -566,7 +688,7 @@
               <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>M7</kbd></span><span class="shortcut-description"><strong>Recent PCSX2 games</strong><small>Opens the palette on your recent PCSX2 games; Enter plays one.</small></span><span class="shortcut-status is-new">NEW</span></article>
             </div>
           </section>
-          <p class="settings-note">Default letter assignments for apps and views can be changed in Preferences, where you can also give custom commands their own letters. B, S, R, L, M, V, J, and Y are reserved for fixed commands. With Shift, C, P, D, and F always perform their Shift-layer action (capture, paste a snippet, new folder, new file). When C, D, F, or P has no assignment, Super + that letter passes through to Windows (for example, Win + D shows the desktop). Super + Shift + S saves the current layout under a name you type; the Snipping Tool is in the command palette. On their own, the macro keys (M1 to M7) and the Code key belong to the keyboard's macro scripts; with Super, M4 to M7 run the game commands above, and with Super + Shift they are deliberately vacant.</p>
+          <p class="settings-note">Default letter assignments for apps and views can be changed in Preferences, where you can also give custom commands their own letters. B, S, R, L, M, V, J, and Y are reserved for fixed commands. With Shift, C, P, D, and F always perform their Shift-layer action (capture, paste a note, new folder, new file). When C, D, F, or P has no assignment, Super + that letter passes through to Windows (for example, Win + D shows the desktop). Super + Shift + S saves the current layout under a name you type; the Snipping Tool is in the command palette. On their own, the macro keys (M1 to M7) and the Code key belong to the keyboard's macro scripts; with Super, M4 to M7 run the game commands above, and with Super + Shift they are deliberately vacant.</p>
         </div>
       </section>
 
@@ -592,6 +714,10 @@
             <label class="settings-field" for="driveLetters"><span>Monitored drives</span><input id="driveLetters" name="drives" type="text" placeholder="C:, J:" autocomplete="off"><small>Comma-separated letters, such as C:, J:. Up to 12 drives.</small></label>
             <label class="settings-field" for="snapGap"><span>Snap gap <output id="snapGapValue">0 px</output></span><input id="snapGap" name="snapGap" type="range" min="0" max="48" step="2" value="0"><small>Space around snapped windows and between tiles.</small></label>
             <label class="settings-toggle" for="preserveWindowSize"><input id="preserveWindowSize" name="preserveSize" type="checkbox" checked><span><strong>Preserve size when moving monitors</strong><small>Keep the window's size and relative position on its new display.</small></span></label>
+            <label class="settings-toggle" for="notesSpellcheck"><input id="notesSpellcheck" type="checkbox" checked><span><strong>Spell-check in Quick Notes</strong><small>Underlines misspellings in text notes, never in code notes. Applies at once.</small></span></label>
+            <div class="settings-heading settings-subheading"><h2>Power and sounds</h2><p>The System bar's hold buttons, and the sounds ASCS itself plays.</p></div>
+            <label class="settings-field" for="powerDelay"><span>Delay before power actions</span><select id="powerDelay"><option value="0">None: act as soon as the hold completes</option><option value="5">5 seconds</option><option value="30">30 seconds</option></select><small>For Restart, Shut down, Sign out and Sleep: a countdown with Cancel on the banner. Apps with unsaved work can still stop a restart or shutdown.</small></label>
+            <label class="settings-field" for="ascsSounds"><span>ASCS sounds</span><select id="ascsSounds"><option value="show">When ASCS shows and hides</option><option value="start">When ASCS starts and exits</option><option value="off">Off</option></select><small>The logon and logoff sounds from C:\Sounds\all-windows-sounds-main\Aeolionware Startup\ASCS Sound Files. Never at Windows sign-in or shutdown.</small></label>
           </section>
           <section class="settings-card" id="prefShortcuts" role="tabpanel" aria-labelledby="shortcutSettingsTitle">
             <div class="settings-heading"><h2 id="shortcutSettingsTitle">Super-key shortcuts</h2><p>Choose unique letters for these app and view commands. Changes apply immediately.</p></div>
@@ -605,10 +731,10 @@
               <label for="hotkeyTaskManager"><span>Task Manager</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyTaskManager" data-hotkey="taskmanager" type="text" maxlength="1" autocomplete="off" aria-label="Task Manager shortcut"></span></label>
             </div>
             <label class="settings-field" for="claudeShortcut"><span>Claude quick-entry shortcut</span><input id="claudeShortcut" name="claudeShortcut" type="text" placeholder="Ctrl+Alt+Space" autocomplete="off" spellcheck="false"><small>The shortcut set in the Claude app; ASCS presses it for Ask Claude. Ctrl, Alt, Shift or Win plus Space, a letter, a digit, or F1 to F12. Leave it empty to just open the app.</small></label>
-            <p class="settings-note">Reserved keys: B, S, R, L, M, V, J, and Y. With Shift, the Terminal or Explorer key opens a new window, while C, P, D, and F always capture, paste a snippet, or create Explorer items. Number and arrow shortcuts are fixed.</p>
+            <p class="settings-note">Reserved keys: B, S, R, L, M, V, J, and Y. With Shift, the Terminal or Explorer key opens a new window, while C, P, D, and F always capture, paste a note, or create Explorer items. Number and arrow shortcuts are fixed.</p>
           </section>
           <section class="settings-card" id="prefPalette" role="tabpanel" aria-labelledby="paletteSettingsTitle">
-            <div class="settings-heading"><h2 id="paletteSettingsTitle">Command palette</h2><p>Super + Space searches commands, notes, snippets, workspaces, and open windows.</p></div>
+            <div class="settings-heading"><h2 id="paletteSettingsTitle">Command palette</h2><p>Super + Space searches commands, notes, workspaces, and open windows.</p></div>
             <label class="settings-field" for="searchTemplate"><span>Web search address</span><input id="searchTemplate" name="searchTemplate" type="text" placeholder="https://duckduckgo.com/?q=%s" autocomplete="off" spellcheck="false"><small>Used by “Search the web” and queries starting with ?. Must start with https:// and contain %s where the search text goes.</small></label>
             <p class="settings-note">Start a query with = for the calculator (or just type math, such as 18*1.2) and ? for a web search. Backspace in an empty search leaves a mode such as Snippets.</p>
           </section>
@@ -632,6 +758,7 @@
               <div id="countdownRows" class="countdown-rows"></div>
               <p id="countdownsEmpty" class="settings-note">No countdowns yet.</p>
             </div>
+            <label class="settings-toggle" for="holidayCountdowns"><input id="holidayCountdowns" type="checkbox" checked><span><strong>Count down to US holidays</strong><small>The federal holidays and common observances (Easter, Mother's Day, Halloween…), worked out on this PC. One of yours with the same name or date replaces the holiday. Applies at once.</small></span></label>
             <div class="settings-actions"><span id="countdownStatus" role="status">Stored in data\settings.ini.</span><span class="settings-action-buttons"><button class="secondary" type="button" id="addCountdownButton">Add countdown</button><button class="primary" type="button" id="saveCountdownsButton">Save countdowns</button></span></div>
           </section>
           <section class="settings-card settings-card-wide" id="prefGames" role="tabpanel" aria-labelledby="gamesSettingsTitle">
@@ -678,7 +805,7 @@
           <label class="sr-only" for="launcherSearch">Search commands</label>
           <div class="launcher-search-row">
             <span class="launcher-mode" id="launcherMode" hidden></span>
-            <input id="launcherSearch" type="search" placeholder="Search commands, notes, snippets, windows…" autocomplete="off" spellcheck="false">
+            <input id="launcherSearch" type="search" placeholder="Search commands, notes, windows…" autocomplete="off" spellcheck="false">
           </div>
           <div id="launcherResults" class="launcher-results" role="listbox" aria-label="Available commands"></div>
           <p class="launcher-hint" id="launcherHint"></p>
@@ -697,6 +824,188 @@
         </section>
       </div>
 
+      <div class="confirm-backdrop help-backdrop" id="helpDialog" hidden>
+        <section class="help-dialog" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+          <header class="help-header">
+            <div>
+              <span class="eyebrow">HELP</span>
+              <h2 id="helpTitle">ASCS at a glance</h2>
+              <p class="help-meta" id="helpMeta"></p>
+            </div>
+            <button class="help-close" type="button" id="helpClose" aria-label="Close help" title="Close (F1 or Esc)">
+              <svg viewBox="0 0 10 10" aria-hidden="true"><path d="m1.5 1.5 7 7m0-7-7 7"/></svg>
+            </button>
+          </header>
+          <div class="help-columns">
+            <section aria-labelledby="helpInsideTitle">
+              <h3 id="helpInsideTitle">Inside ASCS</h3>
+              <dl class="help-keys" id="helpInside"></dl>
+            </section>
+            <section aria-labelledby="helpAnywhereTitle">
+              <h3 id="helpAnywhereTitle">From anywhere</h3>
+              <dl class="help-keys" id="helpAnywhere"></dl>
+            </section>
+          </div>
+          <section class="help-pages" aria-labelledby="helpPagesTitle">
+            <h3 id="helpPagesTitle">Pages <span>Ctrl + number, or click</span></h3>
+            <div class="help-page-list" id="helpPages"></div>
+          </section>
+          <footer class="help-footer">
+            <p>Every Super shortcut, on a map of your keyboard, is on the Super Commands page.</p>
+            <button class="secondary" type="button" id="helpAllShortcuts">All Super shortcuts</button>
+          </footer>
+        </section>
+      </div>
+
+      <div class="confirm-backdrop" id="calEventDialog" hidden>
+        <form class="help-dialog cal-dialog" id="calEventForm" role="dialog" aria-modal="true" aria-labelledby="calEventHeading" novalidate>
+          <header class="help-header">
+            <div>
+              <span class="eyebrow">EVENT</span>
+              <h2 id="calEventHeading">New event</h2>
+            </div>
+            <button class="help-close" type="button" data-cal-close aria-label="Close" title="Close (Esc)"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="m1.5 1.5 7 7m0-7-7 7"/></svg></button>
+          </header>
+          <label class="sr-only" for="calSummary">Title</label>
+          <input class="cal-summary" id="calSummary" type="text" maxlength="200" placeholder="Title" autocomplete="off">
+          <div class="cal-fields">
+            <label for="calCalendar">Calendar</label>
+            <select id="calCalendar"></select>
+            <span>When</span>
+            <div class="cal-when">
+              <label class="cal-check"><input type="checkbox" id="calAllDay"> All day</label>
+              <div class="cal-range">
+                <input type="date" id="calStartDate" aria-label="Start date"><input type="time" id="calStartTime" step="300" aria-label="Start time">
+                <span>to</span>
+                <input type="date" id="calEndDate" aria-label="End date"><input type="time" id="calEndTime" step="300" aria-label="End time">
+              </div>
+              <div class="cal-slot-preview" id="calSlotPreview" aria-live="polite" hidden></div>
+            </div>
+            <label for="calRepeat">Repeat</label>
+            <div class="cal-repeat">
+              <div class="cal-row">
+                <select id="calRepeat">
+                  <option value="">Doesn't repeat</option>
+                  <option value="DAILY">Daily</option>
+                  <option value="WEEKLY">Weekly</option>
+                  <option value="MONTHLY">Monthly</option>
+                  <option value="YEARLY">Yearly</option>
+                </select>
+                <span class="cal-every" id="calEvery">every <input type="number" id="calInterval" min="1" max="99" value="1" aria-label="Interval"> <span id="calIntervalUnit">weeks</span></span>
+              </div>
+              <div class="cal-weekdays" id="calWeekdays" aria-label="On these days"></div>
+              <select id="calMonthly" aria-label="Which day of the month"></select>
+              <div class="cal-row" id="calEndsRow">
+                <select id="calRepeatEnd" aria-label="Ends">
+                  <option value="never">Forever</option>
+                  <option value="until">Until</option>
+                  <option value="count">For</option>
+                </select>
+                <input type="date" id="calUntil" aria-label="Last date">
+                <span id="calCountWrap"><input type="number" id="calCount" min="1" max="999" value="10" aria-label="Number of times"> times</span>
+              </div>
+            </div>
+            <label for="calReminder">Reminder</label>
+            <select id="calReminder">
+              <option value="">None</option>
+              <option value="0">When it starts</option>
+              <option value="1">1 minute before</option>
+              <option value="5">5 minutes before</option>
+              <option value="10">10 minutes before</option>
+              <option value="15">15 minutes before</option>
+              <option value="30">30 minutes before</option>
+              <option value="60">1 hour before</option>
+              <option value="120">2 hours before</option>
+              <option value="1440">1 day before</option>
+              <option value="2880">2 days before</option>
+              <option value="10080">1 week before</option>
+            </select>
+            <label for="calLocation">Location</label>
+            <input type="text" id="calLocation" maxlength="200" autocomplete="off">
+            <label for="calNotes">Notes</label>
+            <textarea id="calNotes" rows="3" maxlength="4000"></textarea>
+          </div>
+          <fieldset class="cal-scope" id="calScope" hidden>
+            <legend>This event repeats. Change</legend>
+            <label><input type="radio" name="calScope" value="one"> Only this one</label>
+            <label><input type="radio" name="calScope" value="all" checked> Every event in the series</label>
+          </fieldset>
+          <p class="cal-form-error" id="calEventError" role="alert" hidden></p>
+          <footer class="help-footer cal-dialog-actions">
+            <button class="secondary danger" type="button" id="calDeleteEvent">Delete</button>
+            <button class="secondary" type="button" id="calPinCountdown" title="Show the days until this event in the Command Center's almanac">Pin as countdown</button>
+            <span class="cal-dialog-spacer"></span>
+            <button class="secondary" type="button" data-cal-close>Cancel</button>
+            <button class="primary" type="submit" id="calSaveEvent">Save</button>
+          </footer>
+        </form>
+      </div>
+
+      <div class="confirm-backdrop" id="calCalendarDialog" hidden>
+        <form class="help-dialog cal-dialog cal-dialog-small" id="calCalendarForm" role="dialog" aria-modal="true" aria-labelledby="calCalendarHeading" novalidate>
+          <header class="help-header">
+            <div>
+              <span class="eyebrow">CALENDAR</span>
+              <h2 id="calCalendarHeading">New calendar</h2>
+            </div>
+            <button class="help-close" type="button" data-cal-close aria-label="Close" title="Close (Esc)"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="m1.5 1.5 7 7m0-7-7 7"/></svg></button>
+          </header>
+          <label class="cal-field-label" id="calCalendarNameLabel" for="calCalendarName">Name</label>
+          <input class="cal-summary" id="calCalendarName" type="text" maxlength="60" autocomplete="off">
+          <span class="cal-field-label">Color</span>
+          <div class="cal-swatches" id="calSwatches" role="radiogroup" aria-label="Color"></div>
+          <p class="cal-form-error" id="calCalendarError" role="alert" hidden></p>
+          <footer class="help-footer cal-dialog-actions">
+            <button class="secondary danger" type="button" id="calDeleteCalendar">Delete calendar</button>
+            <button class="secondary" type="button" id="calManageCountdowns" hidden>Manage in Preferences</button>
+            <button class="secondary" type="button" id="calExportCalendar" title="Save this calendar as an .ics file, for another calendar app or as a backup">Export .ics</button>
+            <span class="cal-dialog-spacer"></span>
+            <button class="secondary" type="button" data-cal-close>Cancel</button>
+            <button class="primary" type="submit">Save</button>
+          </footer>
+        </form>
+      </div>
+
+      <div class="confirm-backdrop" id="calMoveDialog" hidden>
+        <div class="help-dialog cal-dialog cal-dialog-small" role="dialog" aria-modal="true" aria-labelledby="calMoveHeading">
+          <header class="help-header">
+            <div>
+              <span class="eyebrow">MOVE</span>
+              <h2 id="calMoveHeading">Move a repeating event</h2>
+            </div>
+          </header>
+          <p class="cal-move-text" id="calMoveText"></p>
+          <footer class="help-footer cal-dialog-actions">
+            <span class="cal-dialog-spacer"></span>
+            <button class="secondary" type="button" id="calMoveCancel">Cancel</button>
+            <button class="secondary" type="button" id="calMoveAll">Every event in the series</button>
+            <button class="primary" type="button" id="calMoveOne">Only this one</button>
+          </footer>
+        </div>
+      </div>
+
+      <div class="confirm-backdrop" id="calImportDialog" hidden>
+        <form class="help-dialog cal-dialog cal-dialog-small" id="calImportForm" role="dialog" aria-modal="true" aria-labelledby="calImportHeading" novalidate>
+          <header class="help-header">
+            <div>
+              <span class="eyebrow">IMPORT</span>
+              <h2 id="calImportHeading">Import events</h2>
+            </div>
+            <button class="help-close" type="button" data-cal-close aria-label="Close" title="Close (Esc)"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="m1.5 1.5 7 7m0-7-7 7"/></svg></button>
+          </header>
+          <p class="cal-import-summary" id="calImportSummary"></p>
+          <label class="cal-field-label" for="calImportTarget">Into</label>
+          <select id="calImportTarget"></select>
+          <p class="settings-note">Events already in that calendar (the same event id) are left as they are.</p>
+          <p class="cal-form-error" id="calImportError" role="alert" hidden></p>
+          <footer class="help-footer cal-dialog-actions">
+            <span class="cal-dialog-spacer"></span>
+            <button class="secondary" type="button" data-cal-close>Cancel</button>
+            <button class="primary" type="submit" id="calImportGo">Import</button>
+          </footer>
+        </form>
+      </div>
+
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
       <footer class="app-footer"><span>AEOLIONWARE</span><i>·</i> Super Command System <i>·</i> Crafted for the keyboard.</footer>
     </main>
@@ -709,6 +1018,10 @@
   <script src="quotes.js"></script>
   <script src="logs.js"></script>
   <script src="games.js"></script>
+  <script src="sounds.js"></script>
+  <script src="calendar.js"></script>
   <script src="app.js"></script>
+  <script src="soundsview.js"></script>
+  <script src="calendarview.js"></script>
 </body>
 </html>

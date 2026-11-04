@@ -8,7 +8,7 @@
 ; A tiny resident helper, started at sign-in, that owns Ctrl+Alt+Shift+A:
 ;   * ASCS not running -> start it;
 ;   * ASCS running     -> ask it to reload (it saves pending notes first).
-; Windows 11 does not reliably honour hotkeys on Start Menu shortcuts, so this
+; Windows 11 does not reliably honor hotkeys on Start Menu shortcuts, so this
 ; script provides the "start" half. ASCS also handles the same keys itself, so
 ; reloading still works when the launcher is not running.
 ;

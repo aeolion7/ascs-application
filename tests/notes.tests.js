@@ -51,4 +51,70 @@
     equal("sparkline clamps", C.sparkline([-20, 150], 10, 10, 0).line, "M0 10 L10 0");
     equal("sparkline needs two points", C.sparkline([42], 10, 10).line, "");
     equal("sparkline ignores junk", C.sparkline([10, "x", null, 20], 10, 10, 0).count, 3);
+
+    // Placeholders (filled when a note is pasted or copied from the palette)
+    const now = new Date(2026, 10, 4, 15, 5);   // Wed, Nov 4 2026, 3:05 PM
+    const fill = (text, answers = {}) => N.fillPlaceholders(text, { now, answers, uuid: () => "UUID" });
+    const marks = text => text.replace(new RegExp(N.MARK_CLIPBOARD, "g"), "[clip]").replace(new RegExp(N.MARK_CURSOR, "g"), "[cursor]");
+    equal("placeholders: dates and times", fill("{date} {isodate} {weekday} {time} {time24} {month} {year}"),
+        "Nov 4, 2026 2026-11-04 Wednesday 3:05 PM 15:05 November 2026");
+    equal("placeholders: day offsets", fill("{isodate+7} {isodate-4} {weekday+1} {date+30}"), "2026-11-11 2026-10-31 Thursday Dec 4, 2026");
+    equal("placeholders: uuid", fill("id {uuid}"), "id UUID");
+    equal("placeholders: clipboard and cursor become marks for ASCS", marks(fill("Re: {clipboard}\n{cursor}")), "Re: [clip]\n[cursor]");
+    equal("placeholders: unknown braces are left exactly", fill("function f() { return {a: 1}; } {Date} {date }"), "function f() { return {a: 1}; } {Date} {date }");
+    equal("placeholders: ask answers", fill("Hi {ask:Name}, see you {ask:Day=Friday}. Bye {ask:Name}!", { Name: "Sam" }), "Hi Sam, see you Friday. Bye Sam!");
+    equal("placeholders: an answer is used as given, never re-filled", fill("{ask:Note}", { Note: "{date}" }), "{date}");
+    equal("placeholders: asks listed once each, with defaults", JSON.stringify(N.placeholderAsks("{ask:Name} {ask: Day = Friday} {ask:Name}")),
+        JSON.stringify([{ name: "Name", fallback: "" }, { name: "Day", fallback: "Friday" }]));
+    equal("placeholders: marks typed into a note or an answer are dropped", marks(fill(`a${N.MARK_CURSOR}b{ask:X}`, { X: N.MARK_CLIPBOARD })), "ab");
+    equal("ask label: camelCase reads as words", N.askLabel("clientName"), "Client name");
+    equal("ask label: snake_case and single words", `${N.askLabel("due_date")}|${N.askLabel("name")}|${N.askLabel("Name")}`, "Due date|Name|Name");
+    equal("ask label: acronyms and digits", N.askLabel("line2Text"), "Line2 text");
+    equal("placeholder menu: ask examples are camelCase", N.PLACEHOLDER_MENU.filter(item => item.text.startsWith("{ask:")).map(item => item.text).join(" "), "{ask:name} {ask:name=default}");
+    check("placeholders: detected", N.hasPlaceholders("x {time}") && !N.hasPlaceholders("x {nope}") && !N.hasPlaceholders("plain"));
+    check("placeholder menu: every entry is a working placeholder", N.PLACEHOLDER_MENU.every(item => N.hasPlaceholders(item.text)));
+    equal("placeholder menu: the selected part is the name or number", N.PLACEHOLDER_MENU.filter(item => item.select)
+        .map(item => item.text.slice(...item.select)).join(), "7,name,name");
+    equal("placeholders: text notes fill, code notes don't, unless set", [
+        N.fillsPlaceholders({ type: "note" }), N.fillsPlaceholders({ type: "code" }),
+        N.fillsPlaceholders({ type: "code", fill: true }), N.fillsPlaceholders({ type: "note", fill: false })].join(), "true,false,true,false");
+
+    // ---- groups (1.8.0)
+    const gnote = (id, group, extra = {}) => ({ id, title: id, content: "", pinned: false, ...(group === undefined ? {} : { group }), ...extra });
+    const sample = () => [gnote("a", "Claude"), gnote("b", "claude "), gnote("c"), gnote("d", "Work"), gnote("e", ""), gnote("f", "Claude", { pinned: true }), gnote("g", "  ")];
+    const ids = list => list.map(item => item.id).join("");
+
+    equal("groups: names tidied", `${N.normalizeGroup("  Claude   prompts ")}|${N.normalizeGroup("a\tb\nc")}|${N.normalizeGroup(null)}`, "Claude prompts|a b c|");
+    equal("groups: names capped at 60", N.normalizeGroup("x".repeat(80)).length, 60);
+    equal("groups: names in use, A to Z, first spelling kept", N.groupNames(sample()).join(","), "Claude,Work");
+
+    const sections = N.groupNotes(sample());
+    equal("groups: pinned notes sit outside the groups", ids(sections.pinned), "f");
+    equal("groups: case-insensitive, in order", sections.groups.map(group => `${group.name}:${ids(group.notes)}`).join(" "), "Claude:ab Work:d");
+    equal("groups: no group, empty or blank means Ungrouped", ids(sections.ungrouped), "ceg");
+    const pinnedFirst = N.groupNotes([gnote("x", "Zeta"), gnote("y", "alpha"), gnote("z", "Mid")], ["zeta"]);
+    equal("groups: pinned groups first, then A to Z", pinnedFirst.groups.map(group => `${group.name}${group.pinned ? "*" : ""}`).join(" "), "Zeta* alpha Mid");
+
+    const renamed = sample();
+    equal("groups: rename moves every note, whatever the case", N.renameGroup(renamed, "CLAUDE", "Prompts"), 3);
+    equal("groups: renamed", renamed.filter(item => item.group === "Prompts").map(item => item.id).join(""), "abf");
+    const merged = sample();
+    N.renameGroup(merged, "Work", "Claude");
+    equal("groups: renaming onto another name merges", ids(N.groupNotes(merged).groups[0].notes), "abd");
+    const deleted = sample();
+    equal("groups: delete moves its notes", N.deleteGroup(deleted, "claude"), 3);
+    check("groups: deleted notes are kept, ungrouped", deleted.length === 7 && ["a", "b", "f"].every(id => !("group" in deleted.find(item => item.id === id))));
+    equal("groups: deleting leaves the others", N.groupNames(deleted).join(","), "Work");
+    equal("groups: a blank name renames nothing", N.renameGroup(sample(), "  ", "X"), 0);
+
+    equal("groups: palette label", `${N.groupedLabel(gnote("a", "Claude"), "Bug")}|${N.groupedLabel(gnote("b"), "Bug")}`, "Claude › Bug|Bug");
+    check("groups: the filter matches the group name", N.matchesNoteQuery(gnote("a", "Claude"), "claude") && !N.matchesNoteQuery(gnote("b", "Work"), "claude"));
+    const P = globalThis.ASCSPalette;
+    const ranked = P.rankItems([
+        { id: "1", label: N.groupedLabel(gnote("a", "Claude"), "Bug") },
+        { id: "2", label: N.groupedLabel(gnote("b", "Claude"), "Feature") },
+        { id: "3", label: N.groupedLabel(gnote("c"), "Bug report") }
+    ], "cl bug");
+    equal("groups: palette \"cl bug\" finds Claude › Bug first", ranked[0]?.id, "1");
+    check("groups: palette \"cl bug\" leaves out other Claude notes", !ranked.some(item => item.id === "2"));
 })();

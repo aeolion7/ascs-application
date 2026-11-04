@@ -1270,6 +1270,318 @@ RetroAchievementsImage(token) {
     throw Error("Invalid RetroAchievements image.")
 }
 
+; ---- Sounds (1.8.0)
+
+; How a library file is played: "web" (decoded in the page), "windows"
+; (Windows plays it: MIDI and WMA), or "" (not listed: raw data, text...).
+SoundKind(ext) {
+    ext := StrLower(ext)
+    if (ext = "wav" || ext = "m4a" || ext = "mp3" || ext = "ogg" || ext = "flac")
+        return "web"
+    if (ext = "mid" || ext = "midi" || ext = "wma")
+        return "windows"
+    return ""
+}
+
+; A library version folder, "(1998) Windows 98", as year and label. Folders
+; without a year (your own) get year 0 and their name.
+ParseSoundEra(folder) {
+    if RegExMatch(folder, "^\((\d{4})\)\s*(.+)$", &m)
+        return Map("year", Integer(m[1]), "label", Trim(m[2]))
+    return Map("year", 0, "label", folder)
+}
+
+; A WAV header's length in seconds (from the data size and byte rate, so it
+; works for ADPCM too); 0 if it isn't a WAV or the header can't be read.
+WavSeconds(buf, size) {
+    if (size < 44 || StrGet(buf, 4, "CP0") != "RIFF" || StrGet(buf.Ptr + 8, 4, "CP0") != "WAVE")
+        return 0
+    offset := 12, byteRate := 0
+    while (offset + 8 <= size) {
+        id := StrGet(buf.Ptr + offset, 4, "CP0")
+        chunk := NumGet(buf, offset + 4, "UInt")
+        if (id = "fmt " && offset + 16 <= size)
+            byteRate := NumGet(buf, offset + 16, "UInt")
+        else if (id == "data")
+            return byteRate ? Round(chunk / byteRate, 2) : 0
+        offset += 8 + chunk + Mod(chunk, 2)
+    }
+    return 0
+}
+
+; The sound library folder: an existing folder, not a drive root, the
+; Windows folder or a user's profile folder itself (ASCS sends the page only
+; files it has indexed as sounds, but the library should still be a folder
+; of sounds).
+ValidateSoundLibrary(path) {
+    path := RTrim(Trim(path), "\")
+    if (path = "" || !RegExMatch(path, "i)^[A-Z]:\\.+") || InStr(path, ".."))
+        throw Error("Choose a folder such as C:\Sounds\all-windows-sounds-main.")
+    if RegExMatch(path, "i)^[A-Z]:\\(Windows|Users(\\[^\\]+)?|Program Files( \(x86\))?|ProgramData)$")
+        throw Error("Choose a folder of sounds, not a system or profile folder.")
+    return path
+}
+
+; The name of a leveled copy: "CHIMES (-7.6 dB).wav".
+LeveledSoundName(stem, gainDb) {
+    stem := Trim(RegExReplace(stem, '[<>:"/\\|?*\x00-\x1F]', ""))
+    return SubStr(stem = "" ? "Sound" : stem, 1, 120) " (" Format("{:+.1f}", gainDb) " dB).wav"
+}
+
+; Windows sound events ASCS may set (HKCU\AppEvents\Schemes\Apps\<app>\
+; <event>\.Current). Only these, and only to WAV files in the sound library.
+WindowsSoundEvents() {
+    ; Logon, logoff and exit are left out: Windows 11 doesn't play them (the
+    ; sign-in and shutdown scripts in C:\Scripts do that job).
+    static events := [
+        [".Default", "WindowsUnlock", "Windows Unlock"],
+        [".Default", ".Default", "Default Beep"],
+        [".Default", "SystemAsterisk", "Asterisk"],
+        [".Default", "SystemExclamation", "Exclamation"],
+        [".Default", "SystemHand", "Critical Stop"],
+        [".Default", "SystemQuestion", "Question"],
+        [".Default", "SystemNotification", "System Notification"],
+        [".Default", "Notification.Default", "Notification"],
+        [".Default", "Notification.Reminder", "Calendar Reminder"],
+        [".Default", "MailBeep", "Desktop Mail Notification"],
+        [".Default", "DeviceConnect", "Device Connect"],
+        [".Default", "DeviceDisconnect", "Device Disconnect"],
+        [".Default", "DeviceFail", "Device Failed to Connect"],
+        [".Default", "WindowsUAC", "User Account Control"],
+        [".Default", "LowBatteryAlarm", "Low Battery Alarm"],
+        [".Default", "CriticalBatteryAlarm", "Critical Battery Alarm"],
+        ["Explorer", "EmptyRecycleBin", "Empty Recycle Bin"],
+        ["Explorer", "Navigating", "Start Navigation"],
+        ["Explorer", "BlockedPopup", "Blocked Pop-up Window"]
+    ]
+    return events
+}
+
+; Looks up an allowlisted event by "app/event"; throws for anything else.
+WindowsSoundEvent(key) {
+    for event in WindowsSoundEvents()
+        if (event[1] "/" event[2] == key)
+            return event
+    throw Error("That Windows sound can't be changed from ASCS.")
+}
+
+; A sound in use, as the notification level board names it (1.8.0):
+; "windows:<app/event>" (one of WindowsSoundEvents) or "ascs:show|hide|
+; reminder". Returns [kind, name]; anything else is refused, so the page can
+; only ever ask for the file a known event or ASCS sound already plays.
+ParseInUseKey(key) {
+    if RegExMatch(key, "^windows:(.{1,80})$", &match) {
+        WindowsSoundEvent(match[1])
+        return ["windows", match[1]]
+    }
+    if RegExMatch(key, "^ascs:(show|hide|reminder)$", &match)
+        return ["ascs", match[1]]
+    throw Error("That isn't a sound in use.")
+}
+
+; A Windows sound value as a full path: event values are sometimes a bare
+; file name, which Windows looks for in its Media folder.
+ResolveSoundPath(value, windowsDir) {
+    value := Trim(value)
+    if (value = "")
+        return ""
+    if RegExMatch(value, "^[A-Za-z]:\\|^\\\\")
+        return value
+    if !InStr(value, "\")
+        return windowsDir "\Media\" value
+    return ""
+}
+
+; The gain sent with a leveled copy: up to two digits of dB, either sign, with at
+; most two decimals.
+ValidateLeveledGain(text) {
+    if !RegExMatch(text, "^-?\d{1,2}(\.\d{1,2})?$")
+        throw Error("The leveled copy was malformed.")
+    return Float(text)
+}
+
+; ---- Calendar (1.8.0)
+; The page asks for calendar operations; ASCS turns each into exactly one
+; CalDAV request to the local Radicale server, from validated ids only, so the
+; page can't reach any other path or method (and never sees the password).
+
+ValidateCalendarId(id) {
+    if !RegExMatch(id, "^[a-z0-9][a-z0-9-]{0,47}$")
+        throw Error("That calendar id isn't valid.")
+    return id
+}
+
+ValidateEventUid(uid) {
+    if !RegExMatch(uid, "^[A-Za-z0-9][A-Za-z0-9._@-]{0,127}$") || InStr(uid, "..")
+        throw Error("That event id isn't valid.")
+    return uid
+}
+
+; ETags from the server (quoted); "" means none.
+ValidateEtag(etag) {
+    if (etag = "")
+        return ""
+    if !RegExMatch(etag, '^(W/)?"[A-Za-z0-9:/+=._-]{1,128}"$')
+        throw Error("That event version isn't valid.")
+    return etag
+}
+
+ValidateCalendarColor(color) {
+    if !RegExMatch(color, "^#[0-9A-Fa-f]{6}$")
+        throw Error("Choose a color like #8B6FF5.")
+    return StrUpper(color)
+}
+
+ValidateCalendarName(name) {
+    name := Trim(RegExReplace(name, "[\x00-\x1F\x7F]", " "))
+    if (name = "" || StrLen(name) > 60)
+        throw Error("Calendar names are 1 to 60 characters.")
+    return name
+}
+
+; An iCalendar object from the page: one VCALENDAR, text only, at most 512 KB.
+ValidateIcs(body) {
+    if (StrLen(body) > 524288)
+        throw Error("That event is too large.")
+    if RegExMatch(body, "[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]")
+        throw Error("That event contains control characters.")
+    if !RegExMatch(body, "s)^BEGIN:VCALENDAR\r?\n.*\r?\nEND:VCALENDAR\r?\n?$")
+        throw Error("That isn't an iCalendar event.")
+    if RegExMatch(body, "s)END:VCALENDAR.*BEGIN:VCALENDAR")
+        throw Error("Send one calendar object at a time.")
+    return body
+}
+
+; A whole calendar file (import or export): iCalendar text, at most 5 MB, no
+; control characters other than tab and line breaks; a leading BOM is dropped.
+ValidateCalendarFile(text) {
+    text := RegExReplace(text, "^\x{FEFF}")
+    if (StrLen(text) > 5 * 1024 * 1024)
+        throw Error("The file is larger than 5 MB.")
+    if RegExMatch(text, "[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]")
+        throw Error("The file contains control characters.")
+    if !RegExMatch(text, "s)^\s*BEGIN:VCALENDAR\r?\n.*END:VCALENDAR\s*$")
+        throw Error("It isn't an iCalendar (.ics) file.")
+    return text
+}
+
+XmlEscape(text) => StrReplace(StrReplace(StrReplace(StrReplace(StrReplace(text, "&", "&amp;"), "<", "&lt;"), ">", "&gt;"), '"', "&quot;"), "'", "&apos;")
+
+; One operation -> Map(method, path, headers, body). Paths are under the
+; account's own collection, /<user>/.
+CalDavRequest(user, op, calendar := "", uid := "", etag := "", body := "") {
+    static ns := 'xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:cs="http://calendarserver.org/ns/" xmlns:ic="http://apple.com/ns/ical/"'
+    if !RegExMatch(user, "^[a-z][a-z0-9]{0,31}$")
+        throw Error("Invalid calendar account.")
+    base := "/" user "/"
+    headers := Map()
+    switch op {
+        case "calendars":
+            headers["Depth"] := "1"
+            headers["Content-Type"] := "application/xml; charset=utf-8"
+            return Map("method", "PROPFIND", "path", base, "headers", headers, "body",
+                '<?xml version="1.0" encoding="utf-8"?><d:propfind ' ns '><d:prop><d:resourcetype/><d:displayname/>'
+                . '<ic:calendar-color/><cs:getctag/><c:supported-calendar-component-set/></d:prop></d:propfind>')
+        case "createCalendar", "updateCalendar":
+            calendar := ValidateCalendarId(calendar)
+            parts := StrSplit(body, "`n", , 2)
+            if (parts.Length != 2)
+                throw Error("A calendar needs a name and a color.")
+            name := XmlEscape(ValidateCalendarName(parts[1]))
+            color := ValidateCalendarColor(parts[2])
+            props := '<d:displayname>' name '</d:displayname><ic:calendar-color>' color 'FF</ic:calendar-color>'
+            headers["Content-Type"] := "application/xml; charset=utf-8"
+            if (op = "updateCalendar")
+                return Map("method", "PROPPATCH", "path", base calendar "/", "headers", headers, "body",
+                    '<?xml version="1.0" encoding="utf-8"?><d:propertyupdate ' ns '><d:set><d:prop>' props '</d:prop></d:set></d:propertyupdate>')
+            return Map("method", "MKCOL", "path", base calendar "/", "headers", headers, "body",
+                '<?xml version="1.0" encoding="utf-8"?><d:mkcol ' ns '><d:set><d:prop><d:resourcetype><d:collection/><c:calendar/></d:resourcetype>'
+                . props '<c:supported-calendar-component-set><c:comp name="VEVENT"/></c:supported-calendar-component-set></d:prop></d:set></d:mkcol>')
+        case "deleteCalendar":
+            return Map("method", "DELETE", "path", base ValidateCalendarId(calendar) "/", "headers", headers, "body", "")
+        case "events":
+            headers["Depth"] := "1"
+            headers["Content-Type"] := "application/xml; charset=utf-8"
+            return Map("method", "REPORT", "path", base ValidateCalendarId(calendar) "/", "headers", headers, "body",
+                '<?xml version="1.0" encoding="utf-8"?><c:calendar-query ' ns '><d:prop><d:getetag/><c:calendar-data/></d:prop>'
+                . '<c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT"/></c:comp-filter></c:filter></c:calendar-query>')
+        case "putEvent":
+            path := base ValidateCalendarId(calendar) "/" ValidateEventUid(uid) ".ics"
+            etag := ValidateEtag(etag)
+            headers["Content-Type"] := "text/calendar; charset=utf-8"
+            if (etag = "")
+                headers["If-None-Match"] := "*"          ; a new event never replaces another
+            else
+                headers["If-Match"] := etag              ; an edit only applies to the version shown
+            return Map("method", "PUT", "path", path, "headers", headers, "body", ValidateIcs(body))
+        case "deleteEvent":
+            path := base ValidateCalendarId(calendar) "/" ValidateEventUid(uid) ".ics"
+            if ((etag := ValidateEtag(etag)) != "")
+                headers["If-Match"] := etag
+            return Map("method", "DELETE", "path", path, "headers", headers, "body", "")
+    }
+    throw Error("Unknown calendar operation.")
+}
+
+; Reminders from the page: one per line, "unix seconds<TAB>title<TAB>when".
+; Only the next three days, at most 200, titles cleaned and capped.
+ParseReminderList(text, now) {
+    reminders := []
+    for line in StrSplit(text, "`n", "`r") {
+        if (line = "" || reminders.Length >= 200)
+            continue
+        ; at, title, when; since 1.8.0 also the start (empty for all-day)
+        ; and the location, for the pop-up's "Starts in" line.
+        fields := StrSplit(line, "`t")
+        if (fields.Length < 3 || fields.Length > 5 || !RegExMatch(fields[1], "^\d{9,11}$"))
+            continue
+        at := Integer(fields[1])
+        if (at < now - 3600 || at > now + 3 * 86400)
+            continue
+        clean := s => SubStr(Trim(RegExReplace(s, "[\x00-\x1F\x7F]", " ")), 1, 120)
+        start := fields.Length >= 4 && RegExMatch(fields[4], "^\d{9,11}$") ? Integer(fields[4]) : 0
+        reminders.Push(Map("at", at, "title", clean(fields[2]) = "" ? "(No title)" : clean(fields[2]), "when", clean(fields[3]),
+            "start", start, "location", fields.Length >= 5 ? clean(fields[5]) : ""))
+    }
+    return reminders
+}
+
+; Note text from the palette, ready to paste (1.8.0). The page fills the
+; placeholders it can and marks {clipboard} with U+E000 and {cursor} with
+; U+E001; here the first becomes the clipboard's text and the second is
+; removed, returning how many Left presses put the cursor back there
+; (counting a line break as one; 0 when there is no cursor mark, or when it
+; is more than 2000 characters from the end, too far to walk back).
+PrepareNoteText(text, clipboardText) {
+    clipboardMark := Chr(0xE000), cursorMark := Chr(0xE001)
+    text := StrReplace(String(text), clipboardMark, StrReplace(StrReplace(String(clipboardText), clipboardMark), cursorMark))
+    left := 0
+    if (position := InStr(text, cursorMark)) {
+        after := StrReplace(SubStr(text, position + 1), cursorMark)
+        left := StrLen(StrReplace(after, "`r`n", "`n"))
+        if (left > 2000)
+            left := 0
+    }
+    return Map("text", StrReplace(text, cursorMark), "left", left)
+}
+
+; Power actions' delay (1.8.0): none, 5 or 30 seconds, counted down by ASCS.
+ValidatePowerDelay(value) {
+    value := Trim(String(value))
+    if (value = "0" || value = "5" || value = "30")
+        return Integer(value)
+    throw Error("The power action delay must be none, 5 or 30 seconds.")
+}
+
+; ASCS's own sounds (1.8.0): off, when ASCS starts and exits, or when its
+; window shows and hides.
+ValidateAscsSoundMode(value) {
+    value := StrLower(Trim(value))
+    if (value = "off" || value = "start" || value = "show")
+        return value
+    throw Error("ASCS sounds must be off, on start, or on show.")
+}
+
 ; The PSO session's Discord voice channel. Accepts a channel link as Discord's
 ; Copy Link gives it (https://discord.com/channels/<server>/<channel>, also
 ; ptb./canary. and discordapp.com) or the app's own discord://-/channels/...
@@ -1378,3 +1690,126 @@ RaImagesToPrune(files, limit, target) {
     }
     return remove
 }
+
+; Power actions (1.8.0): Windows closes apps one at a time, so an app that
+; asks about unsaved work only gets to ask after others have already gone,
+; and some (Windows 11 Notepad, VS Code) never ask at all. ASCS checks first,
+; from window titles alone. Returns the app's name when the title marks
+; unsaved work (a leading *, ● or •, as Notepad, Notepad++, VS Code and most
+; editors do), otherwise "". The name is the title's last " - " part (the
+; Windows convention "document - App"), or the process name without .exe.
+UnsavedWorkApp(title, processName) {
+    if !RegExMatch(title, "^\s*[*" Chr(0x25CF) Chr(0x2022) "]")
+        return ""
+    parts := StrSplit(title, [" - ", " " Chr(0x2013) " ", " " Chr(0x2014) " "])
+    if (parts.Length > 1) {
+        app := Trim(parts[parts.Length])
+        if (app != "")
+            return app
+    }
+    return RegExReplace(processName, "i)\.exe$")
+}
+
+; "A", "A and B", "A, B and C", or "A, B, C and 2 more".
+UnsavedWorkSummary(apps) {
+    count := apps.Length
+    if !count
+        return ""
+    shown := Min(count, count > 4 ? 3 : count)
+    text := ""
+    Loop shown {
+        if (A_Index > 1)
+            text .= (A_Index = shown && shown = count) ? " and " : ", "
+        text .= apps[A_Index]
+    }
+    return shown < count ? text " and " (count - shown) " more" : text
+}
+
+; Countdowns still to come: a one-off ("YYYY-MM-DD") is dropped once its day
+; has passed; yearly ones ("MM-DD") always stay. `today` is "YYYY-MM-DD".
+ActiveCountdowns(countdowns, today) {
+    kept := []
+    for item in countdowns
+        if (StrLen(item["date"]) != 10 || StrCompare(item["date"], today) >= 0)
+            kept.Push(item)
+    return kept
+}
+
+; A leveled copy ASCS made: a WAV directly inside the library's ASCS Leveled
+; folder (an index id, relative to the library). Only these can be deleted
+; from ASCS (1.8.0).
+IsLeveledCopyId(id) {
+    return RegExMatch(id, "i)^ASCS Leveled\\[^\\/:*?`"<>|]+\.wav$")
+}
+
+; The reminder pop-up's text (1.8.0): how soon, then when, then where.
+; "Starts in 5 minutes · Today 3:00 PM`nMain St". All-day events (no start)
+; show only when.
+ReminderBalloonText(reminder, now) {
+    lead := ""
+    if reminder["start"] {
+        minutes := Round((reminder["start"] - now) / 60)
+        lead := minutes <= 0 ? "Starting now"
+            : minutes < 60 ? "Starts in " minutes " minute" (minutes = 1 ? "" : "s")
+            : minutes < 1440 ? "Starts in " Round(minutes / 60) " hour" (Round(minutes / 60) = 1 ? "" : "s")
+            : "Starts in " Round(minutes / 1440) " day" (Round(minutes / 1440) = 1 ? "" : "s")
+    }
+    text := lead != "" && reminder["when"] != "" ? lead " · " reminder["when"] : lead reminder["when"]
+    return reminder["location"] != "" ? text "`n" reminder["location"] : text
+}
+
+; Select › Delete (1.8.0): the ids in one request, one per line. Blank lines
+; and repeats are dropped; anything that isn't a leveled copy refuses the
+; whole request, as does an empty list or more than `limit` ids.
+ParseDeleteList(content, limit) {
+    ids := [], seen := Map()
+    seen.CaseSense := false
+    for line in StrSplit(String(content), "`n", "`r") {
+        id := Trim(line)
+        if (id = "" || seen.Has(id))
+            continue
+        if !IsLeveledCopyId(id)
+            throw Error("Only leveled copies in ASCS Leveled can be deleted here.")
+        seen[id] := true
+        ids.Push(id)
+        if (ids.Length > limit)
+            throw Error("Too many sounds in one request.")
+    }
+    if !ids.Length
+        throw Error("Nothing to delete.")
+    return ids
+}
+
+; VS Code puts its unsaved mark (●) in the title only for the active tab, so
+; ASCS also looks at VS Code's own backups of unsaved buffers (1.8.0): VS Code
+; writes one under Backups\<window>\file or \untitled while a buffer has
+; unsaved changes and deletes it on save. `dir` is a backup file's folder.
+IsVSCodeBackupFolder(dir) {
+    return RegExMatch(dir, "i)\\Code\\Backups\\[^\\]+\\(file|untitled)$") > 0
+}
+
+; A FILETIME (100 ns since 1601, UTC) as YYYYMMDDHH24MISS in local time, given
+; the local offset from UTC in seconds.
+FileTimeToLocalStamp(fileTime, offsetSeconds) {
+    return DateAdd(DateAdd("16010101000000", fileTime // 10000000, "Seconds"), offsetSeconds, "Seconds")
+}
+
+; Quick Notes groups (1.8.0): every "group" in a notes payload must be text of
+; up to 60 characters, without control characters. Only keys can match: a
+; "group" inside a note's text is escaped there (\"group\"). Throws on the first
+; one that isn't.
+CheckNoteGroups(content) {
+    position := 1
+    while (found := RegExMatch(content, '"group"\s*:\s*', &key, position)) {
+        position := found + key.Len
+        if !RegExMatch(content, '\G"((?:[^"\\]|\\.)*)"', &value, position)
+            throw Error("A note's group must be text.")
+        name := JsonUnescape(value[1])
+        if (StrLen(name) > 60)
+            throw Error("A group name can be up to 60 characters.")
+        if RegExMatch(name, "[\x00-\x1F\x7F]")
+            throw Error("A group name can't contain control characters.")
+        position += value.Len
+    }
+}
+

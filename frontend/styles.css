@@ -2215,8 +2215,8 @@ textarea:focus-visible {
   color: #ff9aab;
 }
 
-.snippet-editor {
-  font-family: monospace;
+.code-editor {
+  font-family: "Cascadia Mono", Consolas, monospace;
   tab-size: 4;
 }
 
@@ -4112,7 +4112,7 @@ textarea {
 
 /* ==========================================================================
    1.6.0: Burgundy secondary accent
-   Violet stays the primary, interactive colour. Burgundy marks secondary
+   Violet stays the primary, interactive color. Burgundy marks secondary
    meaning: memory metrics, saved things (snippets, workspaces, captures),
    heading punctuation, and destructive actions (replacing the pink-red).
    ========================================================================== */
@@ -4258,7 +4258,8 @@ body {
   border-radius: 5px;
 }
 
-.launcher-option[data-kind="snippet"] .launcher-option-action,
+.launcher-option[data-kind="code"] .launcher-option-action,
+.launcher-option[data-kind="note"] .launcher-option-action,
 .launcher-option[data-kind="workspace"] .launcher-option-action,
 .launcher-option[data-kind="save"] .launcher-option-action {
   border-color: var(--burgundy-border);
@@ -4596,7 +4597,7 @@ body {
 
 /* ==========================================================================
    1.6.0: Title bar
-   Context on the left, a command bar in the centre, live status, clock, and
+   Context on the left, a command bar in the center, live status, clock, and
    Windows 11-proportioned caption buttons on the right. The brand lives in
    the sidebar only.
    ========================================================================== */
@@ -5010,7 +5011,7 @@ body {
    drawn by a pseudo-element clipped to the main column (so it always meets
    both edges, whatever the content padding). Caption buttons are pinned to
    the window corner at full bar height, and the sidebar brand shares the
-   bar's centre line, giving one continuous top strip.
+   bar's center line, giving one continuous top strip.
    ========================================================================== */
 
 :root {
@@ -5110,7 +5111,7 @@ body {
   background: #7d2441;
 }
 
-/* Sidebar brand on the title bar's centre line. */
+/* Sidebar brand on the title bar's center line. */
 .sidebar {
   padding-top: 0;
 }
@@ -5138,7 +5139,7 @@ body {
 /* ==========================================================================
    1.6.0: Title bar optical alignment
    Every text run is trimmed to its cap height (text-box), so flex centring
-   centres the letters themselves, not a line box padded for descenders.
+   centers the letters themselves, not a line box padded for descenders.
    Control heights are even and divide cleanly into the 60px bar
    (command bar 32, status pill 26, key chips 20), labels share one size,
    and the caption glyphs are 10px, drawn on whole-pixel strokes.
@@ -5179,7 +5180,7 @@ body {
 .titlebar-command svg {
   width: 14px;
   height: 14px;
-  /* The magnifier's handle pulls its visual centre down-right; nudge it. */
+  /* The magnifier's handle pulls its visual center down-right; nudge it. */
   transform: translate(0, .5px);
 }
 
@@ -5235,7 +5236,7 @@ body {
   transform: translateY(-50%);
 }
 
-/* Caption glyphs: 10px, crisp 1px strokes, centred on whole pixels. */
+/* Caption glyphs: 10px, crisp 1px strokes, centered on whole pixels. */
 .window-control svg {
   width: 10px;
   height: 10px;
@@ -5290,7 +5291,7 @@ body {
    while lighter tints of the same hue carry anything that must be legible.
    Metallic gold is the ASCS signature, used in exactly four places (brand
    mark, the Super keycap, the Command Center rule, the palette title).
-   Flat gold remains the colour of attention and distinction.
+   Flat gold remains the color of attention and distinction.
    ========================================================================== */
 
 :root {
@@ -5424,7 +5425,7 @@ body {
 
 /* ==========================================================================
    1.7.0: A taller title strip and a grander brand
-   72px bar; every element stays on one optical centre line (y = 36).
+   72px bar; every element stays on one optical center line (y = 36).
    ========================================================================== */
 
 :root {
@@ -6047,8 +6048,8 @@ body.sidebar-collapsed .sidebar-bottom {
 
 /* ==========================================================================
    1.7.0: A grander brand
-   Expanded: a 76px gold-trimmed mark with the wordmark centred beneath it
-   and generous space above. Collapsed: the 48px mark, centred in the title
+   Expanded: a 76px gold-trimmed mark with the wordmark centered beneath it
+   and generous space above. Collapsed: the 48px mark, centered in the title
    strip as before.
    ========================================================================== */
 
@@ -6091,7 +6092,7 @@ body:not(.sidebar-collapsed) .brand-copy {
 }
 
 /* Letter-spacing adds trailing space after the last letter; the matching
-   left padding keeps the wordmark optically centred. */
+   left padding keeps the wordmark optically centered. */
 body:not(.sidebar-collapsed) .brand-copy strong {
   padding-left: 3.6px;
   color: #f4f1ff;
@@ -6143,7 +6144,7 @@ body:not(.sidebar-collapsed) .sidebar::before {
    The brand block, the section label and the footer keep identical
    dimensions in both states, so the navigation icons never move when the
    sidebar collapses (verified by measurement). Collapsed, the brand shows a
-   56px mark shrinking in place around the same centre as the 76px mark, the
+   56px mark shrinking in place around the same center as the 76px mark, the
    short ASCS wordmark on the AEOLIONWARE line, and a gold hairline where the
    WORKSPACE label sits.
    ========================================================================== */
@@ -7012,7 +7013,7 @@ button.alm-story-copy:focus-visible {
 @keyframes alm-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes alm-fade-out { to { opacity: 0; } }
 
-/* The stage reserves the label plus two lines; shorter items sit centred in
+/* The stage reserves the label plus two lines; shorter items sit centered in
    it rather than leaving an empty line beneath. */
 .alm-stage {
   min-height: 56px;
@@ -8104,6 +8105,9 @@ button.alm-story-copy:focus-visible {
 }
 
 .power-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   margin-top: 8px;
   padding: 10px 12px;
   border: 1px solid var(--gold-border, rgba(227, 192, 114, .55));
@@ -8141,7 +8145,29 @@ button.alm-story-copy:focus-visible {
   font-weight: 600;
 }
 
+/* Held for unsaved work: wider, wraps, and the dot turns burgundy. */
+.power-banner.is-held {
+  width: min(640px, calc(100vw - 48px));
+  border-color: var(--burgundy-border);
+  border-radius: 16px;
+}
+
+.power-banner.is-held strong {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.power-banner.is-held .power-banner-dot {
+  flex: none;
+  background: var(--burgundy-bright);
+}
+
+.power-banner button[hidden] {
+  display: none;
+}
+
 .power-banner-dot {
+  flex: none;
   width: 9px;
   height: 9px;
   border-radius: 50%;
@@ -8231,7 +8257,7 @@ button.alm-story-copy:focus-visible {
 /* ==========================================================================
    1.7.0: the System bar, in the Command Center header
    Two groups: click actions (plain) and hold-to-confirm actions (framed in
-   gold, labelled HOLD with a ring, each button gold-edged and filling while
+   gold, labeled HOLD with a ring, each button gold-edged and filling while
    held). It sits to the right of the title, so it adds no height.
    ========================================================================== */
 
@@ -8629,4 +8655,3152 @@ button.alm-story-copy:focus-visible {
 .now-stats .now-actions {
   align-self: flex-end;
   margin: 0 0 0 auto;
+}
+
+/* 1.8.0: selects in Preferences match the text fields. */
+.settings-field select {
+  min-height: 43px;
+  padding: 0 12px;
+  border: 1px solid rgba(167, 174, 202, .2);
+  border-radius: 9px;
+  background: var(--panel-input);
+  color: var(--text);
+  font: inherit;
+}
+
+.settings-field select option {
+  background: #1d2130;
+  color: #eef0f7;
+}
+
+.settings-subheading {
+  margin-top: 14px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(152, 151, 181, .12);
+}
+
+
+
+/* 1.8.0: Ctrl numbers on the sidebar, and the shortcuts button in the title bar. */
+.nav .nav-key {
+  margin-left: auto;
+  min-width: 18px;
+  padding: 1px 5px;
+  border: 1px solid rgba(167, 174, 202, .14);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, .03);
+  color: #6f7489;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+  transition: color 140ms ease, border-color 140ms ease;
+}
+
+.nav:hover .nav-key,
+.nav.active .nav-key {
+  border-color: rgba(167, 174, 202, .28);
+  color: #c9ccd8;
+}
+
+.titlebar-help {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgba(167, 174, 202, .16);
+  border-radius: 50%;
+  background: rgba(10, 12, 19, .5);
+  color: #8f94aa;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  -webkit-app-region: no-drag;
+  transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease;
+}
+
+.titlebar-help:hover,
+.titlebar-help:focus-visible {
+  border-color: rgba(139, 111, 245, .4);
+  background: rgba(20, 22, 34, .8);
+  color: #eef0f7;
+}
+
+body.sidebar-collapsed .nav .nav-key {
+  display: none;
+}
+
+/* ==========================================================================
+   1.8.0: Help (F1 or the ? button in the title bar)
+   ========================================================================== */
+
+.help-dialog {
+  display: flex;
+  width: min(820px, calc(100vw - 48px));
+  max-height: calc(100vh - 64px);
+  flex-direction: column;
+  gap: 22px;
+  overflow: auto;
+  padding: 26px 28px 22px;
+  border: 1px solid rgba(139, 111, 245, .22);
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgba(74, 32, 170, .22), transparent 60%),
+    linear-gradient(160deg, rgba(31, 34, 50, .98), rgba(20, 22, 33, .98));
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .55), inset 0 1px rgba(255, 255, 255, .05);
+}
+
+.help-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(152, 151, 181, .12);
+}
+
+.help-header .eyebrow {
+  color: var(--indigo-300);
+}
+
+.help-header h2 {
+  margin: 8px 0 4px;
+  color: #f0f1f8;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -.3px;
+}
+
+.help-meta {
+  margin: 0;
+  color: #8f94aa;
+  font-size: 12.5px;
+}
+
+.help-close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(167, 174, 202, .16);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .03);
+  color: #a4a9bb;
+  cursor: pointer;
+  transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease;
+}
+
+.help-close svg {
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+.help-close:hover,
+.help-close:focus-visible {
+  border-color: rgba(139, 111, 245, .45);
+  background: rgba(139, 111, 245, .1);
+  color: #eef0f7;
+}
+
+.help-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px;
+}
+
+.help-dialog h3 {
+  margin: 0 0 12px;
+  color: #a4a9bb;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+}
+
+.help-dialog h3 span {
+  margin-left: 8px;
+  color: #6f7489;
+  font-weight: 600;
+  letter-spacing: .4px;
+  text-transform: none;
+}
+
+.help-keys {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 16px;
+  margin: 0;
+}
+
+.help-keys dt {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.help-keys dd {
+  margin: 0;
+  color: #c9ccd8;
+  font-size: 13px;
+}
+
+.help-dialog kbd {
+  min-width: 22px;
+  padding: 3px 7px 4px;
+  border: 1px solid rgba(167, 174, 202, .22);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .02));
+  color: #eef0f7;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+}
+
+.help-plus {
+  color: #5f6479;
+  font-size: 11px;
+}
+
+.help-pages {
+  padding-top: 18px;
+  border-top: 1px solid rgba(152, 151, 181, .12);
+}
+
+.help-page-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px;
+}
+
+.help-page {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 7px;
+  border: 1px solid rgba(167, 174, 202, .14);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .025);
+  color: #c9ccd8;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
+}
+
+.help-page span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.help-page kbd {
+  min-width: 18px;
+  padding: 2px 5px 3px;
+  font-size: 10.5px;
+}
+
+.help-page:hover,
+.help-page:focus-visible {
+  border-color: rgba(139, 111, 245, .4);
+  background: rgba(139, 111, 245, .08);
+  color: #eef0f7;
+}
+
+.help-page.is-current {
+  border-color: rgba(139, 111, 245, .5);
+  background: rgba(74, 32, 170, .3);
+  color: #f0f1f8;
+}
+
+.help-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(152, 151, 181, .12);
+}
+
+.help-footer p {
+  margin: 0;
+  color: #8f94aa;
+  font-size: 12.5px;
+}
+
+@media (max-width: 760px) {
+  .help-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ==========================================================================
+   1.8.0: Sounds view
+   ========================================================================== */
+
+.sounds-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.sounds-toolbar input[type="search"] {
+  flex: 1 1 260px;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid rgba(167, 174, 202, .2);
+  border-radius: 9px;
+  background: var(--panel-input);
+  color: var(--text);
+  font: inherit;
+}
+
+.sounds-toolbar button[aria-pressed="true"] {
+  border-color: var(--gold-border);
+  background: var(--gold-soft);
+  color: var(--gold-text);
+}
+
+.sounds-volume {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #8f94aa;
+  font-size: 12px;
+}
+
+.sounds-volume input {
+  width: 120px;
+  accent-color: var(--accent);
+}
+
+.sound-eras {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding-bottom: 6px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.sound-era {
+  display: flex;
+  flex: 0 0 auto;
+  max-width: 220px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 7px 12px 8px;
+  border: 1px solid rgba(167, 174, 202, .14);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .025);
+  color: #c9ccd8;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.sound-era small {
+  color: #7d8298;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.sound-era span {
+  overflow: hidden;
+  max-width: 100%;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sound-era:hover {
+  border-color: rgba(139, 111, 245, .35);
+}
+
+.sound-era.is-active {
+  border-color: rgba(139, 111, 245, .55);
+  background: rgba(74, 32, 170, .32);
+  color: #f0f1f8;
+}
+
+.sound-era.is-active small {
+  color: var(--gold-text);
+}
+
+.sounds-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
+  align-items: start;
+  gap: 20px;
+}
+
+.sounds-meta {
+  margin: 0 0 10px;
+  color: #8f94aa;
+  font-size: 12.5px;
+}
+
+.sound-group {
+  margin-bottom: 18px;
+}
+
+.sound-group h3 {
+  margin: 0 0 8px;
+  color: #a4a9bb;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.sound-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 8px;
+}
+
+.sound-tile {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 11px;
+  background: linear-gradient(145deg, rgba(29, 33, 48, .9), rgba(22, 25, 37, .95));
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.sound-tile:hover {
+  border-color: rgba(139, 111, 245, .3);
+}
+
+.sound-tile.is-selected {
+  border-color: rgba(139, 111, 245, .6);
+  background: linear-gradient(145deg, rgba(58, 26, 140, .45), rgba(28, 24, 52, .95));
+}
+
+.sound-play {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(139, 111, 245, .4);
+  border-radius: 50%;
+  background: rgba(74, 32, 170, .35);
+  color: #e6e0ff;
+  cursor: pointer;
+}
+
+.sound-play svg {
+  width: 11px;
+  height: 11px;
+  margin-left: 2px;
+  fill: currentColor;
+}
+
+.sound-play:hover,
+.sound-play:focus-visible {
+  background: rgba(98, 54, 210, .6);
+}
+
+.sound-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.sound-copy strong {
+  overflow: hidden;
+  color: #eef0f7;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sound-copy small {
+  grid-column: 1;
+  color: #7d8298;
+  font-size: 11px;
+}
+
+.sound-level {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--gold-text);
+  font-size: 11px;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.sound-star {
+  flex: 0 0 auto;
+  padding: 2px 4px;
+  border: 0;
+  background: none;
+  color: #4f5468;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.sound-star:hover {
+  color: #a4a9bb;
+}
+
+.sound-star.is-on {
+  color: var(--gold-bright);
+}
+
+.sounds-side {
+  position: sticky;
+  top: calc(var(--titlebar-height, 72px) + 12px);
+  display: flex;
+  max-height: calc(100vh - var(--titlebar-height, 72px) - 32px);
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.sounds-side .games-panel {
+  min-height: 0;
+}
+
+.sound-detail-head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sound-detail-head strong {
+  overflow-wrap: anywhere;
+  color: #eef0f7;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.sound-detail-head small {
+  color: #8f94aa;
+  font-size: 12px;
+}
+
+.sound-detail-head .sound-uses {
+  color: var(--gold-text);
+}
+
+.sound-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.sound-actions button {
+  min-height: 30px;
+  padding: 0 12px;
+}
+
+.sound-actions select {
+  flex: 1;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(167, 174, 202, .2);
+  border-radius: 8px;
+  background: var(--panel-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.sound-actions select option,
+.sound-actions select optgroup {
+  background: #1d2130;
+  color: #eef0f7;
+}
+
+.sound-levels,
+.sound-use {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(152, 151, 181, .12);
+}
+
+.sound-detail h3 {
+  margin: 0;
+  color: #a4a9bb;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.sound-meters {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.sound-meter {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 70px;
+  align-items: center;
+  gap: 10px;
+}
+
+.sound-meter small {
+  color: #8f94aa;
+  font-size: 11px;
+}
+
+.sound-meter strong {
+  color: #eef0f7;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.sound-meter-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, .06);
+}
+
+.sound-meter-bar b {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--indigo-700, #3a0d94), var(--indigo-300, #a892fb));
+}
+
+.sound-meter-bar i {
+  position: absolute;
+  top: -4px;
+  width: 2px;
+  height: 14px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--gold-bright);
+  box-shadow: 0 0 6px rgba(227, 192, 114, .5);
+}
+
+.sound-reference {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #c9ccd8;
+  font-size: 12.5px;
+}
+
+.sound-reference > label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sound-reference input[type="number"] {
+  width: 82px;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid rgba(167, 174, 202, .2);
+  border-radius: 7px;
+  background: var(--panel-input);
+  color: var(--text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.sound-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sound-preset {
+  padding: 4px 9px;
+  border: 1px solid rgba(167, 174, 202, .16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .03);
+  color: #b4b8c8;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11.5px;
+}
+
+.sound-preset.is-on {
+  border-color: var(--gold-border);
+  background: var(--gold-soft);
+  color: var(--gold-text);
+}
+
+.sound-clip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #a4a9bb;
+  font-size: 12px;
+}
+
+.sound-plan {
+  margin: 0;
+  color: #c9ccd8;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sound-plan.is-warning {
+  color: var(--gold-text);
+}
+
+.sound-assignments {
+  display: flex;
+  flex-direction: column;
+}
+
+.sound-assignment {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(152, 151, 181, .08);
+}
+
+.sound-assignment > span:first-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.sound-assignment strong {
+  color: #dfe1ea;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.sound-assignment small {
+  overflow: hidden;
+  color: #7d8298;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sound-assignment small.is-missing {
+  color: var(--burgundy-text, #ff9aab);
+}
+
+.sound-assignment-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
+}
+
+
+@media (max-width: 1280px) {
+  .sounds-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sounds-side {
+    position: static;
+    max-height: none;
+  }
+}
+
+/* 1.8.0: Sounds layout, second pass. Finding on the left of the toolbar,
+   playback on the right; one side panel at a time (tabs); the library
+   folder as a footer under the list. */
+.sounds-toolbar {
+  justify-content: space-between;
+}
+
+.sounds-find,
+.sounds-playback {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.sounds-find {
+  flex: 1 1 420px;
+}
+
+.sounds-playback {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+}
+
+.sounds-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.sounds-meta-row .sounds-meta {
+  margin: 0;
+}
+
+.sound-side-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border-soft);
+  border-radius: 11px;
+  background: rgba(10, 12, 19, .45);
+}
+
+.sound-side-tabs button {
+  flex: 1;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: #a4a9bb;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.sound-side-tabs button[aria-selected="true"] {
+  background: rgba(74, 32, 170, .45);
+  color: #f0f1f8;
+}
+
+.sound-side-tabs button span {
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .08);
+  font-size: 11px;
+}
+
+.sounds-side {
+  overflow: hidden;
+}
+
+.sounds-side .games-panel {
+  min-height: 0;
+  flex: 0 1 auto;
+}
+
+.sound-detail {
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+/* In use: the list is the only thing that scrolls. */
+.sound-in-use {
+  overflow: hidden;
+}
+
+.sound-in-use .sound-assignments {
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.sound-in-use .settings-note {
+  margin: 0;
+}
+
+.sound-assignment {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px;
+  padding: 6px 0;
+}
+
+.sound-assignment-actions {
+  justify-content: flex-end;
+}
+
+.sound-assignment > span:first-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sound-assignment strong,
+.sound-assignment small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sound-reference {
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sound-reference-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #c9ccd8;
+  font-size: 12.5px;
+}
+
+.sound-presets {
+  gap: 6px;
+}
+
+.sound-preset {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 8px;
+}
+
+.sound-preset b {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.sound-library {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(152, 151, 181, .12);
+  color: #8f94aa;
+  font-size: 12.5px;
+}
+
+.sound-library-label {
+  color: #a4a9bb;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.sound-library code {
+  overflow: hidden;
+  max-width: 100%;
+  color: #c9ccd8;
+  font-family: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sound-library small {
+  flex-basis: 100%;
+  color: #6f7489;
+  font-size: 11.5px;
+}
+
+.sound-library-edit {
+  display: flex;
+  flex: 1 1 420px;
+  align-items: center;
+  gap: 8px;
+}
+
+.sound-library-edit[hidden] {
+  display: none;
+}
+
+.sound-library-edit input {
+  flex: 1;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(167, 174, 202, .2);
+  border-radius: 8px;
+  background: var(--panel-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+
+.sound-in-use .sound-assignments {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+/* The side column is a little wider where there's room. */
+@media (min-width: 1600px) {
+  .sounds-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(380px, 440px);
+  }
+}
+
+/* ==========================================================================
+   1.8.0: Calendar
+   ========================================================================== */
+
+.cal-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.cal-nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.cal-nav h2 {
+  overflow: hidden;
+  margin: 0 0 0 8px;
+  color: #f0f1f8;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -.3px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-step {
+  width: 34px;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.cal-modes {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+  padding: 4px;
+  border: 1px solid var(--border-soft);
+  border-radius: 11px;
+  background: rgba(10, 12, 19, .45);
+}
+
+.cal-modes button {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: #a4a9bb;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.cal-modes button[aria-pressed="true"] {
+  background: rgba(74, 32, 170, .45);
+  color: #f0f1f8;
+}
+
+.cal-status {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--gold-border);
+  border-radius: 10px;
+  background: var(--gold-soft);
+  color: var(--gold-text);
+  font-size: 13px;
+}
+
+.cal-status[data-state="starting"] {
+  border-color: rgba(167, 174, 202, .2);
+  background: rgba(255, 255, 255, .03);
+  color: #a4a9bb;
+}
+
+.cal-layout {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.cal-side {
+  min-height: 0;
+  gap: 10px;
+}
+
+.cal-calendars {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cal-calendar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 0;
+}
+
+.cal-calendar label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  color: #dfe1ea;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.cal-calendar label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-calendar input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  border: 2px solid var(--cal-color);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  appearance: none;
+}
+
+.cal-calendar input[type="checkbox"]:checked {
+  background: var(--cal-color);
+}
+
+.cal-calendar .link-button {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+}
+
+/* Month */
+.cal-month {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-auto-rows: minmax(108px, auto);
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: rgba(22, 25, 37, .6);
+}
+
+.cal-month .cal-weekday {
+  grid-row: 1;
+  min-height: 0;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-soft);
+  color: #8f94aa;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+}
+
+.cal-month {
+  grid-template-rows: auto;
+}
+
+.cal-day {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 6px 8px;
+  border-right: 1px solid rgba(152, 151, 181, .08);
+  border-bottom: 1px solid rgba(152, 151, 181, .08);
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.cal-day:nth-child(7n) {
+  border-right: 0;
+}
+
+.cal-day:hover,
+.cal-day:focus-visible {
+  background: rgba(139, 111, 245, .06);
+  outline: none;
+}
+
+.cal-day.is-other {
+  background: rgba(10, 12, 19, .3);
+}
+
+.cal-day.is-other .cal-day-number {
+  color: #4f5468;
+}
+
+.cal-day-number {
+  align-self: flex-start;
+  min-width: 24px;
+  margin-bottom: 2px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: #c9ccd8;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.cal-day.is-today .cal-day-number {
+  background: rgba(98, 54, 210, .85);
+  color: #fff;
+}
+
+.cal-chip {
+  display: flex;
+  min-width: 0;
+  min-height: 20px;
+  align-items: center;
+  gap: 5px;
+  line-height: 16px;
+  padding: 2px 6px;
+  border: 0;
+  border-left: 3px solid var(--cal-color);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--cal-color) 14%, transparent);
+  color: #e6e8f0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+
+.cal-chip small {
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--cal-color) 70%, #ffffff);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Trimmed to the capitals and baseline, so text is centered by its letters:
+   Segoe UI's line box has extra room below, which left text sitting high. */
+.cal-chip:not(.cal-block) small,
+.cal-chip:not(.cal-block) span {
+  text-box: trim-both cap alphabetic;
+}
+
+/* The trimmed box runs from the capitals' top to the baseline, and the title
+   clips (for its ellipsis): padding above and below gives ascenders and
+   descenders room, and the matching negative margins keep the letters
+   centered. Week and day blocks stack time over title, so they keep their
+   normal line boxes. */
+.cal-chip:not(.cal-block) span {
+  margin: -3px 0 -4px;
+  padding: 3px 0 4px;
+}
+
+.cal-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-chip.is-all-day {
+  background: color-mix(in srgb, var(--cal-color) 38%, transparent);
+  color: #fff;
+}
+
+.cal-chip:hover,
+.cal-chip:focus-visible {
+  background: color-mix(in srgb, var(--cal-color) 30%, transparent);
+}
+
+.cal-more {
+  align-self: flex-start;
+  padding: 1px 6px;
+  border: 0;
+  background: none;
+  color: #a4a9bb;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11.5px;
+}
+
+.cal-more:hover {
+  color: #eef0f7;
+}
+
+/* Week */
+.cal-week {
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: rgba(22, 25, 37, .6);
+}
+
+.cal-week-head,
+.cal-week-allday,
+.cal-week-body {
+  display: grid;
+  grid-template-columns: 64px repeat(7, minmax(0, 1fr));
+}
+
+.cal-week-head {
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.cal-week-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: #a4a9bb;
+  cursor: pointer;
+  font: inherit;
+}
+
+.cal-week-day small {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* A 30 px circle with the date centered in it, in Week (column) and Day
+   (row) alike; two-digit dates widen it into a pill. */
+.cal-week-day strong {
+  display: inline-flex;
+  min-width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border-radius: 999px;
+  color: #eef0f7;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.cal-week-day.is-today strong {
+  background: rgba(98, 54, 210, .85);
+}
+
+.cal-gutter {
+  padding: 6px 8px 0 0;
+  color: #6f7489;
+  font-size: 10.5px;
+  text-align: right;
+}
+
+.cal-week-allday {
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.cal-allday-cell {
+  display: flex;
+  min-height: 30px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  padding: 3px;
+  border-left: 1px solid rgba(152, 151, 181, .08);
+}
+
+.cal-week-scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.cal-hours {
+  display: flex;
+  flex-direction: column;
+}
+
+.cal-hours span {
+  height: 48px;
+  padding-right: 8px;
+  color: #6f7489;
+  font-size: 10.5px;
+  line-height: 1;
+  text-align: right;
+  transform: translateY(-5px);
+}
+
+.cal-column {
+  position: relative;
+  border-left: 1px solid rgba(152, 151, 181, .08);
+  background-image: repeating-linear-gradient(to bottom, rgba(152, 151, 181, .08) 0 1px, transparent 1px 48px);
+  cursor: pointer;
+}
+
+.cal-column.is-today {
+  background-color: rgba(139, 111, 245, .04);
+}
+
+.cal-block {
+  position: absolute;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--cal-color) 26%, #181b28);
+}
+
+.cal-block span {
+  white-space: normal;
+}
+
+.cal-now {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: var(--gold-bright);
+  box-shadow: 0 0 6px rgba(227, 192, 114, .6);
+  pointer-events: none;
+}
+
+/* Agenda */
+.cal-agenda {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cal-agenda-day h3 {
+  margin: 0 0 6px;
+  color: #a4a9bb;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.cal-agenda-day.is-today h3 {
+  color: var(--gold-text);
+}
+
+.cal-agenda-row {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 150px 10px minmax(0, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  margin-bottom: 6px;
+  background: rgba(29, 33, 48, .7);
+  color: #eef0f7;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.cal-agenda-row:hover {
+  border-color: rgba(139, 111, 245, .35);
+}
+
+.cal-agenda-time {
+  color: #a4a9bb;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-agenda-row i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--cal-color);
+}
+
+.cal-agenda-row strong {
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-agenda-row small {
+  overflow: hidden;
+  color: #7d8298;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Dialogs */
+.cal-dialog {
+  gap: 16px;
+}
+
+.cal-dialog-small {
+  width: min(460px, calc(100vw - 48px));
+}
+
+.cal-summary {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(167, 174, 202, .22);
+  border-radius: 9px;
+  background: var(--panel-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+
+.cal-fields {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px 14px;
+}
+
+.cal-fields > label,
+.cal-fields > span,
+.cal-field-label {
+  padding-top: 8px;
+  color: #a4a9bb;
+  font-size: 12.5px;
+}
+
+.cal-dialog input[type="text"],
+.cal-dialog input[type="date"],
+.cal-dialog input[type="time"],
+.cal-dialog input[type="number"],
+.cal-dialog select,
+.cal-dialog textarea {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(167, 174, 202, .2);
+  border-radius: 8px;
+  background: var(--panel-input);
+  color: var(--text);
+  color-scheme: dark;
+  font: inherit;
+  font-size: 13px;
+}
+
+.cal-dialog textarea {
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.cal-dialog select option {
+  background: #1d2130;
+}
+
+.cal-dialog input[type="number"] {
+  width: 64px;
+}
+
+.cal-when,
+.cal-repeat {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cal-range,
+.cal-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: #a4a9bb;
+  font-size: 12.5px;
+}
+
+.cal-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #c9ccd8;
+  font-size: 13px;
+}
+
+.cal-every {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cal-every[hidden],
+.cal-row[hidden],
+.cal-weekdays[hidden],
+#calCountWrap[hidden],
+.cal-dialog [hidden] {
+  display: none;
+}
+
+.cal-weekdays {
+  display: flex;
+  gap: 6px;
+}
+
+.cal-weekday-chip {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(167, 174, 202, .2);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .03);
+  color: #a4a9bb;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cal-weekday-chip[aria-pressed="true"] {
+  border-color: rgba(139, 111, 245, .7);
+  background: rgba(98, 54, 210, .7);
+  color: #fff;
+}
+
+.cal-scope {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--gold-border);
+  border-radius: 10px;
+  background: var(--gold-soft);
+  color: #dfe1ea;
+  font-size: 13px;
+}
+
+.cal-scope legend {
+  padding: 0 6px;
+  color: var(--gold-text);
+  font-size: 12px;
+}
+
+.cal-scope label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cal-form-error {
+  margin: 0;
+  color: var(--burgundy-text, #ff9aab);
+  font-size: 13px;
+}
+
+.cal-dialog-actions {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.cal-dialog-spacer {
+  flex: 1;
+}
+
+.cal-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cal-swatch {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: var(--cal-color);
+  box-shadow: inset 0 0 0 2px rgba(13, 15, 22, .9);
+  cursor: pointer;
+}
+
+.cal-swatch[aria-checked="true"] {
+  border-color: #fff;
+}
+
+@media (max-width: 1100px) {
+  .cal-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cal-block.is-short {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 5px;
+  padding-top: 2px;
+}
+
+.cal-block.is-short span {
+  white-space: nowrap;
+}
+
+.cal-swatch[aria-checked="true"] {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+.cal-swatch[aria-checked="false"] {
+  border-color: transparent;
+}
+
+/* 1.8.0 alignment pass: text in a row shares one baseline; dots, boxes and
+   check marks are centered on it. */
+.cal-agenda-row {
+  align-items: baseline;
+}
+
+.cal-agenda-row i {
+  align-self: center;
+}
+
+.cal-calendar {
+  align-items: baseline;
+}
+
+.cal-calendar label {
+  align-items: baseline;
+}
+
+.cal-calendar input[type="checkbox"] {
+  align-self: center;
+}
+
+.cal-week-allday .cal-gutter {
+  padding-top: 8px;
+}
+
+.sound-library {
+  align-items: baseline;
+}
+
+.sound-in-use .sound-assignments {
+  padding-right: 10px;
+}
+
+.cal-agenda-row i {
+  transform: translateY(2px);
+}
+
+.cal-calendar input[type="checkbox"] {
+  transform: translateY(1.5px);
+}
+
+/* A confirmation always answers something already open (the event editor,
+   the calendar editor), so it sits above every other dialog. */
+#confirmDialog {
+  z-index: 40;
+}
+
+/* 1.8.0: the Day view shares the week's hourly layout, with one column. */
+.cal-week .cal-week-head,
+.cal-week .cal-week-allday,
+.cal-week .cal-week-body {
+  grid-template-columns: 64px repeat(var(--cal-days, 7), minmax(0, 1fr));
+}
+
+.cal-week.is-day .cal-week-day {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+}
+
+.cal-week.is-day .cal-week-day small {
+  font-size: 12px;
+}
+
+.cal-allday-cell {
+  cursor: pointer;
+}
+
+.cal-allday-cell:hover {
+  background: rgba(139, 111, 245, .05);
+}
+
+/* 1.8.0: the month as week rows, so multi-day events can be bars across the
+   days they cover (lanes under the day numbers, the day's own events below). */
+.cal-month {
+  display: flex;
+  flex-direction: column;
+}
+
+.cal-month-head {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.cal-week-row {
+  display: grid;
+  min-height: 108px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: 30px repeat(var(--lanes, 0), 24px) minmax(30px, 1fr);
+  border-bottom: 1px solid rgba(152, 151, 181, .08);
+}
+
+.cal-week-row:last-child {
+  border-bottom: 0;
+}
+
+.cal-week-row > .cal-day {
+  grid-row: 1 / -1;
+  border-bottom: 0;
+}
+
+.cal-week-row > .cal-day.is-row-end {
+  border-right: 0;
+}
+
+.cal-week-row > .cal-day:nth-child(7n) {
+  border-right: 1px solid rgba(152, 151, 181, .08);
+}
+
+.cal-week-row > .cal-day.is-row-end:nth-child(7n) {
+  border-right: 0;
+}
+
+.cal-day-items {
+  z-index: 1;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  padding: 3px 6px 8px;
+  pointer-events: none;                 /* clicks between events reach the day */
+}
+
+.cal-day-items > * {
+  pointer-events: auto;
+}
+
+/* Bars: one per event per row, pointed where they continue past the row. */
+.cal-bar {
+  z-index: 1;
+  min-width: 0;
+  align-self: center;
+  height: 21px;
+  margin: 0 5px;
+  align-items: center;
+  background: color-mix(in srgb, var(--cal-color) 34%, #171a27);
+  color: #f0f1f8;
+}
+
+.cal-bar:hover,
+.cal-bar:focus-visible {
+  background: color-mix(in srgb, var(--cal-color) 48%, #171a27);
+}
+
+.cal-bar.continues-before {
+  margin-left: 0;
+  padding-left: 13px;
+  border-left-width: 0;
+  border-radius: 0 5px 5px 0;
+  clip-path: polygon(8px 0, 100% 0, 100% 100%, 8px 100%, 0 50%);
+}
+
+.cal-bar.continues-after {
+  margin-right: 0;
+  padding-right: 13px;
+  border-radius: 5px 0 0 5px;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 0 100%);
+}
+
+.cal-bar.continues-before.continues-after {
+  border-radius: 0;
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 8px 100%, 0 50%);
+}
+
+.cal-bar span {
+  flex: 1 1 auto;
+}
+
+/* The week and day views' all-day row: bars in lanes over the day cells. */
+.cal-week .cal-week-allday {
+  grid-template-rows: repeat(var(--lanes, 1), 26px);
+  padding: 2px 0;
+}
+
+.cal-week-allday .cal-gutter {
+  grid-row: 1 / -1;
+  grid-column: 1;
+}
+
+.cal-week-allday .cal-allday-cell {
+  grid-row: 1 / -1;
+  min-height: 26px;
+}
+
+.cal-week-allday .cal-bar {
+  margin: 0 3px;
+}
+
+.cal-week-allday .cal-bar.continues-before {
+  margin-left: 0;
+}
+
+.cal-week-allday .cal-bar.continues-after {
+  margin-right: 0;
+}
+
+.cal-week-row {
+  grid-template-rows: 28px repeat(var(--lanes, 0), 24px) minmax(24px, 1fr);
+}
+
+
+/* ==========================================================================
+   1.8.0: the Command Center's Today card, and calendar import
+   ========================================================================== */
+
+.today-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 14px 18px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(29, 33, 48, .92), rgba(22, 25, 37, .96));
+  box-shadow: var(--panel-shadow), inset 0 1px rgba(255, 255, 255, .025);
+}
+
+.today-card[hidden] {
+  display: none;
+}
+
+.today-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.today-date {
+  color: #dfe1ea;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.today-head .link-button {
+  margin-left: auto;
+  font-size: 12px;
+}
+
+.today-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.today-row {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(84px, max-content) 9px minmax(0, max-content) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: #eef0f7;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.today-row:hover,
+.today-row:focus-visible {
+  background: rgba(139, 111, 245, .08);
+}
+
+.today-time {
+  color: #a4a9bb;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.today-row i {
+  align-self: center;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--cal-color);
+  transform: translateY(1px);
+}
+
+.today-row strong {
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.today-row small {
+  overflow: hidden;
+  color: #7d8298;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.today-empty {
+  padding: 6px 8px 0;
+  color: #8f94aa;
+  font-size: 13px;
+}
+
+.today-more {
+  padding: 2px 8px 0;
+}
+
+.today-more .link-button {
+  font-size: 12px;
+}
+
+.cal-side-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.cal-import-summary {
+  margin: 0;
+  color: #dfe1ea;
+  font-size: 14px;
+}
+
+/* ==========================================================================
+   1.8.0 polish: dropdown carets, the Sounds version grid, favorites, and
+   countdowns in the Calendar.
+   ========================================================================== */
+
+/* Every dropdown draws its own chevron, set in from the right edge, with
+   room so the chosen text never runs under it. */
+select:not([multiple]):not([size]) {
+  padding-right: 34px;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23a4a9bb' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right 13px center;
+  background-repeat: no-repeat;
+  background-size: 10px 6px;
+  cursor: pointer;
+}
+
+select:not([multiple]):not([size]):disabled {
+  cursor: default;
+  opacity: .6;
+}
+
+/* Sounds: every version as a card, three to a row. */
+.sound-versions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.sound-version {
+  display: flex;
+  min-width: 0;
+  min-height: 104px;
+  align-items: center;
+  gap: 18px;
+  padding: 16px 20px;
+  border: 1px solid rgba(167, 174, 202, .14);
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .015));
+  color: #dfe1ea;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
+}
+
+.sound-version:hover,
+.sound-version:focus-visible {
+  border-color: rgba(139, 111, 245, .5);
+  background: linear-gradient(145deg, rgba(74, 32, 170, .28), rgba(28, 24, 52, .6));
+  transform: translateY(-1px);
+}
+
+.sound-version-art {
+  display: grid;
+  flex: 0 0 68px;
+  height: 68px;
+  place-items: center;
+}
+
+.sound-version-art img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
+.sound-version-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sound-version-copy small {
+  color: var(--gold-text);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.sound-version-copy strong {
+  overflow: hidden;
+  color: #f0f1f8;
+  font-size: 16px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sound-version-copy em {
+  color: #8a8fa5;
+  font-size: 12px;
+  font-style: normal;
+}
+
+@media (max-width: 1100px) {
+  .sound-versions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* The version strip, inside a version: larger, each with its logo. */
+.sound-era {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px 9px 11px;
+}
+
+.sound-era-logo {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+
+.sound-era-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sound-era-copy span {
+  overflow: hidden;
+  max-width: 180px;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Back to every version, at the start of the line above the sounds. */
+.sounds-meta-left {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.sound-back {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 6px 9px;
+  border: 1px solid rgba(139, 111, 245, .35);
+  border-radius: 8px;
+  background: rgba(74, 32, 170, .18);
+  color: #e4e0fb;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sound-back svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sound-back:hover,
+.sound-back:focus-visible {
+  border-color: rgba(139, 111, 245, .6);
+  background: rgba(74, 32, 170, .34);
+}
+
+.sound-back[hidden] {
+  display: none;
+}
+
+/* Favorites are saved things: burgundy, with a heart. */
+.sound-star.is-on {
+  color: var(--burgundy-bright);
+}
+
+.sound-star.is-on:hover {
+  color: var(--burgundy-text);
+}
+
+.sound-actions button.is-favorite {
+  border-color: var(--burgundy-border);
+  background: var(--burgundy-soft);
+  color: var(--burgundy-text);
+}
+
+#soundFavoritesOnly[aria-pressed="true"] {
+  border-color: var(--burgundy-border);
+  background: var(--burgundy-soft);
+  color: var(--burgundy-text);
+}
+
+/* Countdowns in the Calendar are read-only: a pill with an hourglass, where
+   events (yearly ones too) are square-cornered with a color stripe. */
+.cal-chip.is-countdown,
+.cal-chip.is-countdown.is-all-day {
+  gap: 5px;
+  padding: 2px 10px 2px 7px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cal-color) 32%, transparent), color-mix(in srgb, var(--cal-color) 10%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cal-color) 42%, transparent);
+  color: color-mix(in srgb, var(--cal-color) 45%, #ffffff);
+}
+
+.cal-chip.is-countdown:hover,
+.cal-chip.is-countdown:focus-visible {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cal-color) 46%, transparent), color-mix(in srgb, var(--cal-color) 20%, transparent));
+}
+
+.cal-countdown-mark {
+  display: inline-flex;
+  flex: none;
+  width: 11px;
+  height: 11px;
+}
+
+.cal-countdown-mark svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.4;
+}
+
+.cal-agenda-row.is-countdown strong {
+  color: var(--gold-text);
+}
+
+/* Horizontal strips being dragged sideways (enableDragScroll in app.js). */
+.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.is-dragging * {
+  cursor: grabbing;
+  pointer-events: none;
+}
+
+/* Quick Notes: whether a note fills placeholders when pasted from the palette. */
+.note-fill {
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.note-fill.is-on {
+  border-color: var(--burgundy-border);
+  background: var(--burgundy-soft);
+  color: var(--burgundy-text);
+}
+
+.note-fill-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.placeholder-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  width: 360px;
+  max-height: min(70vh, 560px);
+  flex-direction: column;
+  padding: 8px;
+  border: 1px solid rgba(167, 174, 202, .18);
+  border-radius: 12px;
+  background: #1a1d2b;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .45);
+}
+
+.placeholder-menu[hidden] {
+  display: none;
+}
+
+.placeholder-items {
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.placeholder-group {
+  margin: 8px 8px 4px;
+  color: #7d8298;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.placeholder-group:first-child {
+  margin-top: 2px;
+}
+
+.placeholder-item {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: 10px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: #dfe1ea;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+}
+
+.placeholder-item code {
+  color: var(--burgundy-text);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+}
+
+.placeholder-item small {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: #8a8fa5;
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.placeholder-item:hover,
+.placeholder-item:focus-visible {
+  background: rgba(74, 32, 170, .3);
+  outline: none;
+}
+
+.placeholder-fill {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 6px;
+  padding: 10px 8px 4px;
+  border-top: 1px solid rgba(167, 174, 202, .12);
+  cursor: pointer;
+}
+
+.note-controls .placeholder-fill input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin: 2px 0 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+.placeholder-fill span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.placeholder-fill strong {
+  color: #dfe1ea;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.placeholder-fill small {
+  color: #8a8fa5;
+  font-size: 11.5px;
+}
+
+/* The palette asking for a placeholder's value. */
+.launcher-option[data-kind="next"] .launcher-option-action,
+.launcher-option[data-kind="paste"] .launcher-option-action,
+.launcher-option[data-kind="copy"] .launcher-option-action {
+  border-color: rgba(139, 111, 245, .45);
+  background: rgba(74, 32, 170, .3);
+  color: #e4e0fb;
+}
+
+/* ==========================================================================
+   1.8.0: the notification level board (Sounds › In use).
+   ========================================================================== */
+.notify-head {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(152, 151, 181, .12);
+}
+
+.notify-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.notify-title h3 {
+  margin: 0;
+}
+
+.notify-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notify-stepper button {
+  min-width: 30px;
+  min-height: 28px;
+  padding: 0 8px;
+}
+
+.notify-stepper strong {
+  min-width: 92px;
+  color: #f0f1f8;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.notify-head .settings-note {
+  margin: 0;
+  font-size: 11.5px;
+}
+
+.notify-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notify-summary {
+  flex: 1;
+  color: #a4a9bb;
+  font-size: 12px;
+}
+
+.sound-in-use .sound-assignment {
+  grid-template-columns: minmax(0, 1fr) auto;
+  row-gap: 5px;
+  padding: 8px 4px;
+  border-radius: 6px;
+}
+
+.sound-in-use .sound-assignment.is-playing {
+  background: rgba(74, 32, 170, .2);
+}
+
+.sound-in-use .sound-assignment-actions {
+  gap: 10px;
+}
+
+.notify-meter {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 10px;
+}
+
+.notify-bar {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, rgba(227, 192, 114, .14), rgba(255, 255, 255, .05) 35%, rgba(139, 111, 245, .22) 50%, rgba(255, 255, 255, .05) 65%, rgba(196, 88, 123, .16));
+}
+
+.notify-bar i {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: 50%;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent-bright);
+  transform: translateX(-1px);
+}
+
+.notify-bar b {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #15161f;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.notify-bar b.is-matched {
+  background: var(--accent-bright);
+}
+
+.notify-bar b.is-loud {
+  background: var(--burgundy-bright);
+}
+
+.notify-bar b.is-quiet {
+  background: var(--gold-bright);
+}
+
+.notify-status {
+  flex: 0 0 96px;
+  color: #a4a9bb;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.notify-status.is-matched {
+  color: var(--accent-bright);
+}
+
+.sound-loudness {
+  margin: 8px 0 0;
+  color: #a4a9bb;
+  font-size: 12px;
+}
+
+/* ==========================================================================
+   1.8.0: Sidebar footer
+   A quiet card: the wordmark and version on one line, the live status under
+   it, and the Super keycap centered against both.
+   ========================================================================== */
+
+.sidebar-bottom {
+  gap: 12px;
+  min-height: 64px;
+  margin-right: -2px;
+  margin-left: -2px;
+  padding: 11px 12px 11px 14px;
+  border: 1px solid rgba(152, 151, 181, .12);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .03), rgba(255, 255, 255, .012));
+}
+
+.sidebar-status {
+  gap: 5px;
+}
+
+.sidebar-status strong {
+  color: #ecebf4;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+}
+
+.sidebar-status strong span {
+  margin-left: 3px;
+  color: #a4a9bb;
+  font-weight: 600;
+  letter-spacing: .6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebar-status small {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #a4a9bb;
+  font-size: 12.5px;
+}
+
+.sidebar-bottom .key-hint {
+  flex: none;
+  min-width: 0;
+  padding: 5px 9px;
+  font-size: 11px;
+}
+
+body.sidebar-collapsed .sidebar-bottom {
+  margin-right: 0;
+  margin-left: 0;
+  border-color: transparent;
+  background: none;
+}
+
+/* ==========================================================================
+   1.8.0: Select in Sounds (several leveled copies deleted at once)
+   Picked tiles take burgundy, the color of destructive actions; tiles that
+   can't be picked fade back.
+   ========================================================================== */
+
+.sounds-meta-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 16px;
+}
+
+.sound-select-bar {
+  position: sticky;
+  z-index: 3;
+  top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 9px 10px 9px 16px;
+  border: 1px solid var(--burgundy-border);
+  border-radius: 12px;
+  background: rgba(24, 19, 30, .96);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .35);
+}
+
+.sound-select-status {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.sound-select-status strong {
+  color: #f3e9ee;
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sound-select-status small {
+  overflow: hidden;
+  color: #a4a9bb;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sound-copy[role="checkbox"] {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.sound-copy[role="checkbox"] strong,
+.sound-copy[role="checkbox"] small {
+  grid-column: 2;
+}
+
+.sound-copy[role="checkbox"] .sound-level {
+  grid-column: 3;
+}
+
+.sound-check {
+  position: relative;
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 2px;
+  border: 1.5px solid rgba(196, 88, 123, .55);
+  border-radius: 5px;
+  background: rgba(10, 11, 18, .4);
+}
+
+.sound-tile.is-picked {
+  border-color: var(--burgundy-bright);
+  background: linear-gradient(145deg, rgba(125, 36, 65, .42), rgba(34, 22, 32, .95));
+}
+
+.sound-tile.is-picked .sound-check {
+  border-color: var(--burgundy-bright);
+  background: var(--burgundy-gradient);
+}
+
+.sound-tile.is-picked .sound-check::after {
+  position: absolute;
+  top: 1px;
+  left: 4.5px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  content: "";
+  transform: rotate(45deg);
+}
+
+.sound-tile.is-locked,
+.sound-tile.is-unpickable {
+  opacity: .5;
+}
+
+.sound-tile.is-locked .sound-copy,
+.sound-tile.is-unpickable .sound-copy {
+  cursor: not-allowed;
+}
+
+.sound-tile.is-locked .sound-check {
+  border-style: dashed;
+}
+
+/* 1.8.0: the power messages. The arm warning states each warning as a
+   sentence with the instruction beneath; a held action reads as a headline
+   with one line of explanation. */
+.power-confirm strong {
+  color: #f6e7bd;
+  font-weight: 600;
+}
+
+.power-confirm span {
+  color: #c9b98f;
+  font-size: 12px;
+}
+
+.power-banner.is-held strong {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.power-held-title {
+  color: #f6dbe5;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: .2px;
+}
+
+.power-held-text {
+  color: #d9c9d0;
+  font-size: 12.5px;
+  font-weight: 450;
+  line-height: 1.45;
+}
+
+/* 1.8.0: folders of your own (Aeolionware Startup, ASCS Leveled) as buttons
+   beside Favorites, out of the Windows version grid. */
+.sound-own-folders {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+.sound-own {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.sound-own .sound-era-logo {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.sound-own[aria-pressed="true"] {
+  border-color: rgba(139, 111, 245, .7);
+  background: rgba(58, 26, 140, .45);
+  color: #f1ecff;
+}
+
+/* 1.8.0: the event editor's day strip, showing where the event lands. */
+.cal-slot-preview {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.cal-slot-caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  font-size: 12px;
+}
+
+.cal-slot-caption strong {
+  color: #d9dcea;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-slot-clash {
+  color: var(--burgundy-text);
+}
+
+.cal-slot-track {
+  position: relative;
+  height: 26px;
+  border: 1px solid rgba(167, 174, 202, .16);
+  border-radius: 7px;
+  background:
+    repeating-linear-gradient(90deg, transparent 0, transparent calc(100% / var(--hours, 24) - 1px), rgba(167, 174, 202, .1) calc(100% / var(--hours, 24) - 1px), rgba(167, 174, 202, .1) calc(100% / var(--hours, 24))),
+    rgba(10, 11, 18, .45);
+  overflow: hidden;
+}
+
+.cal-slot-scale {
+  position: relative;
+  height: 12px;
+  margin-top: -2px;
+}
+
+.cal-slot-scale span {
+  position: absolute;
+  top: 0;
+  color: rgba(164, 169, 187, .7);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.cal-slot-scale span:first-child {
+  transform: none;
+}
+
+.cal-slot-scale span:last-child {
+  transform: translateX(-100%);
+}
+
+.cal-slot-other,
+.cal-slot-this {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  border-radius: 4px;
+}
+
+.cal-slot-other {
+  background: rgba(167, 174, 202, .22);
+}
+
+.cal-slot-this {
+  z-index: 1;
+  border: 1.5px solid var(--cal-color);
+  background: color-mix(in srgb, var(--cal-color) 45%, transparent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--cal-color) 45%, transparent);
+}
+
+.power-banner.is-held .power-banner-dot {
+  align-self: flex-start;
+  margin-top: 6px;
+}
+
+/* ==========================================================================
+   1.8.0: Quick Notes groups
+   Headers fold their notes away; pinned groups carry the gold diamond.
+   ========================================================================== */
+
+.notes-list-card {
+  position: relative;
+}
+
+.note-items {
+  display: grid;
+  gap: 5px;
+}
+
+.note-group + .note-group,
+.note-items + .note-group {
+  margin-top: 4px;
+}
+
+.note-group-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-top: 1px solid rgba(152, 151, 181, .1);
+  padding-top: 6px;
+}
+
+.note-items:first-child + .note-group .note-group-head,
+.note-group:first-child .note-group-head {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.note-group-toggle {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 6px 6px 4px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: #c9cbdb;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.note-group-toggle:hover,
+.note-group-toggle:focus-visible {
+  background: rgba(139, 111, 245, .08);
+  color: #eef0f7;
+}
+
+.note-group-toggle svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 140ms ease;
+}
+
+.note-group.is-open .note-group-toggle svg {
+  transform: rotate(90deg);
+}
+
+.note-group-name {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.note-group.is-pinned .note-group-name .pin-mark {
+  color: var(--gold-text);
+}
+
+.note-group-count {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(167, 174, 202, .1);
+  color: #a4a9bb;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.note-group-more {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: #8d92a8;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.note-group-more:hover,
+.note-group-more:focus-visible {
+  background: rgba(139, 111, 245, .12);
+  color: #eef0f7;
+}
+
+.note-group > .note-items {
+  margin-top: 4px;
+  padding-left: 10px;
+  border-left: 1px solid rgba(139, 111, 245, .16);
+  margin-left: 9px;
+}
+
+.note-group-rename {
+  flex: 1;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.note-group-menu {
+  position: absolute;
+  z-index: 20;
+  display: grid;
+  min-width: 170px;
+  padding: 5px;
+  border: 1px solid rgba(167, 174, 202, .2);
+  border-radius: 10px;
+  background: #1a1c28;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, .45);
+}
+
+.note-group-menu-item {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: #e4e6f0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+}
+
+.note-group-menu-item:hover,
+.note-group-menu-item:focus-visible {
+  background: rgba(139, 111, 245, .14);
+  outline: none;
+}
+
+.note-group-menu-item.is-danger {
+  color: var(--burgundy-text);
+}
+
+.note-controls .note-group-field {
+  flex: 0 1 170px;
+  min-width: 110px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 9px;
+  font-size: 14px;
+}
+
+/* Day labels sit under the middle of each day, not on its edge. */
+.cal-slot-scale.is-days span,
+.cal-slot-scale.is-days span:first-child,
+.cal-slot-scale.is-days span:last-child {
+  transform: translateX(-50%);
+}
+
+/* 1.8.0: dragging events in Day and Week. The event dims where it was; an
+   outline in its color, snapped to 15 minutes, shows where it will land. */
+.cal-block {
+  touch-action: none;
+}
+
+body.is-dragging-event,
+body.is-dragging-event * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+.cal-block.is-drag-source {
+  opacity: .35;
+}
+
+.cal-drop-ghost {
+  position: absolute;
+  z-index: 3;
+  right: 2px;
+  left: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+  padding: 3px 7px;
+  border: 1.5px dashed color-mix(in srgb, var(--cal-color) 85%, #ffffff);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--cal-color) 30%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cal-color) 18%, transparent), 0 8px 20px rgba(0, 0, 0, .35);
+  color: #f3f4fa;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.cal-drop-ghost.is-short {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.cal-drop-ghost strong {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.cal-drop-ghost span {
+  overflow: hidden;
+  color: #d9dbe6;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-move-text {
+  margin: 4px 0 6px;
+  color: #c9cbdb;
+  font-size: 13.5px;
+  line-height: 1.5;
 }
