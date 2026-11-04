@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ASCS 1.8.1 manual pass</title>
+<style>
+  :root { color-scheme: dark; --indigo: #2b0071; --accent: #8b6ff5; --burgundy: #c4587b; --gold: #e3c072; }
+  body { margin: 0; background: #0f1017; color: #e6e7ee; font: 14px/1.5 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 920px; margin: 0 auto; padding: 32px 24px 80px; }
+  h1 { margin: 0 0 4px; font-size: 26px; }
+  h2 { margin: 32px 0 8px; padding-bottom: 6px; border-bottom: 1px solid #262838; color: var(--accent); font-size: 15px; letter-spacing: .06em; text-transform: uppercase; }
+  p.lead { margin: 0 0 16px; color: #a4a9bb; }
+  .before { padding: 12px 16px; border: 1px solid #2c2f44; border-radius: 10px; background: #151622; }
+  .before li { margin: 4px 0; }
+  code { padding: 1px 5px; border-radius: 4px; background: #1d1f2e; font: 12.5px Consolas, monospace; }
+  .item { display: grid; grid-template-columns: 44px 1fr; gap: 4px 14px; padding: 14px 0; border-bottom: 1px solid #1f2130; }
+  .id { color: var(--gold); font-weight: 700; }
+  .item h3 { margin: 0; font-size: 14.5px; }
+  .item ol { margin: 6px 0; padding-left: 20px; }
+  .expect { color: #b9bdd0; }
+  .expect b { color: #e6e7ee; }
+  .controls { display: flex; grid-column: 2; gap: 8px; align-items: center; }
+  .controls button { padding: 4px 14px; border: 1px solid #34374d; border-radius: 6px; background: #181a27; color: #e6e7ee; cursor: pointer; font: inherit; }
+  .controls button.on.pass { border-color: var(--accent); background: var(--indigo); }
+  .controls button.on.fail { border-color: var(--burgundy); background: #4a1428; }
+  .controls input { flex: 1; padding: 5px 8px; border: 1px solid #2c2f44; border-radius: 6px; background: #12131c; color: #e6e7ee; font: inherit; }
+  .bar { position: sticky; bottom: 0; display: flex; gap: 12px; align-items: center; padding: 12px 24px; border-top: 1px solid #262838; background: #0f1017ee; }
+  .bar button { padding: 7px 18px; border: 0; border-radius: 6px; background: var(--indigo); color: #fff; cursor: pointer; font: inherit; font-weight: 600; }
+  .bar button.quiet { background: #1d1f2e; }
+  #summary { color: #a4a9bb; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ASCS 1.8.1 manual pass</h1>
+  <p class="lead">Startup sounds in ASCS, Match from the original, and own levels. Mark each item Pass or Fail and add a note if anything's off; progress is kept in this browser. <b>Copy results</b> gives a plain-text list to paste back.</p>
+
+  <div class="before">
+    <b>Before you start</b>
+    <ol>
+      <li>Restart ASCS so 1.8.1 is running (tray › Exit, then the ASCS Launcher shortcut). The sidebar should read <b>ASCS 1.8.1</b>.</li>
+      <li>Double-click <code>C:\Scripts\Sync Startup Folder.cmd</code> and accept: it copies the new <code>Shutdown Sound.ahk</code> into the Startup folder and restarts it. (<code>SignIn.ahk</code> is used where it is, so it's already live.)</li>
+      <li>Backups from before 1.8.1: <code>C:\Scripts\Backups (before ASCS 1.8.1)</code> and <code>C:\ASCS\data\backup-before-1.8.1-…</code>. The old <code>Aeolionware Startup</code> folder is in the Recycle Bin.</li>
+    </ol>
+  </div>
+
+  <div id="items"></div>
+</main>
+<div class="bar">
+  <button type="button" id="copy">Copy results</button>
+  <button type="button" class="quiet" id="reset">Clear all</button>
+  <span id="summary"></span>
+</div>
+
+<script>
+const sections = [
+  ["A. The Startup tab", [
+    ["A1", "It opens with your startup sounds", ["Open Sounds and choose the <b>Startup</b> tab (beside Selected sound and In use)."],
+      "Four sign-in sounds with chances <b>88, 10, 1, 1</b> (Windows XP Startup, then Windows Me, 98 and 95 · The Microsoft Sound), then <b>Shutdown · Windows XP Shutdown</b>. The line reads \u201cSign-in chances add up to 100%. Saved.\u201d Each row is measured within a few seconds."],
+    ["A2", "Play and Play all", ["Press <b>Play</b> on the Windows 98 row.", "Press <b>Play all</b>, then <b>Stop</b> partway through."],
+      "Each plays the right sound; Play all plays them in turn, highlighting the row playing, and Stop ends it."],
+    ["A3", "Match all and Restore", ["Press <b>Match all</b>.", "Then press <b>Restore</b> on the Windows Me row."],
+      "Every row shows <b>Matched</b>, and each file name has a single gain, such as <code>The Microsoft Sound (-2.4 dB).wav</code>. After Restore the Me row plays the original again (<code>The Microsoft Sound.wav</code>) and Match is offered."],
+    ["A4", "Chances", ["Change Windows Me's chance from 10 to 9.", "Change Windows XP's from 88 to 89.", "Close and reopen ASCS's window (Super twice) and go back to Startup."],
+      "After the first change the line turns burgundy: \u201cadd up to 99%: make them 100% to save\u201d. After the second it reads \u201cSaving…\u201d, then \u201cSaved.\u201d The cursor stays in the box as you type. After reopening, the chances are 89, 9, 1, 1. Set them back to 88 and 10 afterward if you like."],
+    ["A5", "Add and remove a sign-in sound", ["Open any WAV in the library (for example Windows 2000 › Windows Logon Sound), and in <b>Use as</b> choose <b>Startup › Sign-in sound (adds to the chance roll)</b>. If \u201cMatch the startup level\u201d is offered, leave it ticked. Press <b>Use</b>.", "On the Startup tab, give it 5% (take 5 from XP), then press <b>Remove</b> on it."],
+      "It appears at 0%, Matched if it was matched. After Remove it's gone and its 5% has gone back to the first sound (XP)."],
+    ["A6", "Shutdown sound from Use as", ["Choose a WAV, and in <b>Use as</b> pick <b>Startup › Shutdown sound</b>, then Use.", "Then press <b>Restore</b> on the Shutdown row (or set Windows XP Shutdown back the same way)."],
+      "The Shutdown row shows the new sound; Restore takes it back to the original it was leveled from."],
+    ["A7", "The startup level", ["Press <b>−</b> and <b>+</b>, then each preset chip (Quiet, Balanced, Bold, Like XP, Middle of yours)."],
+      "The level and the rows' Matched or \u201cx dB louder/quieter\u201d follow it. <b>Like XP</b> appears while the XP row plays its unchanged original. The In use tab's notification level is unaffected."],
+  ]],
+  ["B. Sign-in and shutdown", [
+    ["B1", "A forced sign-in sound", ["In a terminal, run (it starts nothing else: an empty folder, no Run list, no Keychron, and RetroBar and Open-Shell are already running):<br><code>& \"C:\\Program Files\\AutoHotkey\\v2\\AutoHotkey64.exe\" C:\\Scripts\\SignIn.ahk --sound=2 --folder=C:\\NoSuchFolder --no-run-list --no-keychron</code>", "Then double-click <code>C:\\Scripts\\Startup Status.cmd</code>."],
+      "Sign-in sound 2 (Windows Me) plays at its matched level. The status shows a timeline line ending with <code>startup sound The Microsoft Sound (…).wav</code>, and no problems."],
+    ["B2", "A real sign-in", ["Restart Windows (or sign out and in) once or twice."],
+      "A sign-in sound plays at the startup level (usually XP). Startup Status shows which one. RetroBar and Open-Shell come up as before."],
+    ["B3", "Shutdown", ["After the sync in \u201cBefore you start\u201d, restart Windows."],
+      "The shutdown sound set on the Startup tab plays (the matched copy, if you matched it) before Windows closes."],
+  ]],
+  ["C. Match from the original (In use)", [
+    ["C1", "ASCS's own sounds level from the original", ["On <b>In use</b>, press Match on <b>ASCS shows</b> (if it says Matched, press + once on the notification level first, so Match is offered).", "Do the same for <b>ASCS hides</b> and <b>Calendar reminders</b>."],
+      "The new copies are named after the originals with one gain, such as <code>Windows XP Logon Sound (+4.2 dB).wav</code>, not a chain of gains."],
+    ["C2", "Matching twice doesn't pile up", ["Change the notification level by 2 dB and press Match on any Windows event row twice in a row (once per level change)."],
+      "Each new copy carries a single gain in its name."],
+    ["C3", "Restore goes to the library's originals", ["Press <b>Restore</b> on ASCS shows and ASCS hides, show and hide ASCS once, then Match them again if you like."],
+      "They go back to Windows XP's <b>Logon Sound</b> and <b>Logoff Sound</b> from the library (the hand-leveled copies are retired), and still play when ASCS shows and hides."],
+    ["C4", "A selected copy levels its original", ["Open <b>ASCS Leveled</b> (beside \u2665 Favorites) and click a copy.", "Read the note under \u201cAdjust by\u201d, then press <b>Save leveled copy</b>."],
+      "The note reads \u201cA leveled copy of <i>original</i> (<i>version</i>). A new copy is made from that original: <i>+x dB</i> in all.\u201d The new copy is named after the original with that one gain, such as <code>Windows XP Notify (+9.1 dB).wav</code>, never a chain."],
+    ["C5", "Replaced copies are cleared away", ["On <b>In use</b>, change the notification level by 2 dB and press <b>Match</b> on a row twice in a row (changing the level between).", "Press <b>Restore</b> on that row.", "Check <b>ASCS Leveled</b>, and the Recycle Bin."],
+      "After each Match and after Restore, the copy it replaced is gone from ASCS Leveled and is in the Recycle Bin. Copies you saved with <b>Save leveled copy</b> (C4) stay."],
+    ["C6", "Clearing the backlog", ["Open <b>ASCS Leveled</b>, press <b>Select</b>, then <b>Select all</b> and <b>Delete</b> (repeat if there are more than 200)."],
+      "Only copies nothing plays are picked (the ones in use are grayed); after one confirmation they go to the Recycle Bin and every sound in use still plays."],
+  ]],
+  ["D. Own levels", [
+    ["D1", "Drag a gold handle", ["On <b>In use</b>, drag the gold diamond on the Calendar reminders bar to about +3 dB, and let go.", "Press <b>Match</b> on that row."],
+      "The diamond fills gold and <b>Own +3.0 dB ×</b> appears beside the bar (bars stay aligned between rows). The row is judged against the board's level + 3 dB; after Match it reads Matched, with its dot by the diamond."],
+    ["D2", "It stays when the board moves", ["Press + or − on the notification level."],
+      "The reminder keeps its own level, 3 dB above the board's, wherever the board goes."],
+    ["D3", "Keyboard and typing", ["Tab to a handle (or click it) and press the arrow keys, then Page Up.", "Press Enter, type <code>-2.5</code>, press Enter. Then Enter again, type something, and press Esc.", "Press Home."],
+      "Arrows step 0.5 dB, Page Up 3 dB, with focus staying on the handle. Enter opens a small box; Enter keeps the value and Esc leaves it unchanged. Home goes back to the board's level (the diamond empties)."],
+    ["D4", "Resetting and keeping", ["Give two rows own levels; double-click one diamond and press × on the other.", "Give a row an own level, close and reopen ASCS's window."],
+      "Both go back to the board's level. The own level survives reopening."],
+    ["D5", "Startup and Use as", ["On <b>Startup</b>, give the Windows 98 row +2 dB and Match it.", "Then in Selected sound › Use as, choose an event that has an own level."],
+      "The 98 copy is made 2 dB above the startup level. Use as offers \u201cMatch its own level, +x dB from the notification level\u201d for an event with one."],
+  ]],
+  ["E. Housekeeping", [
+    ["E1", "The retired folder is gone", ["On Sounds, look at the buttons beside \u2665 Favorites; press <b>Re-read</b> under the list if it still shows.", "Preferences › General › ASCS sounds: read the help line."],
+      "No <b>Aeolionware Startup</b> button (ASCS Leveled remains). The help line reads \u201cWindows XP's logon and logoff sounds, unless changed in Sounds › In use…\u201d"],
+    ["E2", "Version", ["Look at the sidebar footer."],
+      "It reads <b>ASCS 1.8.1</b>."],
+  ]],
+  ["F. From this pass", [
+    ["F1", "Reset levels", ["Move the notification level, the startup level and Selected sound's Target RMS off their defaults, and give two rows own levels.", "On In use, press <b>Reset levels</b> (a link beneath Match all); read the confirmation, then confirm.", "Check the Startup tab and Selected sound."],
+      "The confirmation lists each change (such as \u201cnotification level -31.0 \u2192 -24.0\u201d and \u201c2 own levels back to the board's\u201d). After it: -24, -20 and -26.4, no gold handles set, and every sound still plays the same file (no Restore, no new copies). The button is gone until something differs again; Startup has the same button."],
+  ]],
+];
+
+const KEY = "ascs-manual-1.8.1";
+const state = JSON.parse(localStorage.getItem(KEY) || "{}");
+const save = () => { localStorage.setItem(KEY, JSON.stringify(state)); summary(); };
+const root = document.getElementById("items");
+sections.forEach(([title, items]) => {
+  const h = document.createElement("h2");
+  h.textContent = title;
+  root.append(h);
+  items.forEach(([id, name, steps, expect]) => {
+    const item = document.createElement("div");
+    item.className = "item";
+    item.innerHTML = `<div class="id">${id}</div><div><h3>${name}</h3><ol>${steps.map(s => `<li>${s}</li>`).join("")}</ol><div class="expect"><b>Expect:</b> ${expect}</div></div>`;
+    const controls = document.createElement("div");
+    controls.className = "controls";
+    const entry = state[id] || (state[id] = { result: "", note: "" });
+    const buttons = ["pass", "fail"].map(kind => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = kind + (entry.result === kind ? " on" : "");
+      b.textContent = kind === "pass" ? "Pass" : "Fail";
+      b.addEventListener("click", () => {
+        entry.result = entry.result === kind ? "" : kind;
+        buttons.forEach(x => x.classList.toggle("on", x.classList.contains(entry.result)));
+        save();
+      });
+      return b;
+    });
+    const note = document.createElement("input");
+    note.placeholder = "Note (optional)";
+    note.value = entry.note;
+    note.addEventListener("input", () => { entry.note = note.value; save(); });
+    controls.append(...buttons, note);
+    item.append(controls);
+    root.append(item);
+  });
+});
+
+function results() {
+  const lines = ["ASCS 1.8.1 manual pass"];
+  sections.forEach(([, items]) => items.forEach(([id, name]) => {
+    const e = state[id] || {};
+    lines.push(`${id} ${e.result ? e.result.toUpperCase() : "—"} ${name}${e.note ? ` — ${e.note}` : ""}`);
+  }));
+  return lines.join("\n");
+}
+function summary() {
+  const all = sections.flatMap(([, items]) => items.map(([id]) => state[id]?.result || ""));
+  document.getElementById("summary").textContent = `${all.filter(r => r === "pass").length} passed, ${all.filter(r => r === "fail").length} failed, ${all.filter(r => !r).length} to go`;
+}
+document.getElementById("copy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(results()); document.getElementById("summary").textContent = "Copied."; setTimeout(summary, 1500); }
+  catch { prompt("Copy the results:", results()); }
+});
+document.getElementById("reset").addEventListener("click", () => {
+  if (confirm("Clear every result and note?")) { localStorage.removeItem(KEY); location.reload(); }
+});
+summary();
+</script>
+</body>
+</html>

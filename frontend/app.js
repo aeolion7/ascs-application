@@ -1612,6 +1612,9 @@ function handleWebMessage(event) {
         case "windowsSounds":
             handleWindowsSounds(data);
             break;
+        case "startupSounds":
+            handleStartupSounds(data);
+            break;
         case "soundsDeleted":
             handleSoundsDeleted(data);
             break;

@@ -77,7 +77,7 @@
 
       <div class="sidebar-bottom">
         <span class="sidebar-status">
-          <strong id="sidebarVersion">ASCS <span>1.8.0</span></strong>
+          <strong id="sidebarVersion">ASCS <span>1.8.1</span></strong>
           <small><span class="status-indicator" aria-hidden="true"></span>Standing by</small>
         </span>
         <span class="key-hint" aria-label="Super key">Super</span>
@@ -434,9 +434,11 @@
             <div class="sound-side-tabs" role="tablist" aria-label="Sound panel">
               <button type="button" role="tab" id="soundTabSelected" aria-controls="soundDetail" aria-selected="true">Selected sound</button>
               <button type="button" role="tab" id="soundTabInUse" aria-controls="soundAssignments" aria-selected="false">In use <span id="soundInUseCount"></span></button>
+              <button type="button" role="tab" id="soundTabStartup" aria-controls="soundStartup" aria-selected="false">Startup <span id="soundStartupCount"></span></button>
             </div>
             <section class="games-panel sound-detail" id="soundDetail" role="tabpanel" aria-labelledby="soundTabSelected" aria-live="polite"></section>
             <section class="games-panel sound-in-use" id="soundAssignments" role="tabpanel" aria-labelledby="soundTabInUse" hidden></section>
+            <section class="games-panel sound-in-use sound-startup" id="soundStartup" role="tabpanel" aria-labelledby="soundTabStartup" hidden></section>
           </aside>
         </div>
       </section>
@@ -717,7 +719,7 @@
             <label class="settings-toggle" for="notesSpellcheck"><input id="notesSpellcheck" type="checkbox" checked><span><strong>Spell-check in Quick Notes</strong><small>Underlines misspellings in text notes, never in code notes. Applies at once.</small></span></label>
             <div class="settings-heading settings-subheading"><h2>Power and sounds</h2><p>The System bar's hold buttons, and the sounds ASCS itself plays.</p></div>
             <label class="settings-field" for="powerDelay"><span>Delay before power actions</span><select id="powerDelay"><option value="0">None: act as soon as the hold completes</option><option value="5">5 seconds</option><option value="30">30 seconds</option></select><small>For Restart, Shut down, Sign out and Sleep: a countdown with Cancel on the banner. Apps with unsaved work can still stop a restart or shutdown.</small></label>
-            <label class="settings-field" for="ascsSounds"><span>ASCS sounds</span><select id="ascsSounds"><option value="show">When ASCS shows and hides</option><option value="start">When ASCS starts and exits</option><option value="off">Off</option></select><small>The logon and logoff sounds from C:\Sounds\all-windows-sounds-main\Aeolionware Startup\ASCS Sound Files. Never at Windows sign-in or shutdown.</small></label>
+            <label class="settings-field" for="ascsSounds"><span>ASCS sounds</span><select id="ascsSounds"><option value="show">When ASCS shows and hides</option><option value="start">When ASCS starts and exits</option><option value="off">Off</option></select><small>Windows XP's logon and logoff sounds, unless changed in Sounds › In use. Never at Windows sign-in or shutdown.</small></label>
           </section>
           <section class="settings-card" id="prefShortcuts" role="tabpanel" aria-labelledby="shortcutSettingsTitle">
             <div class="settings-heading"><h2 id="shortcutSettingsTitle">Super-key shortcuts</h2><p>Choose unique letters for these app and view commands. Changes apply immediately.</p></div>

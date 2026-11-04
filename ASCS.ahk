@@ -18,7 +18,7 @@ SetWorkingDir(A_ScriptDir)
 ; GLOBAL VARIABLES
 ; ==========================================
 
-global ASCS_Version := "1.8.0"
+global ASCS_Version := "1.8.1"
 global ASCS_App := ""
 global ASCS_WindowIcon := 0
 global ASCS_IconPath := A_ScriptDir "\frontend\assets\ascs.ico"
@@ -83,6 +83,8 @@ global ASCS_RaImageFolder := ASCS_DataDir "\ra-images"
 global ASCS_PowerDelay := 5
 ; 1.8.0: the sound library behind the Sounds view, and its index.
 global ASCS_SoundLibrary := "C:\Sounds\all-windows-sounds-main"
+global ASCS_StartupFile := ASCS_DataDir "\startup-sounds.ini"   ; 1.8.1; read by C:\Scripts\SignIn.ahk and Shutdown Sound.ahk
+global ASCS_OriginsFile := ASCS_DataDir "\sound-origins.ini"    ; 1.8.1; which original each leveled copy was made from
 global ASCS_SoundIndex := Map()
 ; 1.8.0: the calendar server's state, its process, requests in flight, and
 ; reminders (pending, and fired in the last day).
@@ -96,8 +98,8 @@ global ASCS_SoundLengthQueue := []
 global ASCS_SoundLengthsFile := ASCS_DataDir "\sound-lengths.txt"
 global ASCS_AscsSoundMode := "show"
 global ASCS_AscsSoundFiles := Map(
-    "show", "C:\Sounds\all-windows-sounds-main\Aeolionware Startup\ASCS Sound Files\Windows XP Logon.wav",
-    "hide", "C:\Sounds\all-windows-sounds-main\Aeolionware Startup\ASCS Sound Files\Windows XP Logoff.wav")
+    "show", "C:\Sounds\all-windows-sounds-main\(2001) Windows XP\Windows XP Logon Sound.wav",
+    "hide", "C:\Sounds\all-windows-sounds-main\(2001) Windows XP\Windows XP Logoff Sound.wav")
 ; The PSO session's Discord voice channel (a validated discord:// link, or "").
 global ASCS_PsoVoiceChannel := ""
 ; Now playing's sessions: source -> Map(owner, title, since in Unix seconds).
@@ -2041,6 +2043,29 @@ HandleWebMessage(sender, args) {
             case "GetInUseSound":
                 if (StrLen(content) <= 100)
                     SendInUseSound(content)
+
+            case "GetInUseOrigin":
+                if (StrLen(content) <= 100)
+                    SendInUseSound(content, true)
+
+            case "GetStartupSounds":
+                SendStartupSounds()
+
+            case "SetStartupSound":
+                if (StrLen(content) <= 600)
+                    SetStartupSound(content)
+
+            case "RemoveStartupSound":
+                if (StrLen(content) <= 4)
+                    RemoveStartupSound(content)
+
+            case "SaveStartupOdds":
+                if (StrLen(content) <= 60)
+                    SaveStartupOdds(content)
+
+            case "RestoreStartupSound":
+                if (StrLen(content) <= 10)
+                    RestoreStartupSound(content)
 
             case "UseLeveledSound":
                 if (StrLen(content) <= 48000000)
@@ -5589,6 +5614,7 @@ LoadSoundSettings() {
         if (path != "" && FileExist(path) && RegExMatch(path, "i)\.wav$"))
             ASCS_AscsSoundFiles[kind] := path
     }
+    StartupSounds()     ; writes data\startup-sounds.ini for the sign-in scripts if it's missing
 }
 
 ; The library index: id (path relative to the library) -> Map of its details.
@@ -5703,12 +5729,24 @@ SendSoundLibrary(refresh := false, changed := true) {
     index := SoundIndex(refresh)
     eras := Map()
     sounds := ""
+    byName := ""
     for id, sound in index {
         eras[sound["era"]] := true
+        ; 1.8.1: a leveled copy names the original it was made from, so the
+        ; page levels that instead of the copy.
+        origin := ""
+        if IsLeveledCopyId(id) {
+            if (byName = "")
+                byName := OriginalsByName()
+            path := SoundOrigin(sound["path"], byName)
+            if (path != sound["path"] && InStr(path, ASCS_SoundLibrary "\") = 1)
+                origin := SubStr(path, StrLen(ASCS_SoundLibrary) + 2)
+        }
         sounds .= (sounds = "" ? "" : ",") '{"id":' JsonQuote(id) ',"name":' JsonQuote(sound["name"])
             . ',"era":' JsonQuote(sound["era"]) ',"group":' JsonQuote(sound["group"])
             . ',"kind":' JsonQuote(sound["kind"]) ',"ext":' JsonQuote(sound["ext"])
-            . ',"size":' sound["size"] ',"seconds":' sound["seconds"] '}'
+            . ',"size":' sound["size"] ',"seconds":' sound["seconds"]
+            . (origin != "" ? ',"origin":' JsonQuote(origin) : "") '}'
     }
     eraJson := ""
     for folder in eras {
@@ -5804,6 +5842,8 @@ SaveLeveledSound(content) {
             throw Error("The leveled copy was malformed.")
         sound := IndexedSound(parts[1])
         path := WriteLeveledCopy(sound["name"], ValidateLeveledGain(parts[2]), parts[3])
+        RecordLeveledOrigin(path, SoundOrigin(sound["path"]))
+        MarkLeveledCopySaved(path)
         id := SubStr(path, StrLen(ASCS_SoundLibrary) + 2)
         SendSoundLibrary(true)
         SendToFrontend('{"type":"soundSaved","id":' JsonQuote(id) '}')
@@ -5843,30 +5883,40 @@ WriteLeveledCopy(stem, gainDb, base64) {
 InUseSoundPath(key) {
     global ASCS_AscsSoundFiles
     parsed := ParseInUseKey(key)
-    path := parsed[1] = "windows"
-        ? ResolveSoundPath(ExpandEnvironment(ReadWindowsSound(WindowsSoundEvent(parsed[2]))["value"]), A_WinDir)
-        : ASCS_AscsSoundFiles[parsed[2]]
+    switch parsed[1] {
+        case "windows":
+            path := ResolveSoundPath(ExpandEnvironment(ReadWindowsSound(WindowsSoundEvent(parsed[2]))["value"]), A_WinDir)
+        case "ascs":
+            path := ASCS_AscsSoundFiles[parsed[2]]
+        default:
+            path := StartupSoundPath(parsed[2])
+    }
     if (path = "" || !RegExMatch(path, "i)\.wav$") || !FileExist(path))
         throw Error("It has no WAV file to measure.")
     return path
 }
 
-; Sends a sound in use to the page to measure (reply id "use:<key>").
-SendInUseSound(key) {
+; Sends a sound in use to the page to measure (reply id "use:<key>"), or,
+; for Match (1.8.1), the original it was leveled from (reply id "origin:<key>").
+SendInUseSound(key, fromOrigin := false) {
     global ASCS_App
+    prefix := fromOrigin ? "origin:" : "use:"
     try {
-        data := FileToBase64(InUseSoundPath(key), 16 * 1024 * 1024)
-        ASCS_App.PostWebMessageAsString("SOUND`nuse:" key "`n" data)
+        path := InUseSoundPath(key)
+        data := FileToBase64(fromOrigin ? SoundOrigin(path) : path, 16 * 1024 * 1024)
+        ASCS_App.PostWebMessageAsString("SOUND`n" prefix key "`n" data)
     } catch as err {
-        try ASCS_App.PostWebMessageAsString("SOUND`nuse:" key "`n")
+        try ASCS_App.PostWebMessageAsString("SOUND`n" prefix key "`n")
         WriteLog("Sounds: in-use sound not sent: " err.Message)
     }
 }
 
 ; Payload: target|source|gain dB|base64 WAV. Saves the page's leveled copy
-; and makes the target (a Windows event or ASCS sound) play it. The source
-; names the copy: "current" (what the target plays now) or "lib:<id>".
-; Restore brings back what played before ASCS first changed the target.
+; and makes the target (a Windows event, an ASCS sound or, since 1.8.1, a
+; startup sound) play it. The source is what the page leveled: "origin" (the
+; original behind what the target plays now, SoundOrigin), "current" (what it
+; plays now) or "lib:<id>". The copy is named after it and recorded with its
+; original. Restore brings back what played before ASCS first changed it.
 UseLeveledSound(content) {
     global ASCS_SoundLibrary
     target := ""
@@ -5877,25 +5927,325 @@ UseLeveledSound(content) {
         target := parts[1]
         parsed := ParseInUseKey(target)
         gain := ValidateLeveledGain(parts[3])
-        if (parts[2] = "current") {
-            SplitPath(InUseSoundPath(target), , , , &stem)
+        if (parts[2] = "origin") {
+            origin := SoundOrigin(InUseSoundPath(target))
+            SplitPath(origin, , , , &stem)
+        } else if (parts[2] = "current") {
+            current := InUseSoundPath(target)
+            origin := SoundOrigin(current)
+            SplitPath(current, , , , &stem)
         } else if (SubStr(parts[2], 1, 4) = "lib:") {
-            stem := IndexedSound(SubStr(parts[2], 5))["name"]
+            sound := IndexedSound(SubStr(parts[2], 5))
+            stem := sound["name"], origin := SoundOrigin(sound["path"])
         } else {
             throw Error("The leveled copy was malformed.")
         }
         path := WriteLeveledCopy(stem, gain, parts[4])
+        RecordLeveledOrigin(path, origin)
         SplitPath(path, &file)
-        if (parsed[1] = "windows")
-            ApplyWindowsSound(WindowsSoundEvent(parsed[2]), path, file)
-        else
-            ApplyAscsSound(parsed[2], path)
+        switch parsed[1] {
+            case "windows":
+                ApplyWindowsSound(WindowsSoundEvent(parsed[2]), path, file)
+            case "ascs":
+                ApplyAscsSound(parsed[2], path)
+            default:
+                ApplyStartupSound(parsed[2], path)
+        }
         SendToFrontend('{"type":"soundMatched","target":' JsonQuote(target) ',"ok":true,"file":' JsonQuote(file) '}')
     } catch as err {
         WriteLog("Sounds: leveled copy not used: " err.Message)
         SendToFrontend('{"type":"soundMatched","target":' JsonQuote(target) ',"ok":false,"message":' JsonQuote(err.Message) '}')
     }
     SendWindowsSounds()
+    if (InStr(target, "startup:") = 1)
+        SendStartupSounds()
+}
+
+; ---- where a leveled copy came from (1.8.1)
+; Each copy ASCS writes is recorded with the original it was leveled from, so
+; Match levels that original again rather than the copy (no chain of gains,
+; no clipping carried over) and Restore can go back to it.
+
+RecordLeveledOrigin(copyPath, originPath) {
+    global ASCS_OriginsFile
+    SplitPath(copyPath, &name)
+    try IniWrite(originPath, ASCS_OriginsFile, "Origins", name)
+}
+
+; Copies saved with Selected sound › Save leveled copy are yours: they're
+; never cleared away when something stops using them (RetireReplacedCopy).
+MarkLeveledCopySaved(copyPath) {
+    global ASCS_OriginsFile
+    SplitPath(copyPath, &name)
+    try IniWrite("1", ASCS_OriginsFile, "Saved", name)
+}
+
+; 1.8.1: when Match, Use as, Restore or Remove stops a sound from playing a
+; leveled copy, the copy goes to the Recycle Bin, unless something else
+; still plays it, a Restore would go back to it, or it was saved by hand.
+; Never throws; returns the file name, or "" if it was kept.
+RetireReplacedCopy(path) {
+    global ASCS_OriginsFile, ASCS_SoundLibrary
+    try {
+        folder := ASCS_SoundLibrary "\ASCS Leveled\"
+        if (path = "" || InStr(path, folder) != 1 || !IsLeveledCopyId(SubStr(path, StrLen(ASCS_SoundLibrary) + 2)) || !FileExist(path))
+            return ""
+        SplitPath(path, &name)
+        if (IniRead(ASCS_OriginsFile, "Saved", name, "") != "")
+            return ""
+        if (LeveledCopyUse(path, true) != "")
+            return ""
+        FileRecycle(path)
+        try IniDelete(ASCS_OriginsFile, "Origins", name)
+        WriteLog("Sounds: replaced copy moved to the Recycle Bin, " path ".")
+        SetTimer(SendSoundLibraryRefresh, -300)      ; once, after the request that replaced it
+        return name
+    } catch as err {
+        WriteLog("Sounds: replaced copy kept (" path "): " err.Message)
+        return ""
+    }
+}
+
+SendSoundLibraryRefresh() => SendSoundLibrary(true)
+
+; The original behind a sound: itself unless it's a copy in ASCS Leveled.
+; Copies made before 1.8.1 have no record; for those, a library WAV outside
+; ASCS Leveled with the copy's stem (LeveledStem) is used if there is one.
+SoundOrigin(path, byName := "") {
+    global ASCS_OriginsFile, ASCS_SoundLibrary
+    if (InStr(path, ASCS_SoundLibrary "\ASCS Leveled\") != 1)
+        return path
+    SplitPath(path, &name)
+    origin := IniRead(ASCS_OriginsFile, "Origins", name, "")
+    if (origin != "" && FileExist(origin))
+        return origin
+    if (byName = "")
+        byName := OriginalsByName()
+    stem := LeveledStem(name)
+    return byName.Has(stem) && FileExist(byName[stem]) ? byName[stem] : path
+}
+
+; Library WAVs that aren't leveled copies, by name (the first of each name),
+; so tracing many copies doesn't scan the library once per copy.
+OriginalsByName() {
+    byName := Map()
+    byName.CaseSense := false
+    for id, sound in SoundIndex()
+        if (sound["ext"] = "wav" && !IsLeveledCopyId(id) && !byName.Has(sound["name"]))
+            byName[sound["name"]] := sound["path"]
+    return byName
+}
+
+; ---- startup sounds (1.8.1)
+; The sign-in roll (up to 8 sounds, each with a whole-percent chance, adding
+; up to 100) and the shutdown sound, kept in data\startup-sounds.ini:
+;   [SignIn] Count=N, 1=weight|path, ...    [Shutdown] File=path
+; C:\Scripts\SignIn.ahk and Shutdown Sound.ahk read it at sign-in and
+; shutdown (falling back to Windows' own XP sounds if it's missing or wrong),
+; so ASCS needn't be running then.
+
+; The first set: the library's originals, with the chances SignIn.ahk used.
+StartupDefaults() {
+    global ASCS_SoundLibrary
+    lib := ASCS_SoundLibrary
+    roll := []
+    for entry in [[88, lib "\(2001) Windows XP\Windows XP Startup.wav"], [10, lib "\(2000) Windows Me\The Microsoft Sound.wav"],
+            [1, lib "\(1998) Windows 98\The Microsoft Sound.wav"], [1, lib "\(1995) Windows 95\The Microsoft Sound.wav"]]
+        if FileExist(entry[2])
+            roll.Push(Map("weight", entry[1], "path", entry[2]))
+    if !roll.Length
+        roll.Push(Map("weight", 100, "path", A_WinDir "\Media\Windows XP Startup.wav"))
+    total := 0
+    for item in roll
+        total += item["weight"]
+    roll[1]["weight"] += 100 - total
+    shutdown := lib "\(2001) Windows XP\Windows XP Shutdown.wav"
+    return Map("signin", roll, "shutdown", FileExist(shutdown) ? shutdown : A_WinDir "\Media\Windows XP Shutdown.wav")
+}
+
+StartupSounds() {
+    global ASCS_StartupFile
+    if !FileExist(ASCS_StartupFile) {
+        sounds := StartupDefaults()
+        try WriteStartupSounds(sounds)
+        catch as err
+            WriteLog("Startup sounds: couldn't write " ASCS_StartupFile ": " err.Message)
+        return sounds
+    }
+    roll := []
+    try count := Integer(IniRead(ASCS_StartupFile, "SignIn", "Count", "0"))
+    catch
+        count := 0
+    Loop Min(Max(count, 0), 8) {
+        entry := ParseStartupEntry(IniRead(ASCS_StartupFile, "SignIn", A_Index, ""))
+        if (entry != "")
+            roll.Push(entry)
+    }
+    shutdown := IniRead(ASCS_StartupFile, "Shutdown", "File", "")
+    if (!roll.Length || !RegExMatch(shutdown, "i)\.wav$")) {
+        defaults := StartupDefaults()
+        if !roll.Length
+            roll := defaults["signin"]
+        if !RegExMatch(shutdown, "i)\.wav$")
+            shutdown := defaults["shutdown"]
+    }
+    return Map("signin", roll, "shutdown", shutdown)
+}
+
+; Written whole, as UTF-16 (so IniRead reads any path), then moved into place.
+WriteStartupSounds(sounds) {
+    global ASCS_StartupFile
+    text := "; Startup sounds, written by ASCS (Sounds > Startup). Read at sign-in by`r`n"
+        . "; C:\Scripts\SignIn.ahk and at shutdown by Shutdown Sound.ahk.`r`n"
+        . "; Sign-in entries are chance|path; the chances add up to 100.`r`n"
+        . "[SignIn]`r`nCount=" sounds["signin"].Length "`r`n"
+    for index, item in sounds["signin"]
+        text .= index "=" item["weight"] "|" item["path"] "`r`n"
+    text .= "[Shutdown]`r`nFile=" sounds["shutdown"] "`r`n"
+    DirCreate(StrReplace(ASCS_StartupFile, "\startup-sounds.ini"))
+    file := FileOpen(ASCS_StartupFile ".tmp", "w", "UTF-16")
+    file.Write(text)
+    file.Close()
+    FileMove(ASCS_StartupFile ".tmp", ASCS_StartupFile, 1)
+}
+
+; "1".."8", "shutdown" (or "add", which has none yet).
+StartupSoundPath(slot) {
+    sounds := StartupSounds()
+    if (slot = "shutdown")
+        return sounds["shutdown"]
+    if (slot = "add")
+        return ""
+    index := Integer(slot)
+    return index <= sounds["signin"].Length ? sounds["signin"][index]["path"] : ""
+}
+
+StartupSoundJson(path) {
+    global ASCS_SoundLibrary
+    library := ASCS_SoundLibrary
+    relative := p => InStr(p, library "\") = 1 ? SubStr(p, StrLen(library) + 2) : ""
+    origin := SoundOrigin(path)
+    SplitPath(path, &file)
+    return '"file":' JsonQuote(file) ',"id":' JsonQuote(relative(path)) ',"origin":' JsonQuote(relative(origin))
+        . ',"exists":' (FileExist(path) ? "true" : "false") ',"changed":' (origin != path ? "true" : "false")
+}
+
+SendStartupSounds() {
+    sounds := StartupSounds()
+    roll := ""
+    for item in sounds["signin"]
+        roll .= (roll = "" ? "" : ",") '{"weight":' item["weight"] "," StartupSoundJson(item["path"]) '}'
+    SendToFrontend('{"type":"startupSounds","signin":[' roll '],"shutdown":{' StartupSoundJson(sounds["shutdown"]) '}}')
+}
+
+; Puts a WAV in a sign-in slot ("1".."8"), adds it to the roll ("add", with a
+; 0% chance until the odds are set) or makes it the shutdown sound.
+ApplyStartupSound(slot, path) {
+    sounds := StartupSounds()
+    roll := sounds["signin"]
+    replaced := ""
+    if (slot = "shutdown") {
+        replaced := sounds["shutdown"]
+        sounds["shutdown"] := path
+    } else if (slot = "add") {
+        if (roll.Length >= 8)
+            throw Error("The sign-in roll holds up to 8 sounds.")
+        for item in roll
+            if (item["path"] = path)
+                throw Error("That sound is already in the sign-in roll.")
+        roll.Push(Map("weight", 0, "path", path))
+    } else {
+        index := Integer(slot)
+        if (index > roll.Length)
+            throw Error("That sign-in sound isn't there any more.")
+        replaced := roll[index]["path"]
+        roll[index]["path"] := path
+    }
+    WriteStartupSounds(sounds)
+    WriteLog("Startup sounds: " slot " set to " path ".")
+    if (replaced != path)
+        RetireReplacedCopy(replaced)
+}
+
+; Payload: add|id or shutdown|id (a WAV in the library).
+SetStartupSound(content) {
+    try {
+        parts := StrSplit(content, "|", , 2)
+        if (parts.Length != 2 || !(parts[1] = "add" || parts[1] = "shutdown"))
+            throw Error("Malformed request.")
+        sound := IndexedSound(parts[2])
+        if (sound["ext"] != "wav")
+            throw Error("Startup sounds must be WAV files.")
+        ApplyStartupSound(parts[1], sound["path"])
+        SendToFrontend('{"type":"notice","message":' JsonQuote(parts[1] = "add"
+            ? sound["name"] " joined the sign-in sounds. Give it a chance in Sounds › Startup."
+            : sound["name"] " is the shutdown sound.") '}')
+    } catch as err {
+        SendToFrontend('{"type":"notice","message":' JsonQuote(err.Message) '}')
+    }
+    SendStartupSounds()
+}
+
+; Takes a sound out of the roll; its chance goes to the first one left.
+RemoveStartupSound(content) {
+    try {
+        sounds := StartupSounds()
+        roll := sounds["signin"]
+        if !RegExMatch(content, "^[1-8]$") || Integer(content) > roll.Length
+            throw Error("Malformed request.")
+        if (roll.Length = 1)
+            throw Error("Sign-in needs at least one sound.")
+        removed := roll.RemoveAt(Integer(content))
+        roll[1]["weight"] += removed["weight"]
+        WriteStartupSounds(sounds)
+        WriteLog("Startup sounds: removed " removed["path"] ".")
+        RetireReplacedCopy(removed["path"])
+    } catch as err {
+        SendToFrontend('{"type":"notice","message":' JsonQuote(err.Message) '}')
+    }
+    SendStartupSounds()
+}
+
+; Payload: the chances, comma separated, in roll order (ValidateStartupOdds).
+SaveStartupOdds(content) {
+    try {
+        sounds := StartupSounds()
+        for index, weight in ValidateStartupOdds(content, sounds["signin"].Length)
+            sounds["signin"][index]["weight"] := weight
+        WriteStartupSounds(sounds)
+    } catch as err {
+        SendToFrontend('{"type":"notice","message":' JsonQuote(err.Message) '}')
+    }
+    SendStartupSounds()
+}
+
+; Payload: a slot ("1".."8", "shutdown") or "all": back to the original.
+RestoreStartupSound(content) {
+    try {
+        sounds := StartupSounds()
+        restored := 0, replaced := []
+        for index, item in sounds["signin"] {
+            if (content = "all" || content = String(index)) {
+                origin := SoundOrigin(item["path"])
+                if (origin != item["path"])
+                    replaced.Push(item["path"]), item["path"] := origin, restored++
+            }
+        }
+        if (content = "all" || content = "shutdown") {
+            origin := SoundOrigin(sounds["shutdown"])
+            if (origin != sounds["shutdown"])
+                replaced.Push(sounds["shutdown"]), sounds["shutdown"] := origin, restored++
+        }
+        if !restored
+            throw Error("Nothing to restore: those are originals.")
+        WriteStartupSounds(sounds)
+        for path in replaced
+            RetireReplacedCopy(path)
+        SendToFrontend('{"type":"notice","message":' JsonQuote(restored = 1 ? "Back to the original." : restored " sounds are back to their originals.") '}')
+    } catch as err {
+        SendToFrontend('{"type":"notice","message":' JsonQuote(err.Message) '}')
+    }
+    SendStartupSounds()
 }
 
 ; ---- Windows sounds
@@ -5972,9 +6322,12 @@ ApplyWindowsSound(event, path, name) {
         current := ReadWindowsSound(event)
         IniWrite(current["kind"] "|" current["value"], ASCS_SettingsFile, "WindowsSoundBackup", key)
     }
+    replaced := ResolveSoundPath(ExpandEnvironment(ReadWindowsSound(event)["value"]), A_WinDir)
     RegWrite(path, "REG_SZ", WindowsSoundKey(event), "")
     WriteLog("Sounds: Windows sound " key " set to " path ".")
     RecordActivity("system", event[3] " sound: " name)
+    if (replaced != path)
+        RetireReplacedCopy(replaced)
 }
 
 RestoreWindowsSound(content) {
@@ -5998,6 +6351,7 @@ RestoreWindowsSoundValue(event) {
     if (backup = "")
         return false
     parts := StrSplit(backup, "|", , 2)
+    replaced := ResolveSoundPath(ExpandEnvironment(ReadWindowsSound(event)["value"]), A_WinDir)
     if (parts[1] = "none") {
         try RegDelete(WindowsSoundKey(event), "")
     } else {
@@ -6005,6 +6359,7 @@ RestoreWindowsSoundValue(event) {
     }
     IniDelete(ASCS_SettingsFile, "WindowsSoundBackup", key)
     WriteLog("Sounds: Windows sound " key " restored.")
+    RetireReplacedCopy(replaced)
     return true
 }
 
@@ -6053,22 +6408,48 @@ DeleteLeveledSound(id) {
 ; (with the reason) for anything that isn't a leveled copy in the index, or
 ; one a Windows event or ASCS sound plays now.
 RecycleLeveledCopy(id) {
-    global ASCS_AscsSoundFiles
     if !IsLeveledCopyId(id)
         throw Error("Only leveled copies in ASCS Leveled can be deleted here.")
     path := IndexedSound(id)["path"]
     if !FileExist(path)
         throw Error("It's already gone.")
-    for event in WindowsSoundEvents()
-        if (ResolveSoundPath(ExpandEnvironment(ReadWindowsSound(event)["value"]), A_WinDir) = path)
-            throw Error(event[3] " plays it now. Restore or change that first.")
-    for kind, label in Map("show", "ASCS show", "hide", "ASCS hide", "reminder", "Calendar reminder")
-        if (ASCS_AscsSoundFiles[kind] = path)
-            throw Error(label " plays it now. Restore or change that first.")
+    if ((reason := LeveledCopyUse(path)) != "")
+        throw Error(reason)
     FileRecycle(path)
     SplitPath(path, &file)
     WriteLog("Sounds: leveled copy moved to the Recycle Bin, " path ".")
     return file
+}
+
+; What still plays a copy, as the reason not to remove it, or "". With
+; backups, also a Restore that would go back to it.
+LeveledCopyUse(path, backups := false) {
+    global ASCS_AscsSoundFiles, ASCS_SettingsFile
+    for event in WindowsSoundEvents()
+        if (ResolveSoundPath(ExpandEnvironment(ReadWindowsSound(event)["value"]), A_WinDir) = path)
+            return event[3] " plays it now. Restore or change that first."
+    for kind, label in Map("show", "ASCS show", "hide", "ASCS hide", "reminder", "Calendar reminder")
+        if (ASCS_AscsSoundFiles[kind] = path)
+            return label " plays it now. Restore or change that first."
+    startup := StartupSounds()
+    for item in startup["signin"]
+        if (item["path"] = path)
+            return "The sign-in sounds use it. Restore or change that first."
+    if (startup["shutdown"] = path)
+        return "It's the shutdown sound. Restore or change that first."
+    if backups {
+        for section in ["WindowsSoundBackup", "AscsSoundBackup"] {
+            lines := ""
+            try lines := IniRead(ASCS_SettingsFile, section)
+            Loop Parse lines, "`n", "`r" {
+                value := SubStr(A_LoopField, InStr(A_LoopField, "=") + 1)
+                value := SubStr(value, InStr(value, "|") + 1)
+                if (value != "" && ResolveSoundPath(ExpandEnvironment(value), A_WinDir) = path)
+                    return "A Restore goes back to it."
+            }
+        }
+    }
+    return ""
 }
 
 ; Select › Delete (1.8.0): a batch of up to 10 ids, one per line. The page
@@ -6130,9 +6511,12 @@ ApplyAscsSound(kind, path) {
     global ASCS_SettingsFile, ASCS_AscsSoundFiles
     if (IniRead(ASCS_SettingsFile, "AscsSoundBackup", kind, "") = "")
         IniWrite("file|" ASCS_AscsSoundFiles[kind], ASCS_SettingsFile, "AscsSoundBackup", kind)
+    replaced := ASCS_AscsSoundFiles[kind]
     ASCS_AscsSoundFiles[kind] := path
     IniWrite(path, ASCS_SettingsFile, "Sounds", AscsSoundKey(kind))
     WriteLog("Sounds: ASCS " kind " sound set to " path ".")
+    if (replaced != path)
+        RetireReplacedCopy(replaced)
 }
 
 RestoreAscsSound(kind) {
@@ -6156,10 +6540,13 @@ RestoreAscsSoundValue(kind) {
     if (SubStr(backup, 1, 5) != "file|")
         return false
     path := SubStr(backup, 6)
+    replaced := ASCS_AscsSoundFiles[kind]
     ASCS_AscsSoundFiles[kind] := path
     IniWrite(path, ASCS_SettingsFile, "Sounds", AscsSoundKey(kind))
     IniDelete(ASCS_SettingsFile, "AscsSoundBackup", kind)
     WriteLog("Sounds: ASCS " kind " sound restored.")
+    if (replaced != path)
+        RetireReplacedCopy(replaced)
     return true
 }
 

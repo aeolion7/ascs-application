@@ -158,4 +158,26 @@
     equal("range: same one", S.rangeIds(order, "c", "c").join(""), "c");
     equal("range: anchor not shown", S.rangeIds(order, "z", "c").join(""), "c");
     equal("range: target not shown", S.rangeIds(order, "a", "z").length, 0);
+
+    // 1.8.1: own levels
+    equal("own: snaps to half dB", S.snapOwnLevel(2.26), 2.5);
+    equal("own: capped at +12", S.snapOwnLevel(30), 12);
+    equal("own: capped at -12", S.snapOwnLevel(-30), -12);
+    equal("own: not a number is the board's", S.snapOwnLevel(NaN), 0);
+    equal("own: no negative zero", Object.is(S.snapOwnLevel(-0.1), 0), true);
+    equal("own: middle of the bar", S.ownLevelAt(0), 0.5);
+    equal("own: right end", S.ownLevelAt(12), 1);
+    equal("own: from a quarter across", S.ownLevelFromFraction(0.25), -6);
+    equal("own: from past the end", S.ownLevelFromFraction(1.4), 12);
+    const cleaned = S.cleanOwnLevels({ "ascs:show": 3.2, "windows:x": 0, "bad": "4", "far": 40 });
+    equal("own: cleaned keys", Object.keys(cleaned).join(","), "ascs:show,far");
+    equal("own: cleaned value snapped", cleaned["ascs:show"], 3);
+    equal("own: cleaned value capped", cleaned.far, 12);
+    equal("own: an array is nothing", Object.keys(S.cleanOwnLevels([1, 2])).length, 0);
+    equal("own: null is nothing", Object.keys(S.cleanOwnLevels(null)).length, 0);
+    equal("reset: defaults have nothing to reset", S.levelChanges({ notifyTarget: -24, startupTarget: -20, reference: -26.4, levels: {} }).length, 0);
+    const changes = S.levelChanges({ notifyTarget: -31, startupTarget: -20, reference: -22.4, levels: { a: 3, b: -1 } });
+    equal("reset: what changes", changes.join("; "), "notification level -31.0 → -24.0; Target RMS -22.4 → -26.4; 2 own levels back to the board's");
+    equal("reset: one own level", S.levelChanges({ notifyTarget: -24, startupTarget: -16, reference: -26.4, levels: { a: 1 } }).join("; "), "startup level -16.0 → -20.0; 1 own level back to the board's");
+    equal("reset: within rounding is the default", S.levelChanges({ notifyTarget: -24.01, startupTarget: -20, reference: -26.4, levels: {} }).length, 0);
 })();

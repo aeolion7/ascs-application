@@ -639,6 +639,28 @@ Throws("groups: a tab", () => CheckNoteGroups(groupNote('"a' Chr(92) 'tb"')), "c
 Throws("groups: not text", () => CheckNoteGroups(groupNote("42")), "must be text")
 Throws("groups: the second note checked too", () => CheckNoteGroups('{"notes":[{"group":"ok"},{"group" : "' StrRepeat("g", 61) '"}]}'), "60 characters")
 
+; ------------------------------------------------------------ 1.8.1 startup sounds
+Equal("startup key: a sign-in slot", ParseInUseKey("startup:3")[2], "3")
+Equal("startup key: shutdown", ParseInUseKey("startup:shutdown")[1], "startup")
+Equal("startup key: add", ParseInUseKey("startup:add")[2], "add")
+for bad in ["startup:0", "startup:9", "startup:12", "startup:", "startup:Shutdown "]
+    Throws("startup key refused: " bad, () => ParseInUseKey(bad), "in use")
+startupEntry := ParseStartupEntry("88|C:\Sounds\x\Windows XP Startup.wav")
+Equal("startup entry: weight and path", startupEntry["weight"] "|" startupEntry["path"], "88|C:\Sounds\x\Windows XP Startup.wav")
+Equal("startup entry: zero is allowed", ParseStartupEntry("0|C:\a.WAV")["weight"], 0)
+for bad in ["101|C:\a.wav", "-1|C:\a.wav", "x|C:\a.wav", "50|C:\a.mp3", "50", "50|"]
+    Check("startup entry refused: " bad, ParseStartupEntry(bad) = "")
+Equal("startup odds: read", ValidateStartupOdds(" 88, 10,1 ,1", 4)[1], 88)
+Throws("startup odds: must add up to 100", () => ValidateStartupOdds("88,10,1", 3), "add up to 100")
+Throws("startup odds: count must match", () => ValidateStartupOdds("100", 2), "match")
+Throws("startup odds: whole numbers", () => ValidateStartupOdds("50.5,49.5", 2), "whole number")
+Throws("startup odds: at most 100 each", () => ValidateStartupOdds("150,-50", 2), "whole number")
+Equal("leveled stem: a chain of gains", LeveledStem("Windows XP Notify (+12.6 dB) 2 (-6.0 dB) (+11.8 dB) (-5.8 dB).wav"), "Windows XP Notify")
+Equal("leveled stem: one gain", LeveledStem("CHIMES (-7.6 dB).wav"), "CHIMES")
+Equal("leveled stem: numbers in the name stay", LeveledStem("Windows 98 Startup (+1.0 dB).wav"), "Windows 98 Startup")
+Equal("leveled stem: not a copy", LeveledStem("The Microsoft Sound.wav"), "The Microsoft Sound")
+Equal("leveled name: INI-unsafe characters dropped", LeveledSoundName("a=b [c];d", 1), "ab cd (+1.0 dB).wav")
+
 ; ------------------------------------------------------------ report
 StrRepeat(text, count) {
     output := ""

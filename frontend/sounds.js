@@ -200,6 +200,45 @@
         return { difference, matched: Math.abs(difference) <= tolerance, gainDb, limited };
     }
 
+    // Own levels (1.8.1): a sound in use can sit above or below its board's
+    // level, by up to 12 dB in half-dB steps (the board's bar spans +-12 dB).
+    const OWN_LEVEL_LIMIT = 12;
+    function snapOwnLevel(value) {
+        if (!Number.isFinite(value)) return 0;
+        const snapped = Math.round(Math.max(-OWN_LEVEL_LIMIT, Math.min(OWN_LEVEL_LIMIT, value)) * 2) / 2;
+        return snapped === 0 ? 0 : snapped;      // never -0
+    }
+
+    // Where on the bar (0 to 1 across it) an own level is, and back.
+    const ownLevelAt = value => (snapOwnLevel(value) + OWN_LEVEL_LIMIT) / (2 * OWN_LEVEL_LIMIT);
+    const ownLevelFromFraction = fraction => snapOwnLevel(fraction * 2 * OWN_LEVEL_LIMIT - OWN_LEVEL_LIMIT);
+
+    // Reset levels (1.8.1): what differs from the defaults, as short phrases
+    // for the confirmation. Sound files are never part of it.
+    const LEVEL_DEFAULTS = Object.freeze({ notifyTarget: -24, startupTarget: -20, reference: -26.4 });
+    function levelChanges(prefs) {
+        const changes = [];
+        const differs = (value, standard) => Number.isFinite(value) && Math.abs(value - standard) >= 0.05;
+        if (differs(prefs?.notifyTarget, LEVEL_DEFAULTS.notifyTarget)) changes.push(`notification level ${prefs.notifyTarget.toFixed(1)} → ${LEVEL_DEFAULTS.notifyTarget.toFixed(1)}`);
+        if (differs(prefs?.startupTarget, LEVEL_DEFAULTS.startupTarget)) changes.push(`startup level ${prefs.startupTarget.toFixed(1)} → ${LEVEL_DEFAULTS.startupTarget.toFixed(1)}`);
+        if (differs(prefs?.reference, LEVEL_DEFAULTS.reference)) changes.push(`Target RMS ${prefs.reference.toFixed(1)} → ${LEVEL_DEFAULTS.reference.toFixed(1)}`);
+        const own = Object.keys(prefs?.levels || {}).length;
+        if (own) changes.push(`${own} own level${own === 1 ? "" : "s"} back to the board's`);
+        return changes;
+    }
+
+    // Saved own levels, cleaned: up to 200 entries, short string keys, and
+    // only non-zero levels (zero means the board's level).
+    function cleanOwnLevels(saved) {
+        const levels = {};
+        if (!saved || typeof saved !== "object" || Array.isArray(saved)) return levels;
+        Object.entries(saved).slice(0, 200).forEach(([key, value]) => {
+            const level = snapOwnLevel(Number(value));
+            if (typeof value === "number" && key.length <= 400 && level !== 0) levels[key] = level;
+        });
+        return levels;
+    }
+
     // The gain to bring a sound's RMS to the reference. With avoidClipping,
     // the gain is capped so the peak stays at or below the ceiling (dBFS);
     // the result then falls short of the reference, and says so.
@@ -306,6 +345,7 @@
     global.ASCSSounds = {
         parseWav, measureWav, measureChannels, planLevel, applyGain, toDb, fromDb,
         bytesToBase64, base64ToBytes, formatDb, formatSeconds, filterSounds, groupSounds, eraLogo,
-        measureLoudness, wavChannels, compareToTarget, isLeveledCopy, rangeIds
+        measureLoudness, wavChannels, compareToTarget, isLeveledCopy, rangeIds,
+        snapOwnLevel, ownLevelAt, ownLevelFromFraction, cleanOwnLevels, levelChanges, LEVEL_DEFAULTS
     };
 })(globalThis);

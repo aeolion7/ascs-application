@@ -11164,8 +11164,35 @@ select:not([multiple]):not([size]):disabled {
 
 .notify-summary {
   flex: 1;
+  min-width: 0;
   color: #a4a9bb;
   font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notify-actions button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* 1.8.1: Reset levels and Restore all, as links beneath the main actions. */
+.notify-tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 18px;
+  margin-top: -2px;
+}
+
+.notify-tools .link-button.is-danger {
+  color: var(--burgundy-bright);
+}
+
+.notify-tools .link-button.is-danger:hover,
+.notify-tools .link-button.is-danger:focus-visible {
+  color: #f0a3bb;
 }
 
 .sound-in-use .sound-assignment {
@@ -11803,4 +11830,147 @@ body.is-dragging-event * {
   color: #c9cbdb;
   font-size: 13.5px;
   line-height: 1.5;
+}
+
+/* ==========================================================================
+   1.8.1: Sounds › Startup. The sign-in roll's chances sit beside each sound;
+   the total turns burgundy until it makes 100%.
+   ========================================================================== */
+
+.sound-in-use .sound-assignment.has-odds {
+  grid-template-columns: 66px minmax(0, 1fr) auto;
+  column-gap: 10px;
+}
+
+.sound-assignment.has-odds .sound-assignment-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sound-assignment.has-odds .sound-assignment-copy strong,
+.sound-assignment.has-odds .sound-assignment-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sound-assignment.has-odds .startup-odds-wrap {
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+
+.sound-assignment.has-odds .notify-meter {
+  grid-column: 2 / -1;
+}
+
+.startup-odds-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #a4a9bb;
+  font-size: 12px;
+}
+
+.startup-odds {
+  width: 52px;
+  min-height: 28px;
+  padding: 0 6px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.startup-odds-total {
+  margin: 2px 0 0;
+  color: #9fd8b5;
+  font-size: 12px;
+}
+
+.startup-odds-total.is-off {
+  color: var(--burgundy-text);
+}
+
+
+/* 1.8.1: own levels. A gold handle on each row's bar (outlined at the
+   board's level, filled when the sound has its own), dragged along it. */
+.notify-bar .notify-own {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 2px solid var(--gold-border);
+  border-radius: 2px;
+  background: #15161f;
+  cursor: ew-resize;
+  touch-action: none;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.notify-bar .notify-own:hover,
+.notify-bar .notify-own:focus-visible,
+.notify-bar .notify-own.is-dragging {
+  border-color: var(--gold-bright);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--gold-soft);
+}
+
+.notify-bar .notify-own.is-set {
+  border-color: var(--gold-bright);
+  background: var(--gold);
+}
+
+.notify-bar b {
+  z-index: 2;
+  pointer-events: none;
+}
+
+.notify-own-slot {
+  display: flex;
+  flex: 0 0 92px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  color: var(--gold-text);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.notify-own-label {
+  flex: 0 0 auto;
+  color: var(--gold-text);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.notify-own-input {
+  flex: 0 0 68px;
+  width: 68px;
+  padding: 2px 6px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.notify-own-reset {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #a4a9bb;
+  font-size: 13px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.notify-own-reset:hover,
+.notify-own-reset:focus-visible {
+  background: var(--gold-soft);
+  color: var(--gold-bright);
+  outline: none;
 }

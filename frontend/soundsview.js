@@ -18,7 +18,8 @@ const soundState = {
     measuring: false, plan: null, sideTab: "selected", editingLibrary: false, playToken: 0,
     inUse: new Map(), matchWaits: new Map(), measuringInUse: false, matching: false, playingRow: "",
     selecting: false, picked: new Set(), anchor: "", deleting: null, deleteWait: null,
-    matchQueue: [], matchingKey: ""
+    matchQueue: [], matchingKey: "",
+    startup: { signin: [], shutdown: null }, oddsDraft: null, oddsTimer: 0, ownEditing: "", ownDraft: null
 };
 const SELECT_LIMIT = 200;       // copies in one Select › Delete
 const DELETE_BATCH = 10;        // ids per request; ASCS answers each
@@ -32,10 +33,12 @@ function loadSoundPrefs() {
             avoidClipping: saved.avoidClipping !== false,
             volume: Number.isFinite(saved.volume) ? Math.max(0, Math.min(100, saved.volume)) : 70,
             era: typeof saved.era === "string" ? saved.era : "",
-            notifyTarget: Number.isFinite(saved.notifyTarget) ? Math.max(-40, Math.min(-10, saved.notifyTarget)) : -24
+            notifyTarget: Number.isFinite(saved.notifyTarget) ? Math.max(-40, Math.min(-10, saved.notifyTarget)) : -24,
+            startupTarget: Number.isFinite(saved.startupTarget) ? Math.max(-40, Math.min(-10, saved.startupTarget)) : -20,
+            levels: Sounds.cleanOwnLevels(saved.levels)
         };
     } catch {
-        return { favorites: new Set(), reference: -26.4, avoidClipping: true, volume: 70, era: "", notifyTarget: -24 };
+        return { favorites: new Set(), reference: -26.4, avoidClipping: true, volume: 70, era: "", notifyTarget: -24, startupTarget: -20, levels: {} };
     }
 }
 const soundPrefs = loadSoundPrefs();
@@ -46,7 +49,7 @@ function saveSoundPrefs() {
         localStorage.setItem(SOUND_PREFS, JSON.stringify({
             favorites: [...soundPrefs.favorites], reference: soundPrefs.reference,
             avoidClipping: soundPrefs.avoidClipping, volume: soundPrefs.volume, era: soundState.era,
-            notifyTarget: soundPrefs.notifyTarget
+            notifyTarget: soundPrefs.notifyTarget, startupTarget: soundPrefs.startupTarget, levels: soundPrefs.levels
         }));
     } catch { /* storage full or unavailable: preferences just aren't kept */ }
 }
@@ -54,6 +57,7 @@ function saveSoundPrefs() {
 function openSoundsView() {
     if (!soundState.library) send("GetSoundLibrary");
     send("GetWindowsSounds");
+    send("GetStartupSounds");
 }
 
 // ---- messages from ASCS
@@ -70,7 +74,8 @@ function handleSoundLibrary(data) {
             id: sound.id, name: sound.name, era: String(sound.era || ""), group: String(sound.group || ""),
             kind: sound.kind === "windows" ? "windows" : "web", ext: String(sound.ext || ""),
             size: Number(sound.size) || 0, seconds: Number(sound.seconds) || 0,
-            eraLabel: labels.get(String(sound.era || "")) || ""
+            eraLabel: labels.get(String(sound.era || "")) || "",
+            origin: typeof sound.origin === "string" ? sound.origin : ""
         }));
     soundState.library = { root: String(data.root || ""), exists: data.exists === true, eras, sounds, byId: new Map(sounds.map(s => [s.id, s])) };
     $("soundLibraryShown").textContent = soundState.library.root;
@@ -83,7 +88,7 @@ function handleSoundLibrary(data) {
     // file an event plays changes (handleWindowsSounds).
     if (data.changed !== false) {
         for (const cache of [soundState.bytes, soundState.decoded]) {
-            [...cache.keys()].forEach(id => { if (!id.startsWith("use:")) cache.delete(id); });
+            [...cache.keys()].forEach(id => { if (!id.startsWith("use:") && !id.startsWith("origin:")) cache.delete(id); });
         }
         soundState.levels.clear();
     }
@@ -106,6 +111,19 @@ function handleWindowsSounds(data) {
     renderSoundDetail();
 }
 
+// The sign-in roll and the shutdown sound (1.8.1), from data\startup-sounds.ini.
+function handleStartupSounds(data) {
+    const entry = item => item && typeof item === "object" ? {
+        file: String(item.file || ""), id: String(item.id || ""), origin: String(item.origin || ""),
+        exists: item.exists === true, changed: item.changed === true, weight: Number.isFinite(item.weight) ? item.weight : 0
+    } : null;
+    soundState.startup = { signin: (Array.isArray(data.signin) ? data.signin : []).map(entry).filter(Boolean).slice(0, 8), shutdown: entry(data.shutdown) };
+    soundState.oddsDraft = null;
+    startupRows().forEach(row => { if (soundState.inUse.has(row.key) && soundState.inUse.get(row.key).file !== row.file) forgetInUse(row.key); });
+    renderSoundAssignments();
+    renderSoundDetail();
+}
+
 function handleSoundSaved(data) {
     if (typeof data.id !== "string") return;
     soundState.selected = data.id;
@@ -124,7 +142,8 @@ function soundBytes(id) {
         list.push({ resolve, reject });
         if (list.length === 1) {
             soundState.waiting.set(id, list);
-            const sent = id.startsWith("use:") ? send("GetInUseSound", id.slice(4)) : send("GetSound", id);
+            const sent = id.startsWith("use:") ? send("GetInUseSound", id.slice(4))
+                : id.startsWith("origin:") ? send("GetInUseOrigin", id.slice(7)) : send("GetSound", id);
             if (!sent) handleSoundBytes(id, "");
             setTimeout(() => { if (soundState.waiting.get(id) === list) handleSoundBytes(id, ""); }, 15000);
         }
@@ -577,6 +596,8 @@ function soundUses(id) {
     if (soundState.ascsSounds?.show?.id === id) uses.push("ASCS show");
     if (soundState.ascsSounds?.hide?.id === id) uses.push("ASCS hide");
     if (soundState.ascsSounds?.reminder?.id === id) uses.push("Calendar reminders");
+    if (soundState.startup.signin.some(item => item.id === id)) uses.push("Sign-in sounds");
+    if (soundState.startup.shutdown?.id === id) uses.push("Shutdown sound");
     return uses;
 }
 
@@ -589,6 +610,14 @@ function renderSoundDetail() {
     }
     const level = soundState.levels.get(sound.id);
     const wav = sound.ext === "wav";
+    // 1.8.1: a leveled copy is leveled again from the original it was made
+    // from, with one gain worked out from that original (never stacked).
+    const original = sound.origin ? soundState.library.byId.get(sound.origin) : null;
+    const source = original?.ext === "wav" ? original : sound;
+    const sourceLevel = source === sound ? level : soundState.levels.get(source.id);
+    if (source !== sound && !sourceLevel) {
+        measureSound(source.id).then(() => { if (soundState.selected === sound.id) renderSoundDetail(); }, () => {});
+    }
     panel.replaceChildren();
     const head = element("div", "sound-detail-head");
     const title = element("strong", "", sound.name);
@@ -694,6 +723,8 @@ function renderSoundDetail() {
         levels.append(reference);
 
         const plan = Sounds.planLevel(level, soundPrefs.reference, { avoidClipping: soundPrefs.avoidClipping });
+        // What a saved copy is made from: the original, at its own total gain.
+        const sourcePlan = source === sound ? plan : sourceLevel ? Sounds.planLevel(sourceLevel, soundPrefs.reference, { avoidClipping: soundPrefs.avoidClipping }) : null;
         soundState.plan = plan;
         if (plan) {
             const summary = element("p", `sound-plan${plan.limited || plan.clips ? " is-warning" : ""}`);
@@ -703,15 +734,20 @@ function renderSoundDetail() {
                     + (plan.limited ? `. Held back to avoid clipping (${Sounds.formatDb(soundPrefs.reference - plan.resultRmsDb).replace("+", "")} short).` : "")
                     + (plan.clips ? ". This will clip." : "");
             levels.append(summary);
+            if (source !== sound) {
+                levels.append(element("p", "settings-note", sourcePlan
+                    ? `A leveled copy of ${source.name} (${source.eraLabel || source.era}). A new copy is made from that original: ${Math.abs(sourcePlan.gainDb) < 0.05 ? "it's already at the reference" : `${Sounds.formatDb(sourcePlan.gainDb)} in all`}.`
+                    : `A leveled copy of ${source.name}: measuring the original…`));
+            }
             const row = element("div", "sound-actions");
             const preview = element("button", "secondary", "Preview leveled");
             preview.type = "button";
             preview.addEventListener("click", () => playSound(sound.id, plan.gainDb));
             const save = element("button", "primary", "Save leveled copy");
             save.type = "button";
-            save.disabled = !wav || Math.abs(plan.gainDb) < 0.05;
+            save.disabled = !wav || Math.abs(plan.gainDb) < 0.05 || !sourcePlan || Math.abs(sourcePlan.gainDb) < 0.05;
             save.title = wav ? "Saved in the library's ASCS Leveled folder; the original is never changed" : "Only WAV files can be leveled";
-            save.addEventListener("click", () => saveLeveled(sound, plan.gainDb, save));
+            save.addEventListener("click", () => saveLeveled(source, sourcePlan.gainDb, save));
             row.append(preview, save);
             levels.append(row);
             if (wav && !Sounds.parseWav(soundState.bytes.get(sound.id) || new ArrayBuffer(0)) && soundState.bytes.has(sound.id)) {
@@ -749,45 +785,67 @@ function renderSoundDetail() {
             option.value = value;
             groupAscs.append(option);
         });
-        select.append(groupWindows, groupAscs);
+        const groupStartup = element("optgroup");
+        groupStartup.label = "Startup";
+        [["startup:add", "Sign-in sound (adds to the chance roll)"], ["startup:shutdown", "Shutdown sound"]].forEach(([value, text]) => {
+            const option = element("option", "", text);
+            option.value = value;
+            groupStartup.append(option);
+        });
+        select.append(groupWindows, groupAscs, groupStartup);
         const assign = element("button", "secondary", "Use");
         assign.type = "button";
         assign.disabled = true;
-        select.addEventListener("change", () => { assign.disabled = !select.value; });
-        // Off the notification level: use a matched copy unless unticked.
-        const versus = level?.levelable ? Sounds.compareToTarget(level, soundPrefs.notifyTarget) : null;
-        const offer = versus && !versus.matched && Math.abs(versus.gainDb) >= 0.05;
+        // Off the level for where it's going (startup sounds have their own):
+        // use a matched copy unless unticked.
         const matchBox = element("input");
         matchBox.type = "checkbox";
         matchBox.checked = true;
+        const matchLabel = element("label", "sound-clip");
+        matchLabel.title = "Saves a leveled copy in ASCS Leveled and uses that; the original is never changed";
+        matchLabel.hidden = true;
+        let versus = null;
+        const offerFor = value => {
+            const startup = value.startsWith("startup:");
+            const own = value === "startup:add" ? soundPrefs.levels[`startup:${sound.id}`] || 0 : ownLevel(value);
+            versus = sourceLevel?.levelable ? Sounds.compareToTarget(sourceLevel, targetFor(value) + own) : null;
+            const offer = Boolean(versus && !versus.matched && Math.abs(versus.gainDb) >= 0.05);
+            matchLabel.hidden = !offer;
+            const what = own ? `its own level, ${Sounds.formatDb(own)} from the ${startup ? "startup" : "notification"} level`
+                : `the ${startup ? "startup" : "notification"} level`;
+            if (offer) matchLabel.replaceChildren(matchBox, element("span", "",
+                ` Match ${what} (${Sounds.formatDb(versus.gainDb)}${source !== sound ? " from the original" : ""}${versus.limited ? ", held back to avoid clipping" : ""})`));
+            return offer;
+        };
+        select.addEventListener("change", () => {
+            assign.disabled = !select.value;
+            offerFor(select.value);
+        });
         assign.addEventListener("click", async () => {
             const [target, key] = select.value.split(/:(.*)/s);
-            if (offer && matchBox.checked) {
+            if (offerFor(select.value) && matchBox.checked) {
                 assign.disabled = true;
                 try {
-                    const copy = Sounds.applyGain(await soundBytes(sound.id), Math.max(-60, Math.min(60, versus.gainDb)));
+                    const gain = Math.max(-60, Math.min(60, versus.gainDb));
+                    const copy = Sounds.applyGain(await soundBytes(source.id), gain);
                     if (!copy) throw new Error("only uncompressed WAV files can be leveled");
-                    send("UseLeveledSound", `${target}:${key}|lib:${sound.id}|${Math.max(-60, Math.min(60, versus.gainDb)).toFixed(2)}|${Sounds.bytesToBase64(copy)}`);
+                    send("UseLeveledSound", `${target}:${key}|lib:${source.id}|${gain.toFixed(2)}|${Sounds.bytesToBase64(copy)}`);
                     send("GetSoundLibrary", "refresh");
-                    showNotice(`${select.selectedOptions[0]?.textContent || "It"} now plays a matched copy of ${sound.name} (${Sounds.formatDb(versus.gainDb)}).`);
+                    showNotice(`${select.selectedOptions[0]?.textContent || "It"} now plays a matched copy of ${source.name} (${Sounds.formatDb(versus.gainDb)} from the original).`);
                 } catch (error) {
                     showNotice(`Couldn't make the matched copy: ${error.message}`);
                 }
                 assign.disabled = false;
                 return;
             }
-            if (target === "windows") send("SetWindowsSound", `${key}|${sound.id}`);
-            else if (target === "ascs") send("SetAscsSound", `${key}|${sound.id}`);
+            const plain = versus?.matched && source !== sound ? source : sound;
+            if (target === "windows") send("SetWindowsSound", `${key}|${plain.id}`);
+            else if (target === "ascs") send("SetAscsSound", `${key}|${plain.id}`);
+            else if (target === "startup") send("SetStartupSound", `${key}|${plain.id}`);
         });
         const row = element("div", "sound-actions");
         row.append(select, assign);
-        use.append(row);
-        if (offer) {
-            const label = element("label", "sound-clip");
-            label.append(matchBox, element("span", "", ` Match the notification level (${Sounds.formatDb(versus.gainDb)}${versus.limited ? ", held back to avoid clipping" : ""})`));
-            label.title = "Saves a leveled copy in ASCS Leveled and uses that; the original is never changed";
-            use.append(label);
-        }
+        use.append(row, matchLabel);
     }
     panel.append(use);
 }
@@ -847,10 +905,58 @@ function inUseRows() {
 
 // A row's measurement is kept until the file it plays changes.
 function forgetInUse(key) {
-    const id = `use:${key}`;
     soundState.inUse.delete(key);
-    soundState.bytes.delete(id);
-    soundState.decoded.delete(id);
+    for (const id of [`use:${key}`, `origin:${key}`]) {
+        soundState.bytes.delete(id);
+        soundState.decoded.delete(id);
+    }
+}
+
+// Startup sounds (1.8.1): the sign-in roll, each with its chance, then the
+// shutdown sound. Each is named after the original it was leveled from.
+function startupLabel(item) {
+    const sound = soundState.library?.byId.get(item.origin || item.id);
+    if (!sound) return item.file.replace(/\.wav$/i, "");
+    return sound.eraLabel && !sound.name.includes(sound.eraLabel) ? `${sound.eraLabel} · ${sound.name}` : sound.name;
+}
+
+function startupRows() {
+    const { signin, shutdown } = soundState.startup;
+    const rows = signin.map((item, index) => ({
+        key: `startup:${index + 1}`, label: startupLabel(item), file: item.file, exists: item.exists, changed: item.changed,
+        weight: item.weight, index,
+        restore: () => send("RestoreStartupSound", String(index + 1)),
+        remove: signin.length > 1 ? () => send("RemoveStartupSound", String(index + 1)) : null
+    }));
+    if (shutdown) rows.push({ key: "startup:shutdown", label: `Shutdown · ${startupLabel(shutdown)}`, file: shutdown.file, exists: shutdown.exists,
+        changed: shutdown.changed, restore: () => send("RestoreStartupSound", "shutdown") });
+    rows.forEach(row => { row.measurable = row.exists && /\.wav$/i.test(row.file); });
+    return rows;
+}
+
+// Which level a row is measured against: its board's, moved by the row's
+// own level if it has one (1.8.1). Own levels belong to the place a sound
+// plays (an event, ASCS's show sound, the shutdown sound), except sign-in
+// sounds, which keep theirs by the original they're leveled from, so
+// removing one doesn't hand its level to the next.
+const targetFor = key => key.startsWith("startup:") ? soundPrefs.startupTarget : soundPrefs.notifyTarget;
+
+function ownKey(key) {
+    const slot = /^startup:(\d)$/.exec(key);
+    if (!slot) return key;
+    const item = soundState.startup.signin[Number(slot[1]) - 1];
+    return item ? `startup:${item.origin || item.id}` : key;
+}
+
+const ownLevel = key => soundPrefs.levels[ownKey(key)] || 0;
+const rowTarget = key => targetFor(key) + ownLevel(key);
+
+function setOwnLevel(key, value) {
+    const level = Sounds.snapOwnLevel(value);
+    if (level) soundPrefs.levels[ownKey(key)] = level;
+    else delete soundPrefs.levels[ownKey(key)];
+    saveSoundPrefs();
+    renderSoundAssignments();
 }
 
 async function measureInUse(row) {
@@ -870,7 +976,7 @@ async function measureInUseSounds() {
     if (soundState.measuringInUse) return;
     soundState.measuringInUse = true;
     try {
-        for (const row of inUseRows()) {
+        for (const row of [...inUseRows(), ...startupRows()]) {
             if (!row.measurable || soundState.inUse.get(row.key)?.file === row.file) continue;
             try {
                 soundState.inUse.set(row.key, await measureInUse(row));
@@ -886,34 +992,46 @@ async function measureInUseSounds() {
 
 function inUseComparison(key) {
     const entry = soundState.inUse.get(key);
-    return entry && !entry.error ? Sounds.compareToTarget(entry, soundPrefs.notifyTarget) : null;
+    return entry && !entry.error ? Sounds.compareToTarget(entry, rowTarget(key)) : null;
 }
 
 const describeDifference = compare => compare.matched ? "Matched"
     : `${Math.abs(compare.difference).toFixed(1)} dB ${compare.difference > 0 ? "louder" : "quieter"}`;
 
-// Saves a leveled copy of what a row plays and switches the row to it;
-// resolves once ASCS has answered.
+// Saves a leveled copy and switches the row to it; resolves once ASCS has
+// answered. Since 1.8.1 the copy is made from the original behind what the
+// row plays (ASCS sends it as "origin:<key>"), never from an earlier copy,
+// so gains don't pile up.
 async function matchInUse(row) {
     const compare = inUseComparison(row.key);
     const entry = soundState.inUse.get(row.key);
     if (!compare || !entry?.levelable || Math.abs(compare.gainDb) < 0.05) return { ok: false, skipped: true };
-    let bytes;
+    let bytes, gain, limited;
     try {
-        bytes = await soundBytes(`use:${row.key}`);      // fetched again if it was let go
+        bytes = await soundBytes(`origin:${row.key}`);
+        const wav = Sounds.wavChannels(bytes);
+        if (!wav) throw new Error("only uncompressed WAV files can be leveled");
+        const original = Sounds.compareToTarget({ lufs: Sounds.measureLoudness(wav.channels, wav.rate), peakDb: Sounds.measureWav(bytes).peakDb }, rowTarget(row.key));
+        if (!original) throw new Error("the original couldn't be measured");
+        gain = Math.max(-60, Math.min(60, original.gainDb));
+        limited = original.limited;
     } catch (error) {
         return { ok: false, message: error.message };
     }
-    const gain = Math.max(-60, Math.min(60, compare.gainDb));
+    // The original is already at the level: go back to it rather than copy it.
+    if (Math.abs(gain) < 0.05 && row.changed) {
+        row.restore();
+        return { ok: true, limited: false };
+    }
     const copy = Sounds.applyGain(bytes, gain);
     if (!copy) return { ok: false, message: "only uncompressed WAV files can be leveled" };
     return new Promise(resolve => {
         soundState.matchWaits.set(row.key, resolve);
-        if (!send("UseLeveledSound", `${row.key}|current|${gain.toFixed(2)}|${Sounds.bytesToBase64(copy)}`)) {
+        if (!send("UseLeveledSound", `${row.key}|origin|${gain.toFixed(2)}|${Sounds.bytesToBase64(copy)}`)) {
             soundState.matchWaits.delete(row.key);
             resolve({ ok: false, message: "ASCS didn't answer" });
         }
-    }).then(result => ({ ...result, limited: compare.limited }));
+    }).then(result => ({ ...result, limited }));
 }
 
 function handleSoundMatched(data) {
@@ -948,7 +1066,7 @@ async function matchRows(rows) {
     soundState.matching = false;
     send("GetSoundLibrary", "refresh");          // the new copies join the library
     const parts = [];
-    if (matched) parts.push(`Matched ${matched} sound${matched === 1 ? "" : "s"} to ${Sounds.formatDb(soundPrefs.notifyTarget).replace(" dB", " LUFS")}`);
+    if (matched) parts.push(`Matched ${matched} sound${matched === 1 ? "" : "s"}`);
     if (held) parts.push(`${held} held back to avoid clipping`);
     if (failed.length) parts.push(`not matched: ${failed.join("; ")}`);
     if (parts.length) showNotice(`${parts.join("; ")}.${matched ? " Restore undoes any of them." : ""}`);
@@ -973,9 +1091,9 @@ async function playInUse(key, token = ++soundState.playToken) {
 
 // Play all: each measured sound in turn, to hear them side by side. Stop
 // all (or playing anything else) ends it.
-async function playAllInUse() {
+async function playAllInUse(rowsOf = inUseRows) {
     const token = ++soundState.playToken;
-    for (const row of inUseRows()) {
+    for (const row of rowsOf()) {
         if (!soundState.inUse.get(row.key) || soundState.inUse.get(row.key).error) continue;
         if (token !== soundState.playToken) return;
         soundState.playingRow = row.key;
@@ -995,10 +1113,123 @@ function setNotifyTarget(value) {
     renderSoundDetail();
 }
 
+async function resetAllLevels() {
+    const changes = Sounds.levelChanges(soundPrefs);
+    if (!changes.length) return;
+    const ok = await confirmDialog({
+        title: "Reset all levels?",
+        message: `${changes.join("; ")}. No sound changes: each keeps playing what it plays now, so rows may read louder or quieter until you Match them.`,
+        confirmLabel: "Reset levels"
+    });
+    if (!ok) return;
+    const { notifyTarget, startupTarget, reference } = Sounds.LEVEL_DEFAULTS;
+    Object.assign(soundPrefs, { notifyTarget, startupTarget, reference, levels: {} });
+    soundState.ownEditing = "";
+    soundState.ownDraft = null;
+    saveSoundPrefs();
+    renderSoundAssignments();
+    renderSoundDetail();
+    showNotice("Levels are back to their defaults.");
+}
+
+function setStartupTarget(value) {
+    soundPrefs.startupTarget = Math.max(-40, Math.min(-10, Math.round(value * 10) / 10));
+    saveSoundPrefs();
+    renderSoundAssignments();
+}
+
+// The two boards (1.8.1): notifications (In use) and startup sounds
+// (Startup), drawn by one renderer, each with its own level.
+const NOTIFY_BOARD = {
+    panel: "soundAssignments", count: "soundInUseCount", title: "Notification level", rows: () => inUseRows(),
+    target: () => soundPrefs.notifyTarget, setTarget: value => setNotifyTarget(value), presets: () => NOTIFY_PRESETS,
+    note: "Loudness as the ear hears it (LUFS). Within ±1.5 dB of the target counts as matched; Match saves a leveled copy and switches to it, and Restore goes back. Drag a sound's gold handle to give it its own level.",
+    restoreAll: changed => {
+        const button = element("button", "link-button is-danger", `Restore all (${changed.length})`);
+        button.type = "button";
+        button.title = "Every sound ASCS changed goes back to what it played before";
+        button.addEventListener("click", async () => {
+            const ok = await confirmDialog({
+                title: "Restore all sounds?",
+                message: `${changed.map(row => row.label).join(", ")} go back to what they played before ASCS changed them. Leveled copies stay in the library.`,
+                confirmLabel: "Restore all", danger: true
+            });
+            if (ok) send("RestoreAllSounds");
+        });
+        return button;
+    }
+};
+
+const STARTUP_PRESETS = [["Quiet", -24], ["Balanced", -20], ["Bold", -16]];
+const STARTUP_BOARD = {
+    panel: "soundStartup", count: "soundStartupCount", title: "Startup level", rows: () => startupRows(),
+    target: () => soundPrefs.startupTarget, setTarget: value => setStartupTarget(value),
+    // "Like XP": the level of the XP startup sound's original, once measured.
+    presets: () => {
+        const xp = startupRows().find(row => /xp startup/i.test(row.label));
+        const measured = xp && !xp.changed ? soundState.inUse.get(xp.key) : null;
+        return [...STARTUP_PRESETS, ...(measured?.lufs > -70 ? [["Like XP", Math.round(measured.lufs * 10) / 10]] : [])];
+    },
+    note: "The sounds played at Windows sign-in (one picked by chance) and at shutdown, by the scripts in C:\\Scripts, which read them from ASCS. Add sounds with Selected sound › Use as. Match levels a copy of the original; Restore goes back to it. Drag a sound's gold handle to give it its own level.",
+    restoreAll: changed => {
+        const button = element("button", "link-button is-danger", `Restore all (${changed.length})`);
+        button.type = "button";
+        button.title = "Every startup sound goes back to its original";
+        button.addEventListener("click", () => send("RestoreStartupSound", "all"));
+        return button;
+    },
+    head: head => head.append(startupOddsLine())
+};
+
 function renderSoundAssignments() {
-    const panel = $("soundAssignments");
-    const rows = inUseRows();
-    const target = soundPrefs.notifyTarget;
+    renderBoard(NOTIFY_BOARD);
+    renderBoard(STARTUP_BOARD);
+    if (soundState.sideTab === "inuse" || soundState.sideTab === "startup") measureInUseSounds();
+}
+
+// ---- the sign-in chances (1.8.1)
+// Whole percentages beside each sign-in sound; saved once they add up to 100.
+function startupOdds() {
+    return soundState.oddsDraft || soundState.startup.signin.map(item => item.weight);
+}
+
+function startupOddsLine() {
+    const odds = startupOdds();
+    const total = odds.reduce((sum, value) => sum + value, 0);
+    const line = element("p", `startup-odds-total${total === 100 ? "" : " is-off"}`);
+    line.textContent = total === 100
+        ? `Sign-in chances add up to 100%. ${soundState.oddsDraft ? "Saving…" : "Saved."}`
+        : `Sign-in chances add up to ${total}%: make them 100% to save.`;
+    return line;
+}
+
+function oddsInput(row) {
+    const input = element("input", "startup-odds");
+    input.type = "number";
+    input.min = "0";
+    input.max = "100";
+    input.step = "1";
+    input.value = String(startupOdds()[row.index] ?? 0);
+    input.dataset.oddsIndex = String(row.index);
+    input.setAttribute("aria-label", `Chance of ${row.label} at sign-in, in percent`);
+    input.title = "Chance at sign-in, in percent";
+    input.addEventListener("input", () => {
+        const odds = [...startupOdds()];
+        odds[row.index] = Math.max(0, Math.min(100, Math.round(Number(input.value) || 0)));
+        soundState.oddsDraft = odds;
+        clearTimeout(soundState.oddsTimer);
+        if (odds.reduce((sum, value) => sum + value, 0) === 100) {
+            soundState.oddsTimer = setTimeout(() => send("SaveStartupOdds", odds.join(",")), 600);
+        }
+        renderBoard(STARTUP_BOARD);
+    });
+    return input;
+}
+
+function renderBoard(board) {
+    const panel = $(board.panel);
+    const rows = board.rows();
+    const target = board.target();
     const measured = rows.filter(row => inUseComparison(row.key));
     const off = measured.filter(row => !inUseComparison(row.key).matched && soundState.inUse.get(row.key).levelable
         && Math.abs(inUseComparison(row.key).gainDb) >= 0.05);
@@ -1006,13 +1237,13 @@ function renderSoundAssignments() {
     // The target, with presets, and what to do about it.
     const head = element("div", "notify-head");
     const title = element("div", "notify-title");
-    title.append(element("h3", "", "Notification level"));
+    title.append(element("h3", "", board.title));
     const stepper = element("div", "notify-stepper");
     const step = (label, delta, hint) => {
         const button = element("button", "secondary", label);
         button.type = "button";
         button.title = hint;
-        button.addEventListener("click", () => setNotifyTarget(target + delta));
+        button.addEventListener("click", () => board.setTarget(target + delta));
         return button;
     };
     stepper.append(step("−", -1, "1 dB quieter"), element("strong", "", `${target.toFixed(1)} LUFS`), step("+", 1, "1 dB louder"));
@@ -1021,16 +1252,17 @@ function renderSoundAssignments() {
     const presets = element("div", "sound-presets");
     const loudness = measured.map(row => soundState.inUse.get(row.key).lufs).sort((a, b) => a - b);
     const middle = loudness.length ? Math.round(loudness[Math.floor((loudness.length - 1) / 2)] * 10) / 10 : null;
-    [...NOTIFY_PRESETS, ...(middle !== null ? [["Middle of yours", middle]] : [])].forEach(([name, value]) => {
+    [...board.presets(), ...(middle !== null ? [["Middle of yours", middle]] : [])].forEach(([name, value]) => {
         const chip = element("button", `sound-preset${Math.abs(target - value) < 0.05 ? " is-on" : ""}`);
         chip.type = "button";
         chip.title = name === "Middle of yours" ? "The median of the sounds below: matching to it changes the fewest" : `${value} LUFS`;
         chip.append(element("span", "", name), element("b", "", value.toFixed(1)));
-        chip.addEventListener("click", () => setNotifyTarget(value));
+        chip.addEventListener("click", () => board.setTarget(value));
         presets.append(chip);
     });
     head.append(presets);
-    head.append(element("p", "settings-note", "Loudness as the ear hears it (LUFS). Within ±1.5 dB of the target counts as matched; Match saves a leveled copy and switches to it, and Restore goes back."));
+    head.append(element("p", "settings-note", board.note));
+    board.head?.(head);
     const actions = element("div", "notify-actions");
     const pending = rows.filter(row => row.measurable && soundState.inUse.get(row.key)?.file !== row.file).length;
     actions.append(element("span", "notify-summary",
@@ -1038,33 +1270,33 @@ function renderSoundAssignments() {
     const playAll = element("button", "secondary", soundState.playingRow ? "Stop" : "Play all");
     playAll.type = "button";
     playAll.disabled = !measured.length;
-    playAll.addEventListener("click", () => (soundState.playingRow ? stopAllSounds() : playAllInUse()));
+    playAll.addEventListener("click", () => (soundState.playingRow ? stopAllSounds() : playAllInUse(board.rows)));
     const matchAll = element("button", "primary", soundState.matching ? "Matching…" : `Match all${off.length ? ` (${off.length})` : ""}`);
     matchAll.type = "button";
     matchAll.disabled = !off.length || off.every(row => row.key === soundState.matchingKey || soundState.matchQueue.some(item => item.key === row.key));
     matchAll.addEventListener("click", () => matchRows(off));
     actions.append(playAll, matchAll);
-    const changed = rows.filter(row => row.changed);
-    if (changed.length) {
-        const restoreAll = element("button", "secondary danger", `Restore all (${changed.length})`);
-        restoreAll.type = "button";
-        restoreAll.title = "Every sound ASCS changed goes back to what it played before";
-        restoreAll.addEventListener("click", async () => {
-            const ok = await confirmDialog({
-                title: "Restore all sounds?",
-                message: `${changed.map(row => row.label).join(", ")} go back to what they played before ASCS changed them. Leveled copies stay in the library.`,
-                confirmLabel: "Restore all", danger: true
-            });
-            if (ok) send("RestoreAllSounds");
-        });
-        actions.append(restoreAll);
-    }
     head.append(actions);
+    // The rarer, undoing actions sit beneath as links (1.8.1): Reset levels
+    // (the levels and own levels back to their defaults, on either board;
+    // sound files stay as they are) and Restore all.
+    const tools = element("div", "notify-tools");
+    if (Sounds.levelChanges(soundPrefs).length) {
+        const reset = element("button", "link-button", "Reset levels");
+        reset.type = "button";
+        reset.title = "The notification and startup levels, Target RMS and every own level back to their defaults; no sound changes";
+        reset.addEventListener("click", resetAllLevels);
+        tools.append(reset);
+    }
+    const changed = rows.filter(row => row.changed);
+    if (changed.length) tools.append(board.restoreAll(changed));
+    if (tools.childElementCount) head.append(tools);
 
     const list = element("div", "sound-assignments");
     rows.forEach(row => {
         const item = element("div", `sound-assignment${soundState.playingRow === row.key ? " is-playing" : ""}`);
-        const copy = element("span");
+        const copy = element("span", "sound-assignment-copy");
+        copy.title = row.file ? `${row.label} · ${row.file}` : row.label;
         copy.append(element("strong", "", row.label), element("small", row.exists || !row.file ? "" : "is-missing", row.file ? (row.exists ? row.file : `${row.file} (missing)`) : "No sound"));
         const buttons = element("span", "sound-assignment-actions");
         const link = (label, onClick, hint = "") => {
@@ -1085,15 +1317,26 @@ function renderSoundAssignments() {
             match.disabled = running || queued;
         }
         if (row.changed) link("Restore", row.restore, "Back to the sound it had before ASCS changed it");
+        if (row.remove) link("Remove", row.remove, "Take it out of the sign-in sounds; its chance goes to the first one");
+        const own = ownLevel(row.key);
         item.append(copy, buttons);
+        // A sign-in sound's chance, in its own column at the left.
+        if (row.weight !== undefined) {
+            const odds = element("label", "startup-odds-wrap");
+            odds.append(oddsInput(row), element("span", "", "%"));
+            item.classList.add("has-odds");
+            item.prepend(odds);
+        }
         // The meter: the target in the middle, ±12 dB to either side.
         const meter = element("div", "notify-meter");
         const bar = element("span", "notify-bar");
         bar.append(element("i"));
         const status = element("small", "notify-status");
+        if (row.measurable || compare) bar.append(ownHandle(row, bar, own));
         if (compare) {
             const dot = element("b", compare.matched ? "is-matched" : compare.difference > 0 ? "is-loud" : "is-quiet");
-            dot.style.left = `${Math.max(0, Math.min(100, 50 + compare.difference / 12 * 50))}%`;
+            // The bar is centered on the board's level; the dot is where the sound is.
+            dot.style.left = `${Math.max(0, Math.min(100, 50 + (compare.difference + own) / 12 * 50))}%`;
             bar.append(dot);
             status.textContent = describeDifference(compare);
             status.className = `notify-status${compare.matched ? " is-matched" : ""}`;
@@ -1102,13 +1345,132 @@ function renderSoundAssignments() {
             status.textContent = entry?.error ? "Can't measure" : !row.measurable ? (row.file ? "Not a WAV" : "") : "Measuring…";
             if (entry?.error) status.title = entry.error;
         }
-        meter.append(bar, status);
+        // A slot of the same width on every row, so the bars line up.
+        const slot = element("span", "notify-own-slot");
+        if (soundState.ownEditing === row.key) slot.append(ownInput(row));
+        else if (own) {
+            const label = element("button", "link-button notify-own-label", `Own ${Sounds.formatDb(own)}`);
+            label.type = "button";
+            label.title = "This sound's own level, from the board's. Click to type one.";
+            label.addEventListener("click", () => { soundState.ownEditing = row.key; renderSoundAssignments(); });
+            const reset = element("button", "notify-own-reset", "×");
+            reset.type = "button";
+            reset.title = "Back to the board's level";
+            reset.setAttribute("aria-label", `${row.label}: back to the board's level`);
+            reset.addEventListener("click", () => setOwnLevel(row.key, 0));
+            slot.append(label, reset);
+        }
+        meter.append(bar, slot, status);
         if (row.measurable || compare) item.append(meter);
         list.append(item);
     });
-    $("soundInUseCount").textContent = `${rows.length}`;
+    $(board.count).textContent = `${rows.length}`;
+    // Typing a chance, or stepping a level, redraws the board: keep the focus
+    // where it was.
+    const focusData = document.activeElement?.dataset || {};
+    const selector = focusData.oddsIndex !== undefined ? `input[data-odds-index="${focusData.oddsIndex}"]`
+        : focusData.ownKey !== undefined ? `[data-own-key="${CSS.escape(focusData.ownKey)}"]` : "";
+    const hadFocus = selector && panel.contains(document.activeElement);
     panel.replaceChildren(head, list);
-    if (soundState.sideTab === "inuse") measureInUseSounds();
+    const editing = soundState.ownEditing ? panel.querySelector(`input[data-own-key="${CSS.escape(soundState.ownEditing)}"]`) : null;
+    const refocus = editing || (hadFocus ? panel.querySelector(selector) : null);
+    if (refocus && document.activeElement !== refocus) {
+        refocus.focus();
+        if (refocus.tagName === "INPUT") {
+            const end = refocus.value.length;
+            try { refocus.setSelectionRange(end, end); } catch { /* number inputs have no selection */ }
+        }
+    }
+}
+
+// ---- own levels (1.8.1)
+// A gold handle on each row's bar sets that sound's own level, from -12 to
+// +12 dB around the board's (the middle of the bar). Dragging moves it in
+// half-dB steps, drawn in place and saved on release; the arrow keys step
+// 0.5 dB (Page Up and Down 3 dB), Home or a double-click goes back to the
+// board's level, and Enter types one.
+function ownHandle(row, bar, own) {
+    const handle = element("button", `notify-own${own ? " is-set" : ""}`);
+    handle.type = "button";
+    handle.dataset.ownKey = row.key;
+    handle.setAttribute("role", "slider");
+    handle.setAttribute("aria-label", `${row.label}: own level`);
+    handle.setAttribute("aria-valuemin", "-12");
+    handle.setAttribute("aria-valuemax", "12");
+    handle.setAttribute("aria-valuenow", String(own));
+    handle.setAttribute("aria-valuetext", own ? `${Sounds.formatDb(own)} from the board's level` : "The board's level");
+    handle.title = own ? `Own level ${Sounds.formatDb(own)}: drag to change, double-click for the board's level`
+        : "Drag to give this sound its own level (Enter to type one)";
+    const place = value => { handle.style.left = `${Sounds.ownLevelAt(value) * 100}%`; };
+    place(own);
+    let dragging = null;
+    handle.addEventListener("pointerdown", event => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        handle.focus();
+        try { handle.setPointerCapture(event.pointerId); } catch { /* a pointer that is already gone */ }
+        dragging = { value: own, moved: false };
+        handle.classList.add("is-dragging");
+    });
+    handle.addEventListener("pointermove", event => {
+        if (!dragging) return;
+        const rect = bar.getBoundingClientRect();
+        const value = Sounds.ownLevelFromFraction((event.clientX - rect.left) / Math.max(1, rect.width));
+        if (value === dragging.value) return;
+        dragging = { value, moved: true };
+        place(value);
+        handle.title = value ? `Own level ${Sounds.formatDb(value)}` : "The board's level";
+        const label = bar.parentElement?.querySelector(".notify-own-slot");
+        if (label) label.textContent = value ? `Own ${Sounds.formatDb(value)}` : "";
+    });
+    const finish = () => {
+        if (!dragging) return;
+        const { value, moved } = dragging;
+        dragging = null;
+        if (moved && value !== own) setOwnLevel(row.key, value);
+        else handle.classList.remove("is-dragging");
+    };
+    handle.addEventListener("pointerup", finish);
+    handle.addEventListener("pointercancel", finish);
+    handle.addEventListener("dblclick", () => { if (own) setOwnLevel(row.key, 0); });
+    handle.addEventListener("keydown", event => {
+        const steps = { ArrowRight: 0.5, ArrowUp: 0.5, ArrowLeft: -0.5, ArrowDown: -0.5, PageUp: 3, PageDown: -3 };
+        if (event.key in steps) setOwnLevel(row.key, own + steps[event.key]);
+        else if (event.key === "Home" || event.key === "Delete" || event.key === "Backspace") setOwnLevel(row.key, 0);
+        else if (event.key === "Enter") { soundState.ownEditing = row.key; renderSoundAssignments(); }
+        else return;
+        event.preventDefault();
+    });
+    return handle;
+}
+
+function ownInput(row) {
+    const input = element("input", "notify-own-input");
+    input.type = "number";
+    input.min = "-12";
+    input.max = "12";
+    input.step = "0.5";
+    input.value = String(soundState.ownDraft ?? ownLevel(row.key));
+    input.dataset.ownKey = row.key;
+    input.setAttribute("aria-label", `${row.label}: own level in dB from the board's`);
+    input.title = "dB from the board's level (−12 to +12). Enter to keep, Esc to cancel.";
+    input.addEventListener("input", () => { soundState.ownDraft = input.value; });
+    const done = keep => {
+        if (soundState.ownEditing !== row.key) return;
+        soundState.ownEditing = "";
+        soundState.ownDraft = null;
+        if (keep && input.value.trim() !== "") setOwnLevel(row.key, Number(input.value));
+        else renderSoundAssignments();
+    };
+    input.addEventListener("keydown", event => {
+        if (event.key === "Enter") { event.preventDefault(); done(true); }
+        else if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); done(false); }
+    });
+    input.addEventListener("blur", () => setTimeout(() => {
+        // A redraw also blurs it; only a real move elsewhere ends typing.
+        if (soundState.ownEditing === row.key && !document.activeElement?.matches?.(`input[data-own-key="${CSS.escape(row.key)}"]`)) done(true);
+    }, 0));
+    return input;
 }
 
 async function measureVisibleSounds() {
@@ -1159,13 +1521,17 @@ function showSoundTab(tab) {
     soundState.sideTab = tab;
     $("soundTabSelected").setAttribute("aria-selected", String(tab === "selected"));
     $("soundTabInUse").setAttribute("aria-selected", String(tab === "inuse"));
+    $("soundTabStartup").setAttribute("aria-selected", String(tab === "startup"));
     $("soundDetail").hidden = tab !== "selected";
     $("soundAssignments").hidden = tab !== "inuse";
-    if (tab === "inuse") renderSoundAssignments();
+    $("soundStartup").hidden = tab !== "startup";
+    if (tab === "startup") send("GetStartupSounds");
+    if (tab === "inuse" || tab === "startup") renderSoundAssignments();
     fitSoundSide();
 }
 $("soundTabSelected").addEventListener("click", () => showSoundTab("selected"));
 $("soundTabInUse").addEventListener("click", () => showSoundTab("inuse"));
+$("soundTabStartup").addEventListener("click", () => showSoundTab("startup"));
 
 function editSoundLibrary(editing) {
     soundState.editingLibrary = editing;

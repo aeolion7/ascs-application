@@ -1322,9 +1322,10 @@ ValidateSoundLibrary(path) {
     return path
 }
 
-; The name of a leveled copy: "CHIMES (-7.6 dB).wav".
+; The name of a leveled copy: "CHIMES (-7.6 dB).wav". Characters a file
+; name or an INI key can't hold are dropped (1.8.1: also = [ ] ;).
 LeveledSoundName(stem, gainDb) {
-    stem := Trim(RegExReplace(stem, '[<>:"/\\|?*\x00-\x1F]', ""))
+    stem := Trim(RegExReplace(stem, '[<>:"/\\|?*=\[\];\x00-\x1F]', ""))
     return SubStr(stem = "" ? "Sound" : stem, 1, 120) " (" Format("{:+.1f}", gainDb) " dB).wav"
 }
 
@@ -1376,6 +1377,8 @@ ParseInUseKey(key) {
     }
     if RegExMatch(key, "^ascs:(show|hide|reminder)$", &match)
         return ["ascs", match[1]]
+    if RegExMatch(key, "^startup:([1-8]|shutdown|add)$", &match)      ; 1.8.1
+        return ["startup", match[1]]
     throw Error("That isn't a sound in use.")
 }
 
@@ -1813,3 +1816,43 @@ CheckNoteGroups(content) {
     }
 }
 
+; ---- startup sounds (1.8.1)
+; ASCS keeps the sign-in roll and the shutdown sound in data\startup-sounds.ini,
+; which C:\Scripts\SignIn.ahk and Shutdown Sound.ahk read. A sign-in entry is
+; "weight|path": a whole-number weight from 0 to 100 and a WAV path. Returns
+; Map(weight, path), or "" for anything else.
+ParseStartupEntry(value) {
+    if !RegExMatch(value, "i)^\s*(\d{1,3})\s*\|(.+\.wav)\s*$", &match)
+        return ""
+    weight := Integer(match[1])
+    return weight <= 100 ? Map("weight", weight, "path", Trim(match[2])) : ""
+}
+
+; The odds from the Startup tab: one whole number per sign-in sound, comma
+; separated, 0 to 100 each, adding up to 100. Returns them as an Array.
+ValidateStartupOdds(content, count) {
+    parts := StrSplit(Trim(content), ",")
+    if (parts.Length != count || count < 1 || count > 8)
+        throw Error("The odds don't match the sign-in sounds.")
+    odds := [], total := 0
+    for part in parts {
+        part := Trim(part)
+        if !RegExMatch(part, "^\d{1,3}$") || Integer(part) > 100
+            throw Error("Each chance is a whole number from 0 to 100.")
+        odds.Push(Integer(part))
+        total += Integer(part)
+    }
+    if (total != 100)
+        throw Error("The chances must add up to 100% (they add up to " total "%).")
+    return odds
+}
+
+; The stem a leveled copy was made from: "Windows XP Notify (+12.6 dB) 2
+; (-6.0 dB).wav" -> "Windows XP Notify". Copies made before 1.8.1 were
+; leveled from earlier copies, so their names carry several gains.
+LeveledStem(name) {
+    stem := RegExReplace(name, "i)\.wav$")
+    while RegExMatch(stem, "^(.*?)\s*\([+-]\d+(?:\.\d+)? dB\)(?:\s+\d+)?$", &match)
+        stem := match[1]
+    return Trim(stem)
+}

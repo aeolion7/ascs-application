@@ -2,6 +2,24 @@
 
 All notable changes to the Aeolionware Super Command System. The newest release is first. For current behavior, see [README.md](README.md).
 
+## Version 1.8.1
+
+Startup sounds move into ASCS, leveling always starts from the original, and each sound can have its own level. Built at the owner's request after 1.8.0. Manual pass (`tests\manual-1.8.1.html`): 21 of 23 items passed; a real sign-in and shutdown (B2, B3) were left for the next restart. Reset levels came from the pass. 911 automated checks.
+
+### Added
+- **Sounds › Startup:** a third tab for the sounds played at Windows sign-in (one picked by chance) and at shutdown, with its own startup level (presets Quiet, Balanced, Bold, Like XP and Middle of yours), Play all, Match, Match all, Restore, Restore all and Remove. Each sign-in sound's chance sits beside it and is saved once the chances add up to 100. Up to 8 sign-in sounds.
+- **Reset levels** (from the manual pass, C4): one link on In use and Startup, beneath Play all and Match all with Restore all, puts the notification and startup levels, Target RMS and every own level back to their defaults, without changing any sound.
+- **Use as › Startup:** "Sign-in sound (adds to the chance roll)" and "Shutdown sound", offering a copy matched to the startup level.
+- **Own levels:** a gold handle on each row's bar gives that sound its own level, −12 to +12 dB around its board's, in half-dB steps (drag it, step it with the arrow keys, or type one; double-click, Home or × goes back). Matched, Match, Match all and Use as follow it.
+- `C:\Scripts\SignIn.ahk` and `Shutdown Sound.ahk` read the sounds and chances from `data\startup-sounds.ini`, which ASCS writes (and creates at launch with the defaults if it's missing); they fall back to Windows' own XP sounds. `SignIn.ahk --sound=N` now forces sign-in sound N.
+
+### Changed
+- **Match levels the original:** ASCS records which original each leveled copy came from (`data\sound-origins.ini`), and Match, Match all and Restore work from it on both boards, so gains no longer pile up in chained copies. Earlier copies are traced back by name.
+- **Hand-leveled copies retired:** ASCS's show and hide sounds default to Windows XP's Logon and Logoff Sound from the library, and the `Aeolionware Startup` folder (the hand-leveled 95, 98 and Me startup sounds and `ASCS Sound Files`) was moved to the Recycle Bin. The first sign-in roll uses the library's originals at the same chances (XP 88%, Me 10%, 98 1%, 95 1%); Match them once on the Startup tab.
+- **Selected sound levels from the original too:** with a leveled copy selected, Save leveled copy and Use as make the new copy from its original with one total gain, so names never stack gains.
+- **Replaced copies are cleared away:** when Match, Use as, Restore or Remove stops a sound playing a leveled copy, the copy goes to the Recycle Bin unless something else plays it, a Restore points to it, or it was saved by hand.
+- Leveled copy names drop `=`, `[`, `]` and `;`, so they're safe as ini keys.
+
 ## Version 1.8.0
 
 Released after three manual passes on the target system (`tests\manual-1.8.0.html`); every item passed in the end. Round 1 (61 items) found the restart closing apps before they could ask about unsaved work, and test steps for the In use board that couldn't be followed; round 2 found a second Match doing nothing, event text sitting high, and asked for an indicator when moving events; round 3 found that indicator was meant for dragging, which then shipped. Quick Notes groups, Select in Sounds, US holidays and dragging events were added along the way at the owner's request. iPhone calendar sync is designed and moves to 1.9.0. 867 automated checks.
