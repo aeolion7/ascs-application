@@ -858,6 +858,21 @@ Throws("groups: a tab", () => CheckNoteGroups(groupNote('"a' Chr(92) 'tb"')), "c
 Throws("groups: not text", () => CheckNoteGroups(groupNote("42")), "must be text")
 Throws("groups: the second note checked too", () => CheckNoteGroups('{"notes":[{"group":"ok"},{"group" : "' StrRepeat("g", 61) '"}]}'), "60 characters")
 
+; ------------------------------------------------------------ Quick Notes game links (1.11.1)
+gameNote(game) => '{"version":2,"notes":[{"id":"a","title":"t","game":' game ',"content":"x"}]}'
+CheckNoteGames('{"version":2,"notes":[{"id":"a","title":"t","content":"x"}]}')
+Check("game links: none is fine", true)
+CheckNoteGames(gameNote('"zeldaocarinaoftime"'))
+Check("game links: a key is fine", true)
+CheckNoteGames(gameNote('"' StrRepeat("g", 320) '"'))
+Check("game links: the longest is fine", true)
+CheckNoteGames('{"notes":[{"content":"say ' Chr(92) '"game' Chr(92) '": 42"}]}')
+Check("game links: the word in a note's text isn't a link", true)
+Throws("game links: too long", () => CheckNoteGames(gameNote('"' StrRepeat("g", 321) '"')), "320 characters")
+Throws("game links: a control character", () => CheckNoteGames(gameNote('"a' Chr(92) 'u0001b"')), "control")
+Throws("game links: not text", () => CheckNoteGames(gameNote("42")), "must be text")
+Throws("game links: the second note checked too", () => CheckNoteGames('{"notes":[{"game":"ok"},{"game" : 7}]}'), "must be text")
+
 ; ------------------------------------------------------------ 1.8.1 startup sounds
 Equal("startup key: a sign-in slot", ParseInUseKey("startup:3")[2], "3")
 Equal("startup key: shutdown", ParseInUseKey("startup:shutdown")[1], "startup")

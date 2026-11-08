@@ -120,6 +120,28 @@
     equal("groups: deleting leaves the others", N.groupNames(deleted).join(","), "Work");
     equal("groups: a blank name renames nothing", N.renameGroup(sample(), "  ", "X"), 0);
 
+    // Game notes (1.11.1)
+    const linked = (id, game, updated) => ({ id, title: id, content: "", game, updated });
+    check("game key: letters and digits from any script", N.isGameKey("zelda2") && N.isGameKey("ゼルダ"));
+    check("game key: not punctuation, empty, too long or not text", !N.isGameKey("a b") && !N.isGameKey("") && !N.isGameKey("g".repeat(161)) && !N.isGameKey(7));
+    equal("game key: 160 characters is the limit", N.isGameKey("g".repeat(160)), true);
+    equal("game note: found by key", N.findGameNote([linked("a", "one", "1"), linked("b", "two", "1")], "two")?.id, "b");
+    equal("game note: none for another game", N.findGameNote([linked("a", "one", "1")], "two"), null);
+    equal("game note: an unlinked note never matches", N.findGameNote([{ id: "a", updated: "1" }], undefined), null);
+    equal("game note: of two, the one updated last", N.findGameNote([linked("a", "one", "2026-01-01"), linked("b", "one", "2026-02-01"), linked("c", "one", "2025-01-01")], "one")?.id, "b");
+    const links = [linked("a", "ok", "1"), linked("b", "not ok", "1"), linked("c", 7, "1"), { id: "d" }];
+    equal("game links: bad ones dropped and counted", N.cleanGameLinks(links), 2);
+    equal("game links: good ones kept", json(links.map(item => item.game ?? null)), json(["ok", null, null, null]));
+    equal("game links: a second pass drops nothing", N.cleanGameLinks(links), 0);
+    equal("game note title: tidied", N.gameNoteTitle(" A\tB\n  C\x7f "), "A B C");
+    equal("game note title: capped", N.gameNoteTitle("t".repeat(300)).length, 160);
+    equal("stamp: in an empty note", N.appendStamp("", "Now"), "### Now\n");
+    equal("stamp: after text", N.appendStamp("text", "Now"), "text\n\n### Now\n");
+    equal("stamp: after a line", N.appendStamp("text\n", "Now"), "text\n\n### Now\n");
+    equal("stamp: after a gap", N.appendStamp("text\n\n", "Now"), "text\n\n### Now\n");
+    equal("stamp: is a heading in the preview", N.parseMarkdown(N.appendStamp("text", "Now"))[1].type, "h3");
+    equal("stamp: isn't a tag", json(N.extractTags(N.appendStamp("", "Nov 8, 2026"))), json([]));
+
     equal("groups: palette label", `${N.groupedLabel(gnote("a", "Claude"), "Bug")}|${N.groupedLabel(gnote("b"), "Bug")}`, "Claude › Bug|Bug");
     check("groups: the filter matches the group name", N.matchesNoteQuery(gnote("a", "Claude"), "claude") && !N.matchesNoteQuery(gnote("b", "Work"), "claude"));
     const P = globalThis.ASCSPalette;

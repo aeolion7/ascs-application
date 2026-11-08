@@ -29,6 +29,7 @@
   <link rel="stylesheet" href="styles/20-1.9.2-ux.css">
   <link rel="stylesheet" href="styles/21-1.10.0-workspaces.css">
   <link rel="stylesheet" href="styles/22-1.11.0-awards.css">
+  <link rel="stylesheet" href="styles/23-1.11.1-game-notes.css">
 </head>
 <body>
   <div class="app-shell">
@@ -103,7 +104,7 @@
 
       <div class="sidebar-bottom">
         <span class="sidebar-status">
-          <strong id="sidebarVersion">ASCS <span>1.11.0</span></strong>
+          <strong id="sidebarVersion">ASCS <span>1.11.1</span></strong>
           <small><span class="status-indicator" aria-hidden="true"></span>Standing by</small>
         </span>
         <span class="key-hint" aria-label="Super key">Super</span>
@@ -293,6 +294,7 @@
               <button class="secondary" type="button" id="pinNoteButton" aria-pressed="false">Pin</button>
               <button class="secondary danger" type="button" id="deleteNoteButton">Delete</button>
             </div>
+            <div class="note-game-link" id="noteGameLink" hidden><span>Notes for <strong id="noteGameName"></strong></span><button class="secondary" type="button" id="noteGameStamp" title="Adds the date and time, and how far into the session you are if this game is running">Add timestamp</button><button class="secondary" type="button" id="noteGameUnlink" title="Keeps the note, but stops linking it to this game">Unlink</button></div>
             <textarea id="noteText" data-primary-input aria-label="Note text" placeholder="Begin with a thought, a reminder, or an idea. Markdown and #tags work here." spellcheck="true"></textarea>
             <div id="notePreview" class="note-preview" hidden></div>
             <div class="editor-footer"><span id="noteUpdated">Changes save automatically</span><span class="editor-footer-meta"><span id="noteWords"></span><button class="secondary copy-snippet" type="button" id="copySnippetButton" title="Copy the text exactly as written" hidden>Copy</button></span></div>
@@ -396,6 +398,8 @@
           <article class="games-panel games-controllers" id="gamesControllers"></article>
           <article class="games-panel games-totals" id="gamesTotals"></article>
         </div>
+
+        <section class="games-panel" id="gamesNowNotes" aria-label="Notes for this game" hidden></section>
 
         <section class="games-panel controller-tester" id="controllerTester" hidden aria-labelledby="testerTitle">
           <div class="controller-tester-head">
@@ -1106,6 +1110,7 @@
   <script src="soundsview.js"></script>
   <script src="calendarview.js"></script>
   <script src="awardsview.js"></script>
+  <script src="gamenotes.js"></script>
   <script src="workspacesview.js"></script>
 </body>
 </html>

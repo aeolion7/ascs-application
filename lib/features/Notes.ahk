@@ -86,8 +86,10 @@ SaveNotes(content) {
             SendNotesError("Notes payload is invalid or exceeds 5 MB.")
             return
         }
-        try CheckNoteGroups(content)            ; 1.8.0: groups are checked here too
-        catch as err {
+        try {
+            CheckNoteGroups(content)            ; 1.8.0: groups are checked here too
+            CheckNoteGames(content)             ; 1.11.1: and links to games
+        } catch as err {
             WriteLog("Notes not saved: " err.Message)
             SendNotesError("Notes weren't saved: " err.Message " The previous file was kept.")
             return

@@ -313,6 +313,36 @@
         return sortGames(items.filter(game => game.emulator === playing.emulator && titleKey(game.title) === key), "recent")[0] || null;
     }
 
+    // ---- game notes (1.11.1). A note belongs to a game by this key, so the
+    // same game on two emulators shares one note. Changing what titleKey
+    // returns would disconnect every saved note, and a test pins it.
+    function gameNoteKey(title) {
+        return [...titleKey(title)].slice(0, 160).join("");
+    }
+
+    // The game a running item is showing: its library title when it's in the
+    // library, else what its window says ("" at an emulator's menu).
+    function playingTitle(items, playing) {
+        const matched = matchPlayingGame(items, playing);
+        if (matched) return matched.title;
+        if (!playing || typeof playing !== "object") return "";
+        return playing.emulator === "steam" || playing.emulator === "pso" ? clean(playing.title, 200) : gameFromWindowTitle(playing.emulator, playing.title);
+    }
+
+    // When the session of the game with this note key started (0: not running).
+    function sessionSince(items, playing, key) {
+        if (!key || !Array.isArray(playing)) return 0;
+        const running = playing.find(item => gameNoteKey(playingTitle(items, item)) === key);
+        return running ? count(running.since) : 0;
+    }
+
+    // "Nov 8, 2026, 3:42 PM · 1:12:05 into this session"; the date alone when
+    // the game isn't running.
+    function sessionStamp(now, since) {
+        const date = now.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }).replace(/\s/g, " ");
+        return since > 0 ? `${date} · ${formatClock(now.getTime() / 1000 - since)} into this session` : date;
+    }
+
     // A session timer: "4:05", "1:02:03".
     function formatClock(seconds) {
         const total = count(seconds);
@@ -401,6 +431,7 @@
         raBarClass, EMULATORS, systemName, formatDuration, formatLastPlayed, parseLocal, displayTitle, sortGames,
         filterGames, totalsByEmulator, gameFromWindowTitle, parseRetroAchievements, rankPercentile, titleKey, imageToken,
         matchPlayingGame, formatClock, parseRaGame, filterRaAchievements, raCounts, nextUp, parseRaUnlocks,
-        AWARD_TABS, parseRaAwards, awardsInTab, awardText
+        AWARD_TABS, parseRaAwards, awardsInTab, awardText,
+        gameNoteKey, playingTitle, sessionSince, sessionStamp
     };
 })(globalThis);

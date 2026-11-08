@@ -125,6 +125,26 @@
     equal("now playing: Steam by id", G.matchPlayingGame(library, { emulator: "steam", title: "Half-Life 2", id: "st:220" })?.id, "st:220");
     equal("now playing: PSO", G.matchPlayingGame(library, { emulator: "pso", title: "x" })?.id, "pso");
     equal("now playing: an emulator at its menu matches nothing", G.matchPlayingGame(library, { emulator: "retroarch", title: "RetroArch" }), null);
+    // Game notes (1.11.1). These keys are saved in notes, so they must not change.
+    equal("note key: pinned", G.gameNoteKey("Legend of Zelda, The - Ocarina of Time (USA)"), "legendofzeldaocarinaoftime");
+    equal("note key: pinned with digits and accents", G.gameNoteKey("Pokémon Red 2 [T+Eng]"), "pokémonred2");
+    equal("note key: regions share a note", G.gameNoteKey("Super Paper Mario (USA)"), G.gameNoteKey("Super Paper Mario (Europe)"));
+    equal("note key: nothing usable", G.gameNoteKey("!!!"), "");
+    equal("note key: capped at 160 characters", [...G.gameNoteKey("ゼ".repeat(180))].length, 160);
+    check("note key: a long title never splits a character", /^[\p{L}\p{N}]+$/u.test(G.gameNoteKey("😀a".repeat(5) + "𝒜".repeat(180))));
+    equal("playing title: the library's when matched", G.playingTitle(library, { emulator: "steam", title: "Other", id: "st:220" }), library.find(game => game.id === "st:220").title);
+    equal("playing title: the window's when not", G.playingTitle([], { emulator: "steam", title: "Half-Life 2" }), "Half-Life 2");
+    equal("playing title: from an emulator's window", G.playingTitle([], { emulator: "dolphin", title: "Dolphin 2512 | JIT64 DC | D3D12 | HLE | Super Paper Mario (R8PP01)" }), "Super Paper Mario");
+    equal("playing title: at the menu, none", G.playingTitle([], { emulator: "retroarch", title: "RetroArch" }), "");
+    equal("playing title: nothing given", G.playingTitle([], null), "");
+    const runningGames = [{ emulator: "steam", title: "Half-Life 2", since: 100 }, { emulator: "steam", title: "Portal", since: 200 }];
+    equal("session: the matching game's start", G.sessionSince([], runningGames, G.gameNoteKey("Portal")), 200);
+    equal("session: not running", G.sessionSince([], runningGames, G.gameNoteKey("Doom")), 0);
+    equal("session: no key", G.sessionSince([], runningGames, ""), 0);
+    const stampNow = new Date(2026, 10, 8, 15, 42);
+    equal("stamp: the date alone when not running", G.sessionStamp(stampNow, 0), "Nov 8, 2026, 3:42 PM");
+    equal("stamp: with the session", G.sessionStamp(stampNow, stampNow.getTime() / 1000 - 3725), "Nov 8, 2026, 3:42 PM · 1:02:05 into this session");
+
     equal("now playing: never across emulators", G.matchPlayingGame(library, { emulator: "pcsx2", title: "Brave Fencer Musashi" }), null);
     equal("now playing: unknown game", G.matchPlayingGame(library, { emulator: "dolphin", title: "Dolphin 2512 | JIT64 | Zelda (GZLE01)" }), null);
     equal("now playing: junk input", G.matchPlayingGame(null, null), null);
