@@ -8,7 +8,7 @@ SetWorkingDir(A_ScriptDir)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 1.11.1
+; Version 1.11.2
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -18,7 +18,7 @@ SetWorkingDir(A_ScriptDir)
 ; GLOBAL VARIABLES
 ; ==========================================
 
-global ASCS_Version := "1.11.1"
+global ASCS_Version := "1.11.2"
 global ASCS_App := ""
 global ASCS_WindowIcon := 0
 global ASCS_IconPath := A_ScriptDir "\frontend\assets\ascs.ico"
@@ -582,6 +582,8 @@ HandleWebMessage(sender, args) {
                 SendWorkspaces()
                 SendActivity()
                 SendQuickActions()
+                if FileExist(ASCS_DataDir "\test-build.txt")   ; made by the ASCS command's `try`
+                    SendToFrontend('{"type":"testBuild"}')
                 if ASCS_PendingLauncher {
                     ASCS_PendingLauncher := false
                     SendToFrontend('{"type":"openLauncher","mode":' JsonQuote(ASCS_PendingLauncherMode) '}')

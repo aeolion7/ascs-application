@@ -2183,6 +2183,28 @@ CheckNoteGroups(content) {
     CheckNoteTextField(content, "group", "A group name", 60)
 }
 
+; 1.11.2: one copy of notes.json a day, because notes.json.bak is overwritten by
+; nearly every save and so can't undo a bad one. stamp starts yyyyMMdd.
+NotesHistoryName(stamp) {
+    return "notes-" SubStr(stamp, 1, 4) "-" SubStr(stamp, 5, 2) "-" SubStr(stamp, 7, 2) ".json"
+}
+
+; Which copies to delete, oldest first. Anything not named like a copy is left
+; alone. The dates are fixed-width digits, so a text sort orders them.
+NotesHistoryToPrune(names, keep := 14) {
+    list := ""
+    for name in names
+        if RegExMatch(name, "^notes-\d{4}-\d{2}-\d{2}\.json$")
+            list .= name "`n"
+    remove := []
+    if (list = "")
+        return remove
+    sorted := StrSplit(Sort(RTrim(list, "`n")), "`n")
+    Loop sorted.Length - keep
+        remove.Push(sorted[A_Index])
+    return remove
+}
+
 ; 1.11.1: the link from a note to a game (up to 160 letters or digits, which
 ; can take two UTF-16 units each).
 CheckNoteGames(content) {

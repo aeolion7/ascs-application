@@ -2,6 +2,28 @@
 
 All notable changes to the Aeolionware Super Command System. The newest release is first. For current behavior, see [README.md](README.md).
 
+## Version 1.11.2
+
+Running and developing ASCS safely apart, before the redesign. Tested on the target system, with the owner's permission, by running the real commands against the live ASCS: a test build ran on a copy of the data, a calendar event written through it stayed out of the real calendar, and the real notes, settings and calendar files didn't change while it ran. 1,430 automated checks across the core, frontend and command line suites, and a 140-check smoke test. The layout redesign is next.
+
+### Added
+- **A daily copy of your notes.** `notes.json.bak` is replaced by nearly every save, so it couldn't undo a bad one. The first save of each day now keeps a copy in `data\notes-history`, and the newest 14 stay.
+- **`ASCS try`** closes ASCS and runs a second checkout on a copy of your data, with its own calendar and **TEST BUILD** in the title bar. `ASCS try --end` deletes the copy and starts your real ASCS.
+- **`ASCS status`** shows what's running and from where, whether that code is older than what's on disk, whether the version agrees everywhere, and errors logged since the last start.
+- **`ASCS check`** runs the tests, parse check and hidden-character scan, with one result.
+- **`ASCS backup-data`** copies your data folder outside the repo, keeping the newest ten.
+
+### Changed
+- **The title bar reports page errors,** with **View log**, instead of saying all systems are nominal.
+- **`ASCS cut-release`** also checks a second checkout for uncommitted work, and stops if the CHANGELOG still says "in progress".
+- **The `ASCS` command moved into the repo,** at `tools\cli`, so it's versioned and tested with everything else.
+- **The launcher finds ASCS in any folder,** so it can't start a second copy during a test build.
+
+### Performance and security
+- The daily copy adds one small file copy a day, and a file check on each save. No timers, polling or network use.
+- A test build's copy of your secrets file stays in a folder git ignores, and is deleted when the test ends. Its calendar config is rewritten and checked so it can't reach the real calendar.
+- ASCS now exits on a window message, which, like the existing reload message, any program running as you can send.
+
 ## Version 1.11.1
 
 Per-game notes with session timestamps. The first run showed an empty Quick Notes list at startup, with the notes themselves safe in the file. That was fixed, and two restarts after the fix logged no page errors. The owner then reported the release good, using a short list of checks in place of the full checklist. 1,348 automated checks and a 130-check smoke test. The layout redesign is next.

@@ -62,6 +62,16 @@ HandleReloadMessage(wParam, lParam, msg, hwnd) {
     return 1
 }
 
+; 1.11.2: the ASCS command's `try` closes ASCS with this, saving notes first.
+OnMessage(
+    DllCall("RegisterWindowMessage", "Str", "Aeolionware.ASCS.Exit", "UInt"),
+    HandleExitMessage
+)
+HandleExitMessage(wParam, lParam, msg, hwnd) {
+    SetTimer(ExitASCS, -1)
+    return 1
+}
+
 F24 & r:: {
     if GetKeyState("Shift", "P")
         ShowCommandLauncher("workspaces")

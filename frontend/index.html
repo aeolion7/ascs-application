@@ -30,6 +30,7 @@
   <link rel="stylesheet" href="styles/21-1.10.0-workspaces.css">
   <link rel="stylesheet" href="styles/22-1.11.0-awards.css">
   <link rel="stylesheet" href="styles/23-1.11.1-game-notes.css">
+  <link rel="stylesheet" href="styles/24-1.11.2-status.css">
 </head>
 <body>
   <div class="app-shell">
@@ -104,7 +105,7 @@
 
       <div class="sidebar-bottom">
         <span class="sidebar-status">
-          <strong id="sidebarVersion">ASCS <span>1.11.1</span></strong>
+          <strong id="sidebarVersion">ASCS <span>1.11.2</span></strong>
           <small><span class="status-indicator" aria-hidden="true"></span>Standing by</small>
         </span>
         <span class="key-hint" aria-label="Super key">Super</span>
@@ -148,6 +149,7 @@
             <span class="status-indicator" aria-hidden="true"></span>
             <span id="topStatusText">ALL SYSTEMS NOMINAL</span>
           </div>
+          <button class="secondary" type="button" id="topStatusLog" title="Opens ASCS Logs, where the error is listed" hidden>View log</button>
           <time class="top-clock" id="topClock"></time>
           <div class="window-controls" aria-label="Window controls">
             <button class="window-control" type="button" data-window-action="minimize" aria-label="Minimize window" title="Minimize">

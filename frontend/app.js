@@ -4,6 +4,7 @@
 // per session, so a problem in the page is never invisible.
 let reportedPageErrors = 0;
 function reportPageError(message, where) {
+    notePageError(message);
     if (reportedPageErrors >= 10) return;
     reportedPageErrors++;
     const text = `${String(message ?? "unknown error")} ${where || ""}`.replace(/[\r\n]+/g, " ").slice(0, 300);
@@ -17,6 +18,26 @@ window.addEventListener("error", event =>
     reportPageError(event.message, `(${String(event.filename || "").split("/").pop()}:${event.lineno || 0})`));
 window.addEventListener("unhandledrejection", event =>
     reportPageError(event.reason?.message || event.reason, "(promise)"));
+
+// A page error also shows in the title bar. It can happen before the rest of
+// this file has run, so the chip is drawn when it's able to be.
+function notePageError(message) {
+    try {
+        unseenPageErrors++;
+        lastPageError = String(message ?? "unknown error").slice(0, 200);
+        renderTopStatus();
+    } catch {
+        window.addEventListener("DOMContentLoaded", () => {
+            try {
+                unseenPageErrors = Math.max(unseenPageErrors, 1);
+                lastPageError = String(message ?? "unknown error").slice(0, 200);
+                renderTopStatus();
+            } catch {
+                // the log still has it
+            }
+        }, { once: true });
+    }
+}
 
 const $ = id => document.getElementById(id);
 const validViews = new Set(["home", "notes", "calendar", "workspaces", "games", "sounds", "dashboard", "commands", "settings"]);
@@ -1496,6 +1517,10 @@ function handleWebMessage(event) {
             loadNotes(data.data, data.recovered === true);
             refreshGameNotes();
             break;
+        case "testBuild":
+            isTestBuild = true;
+            renderTopStatus();
+            break;
         case "resume": {
             // ASCS was re-shown on the view that was already open.
             const view = document.querySelector(".view.active")?.id ?? "home";
@@ -2356,13 +2381,39 @@ function updateSystemStatus(data) {
     (Array.isArray(data.drives) ? data.drives : []).forEach(drive => {
         if (drive?.online && Number(drive.usage) >= 90) alerts.push(`${drive.letter} ${Math.round(drive.usage)}% FULL`);
     });
-    const status = $("topStatus");
-    status.dataset.state = alerts.length ? "attention" : "nominal";
-    $("topStatusText").textContent = alerts.length
-        ? `ATTENTION · ${alerts[0]}${alerts.length > 1 ? ` +${alerts.length - 1}` : ""}`
-        : "ALL SYSTEMS NOMINAL";
-    status.title = alerts.length ? alerts.join(", ") : "Every monitored resource is below 90%.";
+    topStatusBase = {
+        state: alerts.length ? "attention" : "nominal",
+        text: alerts.length ? `ATTENTION · ${alerts[0]}${alerts.length > 1 ? ` +${alerts.length - 1}` : ""}` : "ALL SYSTEMS NOMINAL",
+        title: alerts.length ? alerts.join(", ") : "Every monitored resource is below 90%."
+    };
+    renderTopStatus();
 }
+
+// What the chip shows, most important first (1.11.2): a page error, a test
+// build, then the system's resources.
+let topStatusBase = { state: "nominal", text: "ALL SYSTEMS NOMINAL", title: "Every monitored resource is below 90%." };
+let unseenPageErrors = 0;
+let lastPageError = "";
+let isTestBuild = false;
+
+function renderTopStatus() {
+    const shown = unseenPageErrors
+        ? { state: "error", text: `ATTENTION · PAGE ERROR${unseenPageErrors > 1 ? ` +${unseenPageErrors - 1}` : ""}`, title: lastPageError }
+        : isTestBuild
+            ? { state: "test", text: "TEST BUILD · CHANGES ARE DISCARDED", title: "Running on a copy of your data. Go back with: ASCS try --end" }
+            : topStatusBase;
+    const status = $("topStatus");
+    status.dataset.state = shown.state;
+    status.title = shown.title;
+    $("topStatusText").textContent = shown.text;
+    $("topStatusLog").hidden = !unseenPageErrors;
+}
+
+$("topStatusLog").addEventListener("click", () => {
+    unseenPageErrors = 0;
+    renderTopStatus();
+    toggleLogs(true);
+});
 
 // ------------------------------------------------------------ keyboard map
 // An ISO 100% keyboard showing which keys are taken with Super, or with

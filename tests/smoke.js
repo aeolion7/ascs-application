@@ -315,6 +315,32 @@
             checks.push(["no awards says so", awardBox.querySelector(".ra-awards .settings-note")?.textContent === "No awards yet." ? [] : ["no message"]]);
             checks.push(["asking for awards is allowlisted", new Set(window.SMOKE_ALLOWLIST || []).has("GetRaAwards") ? [] : ["not allowlisted"]]);
 
+            // 1.11.2: the title bar tells the truth.
+            navigate("home");
+            const chip = () => $("topStatus").dataset.state;
+            updateSystemStatus({ cpu: 10, ram: 10, drives: [] });
+            checks.push(["the chip starts nominal, with no log button", chip() === "nominal" && $("topStatusLog").hidden ? [] : [chip()]]);
+            handleWebMessage({ data: { type: "testBuild" } });
+            checks.push(["a test build says so", chip() === "test" && $("topStatusText").textContent.includes("TEST BUILD") ? [] : [chip()]]);
+            updateSystemStatus({ cpu: 10, ram: 10, drives: [] });
+            checks.push(["and a metrics update doesn't hide that", chip() === "test" ? [] : [chip()]]);
+            window.dispatchEvent(new ErrorEvent("error", { message: "<b>boom</b>", filename: "x.js", lineno: 1 }));
+            window.dispatchEvent(new ErrorEvent("error", { message: "second", filename: "x.js", lineno: 2 }));
+            errors.splice(0);
+            checks.push(["a page error shows in the title bar", chip() === "error" && $("topStatusText").textContent.includes("PAGE ERROR +1") ? [] : [$("topStatusText").textContent]]);
+            checks.push(["with a way to see it", !$("topStatusLog").hidden && getComputedStyle($("topStatusLog")).display !== "none" ? [] : ["no button"]]);
+            checks.push(["and keeps its text as text", $("topStatus").querySelector("b") ? ["markup ran"] : []]);
+            updateSystemStatus({ cpu: 95, ram: 10, drives: [] });
+            checks.push(["a metrics update doesn't hide it either", chip() === "error" ? [] : [chip()]]);
+            $("topStatusLog").click();
+            checks.push(["View log opens ASCS Logs", !$("logsDialog").hidden ? [] : ["not open"]]);
+            toggleLogs(false);
+            checks.push(["and clears the warning", chip() === "test" && $("topStatusLog").hidden ? [] : [chip()]]);
+            isTestBuild = false;
+            renderTopStatus();
+            checks.push(["then the resources show again", chip() === "attention" && $("topStatusText").textContent.includes("CPU 95%") ? [] : [chip()]]);
+            updateSystemStatus({ cpu: 10, ram: 10, drives: [] });
+
             // 1.11.1: per-game notes.
             navigate("games");
             gamesState.items = [];

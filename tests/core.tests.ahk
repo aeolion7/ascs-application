@@ -858,6 +858,22 @@ Throws("groups: a tab", () => CheckNoteGroups(groupNote('"a' Chr(92) 'tb"')), "c
 Throws("groups: not text", () => CheckNoteGroups(groupNote("42")), "must be text")
 Throws("groups: the second note checked too", () => CheckNoteGroups('{"notes":[{"group":"ok"},{"group" : "' StrRepeat("g", 61) '"}]}'), "60 characters")
 
+; ------------------------------------------------------------ notes history (1.11.2)
+Equal("notes history: the name", NotesHistoryName("20261108154233"), "notes-2026-11-08.json")
+historyNames(count) {
+    names := []
+    Loop count
+        names.Push("notes-2026-01-" Format("{:02}", A_Index) ".json")
+    return names
+}
+Equal("notes history: under the limit, nothing goes", NotesHistoryToPrune(historyNames(13)).Length, 0)
+Equal("notes history: at the limit, nothing goes", NotesHistoryToPrune(historyNames(14)).Length, 0)
+Equal("notes history: past it, one goes", NotesHistoryToPrune(historyNames(15)).Length, 1)
+Equal("notes history: the oldest goes", NotesHistoryToPrune(historyNames(16))[2], "notes-2026-01-02.json")
+Equal("notes history: order doesn't matter", NotesHistoryToPrune(["notes-2026-03-01.json", "notes-2026-01-01.json", "notes-2026-02-01.json"], 2)[1], "notes-2026-01-01.json")
+Equal("notes history: other files are never chosen", NotesHistoryToPrune(["notes.json", "notes-2026-01-01.json.bak", "secrets.json", "notes-x.json"], 0).Length, 0)
+Equal("notes history: nothing there", NotesHistoryToPrune([]).Length, 0)
+
 ; ------------------------------------------------------------ Quick Notes game links (1.11.1)
 gameNote(game) => '{"version":2,"notes":[{"id":"a","title":"t","game":' game ',"content":"x"}]}'
 CheckNoteGames('{"version":2,"notes":[{"id":"a","title":"t","content":"x"}]}')

@@ -37,7 +37,9 @@ $^!+a::StartOrReloadASCS()
 FindASCSWindow() {
     DetectHiddenWindows(true)
     SetTitleMatchMode(2)
-    return WinExist(ASCS_ScriptPath " - AutoHotkey ahk_class AutoHotkey")
+    ; Any folder: during ASCS try, the test build is the ASCS that's running, and
+    ; starting this folder's copy beside it would make their hotkeys fight.
+    return WinExist("\ASCS.ahk - AutoHotkey ahk_class AutoHotkey")
 }
 
 StartOrReloadASCS(*) {

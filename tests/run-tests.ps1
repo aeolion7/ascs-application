@@ -96,5 +96,9 @@ $match = [regex]::Match($html, '<pre id="results">([\s\S]*?)</pre>')
 $text = if ($match.Success) { [Net.WebUtility]::HtmlDecode($match.Groups[1].Value) } else { "" }
 if (-not (Show-Result "smoke" $text)) { $failed = $true }
 
+# --- The ASCS command line, against throwaway repositories
+$text = (& pwsh -NoProfile -File (Join-Path $PSScriptRoot "cli.tests.ps1") 2>&1 | ForEach-Object { "$_" }) -join "`n"
+if (-not (Show-Result "cli" $text)) { $failed = $true }
+
 if ($failed) { exit 1 }
 Write-Host "All tests passed." -ForegroundColor Green

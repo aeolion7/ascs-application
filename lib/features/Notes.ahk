@@ -108,8 +108,10 @@ SaveNotes(content) {
             noteHandle.Close()
         }
 
-        if (FileExist(ASCS_NotesFile) && !ASCS_NotesRecovered)
+        if (FileExist(ASCS_NotesFile) && !ASCS_NotesRecovered) {
+            KeepTodaysNotesCopy()
             FileCopy(ASCS_NotesFile, backupPath, 1)
+        }
 
         FileMove(tempPath, ASCS_NotesFile, 1)
         ASCS_NotesFileTime := GetNotesFileStamp()
@@ -123,6 +125,28 @@ SaveNotes(content) {
                 FileDelete(tempPath)
         }
         SendNotesError("Unable to save notes. The previous file was kept.")
+    }
+}
+
+; 1.11.2: the first save of each day keeps the notes as they were before it.
+; A failure here is logged and never stops the save.
+KeepTodaysNotesCopy() {
+    global ASCS_NotesFile, ASCS_DataDir
+
+    try {
+        folder := ASCS_DataDir "\notes-history"
+        target := folder "\" NotesHistoryName(A_Now)
+        if FileExist(target)
+            return
+        DirCreate(folder)
+        FileCopy(ASCS_NotesFile, target, 1)
+        names := []
+        Loop Files folder "\*.json"
+            names.Push(A_LoopFileName)
+        for name in NotesHistoryToPrune(names)
+            FileDelete(folder "\" name)
+    } catch as err {
+        WriteLog("Notes history failed: " err.Message)
     }
 }
 
