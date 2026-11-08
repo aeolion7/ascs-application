@@ -2180,16 +2180,26 @@ FileTimeToLocalStamp(fileTime, offsetSeconds) {
 ; "group" inside a note's text is escaped there (\"group\"). Throws on the first
 ; one that isn't.
 CheckNoteGroups(content) {
+    CheckNoteTextField(content, "group", "A group name", 60)
+}
+
+; 1.11.1: the link from a note to a game (up to 160 letters or digits, which
+; can take two UTF-16 units each).
+CheckNoteGames(content) {
+    CheckNoteTextField(content, "game", "A game link", 320)
+}
+
+CheckNoteTextField(content, field, label, limit) {
     position := 1
-    while (found := RegExMatch(content, '"group"\s*:\s*', &key, position)) {
+    while (found := RegExMatch(content, '"' field '"\s*:\s*', &key, position)) {
         position := found + key.Len
         if !RegExMatch(content, '\G"((?:[^"\\]|\\.)*)"', &value, position)
-            throw Error("A note's group must be text.")
+            throw Error("A note's " field " must be text.")
         name := JsonUnescape(value[1])
-        if (StrLen(name) > 60)
-            throw Error("A group name can be up to 60 characters.")
+        if (StrLen(name) > limit)
+            throw Error(label " can be up to " limit " characters.")
         if RegExMatch(name, "[\x00-\x1F\x7F]")
-            throw Error("A group name can't contain control characters.")
+            throw Error(label " can't contain control characters.")
         position += value.Len
     }
 }

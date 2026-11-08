@@ -326,6 +326,12 @@ function paletteSources(mode) {
             run: () => send("RunCommand", String(command.id)), weight: 4
         }));
     }
+    if (mode === "all") {
+        items.push({
+            id: "game-notes", label: "Notes for current game", description: "Opens the running game's notes in Quick Notes",
+            keywords: "game notes playing session", badge: "NOTE", run: () => openCurrentGameNotes()
+        });
+    }
     if (mode === "all" || mode === "workspaces" || mode === "pick") {
         savedWorkspaces.forEach(workspace => items.push({
             id: `ws:${workspace.name.toLowerCase()}`, label: `Restore workspace “${workspace.name}”`,
@@ -1107,6 +1113,7 @@ function renderActiveNote() {
     $("noteUpdated").textContent = note
         ? `Updated ${new Date(note.updated).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`
         : "Changes save automatically";
+    renderNoteGameLink(note);
     renderNotesList();
 }
 
@@ -1198,6 +1205,7 @@ function loadNotes(raw, recovered) {
             migrated = true;
         }
     });
+    if (ASCSNotes.cleanGameLinks(parsed.notes)) migrated = true;
     notesData = {
         version: 2,
         activeId: typeof parsed.activeId === "string" ? parsed.activeId : null,
@@ -1486,6 +1494,7 @@ function handleWebMessage(event) {
             }
             if (data.external === true) showNotice("Notes reloaded because notes.json changed outside ASCS.");
             loadNotes(data.data, data.recovered === true);
+            refreshGameNotes();
             break;
         case "resume": {
             // ASCS was re-shown on the view that was already open.
@@ -1723,7 +1732,19 @@ function handleWebMessage(event) {
     }
 }
 
-window.chrome?.webview?.addEventListener("message", handleWebMessage);
+// AHK answers Ready at once, which can be before the page's later scripts have
+// run, and handling a reply then calls functions that don't exist yet. Replies
+// wait, in order, until every script has run.
+let earlyMessages = [];
+window.chrome?.webview?.addEventListener("message", event => {
+    if (earlyMessages) earlyMessages.push(event);
+    else handleWebMessage(event);
+});
+document.addEventListener("DOMContentLoaded", () => {
+    const waiting = earlyMessages;
+    earlyMessages = null;
+    waiting.forEach(handleWebMessage);
+}, { once: true });
 
 // System Dashboard: recent sign-ins as a graph with data points, oldest on the
 // left (1.9.2). The pointer anywhere over the graph picks the nearest point and
@@ -3553,6 +3574,7 @@ function playGame(game) {
 
 function renderGames() {
     if (!Games) return;
+    keepGameNoteFocus();
     const items = gamesState.items;
 
     // Continue playing: the twelve most recent games ASCS can start, in a
@@ -3638,6 +3660,7 @@ function renderGamesLive(data) {
     updateRaTimestamp();
 
     if (data.apps && typeof data.apps === "object") setRunningApps(data.apps);
+    gameNotesLiveArrived();
 }
 
 // Now playing (1.7.0): the game in front, with its cover as a soft backdrop,
@@ -3655,6 +3678,7 @@ function renderNowPlaying() {
     const last = !lead ? Games.sortGames(gamesState.items.filter(game => game.last && game.installed !== false), "recent")[0] : null;
     const shownGame = leadGame || last;
     const progress = leadGame ? raProgressFor(leadGame) : null;
+    syncNowPlayingNotes(lead ? leadGame?.title || leadName : last?.title || "");
     const signature = JSON.stringify([playing, matched.map(game => game?.id || ""), leadGame?.seconds, last?.id,
         shownGame ? gamesState.covers.has(shownGame.id) : false, gamesState.ra.updatedAt, progress?.achieved]);
     if (panel.dataset.signature === signature) return;
@@ -3878,6 +3902,8 @@ function gameDetailsPanel(game) {
         actions.append(show);
     }
     body.append(actions);
+    const notes = gameNotesBox("library", game.title);
+    if (notes) body.append(notes);
     panel.append(body);
     return panel;
 }
@@ -4212,6 +4238,8 @@ function renderRaBrowser(box) {
         : "This game has no achievements yet."));
     head.append(raImage(game.icon, "ra-icon ra-browser-icon"), titles);
     panel.append(head);
+    const notes = gameNotesBox("achievements", game.title);
+    if (notes) panel.append(notes);
 
     const tools = element("div", "ra-browser-tools");
     const counts = Games.raCounts(game.achievements);
@@ -4287,6 +4315,7 @@ function raNextUpCard(gameId) {
 }
 
 function renderAchievements() {
+    keepGameNoteFocus();
     const box = $("gamesAchievements");
     const ra = gamesState.ra;
     box.replaceChildren();
@@ -4491,6 +4520,8 @@ function preloadGames() {
 
 function startGamesPolling() {
     stopGamesPolling();
+    if (!notesLoaded) send("GetNotes");
+    refreshGameNotes();
     send("GetGames");
     send("GetGamesLive");
     send("GetRetroAchievements");

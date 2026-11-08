@@ -89,6 +89,44 @@
         return renameGroup(notes, name, "");
     }
 
+    // ---------------------------------------------------------- game notes
+    // 1.11.1: an optional `game` string links a note to a game, by the game's
+    // title key (ASCSGames.gameNoteKey), so renaming the note keeps the link.
+    const GAME_NOTE_GROUP = "Game notes";
+    const isGameKey = key => typeof key === "string" && /^[\p{L}\p{N}]{1,160}$/u.test(key);
+
+    // Drops a link that isn't valid, so one bad hand edit can't make ASCS
+    // refuse every later save. Returns how many were dropped.
+    function cleanGameLinks(notes) {
+        let dropped = 0;
+        notes.forEach(note => {
+            if (note.game !== undefined && !isGameKey(note.game)) {
+                delete note.game;
+                dropped++;
+            }
+        });
+        return dropped;
+    }
+
+    // The game's note; if a hand edit left several, the one updated last.
+    function findGameNote(notes, key) {
+        if (!isGameKey(key)) return null;
+        return notes.filter(note => note.game === key)
+            .reduce((best, note) => !best || String(note.updated) > String(best.updated) ? note : best, null);
+    }
+
+    // A window's title can hold anything, so it's tidied before it's a note's.
+    function gameNoteTitle(title) {
+        return String(title ?? "").replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 160).trim();
+    }
+
+    // A timestamp as a heading on its own line at the end, ready to write under.
+    function appendStamp(content, stamp) {
+        const text = String(content ?? "");
+        const gap = !text || text.endsWith("\n\n") ? "" : text.endsWith("\n") ? "\n" : "\n\n";
+        return `${text}${gap}### ${stamp}\n`;
+    }
+
     // A note's name with its group in front, for the palette: "Claude › Bug".
     function groupedLabel(note, label) {
         const group = normalizeGroup(note?.group);
@@ -274,6 +312,7 @@
     global.ASCSNotes = {
         extractTags, matchesNoteQuery, tagCounts, parseMarkdown, parseInline, wordCount,
         MARK_CLIPBOARD, MARK_CURSOR, PLACEHOLDER_MENU, askLabel, placeholderAsks,
-        normalizeGroup, groupKey, groupNames, groupNotes, renameGroup, deleteGroup, groupedLabel, hasPlaceholders, fillPlaceholders, fillsPlaceholders
+        normalizeGroup, groupKey, groupNames, groupNotes, renameGroup, deleteGroup, groupedLabel, hasPlaceholders, fillPlaceholders, fillsPlaceholders,
+        GAME_NOTE_GROUP, isGameKey, cleanGameLinks, findGameNote, gameNoteTitle, appendStamp
     };
 })(globalThis);
