@@ -1741,6 +1741,49 @@ ActiveCountdowns(countdowns, today) {
 ; A leveled copy ASCS made: a WAV directly inside the library's ASCS Leveled
 ; folder (an index id, relative to the library). Only these can be deleted
 ; from ASCS (1.8.0).
+; Workspaces across desktops (1.9.0): which current desktop each saved one
+; goes to. A desktop named in Task View goes to the desktop with that name;
+; otherwise to the same number. saved: Map(number -> name), numbers 0-based;
+; current: Array of the current desktops' names (desktop n at n + 1).
+; Returns Map(number -> target); -1 means there's no such desktop now.
+WorkspaceDesktopTargets(saved, current) {
+    targets := Map()
+    taken := Map()
+    for number, name in saved {
+        if (name = "")
+            continue
+        for index, existing in current {
+            if (existing = name && !taken.Has(index - 1)) {
+                targets[number] := index - 1
+                taken[index - 1] := true
+                break
+            }
+        }
+    }
+    for number, name in saved
+        if !targets.Has(number)
+            targets[number] := number < current.Length ? number : -1
+    return targets
+}
+
+; How many desktops must be added so every saved desktop without a target
+; gets its own number (0 when none are missing).
+WorkspaceDesktopsMissing(targets, current) {
+    highest := -1
+    for number, target in targets
+        if (target = -1 && number > highest)
+            highest := number
+    return highest < 0 ? 0 : highest + 1 - current.Length
+}
+
+; A RetroAchievements game ID (1.9.0, the achievement browser): 1 to 9
+; digits, no leading zero. Returned as text, for the request.
+ValidateRaGameId(text) {
+    if !RegExMatch(text, "^[1-9]\d{0,8}$")
+        throw Error("That isn't a RetroAchievements game.")
+    return text
+}
+
 IsLeveledCopyId(id) {
     return RegExMatch(id, "i)^ASCS Leveled\\[^\\/:*?`"<>|]+\.wav$")
 }

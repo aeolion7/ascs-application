@@ -1,0 +1,788 @@
+/* ==========================================================================
+   1.7.0: Command Center system and power buttons
+   Guarded buttons carry a gold edge and fill while held; a plain click only
+   flashes the hint. The countdown banner sits above every tab.
+   ========================================================================== */
+
+.system-block {
+  margin: 18px 0 4px;
+}
+
+.system-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.power-hint {
+  color: #7d8298;
+  font-size: 11.5px;
+  transition: color 200ms ease;
+}
+
+.power-hint.is-flashing {
+  animation: power-hint-flash 1.4s ease;
+}
+
+@keyframes power-hint-flash {
+  0%, 60% { color: var(--gold-text, #e3c072); }
+  100% { color: #7d8298; }
+}
+
+.power-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.power-button {
+  --hold: 0;
+  position: relative;
+  display: grid;
+  min-width: 0;
+  justify-items: center;
+  gap: 4px;
+  padding: 10px 6px 9px;
+  overflow: hidden;
+  border: 1px solid rgba(167, 174, 202, .14);
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(29, 33, 48, .9), rgba(20, 22, 33, .95));
+  color: #d9dbe6;
+  cursor: pointer;
+  font: inherit;
+  touch-action: none;
+  user-select: none;
+}
+
+.power-button::before {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(201, 162, 74, .38), rgba(227, 192, 114, .22));
+  content: "";
+  transform: scaleX(var(--hold));
+  transform-origin: left;
+}
+
+.power-button > * {
+  position: relative;
+}
+
+.power-button svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: var(--icon-gold, #d9b866);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.power-button span {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.power-button small {
+  max-width: 100%;
+  overflow: hidden;
+  color: #8f94aa;
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.power-button:hover,
+.power-button:focus-visible {
+  border-color: rgba(139, 111, 245, .5);
+}
+
+.power-button:focus-visible {
+  outline: 2px solid var(--indigo-300);
+  outline-offset: 2px;
+}
+
+.power-button.is-guarded {
+  border-color: rgba(201, 162, 74, .32);
+}
+
+.power-button.is-guarded:hover,
+.power-button.is-guarded:focus-visible {
+  border-color: rgba(227, 192, 114, .7);
+}
+
+.power-button:disabled {
+  cursor: default;
+  opacity: .45;
+}
+
+.audio-menu {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 6px;
+  border: 1px solid rgba(139, 111, 245, .35);
+  border-radius: 12px;
+  background: rgba(16, 18, 27, .96);
+}
+
+.audio-option {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #d9dbe6;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+}
+
+.audio-option:hover,
+.audio-option:focus-visible {
+  background: rgba(76, 31, 184, .35);
+}
+
+.audio-option.is-current {
+  color: #f1ecff;
+  font-weight: 600;
+}
+
+.audio-option.is-current::before {
+  margin-right: 8px;
+  color: #a892fb;
+  content: "●";
+}
+
+.power-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--gold-border, rgba(227, 192, 114, .55));
+  border-radius: 10px;
+  background: rgba(201, 162, 74, .1);
+  color: #ecd9a8;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.power-banner {
+  position: fixed;
+  z-index: 60;
+  top: calc(var(--titlebar-height) + 10px);
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 10px 10px 16px;
+  border: 1px solid var(--gold-border, rgba(227, 192, 114, .6));
+  border-radius: 999px;
+  background: rgba(26, 20, 10, .94);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .45);
+  color: #fff3d1;
+  transform: translateX(-50%);
+}
+
+.power-banner[hidden] {
+  display: none;
+}
+
+.power-banner strong {
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* Held for unsaved work: wider, wraps, and the dot turns burgundy. */
+.power-banner.is-held {
+  width: min(640px, calc(100vw - 48px));
+  border-color: var(--burgundy-border);
+  border-radius: 16px;
+}
+
+.power-banner.is-held strong {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.power-banner.is-held .power-banner-dot {
+  flex: none;
+  background: var(--burgundy-bright);
+}
+
+.power-banner button[hidden] {
+  display: none;
+}
+
+.power-banner-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--gold-text, #e3c072);
+  animation: power-pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes power-pulse {
+  from { opacity: .35; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 1250px) {
+  .power-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .power-banner-dot,
+  .power-hint.is-flashing {
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+   1.7.0: horizontal scrolling
+   Tab strips stay on one line and scroll sideways when the window is too
+   narrow for them (scrollbar hidden; the thumb wheel steps through tabs).
+   Continue playing is a sideways-scrolling row with snap points.
+   ========================================================================== */
+
+#settings .settings-nav,
+.logs-sources,
+.logs-levels {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+#settings .settings-nav::-webkit-scrollbar,
+.logs-sources::-webkit-scrollbar,
+.logs-levels::-webkit-scrollbar,
+.games-continue::-webkit-scrollbar {
+  display: none;
+}
+
+#settings .settings-nav button,
+.logs-sources button,
+.logs-levels button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.games-continue {
+  display: grid;
+  grid-auto-columns: max(150px, calc((100% - 5 * 14px) / 6));
+  grid-auto-flow: column;
+  grid-template-columns: none;
+  padding-bottom: 4px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+
+.games-continue.has-more {
+  mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent);
+}
+
+.games-continue .game-tile {
+  scroll-snap-align: start;
+}
+
+.games-continue > p {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 1250px) {
+  .games-continue {
+    grid-auto-columns: max(150px, calc((100% - 3 * 14px) / 4));
+    grid-template-columns: none;
+  }
+}
+
+/* ==========================================================================
+   1.7.0: the System bar, in the Command Center header
+   Two groups: click actions (plain) and hold-to-confirm actions (framed in
+   gold, labeled HOLD with a ring, each button gold-edged and filling while
+   held). It sits to the right of the title, so it adds no height.
+   ========================================================================== */
+
+.system-bar {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.system-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid rgba(167, 174, 202, .14);
+  border-radius: 14px;
+  background: rgba(16, 18, 27, .55);
+}
+
+.system-group.is-guarded {
+  border-color: rgba(201, 162, 74, .45);
+  background: linear-gradient(160deg, rgba(201, 162, 74, .08), rgba(16, 18, 27, .55));
+}
+
+.system-group-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 6px 0 7px;
+  color: #7d8298;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 1.3px;
+}
+
+.system-group.is-guarded .system-group-label {
+  color: var(--gold-text, #e3c072);
+  cursor: help;
+}
+
+.system-group-label svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 2;
+}
+
+.system-group-label.is-flashing {
+  animation: hold-label-flash 1.4s ease;
+}
+
+@keyframes hold-label-flash {
+  0%, 55% { color: #fff3d1; text-shadow: 0 0 10px rgba(227, 192, 114, .8); }
+  100% { color: var(--gold-text, #e3c072); text-shadow: none; }
+}
+
+.system-button {
+  --hold: 0;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 12px;
+  overflow: hidden;
+  border: 1px solid rgba(167, 174, 202, .16);
+  border-radius: 10px;
+  background: rgba(29, 33, 48, .9);
+  color: #d9dbe6;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  touch-action: none;
+  user-select: none;
+}
+
+.system-button::before {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(201, 162, 74, .5), rgba(227, 192, 114, .28));
+  content: "";
+  transform: scaleX(var(--hold));
+  transform-origin: left;
+}
+
+.system-button > * {
+  position: relative;
+}
+
+.system-button svg {
+  flex: 0 0 17px;
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: #a5aabd;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.system-button.is-guarded {
+  border-color: rgba(201, 162, 74, .38);
+}
+
+.system-button.is-guarded svg {
+  stroke: var(--icon-gold, #d9b866);
+}
+
+.system-button small {
+  color: #8f94aa;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.system-button #audioCurrent {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.system-button:hover,
+.system-button:focus-visible {
+  border-color: rgba(139, 111, 245, .55);
+  color: #fff;
+}
+
+.system-button.is-guarded:hover,
+.system-button.is-guarded:focus-visible {
+  border-color: rgba(227, 192, 114, .8);
+}
+
+.system-button:focus-visible {
+  outline: 2px solid var(--indigo-300);
+  outline-offset: 2px;
+}
+
+.system-button:disabled {
+  cursor: default;
+  opacity: .45;
+}
+
+/* Pop-overs hang below the bar instead of pushing the page down. */
+.system-bar .audio-menu,
+.system-bar .power-confirm {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(420px, 90vw);
+  margin: 0;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, .45);
+}
+
+.system-bar .power-confirm {
+  background: rgba(32, 25, 12, .97);
+}
+
+/* ---- RetroAchievements badges and game icons ---- */
+.ra-with-image {
+  display: grid !important;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+
+.ra-item-body {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.ra-image {
+  display: block;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  border: 1px solid rgba(167, 174, 202, .14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .04);
+}
+
+.ra-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ra-badge.is-hardcore {
+  border-color: var(--gold-border, rgba(227, 192, 114, .6));
+  box-shadow: 0 0 8px rgba(227, 192, 114, .25);
+}
+
+/* ==========================================================================
+   1.7.0: Now playing
+   The game in front gets its cover as a soft, blurred backdrop, a session
+   timer, total play time, achievement progress and Show file.
+   ========================================================================== */
+
+.games-now {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.games-now > :not(.now-backdrop) {
+  position: relative;
+}
+
+.now-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.now-backdrop img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(26px) saturate(1.25);
+  opacity: .26;
+  transform: scale(1.25);
+  -webkit-mask-image: linear-gradient(100deg, rgba(0, 0, 0, .35) 0%, #000 70%);
+  mask-image: linear-gradient(100deg, rgba(0, 0, 0, .35) 0%, #000 70%);
+}
+
+.games-now.is-playing {
+  border-color: rgba(79, 209, 139, .22);
+}
+
+.games-now.is-playing > .games-panel-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #8fe0b3;
+}
+
+.games-now.is-playing > .games-panel-label::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4fd18b;
+  box-shadow: 0 0 8px rgba(79, 209, 139, .6);
+  content: "";
+  animation: now-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes now-pulse {
+  50% { opacity: .45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .games-now.is-playing > .games-panel-label::before { animation: none; }
+}
+
+.now-main {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 14px;
+}
+
+.game-cover-now {
+  flex: 0 0 auto;
+  width: 58px;
+  height: 78px;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+}
+
+.now-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4fd18b;
+}
+
+.now-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.now-kicker {
+  color: #8f94aa;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.1px;
+}
+
+.now-copy .now-title {
+  overflow: hidden;
+  color: #eef0f7;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -.2px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.now-copy small {
+  overflow: hidden;
+  color: #8f94aa;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.now-stats {
+  display: flex;
+  gap: 26px;
+}
+
+.now-stats span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.now-stats small,
+.now-ra-head small {
+  color: #8f94aa;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.1px;
+}
+
+.now-stats strong {
+  color: #eef0f7;
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.now-stats .now-session {
+  color: #8fe0b3;
+}
+
+.now-ra {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.now-ra-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.now-ra-head strong {
+  color: var(--gold-text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.now-ra-latest,
+.now-presence {
+  overflow: hidden;
+  margin: 0;
+  color: #a4a9bb;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.now-presence {
+  color: #8f94aa;
+  font-style: italic;
+}
+
+.now-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.now-actions button {
+  min-height: 30px;
+  padding: 0 14px;
+}
+
+.now-stats .now-actions {
+  align-self: flex-end;
+  margin: 0 0 0 auto;
+}
+
+/* 1.8.0: selects in Preferences match the text fields. */
+.settings-field select {
+  min-height: 43px;
+  padding: 0 12px;
+  border: 1px solid rgba(167, 174, 202, .2);
+  border-radius: 9px;
+  background: var(--panel-input);
+  color: var(--text);
+  font: inherit;
+}
+
+.settings-field select option {
+  background: #1d2130;
+  color: #eef0f7;
+}
+
+.settings-subheading {
+  margin-top: 14px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(152, 151, 181, .12);
+}
+
+
+
+/* 1.8.0: Ctrl numbers on the sidebar, and the shortcuts button in the title bar. */
+.nav .nav-key {
+  margin-left: auto;
+  min-width: 18px;
+  padding: 1px 5px;
+  border: 1px solid rgba(167, 174, 202, .14);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, .03);
+  color: #6f7489;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+  transition: color 140ms ease, border-color 140ms ease;
+}
+
+.nav:hover .nav-key,
+.nav.active .nav-key {
+  border-color: rgba(167, 174, 202, .28);
+  color: #c9ccd8;
+}
+
+.titlebar-help {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgba(167, 174, 202, .16);
+  border-radius: 50%;
+  background: rgba(10, 12, 19, .5);
+  color: #8f94aa;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  -webkit-app-region: no-drag;
+  transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease;
+}
+
+.titlebar-help:hover,
+.titlebar-help:focus-visible {
+  border-color: rgba(139, 111, 245, .4);
+  background: rgba(20, 22, 34, .8);
+  color: #eef0f7;
+}
+
+body.sidebar-collapsed .nav .nav-key {
+  display: none;
+}
+

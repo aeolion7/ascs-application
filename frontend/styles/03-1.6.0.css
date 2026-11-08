@@ -1,0 +1,1173 @@
+/* ==========================================================================
+   1.6.0: Burgundy secondary accent
+   Violet stays the primary, interactive color. Burgundy marks secondary
+   meaning: memory metrics, saved things (snippets, workspaces, captures),
+   heading punctuation, and destructive actions (replacing the pink-red).
+   ========================================================================== */
+
+:root {
+  --burgundy: #8a2846;
+  --burgundy-bright: #c4587b;
+  --burgundy-text: #e8a3b9;
+  --burgundy-soft: rgba(196, 88, 123, .13);
+  --burgundy-border: rgba(196, 88, 123, .3);
+  --burgundy-gradient: linear-gradient(115deg, #7d2441 0%, #b04a6d 100%);
+}
+
+body {
+  background:
+    radial-gradient(ellipse at 78% -10%, rgba(43, 0, 113, .09), transparent 38rem),
+    radial-gradient(ellipse at -5% 110%, rgba(138, 40, 70, .1), transparent 34rem),
+    var(--background);
+}
+
+.title-period {
+  color: var(--burgundy-bright);
+}
+
+.eyebrow-line {
+  background: linear-gradient(90deg, var(--accent-secondary), var(--burgundy-bright));
+  box-shadow: 0 0 7px rgba(196, 88, 123, .45);
+}
+
+.emblem-glow {
+  background: radial-gradient(circle, rgba(95, 53, 214, .14), rgba(138, 40, 70, .1));
+}
+
+/* Memory is the second metric series. */
+#homeRamBar,
+#ramBar {
+  background: var(--burgundy-gradient);
+  box-shadow: 0 0 10px rgba(176, 74, 109, .35);
+}
+
+.memory-icon {
+  color: var(--burgundy-text);
+}
+
+/* Destructive actions. */
+.secondary.danger {
+  color: var(--burgundy-text);
+}
+
+.secondary.danger:hover {
+  border-color: var(--burgundy-border);
+  background: var(--burgundy-soft);
+  color: #f3c3d2;
+}
+
+.primary.danger-solid {
+  border-color: var(--burgundy-border);
+  background: var(--burgundy-gradient);
+  box-shadow: 0 5px 18px rgba(138, 40, 70, .3), inset 0 1px rgba(255, 255, 255, .12);
+}
+
+.confirm-dialog .eyebrow {
+  color: var(--burgundy-text);
+}
+
+.save-status[data-state="error"] {
+  color: var(--burgundy-text);
+}
+
+.save-status[data-state="error"] .save-status-dot {
+  background: var(--burgundy-bright);
+  box-shadow: 0 0 9px rgba(196, 88, 123, .45);
+}
+
+
+.shortcut-status.is-new {
+  border-color: var(--burgundy-border);
+  background: var(--burgundy-soft);
+  color: var(--burgundy-text);
+}
+
+/* ==========================================================================
+   1.6.0: Command palette
+   ========================================================================== */
+
+.launcher-search-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.launcher-search-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.launcher-mode {
+  position: absolute;
+  z-index: 1;
+  left: 10px;
+  padding: 5px 9px;
+  border: 1px solid var(--burgundy-border);
+  border-radius: 7px;
+  background: var(--burgundy-soft);
+  color: var(--burgundy-text);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  pointer-events: none;
+}
+
+
+.launcher-group {
+  margin: 8px 12px 2px;
+  color: #8f94aa;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.launcher-option-meta {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.launcher-option-meta kbd {
+  min-width: auto;
+  padding: 3px 6px;
+  font-size: 10px;
+}
+
+.launcher-option[aria-disabled="true"] {
+  cursor: default;
+  opacity: .62;
+}
+
+.launcher-option-action {
+  padding: 3px 6px;
+  border: 1px solid rgba(167, 174, 202, .14);
+  border-radius: 5px;
+}
+
+.launcher-option[data-kind="code"] .launcher-option-action,
+.launcher-option[data-kind="note"] .launcher-option-action,
+.launcher-option[data-kind="workspace"] .launcher-option-action,
+.launcher-option[data-kind="save"] .launcher-option-action {
+  border-color: var(--burgundy-border);
+  background: var(--burgundy-soft);
+  color: var(--burgundy-text);
+}
+
+.launcher-option[data-kind="result"] strong {
+  color: #c7b8fd;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.launcher-option[data-kind="custom"] .launcher-option-action,
+.launcher-option[data-kind="result"] .launcher-option-action {
+  border-color: rgba(139, 111, 245, .28);
+  color: #c7b8fd;
+}
+
+.launcher-hint i {
+  color: #5d6175;
+  font-style: normal;
+}
+
+/* ==========================================================================
+   1.6.0: Command Center activity feed
+   ========================================================================== */
+
+.activity-block {
+  margin-top: 16px;
+}
+
+.activity-heading {
+  margin-bottom: 8px;
+}
+
+.activity-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activity-item {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 5px 10px;
+  border-radius: 8px;
+}
+
+.activity-item:nth-child(odd) {
+  background: rgba(255, 255, 255, .018);
+}
+
+.activity-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-secondary);
+  box-shadow: 0 0 7px rgba(139, 111, 245, .45);
+}
+
+.activity-item[data-kind="workspace"] .activity-dot,
+.activity-item[data-kind="snippet"] .activity-dot,
+.activity-item[data-kind="note"] .activity-dot {
+  background: var(--burgundy-bright);
+  box-shadow: 0 0 7px rgba(196, 88, 123, .45);
+}
+
+.activity-item[data-kind="system"] .activity-dot {
+  background: #6f7489;
+  box-shadow: none;
+}
+
+.activity-item[data-kind="error"] .activity-dot {
+  background: #ff7b9c;
+  box-shadow: 0 0 8px rgba(255, 123, 156, .5);
+}
+
+.activity-copy {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.activity-copy small {
+  flex-shrink: 0;
+  color: #8f94aa;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+}
+
+.activity-copy span {
+  overflow: hidden;
+  color: #d9dbe6;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-item[data-kind="error"] .activity-copy span {
+  color: var(--burgundy-text);
+}
+
+.activity-item time {
+  color: #8f94aa;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.activity-empty {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--border-soft);
+  border-radius: 10px;
+  color: #a5aabd;
+  font-size: 12px;
+}
+
+/* Keep the Command Center free of scrolling on shorter windows. */
+@media (max-height: 820px) {
+  .activity-item:nth-child(n + 4) {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   1.6.0: Preferences (palette, custom commands, workspaces)
+   ========================================================================== */
+
+.settings-grid-secondary {
+  margin-top: 16px;
+}
+
+.settings-card-wide {
+  grid-column: 1 / -1;
+}
+
+.settings-action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.settings-card .settings-actions {
+  margin-top: 16px;
+  padding: 0;
+}
+
+.command-rows {
+  display: grid;
+  gap: 8px;
+}
+
+.command-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 128px minmax(220px, 2.4fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid rgba(167, 174, 202, .1);
+  border-radius: 10px;
+}
+
+.command-row input[type="text"],
+.command-row select,
+.workspace-save input {
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid rgba(167, 174, 202, .2);
+  border-radius: 8px;
+  background: var(--panel-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.command-row .hotkey-input input {
+  min-height: 30px;
+  padding: 0;
+}
+
+.command-target {
+  display: flex;
+  min-width: 0;
+  gap: 6px;
+}
+
+.command-target input {
+  flex: 1;
+}
+
+.workspace-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workspace-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid rgba(167, 174, 202, .1);
+  border-left: 2px solid var(--burgundy-border);
+  border-radius: 10px;
+}
+
+.workspace-copy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+}
+
+.workspace-copy strong {
+  color: #eef0f7;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.workspace-copy small {
+  color: #a5aabd;
+  font-size: 12px;
+}
+
+.workspace-save {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.workspace-save input {
+  flex: 1;
+}
+
+@media (max-width: 1100px) {
+  .command-row {
+    grid-template-columns: minmax(0, 1fr) 128px;
+  }
+
+  .command-target {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ==========================================================================
+   1.6.0: Three-accent system
+   Violet   primary: interaction, selection, focus, primary buttons.
+   Burgundy secondary: resources (every usage bar), saved items, destructive.
+   Gold     tertiary: distinction and attention (pinned, recent, results,
+            new, custom) and any resource at 90% or more.
+   ========================================================================== */
+
+:root {
+  --gold: #c9a24a;
+  --gold-bright: #e3c072;
+  --gold-text: #ecd49c;
+  --gold-soft: rgba(227, 192, 114, .11);
+  --gold-border: rgba(227, 192, 114, .32);
+  --gold-gradient: linear-gradient(115deg, #a8812f 0%, #e3c072 100%);
+}
+
+/* Every resource bar (CPU, RAM, drive cards, volume meters) is burgundy. */
+.metric-track > span {
+  background: var(--burgundy-gradient);
+  box-shadow: 0 0 10px rgba(176, 74, 109, .35);
+}
+
+.metric-track > span.is-high {
+  background: var(--gold-gradient);
+  box-shadow: 0 0 10px rgba(227, 192, 114, .4);
+}
+
+/* Drive fullness on the Dashboard's disk layout. */
+.physical-volume-row {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.volume-meter {
+  flex-basis: 100%;
+  height: 5px;
+  margin: 0;
+}
+
+/* Gold accents. */
+.shortcut-status.is-new {
+  border-color: var(--gold-border);
+  background: var(--gold-soft);
+  color: var(--gold-text);
+}
+
+.pin-mark {
+  color: var(--gold-bright);
+}
+
+.note-list-item.is-pinned {
+  box-shadow: inset 2px 0 0 var(--gold-border);
+}
+
+.launcher-group[data-group="Recent"] {
+  color: var(--gold-text);
+}
+
+.launcher-option[data-kind="result"] strong {
+  color: var(--gold-text);
+}
+
+.launcher-option[data-kind="result"] .launcher-option-action,
+.launcher-option[data-kind="custom"] .launcher-option-action {
+  border-color: var(--gold-border);
+  background: var(--gold-soft);
+  color: var(--gold-text);
+}
+
+.activity-item[data-kind="command"] .activity-dot {
+  background: var(--gold-bright);
+  box-shadow: 0 0 7px rgba(227, 192, 114, .45);
+}
+
+.hero-emblem svg {
+  filter: drop-shadow(0 0 6px rgba(227, 192, 114, .12));
+}
+
+/* ==========================================================================
+   1.6.0: Title bar
+   Context on the left, a command bar in the center, live status, clock, and
+   Windows 11-proportioned caption buttons on the right. The brand lives in
+   the sidebar only.
+   ========================================================================== */
+
+.topbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 420px) minmax(0, 1fr);
+  flex-basis: 58px;
+  gap: 18px;
+}
+
+.titlebar-drag {
+  gap: 10px;
+}
+
+.titlebar-context {
+  color: #7d8196;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+}
+
+.titlebar-drag #breadcrumb {
+  color: #e2e4ee;
+  font-size: 11px;
+  letter-spacing: 1.3px;
+}
+
+.titlebar-command {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 34px;
+  padding: 0 8px 0 12px;
+  border: 1px solid rgba(167, 174, 202, .14);
+  border-radius: 9px;
+  background: rgba(10, 12, 19, .55);
+  color: #8f94aa;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  -webkit-app-region: no-drag;
+  transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
+}
+
+.titlebar-command:hover,
+.titlebar-command:focus-visible {
+  border-color: rgba(139, 111, 245, .32);
+  background: rgba(20, 22, 34, .8);
+  color: #d9dbe6;
+}
+
+.titlebar-command svg {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.titlebar-command span {
+  flex: 1;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titlebar-command kbd {
+  min-width: auto;
+  padding: 2px 6px;
+  font-size: 10px;
+}
+
+.titlebar-actions {
+  justify-content: flex-end;
+  gap: 16px;
+}
+
+.top-status {
+  padding: 5px 10px;
+  border: 1px solid rgba(102, 217, 168, .16);
+  border-radius: 999px;
+  background: rgba(102, 217, 168, .05);
+  color: #9fd9bf;
+  font-size: 10.5px;
+  letter-spacing: .9px;
+}
+
+.top-status[data-state="attention"] {
+  border-color: var(--gold-border);
+  background: var(--gold-soft);
+  color: var(--gold-text);
+}
+
+.top-status[data-state="attention"] .status-indicator {
+  background: var(--gold-bright);
+  box-shadow: 0 0 8px rgba(227, 192, 114, .55);
+}
+
+.top-clock {
+  color: #c9ccd8;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: .4px;
+}
+
+/* Caption buttons: 46 x 36, aligned to the top edge as in Windows 11. */
+.window-controls {
+  align-self: flex-start;
+  height: 36px;
+  gap: 0;
+  margin-right: calc(-1 * clamp(22px, 4.2vw, 62px));
+}
+
+.window-control {
+  width: 46px;
+  height: 36px;
+}
+
+.window-control svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+}
+
+.window-control .glyph-restore,
+.window-control.is-maximized .glyph-maximize {
+  display: none;
+}
+
+.window-control.is-maximized .glyph-restore {
+  display: block;
+}
+
+.window-control-close:hover {
+  background: #a3324f;
+  color: #fff;
+}
+
+@media (max-width: 1100px) {
+  .topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .titlebar-command {
+    display: none;
+  }
+
+  .top-clock {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   1.6.0: Keyboard map (Super Commands)
+   ========================================================================== */
+
+.keymap-panel {
+  margin: 0 0 24px;
+  padding: 18px 18px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(29, 33, 48, .92), rgba(22, 25, 37, .96));
+  box-shadow: var(--panel-shadow), inset 0 1px rgba(255, 255, 255, .025);
+}
+
+.keymap-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.keymap-heading h2 {
+  margin: 4px 0 0;
+  color: #eef0f7;
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.keymap-layers {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid rgba(167, 174, 202, .16);
+  border-radius: 9px;
+  background: rgba(10, 12, 19, .5);
+}
+
+.keymap-layer {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #a5aabd;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.keymap-layer[aria-pressed="true"] {
+  background: rgba(95, 53, 214, .2);
+  color: #eef0f7;
+}
+
+.keymap svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.km-cap {
+  fill: rgba(255, 255, 255, .015);
+  stroke: rgba(167, 174, 202, .2);
+  stroke-width: 1;
+  transition: fill 140ms ease, stroke 140ms ease;
+}
+
+.km-label {
+  fill: #6f7489;
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.km-caption {
+  fill: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .3px;
+  pointer-events: none;
+}
+
+.km-key:not([data-cat="free"]) .km-label {
+  fill: #f4f3fa;
+}
+
+.km-key[data-cat="apps"] .km-cap {
+  fill: rgba(95, 53, 214, .42);
+  stroke: rgba(139, 111, 245, .55);
+}
+
+.km-key[data-cat="windows"] .km-cap {
+  fill: rgba(96, 118, 160, .45);
+  stroke: rgba(150, 170, 210, .45);
+}
+
+.km-key[data-cat="saved"] .km-cap {
+  fill: rgba(176, 74, 109, .5);
+  stroke: rgba(214, 120, 152, .55);
+}
+
+.km-key[data-cat="custom"] .km-cap {
+  fill: rgba(201, 162, 74, .5);
+  stroke: rgba(227, 192, 114, .65);
+}
+
+.km-key[data-cat="custom"] .km-caption,
+.km-key[data-cat="custom"] .km-label {
+  fill: #1b1608;
+}
+
+.km-key[data-cat="modifier"] .km-cap {
+  fill: rgba(255, 255, 255, .1);
+  stroke: rgba(255, 255, 255, .35);
+  stroke-dasharray: 3 3;
+}
+
+.km-key[data-cat="modifier"] .km-label {
+  fill: #eef0f7;
+}
+
+.km-key:not([data-cat="free"]):not([data-cat="modifier"]) {
+  cursor: help;
+  outline: none;
+}
+
+.km-key:not([data-cat="free"]):hover .km-cap,
+.km-key:focus-visible .km-cap {
+  stroke: #fff;
+  stroke-width: 1.6;
+}
+
+.keymap-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 20px;
+  margin-top: 12px;
+}
+
+.keymap-detail {
+  flex: 1 1 420px;
+  min-height: 20px;
+  margin: 0;
+  color: #a5aabd;
+  font-size: 13px;
+}
+
+.keymap-detail strong {
+  color: #eef0f7;
+}
+
+.keymap-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.keymap-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #a5aabd;
+  font-size: 11.5px;
+}
+
+.keymap-legend li::before {
+  content: "";
+  width: 11px;
+  height: 11px;
+  border: 1px solid rgba(167, 174, 202, .3);
+  border-radius: 3px;
+}
+
+.keymap-legend li[data-cat="apps"]::before { background: rgba(95, 53, 214, .55); }
+.keymap-legend li[data-cat="windows"]::before { background: rgba(96, 118, 160, .6); }
+.keymap-legend li[data-cat="saved"]::before { background: rgba(176, 74, 109, .65); }
+.keymap-legend li[data-cat="custom"]::before { background: rgba(201, 162, 74, .7); }
+.keymap-legend li[data-cat="free"]::before { background: transparent; }
+
+.keymap[data-layer="shift"] + .keymap-footer .keymap-detail strong {
+  color: var(--gold-text);
+}
+
+.km-label,
+.km-caption {
+  stroke: none;
+  font-family: "Segoe UI", "Segoe UI Variable", sans-serif;
+}
+
+/* ==========================================================================
+   1.6.0: Keyboard map, special keys
+   ========================================================================== */
+
+/* No browser focus box on keys; focus is shown with a white keycap edge. */
+.km-key {
+  outline: none;
+}
+
+.km-key:focus-visible .km-cap {
+  stroke: #fff;
+  stroke-width: 1.6;
+}
+
+/* The physical Super key: the one key every chord starts from. */
+.km-key[data-cat="super"] .km-cap {
+  fill: url(#km-super-gradient);
+  stroke: rgba(199, 184, 253, .85);
+  stroke-width: 1.4;
+}
+
+.km-key[data-cat="super"] .km-label,
+.km-key[data-cat="super"] .km-caption {
+  fill: #fff;
+}
+
+/* Planned: reserved for future functionality, not yet supported. */
+.km-key[data-cat="planned"] .km-cap {
+  fill: rgba(227, 192, 114, .05);
+  stroke: var(--gold-border);
+  stroke-dasharray: 4 3;
+}
+
+.km-key[data-cat="planned"] .km-label,
+.km-key[data-cat="planned"] .km-caption {
+  fill: var(--gold-text);
+}
+
+.km-key[data-cat="super"],
+.km-key[data-cat="planned"] {
+  cursor: help;
+}
+
+.keymap-legend li[data-cat="super"]::before {
+  border-color: rgba(199, 184, 253, .85);
+  background: linear-gradient(135deg, #2b0071, #4c1fb8);
+}
+
+.keymap-legend li[data-cat="planned"]::before {
+  border: 1px dashed var(--gold-border);
+  background: transparent;
+}
+
+/* ==========================================================================
+   1.6.0: Title bar polish
+   The bar has no band at rest, so there is no line to fall short of the
+   window edges. When the page scrolls, a frosted band fades in behind it,
+   drawn by a pseudo-element clipped to the main column (so it always meets
+   both edges, whatever the content padding). Caption buttons are pinned to
+   the window corner at full bar height, and the sidebar brand shares the
+   bar's center line, giving one continuous top strip.
+   ========================================================================== */
+
+:root {
+  --titlebar-height: 60px;
+}
+
+.main {
+  overflow-x: clip;
+}
+
+.topbar {
+  position: sticky;
+  z-index: 15;
+  top: 0;
+  flex: 0 0 var(--titlebar-height);
+  height: var(--titlebar-height);
+  margin: 0;
+  padding: 0 var(--caption-reserve, 110px) 0 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.topbar::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0 -260px;
+  border-bottom: 1px solid rgba(152, 151, 181, .1);
+  background: rgba(13, 15, 22, .78);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .28);
+  backdrop-filter: blur(16px) saturate(140%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+}
+
+.topbar.is-scrolled::before {
+  opacity: 1;
+}
+
+.titlebar-context {
+  color: #6f7489;
+}
+
+.titlebar-drag .breadcrumb-divider {
+  color: #3d4052;
+}
+
+.titlebar-command {
+  height: 34px;
+  border-color: rgba(167, 174, 202, .12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .01)), rgba(10, 12, 19, .6);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .04), 0 6px 18px rgba(0, 0, 0, .18);
+}
+
+.titlebar-actions {
+  gap: 14px;
+}
+
+.top-clock {
+  padding-left: 14px;
+  border-left: 1px solid rgba(167, 174, 202, .14);
+}
+
+/* Caption buttons: pinned to the window's top-right corner. */
+.window-controls {
+  position: fixed;
+  z-index: 40;
+  top: 0;
+  right: 0;
+  height: var(--titlebar-height);
+  margin: 0;
+}
+
+.window-control {
+  width: 48px;
+  height: var(--titlebar-height);
+  color: #8f94aa;
+}
+
+.window-control:hover {
+  background: rgba(255, 255, 255, .06);
+  color: #f4f3fa;
+}
+
+.window-control:active {
+  background: rgba(255, 255, 255, .1);
+}
+
+.window-control-close:hover {
+  background: linear-gradient(180deg, #a3324f, #8a2846);
+  color: #fff;
+}
+
+.window-control-close:active {
+  background: #7d2441;
+}
+
+/* Sidebar brand on the title bar's center line. */
+.sidebar {
+  padding-top: 0;
+}
+
+.brand {
+  height: var(--titlebar-height);
+  margin-bottom: 22px;
+  padding: 0 4px;
+  -webkit-app-region: drag;
+}
+
+.brand-mark {
+  flex-basis: 40px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}
+
+@media (max-width: 1100px) {
+  .top-clock {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   1.6.0: Title bar optical alignment
+   Every text run is trimmed to its cap height (text-box), so flex centring
+   centers the letters themselves, not a line box padded for descenders.
+   Control heights are even and divide cleanly into the 60px bar
+   (command bar 32, status pill 26, key chips 20), labels share one size,
+   and the caption glyphs are 10px, drawn on whole-pixel strokes.
+   ========================================================================== */
+
+.titlebar-drag,
+.titlebar-actions {
+  align-items: center;
+}
+
+.titlebar-context,
+.titlebar-drag #breadcrumb,
+.titlebar-drag .breadcrumb-divider,
+.titlebar-command span,
+.titlebar-command kbd,
+#topStatusText,
+.top-clock {
+  text-box: trim-both cap alphabetic;
+  line-height: 1;
+}
+
+.titlebar-context,
+.titlebar-drag #breadcrumb {
+  font-size: 11px;
+}
+
+.titlebar-drag .breadcrumb-divider {
+  font-size: 13px;
+}
+
+/* Command bar */
+.titlebar-command {
+  height: 32px;
+  gap: 10px;
+  padding: 0 6px 0 12px;
+}
+
+.titlebar-command svg {
+  width: 14px;
+  height: 14px;
+  /* The magnifier's handle pulls its visual center down-right; nudge it. */
+  transform: translate(0, .5px);
+}
+
+.titlebar-command span {
+  font-size: 12.5px;
+}
+
+.titlebar-command kbd {
+  display: inline-grid;
+  height: 20px;
+  place-items: center;
+  padding: 0 6px;
+  border-radius: 5px;
+  font-size: 10px;
+}
+
+/* Status pill */
+.top-status {
+  height: 26px;
+  gap: 8px;
+  padding: 0 11px 0 10px;
+}
+
+#topStatusText {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .9px;
+}
+
+.top-status .status-indicator {
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+}
+
+/* Clock, with its divider drawn independently of the trimmed text box */
+.top-clock {
+  position: relative;
+  padding-left: 15px;
+  border-left: 0;
+  font-size: 12.5px;
+  letter-spacing: .5px;
+}
+
+.top-clock::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 1px;
+  height: 18px;
+  background: rgba(167, 174, 202, .16);
+  transform: translateY(-50%);
+}
+
+/* Caption glyphs: 10px, crisp 1px strokes, centered on whole pixels. */
+.window-control svg {
+  width: 10px;
+  height: 10px;
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.window-control-close svg {
+  shape-rendering: geometricPrecision;
+}
+
+/* 1.6.0: The physical Super key in metallic gold. */
+.km-key[data-cat="super"] .km-cap {
+  fill: url(#km-super-gradient);
+  stroke: #f3d68c;
+  stroke-width: 1.2;
+  filter: drop-shadow(0 0 6px rgba(227, 192, 114, .35));
+}
+
+.km-sheen {
+  fill: url(#km-super-sheen);
+  stroke: none;
+  pointer-events: none;
+}
+
+.km-key[data-cat="super"] .km-label,
+.km-key[data-cat="super"] .km-caption {
+  fill: #2b1d06;
+}
+
+.keymap-legend li[data-cat="super"]::before {
+  border-color: #f3d68c;
+  background: linear-gradient(135deg, #7a5418 0%, #c99a3e 25%, #fff2c6 52%, #d8aa4c 70%, #8c6420 100%);
+}
+
+/* Optical nudge: the slash descends below the baseline. */
+.titlebar-drag .breadcrumb-divider {
+  transform: translateY(-.5px);
+}
+
+/* "Planned" fits within 1u macro keys. */
+.km-key[data-cat="planned"] .km-caption {
+  font-size: 8px;
+  letter-spacing: .2px;
+}
+

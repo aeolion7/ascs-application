@@ -432,7 +432,7 @@
         vevent.props = vevent.props.filter(p => p.name !== "SEQUENCE").concat({ name: "SEQUENCE", params: {}, value: "0" });
         const calendar = { name: "VCALENDAR", props: [
             { name: "VERSION", params: {}, value: "2.0" },
-            { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 1.8.0//EN" },
+            { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 1.9.0//EN" },
             { name: "CALSCALE", params: {}, value: "GREGORIAN" }
         ], children: [vevent] };
         return serializeComponent(calendar) + "\r\n";
@@ -463,6 +463,80 @@
         return serializeComponent(calendar) + "\r\n";
     }
 
+    // ---- "Only this one", kept in its series (1.9.0)
+    // A changed occurrence is an override inside the series' own resource
+    // (a VEVENT with the same UID and RECURRENCE-ID = the start it replaces),
+    // the iCalendar way, so it can be changed again (and asked about again)
+    // or put back. Before 1.9.0 it was cut loose as an event of its own.
+    const masterNodeOf = calendar => calendar.children.find(c => c.name === "VEVENT" && !propOf(c, "RECURRENCE-ID"));
+    const overrideIdOf = node => node.name === "VEVENT" && propOf(node, "RECURRENCE-ID") ? parseDateValue(propOf(node, "RECURRENCE-ID"))?.ms ?? null : null;
+
+    // The end the series gives an occurrence starting at `original`.
+    function seriesEnd(master, original) {
+        if (!master.allDay) return original + (master.end - master.start);
+        const t = new Date(original);
+        return new Date(t.getFullYear(), t.getMonth(), t.getDate() + Math.round((master.end - master.start) / DAY)).getTime();
+    }
+
+    // Whether fields are exactly what the series has on that date.
+    function matchesSeries(master, original, fields) {
+        const series = fieldsOf(master);
+        return fields.start === original && fields.end === seriesEnd(master, original) && Boolean(fields.allDay) === Boolean(master.allDay)
+            && (fields.summary || "") === (series.summary || "") && (fields.location || "") === (series.location || "")
+            && (fields.description || "") === (series.description || "") && (fields.reminder ?? null) === (series.reminder ?? null);
+    }
+
+    // Saves `fields` as the occurrence at `original`. A change that puts it
+    // back exactly as the series has it removes the override instead.
+    function overrideOccurrence(text, original, fields, now = Date.now()) {
+        const calendar = parseComponent(text);
+        const masterNode = calendar && masterNodeOf(calendar);
+        if (!masterNode) return null;
+        const master = readEvent(masterNode);
+        const existing = calendar.children.find(c => overrideIdOf(c) === original);
+        if (matchesSeries(master, original, fields)) {
+            calendar.children = calendar.children.filter(c => c !== existing);
+        } else {
+            const node = existing || { name: "VEVENT", props: [
+                { name: "UID", params: {}, value: propOf(masterNode, "UID")?.value || "" },
+                dateProps("RECURRENCE-ID", original, master.allDay)
+            ], children: [] };
+            if (!existing) calendar.children.push(node);
+            applyFields(node, { ...fields, rrule: null, exdates: [] }, now);
+        }
+        return serializeComponent(calendar) + "\r\n";
+    }
+
+    // "Back to the series": the occurrence at `original` loses its override.
+    function restoreOccurrence(text, original) {
+        const calendar = parseComponent(text);
+        if (!calendar || !masterNodeOf(calendar)) return null;
+        calendar.children = calendar.children.filter(c => overrideIdOf(c) !== original);
+        return serializeComponent(calendar) + "\r\n";
+    }
+
+    // When the whole series moves (move: old start -> new start), its
+    // overrides move with it, keeping their own changes; the one being
+    // edited (at `edited`, before the move) takes `fields` instead.
+    function moveOverrides(text, move, edited = null, fields = null, now = Date.now()) {
+        const calendar = parseComponent(text);
+        const masterNode = calendar && masterNodeOf(calendar);
+        if (!masterNode) return null;
+        const allDay = readEvent(masterNode).allDay;
+        calendar.children.forEach(node => {
+            const id = overrideIdOf(node);
+            if (id === null) return;
+            const event = readEvent(node);
+            node.props = node.props.filter(p => p.name !== "RECURRENCE-ID");
+            node.props.splice(1, 0, dateProps("RECURRENCE-ID", move(id), allDay));
+            const own = id === edited && fields
+                ? { ...fields, rrule: null, exdates: [] }
+                : { ...fieldsOf(event), start: move(event.start), end: move(event.start) + (event.end - event.start), rrule: null, exdates: [], reminder: undefined };
+            applyFields(node, own, now);
+        });
+        return serializeComponent(calendar) + "\r\n";
+    }
+
     // The fields of a resource's master event, for the editor.
     // Dragging in Day and Week (1.8.0): where a dragged event starts, in
     // minutes after midnight, from the pointer's minute in the day and how far
@@ -473,6 +547,120 @@
         const latest = Math.floor((1440 - length) / step) * step;
         const wanted = Math.round((pointerMinutes - grabMinutes) / step) * step;
         return Math.min(latest, Math.max(0, wanted));
+    }
+
+    // ---- 1.9.0: resizing, moving between days, and the wheel time picker
+
+    // Resizing: the dragged edge (minutes into the day), snapped to the step,
+    // keeping at least one step of event and staying within the day.
+    function resizeEdge(pointerMinutes, fixedMinutes, edge, step = 15) {
+        const wanted = Math.round(pointerMinutes / step) * step;
+        return edge === "end"
+            ? Math.min(1440, Math.max(fixedMinutes + step, wanted))
+            : Math.max(0, Math.min(fixedMinutes - step, wanted));
+    }
+
+    // Whole calendar days from one day to another, unaffected by daylight
+    // saving (counted on the dates, not in hours).
+    function daysBetween(from, to) {
+        const a = new Date(from), b = new Date(to);
+        return Math.round((Date.UTC(b.getFullYear(), b.getMonth(), b.getDate()) - Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())) / 86400000);
+    }
+
+    // A time moved by whole days, at the same clock time.
+    function shiftDays(ms, days) {
+        const t = new Date(ms);
+        return new Date(t.getFullYear(), t.getMonth(), t.getDate() + days, t.getHours(), t.getMinutes(), t.getSeconds()).getTime();
+    }
+
+    const clockOf = value => {
+        const m = /^(\d{2}):(\d{2})$/.exec(value || "");
+        return m && +m[1] < 24 && +m[2] < 60 ? +m[1] * 60 + +m[2] : null;
+    };
+    const clockText = total => {
+        const minutes = ((total % 1440) + 1440) % 1440;
+        return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+    };
+
+    // The parts the picker shows: 12-hour hour, minute, AM or PM.
+    function timeParts(value) {
+        const total = clockOf(value) ?? 540;
+        const hour = Math.floor(total / 60);
+        return { hour: hour % 12 || 12, minute: total % 60, meridiem: hour < 12 ? "AM" : "PM" };
+    }
+
+    // One step of one part: hours by one (11 AM -> 12 PM), minutes by the
+    // step (snapping to it first, and carrying into the hour), AM/PM by
+    // twelve hours. The day never changes: 11 PM + 1 hour is 12 AM.
+    function stepTime(value, part, delta, minuteStep = 5) {
+        const total = clockOf(value) ?? 540;
+        if (!delta) return clockText(total);
+        if (part === "hour") return clockText(total + 60 * delta);
+        if (part === "meridiem") return clockText(total + 720);
+        const onStep = total % minuteStep === 0;
+        const base = onStep ? total : delta > 0 ? Math.ceil(total / minuteStep) * minuteStep - minuteStep : Math.floor(total / minuteStep) * minuteStep + minuteStep;
+        return clockText(base + delta * minuteStep);
+    }
+
+    // A typed value for one part: hour 1-12 (keeping AM/PM), minute 0-59,
+    // or "AM"/"PM". Anything else leaves the time as it was.
+    function setTimePart(value, part, typed) {
+        const total = clockOf(value) ?? 540;
+        const hour = Math.floor(total / 60), minute = total % 60;
+        if (part === "hour" && Number.isInteger(typed) && typed >= 1 && typed <= 12) return clockText(((typed % 12) + (hour >= 12 ? 12 : 0)) * 60 + minute);
+        if (part === "minute" && Number.isInteger(typed) && typed >= 0 && typed <= 59) return clockText(hour * 60 + typed);
+        if (part === "meridiem" && (typed === "AM" || typed === "PM")) return clockText(((hour % 12) + (typed === "PM" ? 12 : 0)) * 60 + minute);
+        return clockText(total);
+    }
+
+    // ---- the wheel date picker (1.9.0): "YYYY-MM-DD" by month, day, year
+    const dateOf = value => {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
+        return m ? { y: +m[1], m: +m[2], d: +m[3] } : null;
+    };
+    const monthLength = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const dateText = (y, m, d) => `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const YEARS = [1900, 2100];
+
+    function dateParts(value, now = Date.now()) {
+        const p = dateOf(value);
+        if (p) return { month: p.m, day: p.d, year: p.y };
+        const t = new Date(now);
+        return { month: t.getMonth() + 1, day: t.getDate(), year: t.getFullYear() };
+    }
+
+    // One step of one part: days carry across months and years (Nov 30 + 1
+    // is Dec 1); months and years keep the day where they can (Jan 31 + 1
+    // month is Feb 28). Outside 1900-2100 nothing changes.
+    function stepDate(value, part, delta) {
+        const p = dateOf(value);
+        if (!p || !delta) return value;
+        let y = p.y, m = p.m, d = p.d;
+        if (part === "day") {
+            const t = new Date(Date.UTC(y, m - 1, d + delta));
+            y = t.getUTCFullYear(); m = t.getUTCMonth() + 1; d = t.getUTCDate();
+        } else if (part === "month") {
+            const total = y * 12 + (m - 1) + delta;
+            y = Math.floor(total / 12); m = total - y * 12 + 1;
+            d = Math.min(d, monthLength(y, m));
+        } else if (part === "year") {
+            y += delta;
+            d = Math.min(d, monthLength(y, m));
+        } else {
+            return value;
+        }
+        return y < YEARS[0] || y > YEARS[1] ? value : dateText(y, m, d);
+    }
+
+    // A typed value for one part: month 1-12, a day the month has, or a year
+    // from 1900 to 2100. Anything else leaves the date as it was.
+    function setDatePart(value, part, typed) {
+        const p = dateOf(value);
+        if (!p || !Number.isInteger(typed)) return value;
+        if (part === "month" && typed >= 1 && typed <= 12) return dateText(p.y, typed, Math.min(p.d, monthLength(p.y, typed)));
+        if (part === "day" && typed >= 1 && typed <= monthLength(p.y, p.m)) return dateText(p.y, p.m, typed);
+        if (part === "year" && typed >= YEARS[0] && typed <= YEARS[1]) return dateText(typed, p.m, Math.min(p.d, monthLength(typed, p.m)));
+        return value;
     }
 
     function fieldsOf(event) {
@@ -634,7 +822,7 @@
             uid,
             text: serializeComponent({ name: "VCALENDAR", props: [
                 { name: "VERSION", params: {}, value: "2.0" },
-                { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 1.8.0//EN" }
+                { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 1.9.0//EN" }
             ], children: [...zones, ...vevents] }) + "\r\n"
         }));
     }
@@ -664,7 +852,7 @@
                 else if (c.name === "VEVENT") events.push(c);
             });
         });
-        const props = [{ name: "VERSION", params: {}, value: "2.0" }, { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 1.8.0//EN" }, { name: "CALSCALE", params: {}, value: "GREGORIAN" }];
+        const props = [{ name: "VERSION", params: {}, value: "2.0" }, { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 1.9.0//EN" }, { name: "CALSCALE", params: {}, value: "GREGORIAN" }];
         if (name) props.push({ name: "X-WR-CALNAME", params: {}, value: escapeText(name) });
         return serializeComponent({ name: "VCALENDAR", props, children: [...zones.values(), ...events] }) + "\r\n";
     }
@@ -762,6 +950,8 @@
         DAY, WEEKDAYS, unfold, parseLine, parseComponent, serializeComponent, escapeText, unescapeText, fold,
         parseDateValue, parseDuration, formatTrigger, parseRrule, formatRrule, wallToInstant, zoneOffset,
         readEvent, readResource, expandStarts, occurrences, reminders, uidNew, newResource, editResource, skipOccurrence, snapStart,
+        resizeEdge, daysBetween, shiftDays, timeParts, stepTime, setTimePart, dateParts, stepDate, setDatePart,
+        overrideOccurrence, restoreOccurrence, moveOverrides, matchesSeries,
         fieldsOf, parseMultistatus, layoutDay, spansDays, layoutSpans, parseQuickAdd, splitIcs, joinIcs, resourceNameFor, formatDate, formatLocalDateTime, formatUtc
     };
 })(globalThis);

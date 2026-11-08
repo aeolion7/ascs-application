@@ -19,11 +19,12 @@ window.addEventListener("unhandledrejection", event =>
     reportPageError(event.reason?.message || event.reason, "(promise)"));
 
 const $ = id => document.getElementById(id);
-const validViews = new Set(["home", "notes", "calendar", "games", "sounds", "dashboard", "logs", "commands", "settings"]);
+const validViews = new Set(["home", "notes", "calendar", "workspaces", "games", "sounds", "dashboard", "logs", "commands", "settings"]);
 const viewLabels = {
     home: "COMMAND CENTER",
     notes: "QUICK NOTES",
     calendar: "CALENDAR",
+    workspaces: "WORKSPACES",
     games: "GAMES",
     sounds: "SOUNDS",
     dashboard: "SYSTEM DASHBOARD",
@@ -57,22 +58,38 @@ function send(type, content = "") {
     return true;
 }
 
-function showToast(message) {
+// A toast; with an action ({ label, run }, 1.9.0: Undo) it carries a button
+// and stays 10 seconds instead of 2.8.
+function showToast(message, action = null) {
     const toast = $("toast");
     if (!toast) return;
 
-    toast.textContent = message;
+    toast.replaceChildren(document.createTextNode(message));
+    toast.classList.toggle("has-action", Boolean(action));
+    if (action) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "toast-action";
+        button.textContent = action.label;
+        button.addEventListener("click", () => {
+            clearTimeout(toastTimer);
+            toast.classList.remove("show");
+            action.run();
+        });
+        toast.append(button);
+    }
     toast.classList.add("show");
 
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toast.classList.remove("show"), 2800);
+    toastTimer = setTimeout(() => toast.classList.remove("show"), action ? 10000 : 2800);
 }
 
 // Shows a toast now, or the next time ASCS gains focus when the window is
-// hidden (for example, notes loaded during hidden startup).
-function showNotice(message) {
+// hidden (for example, notes loaded during hidden startup). An action only
+// shows with a toast shown now.
+function showNotice(message, action = null) {
     if (document.hasFocus()) {
-        showToast(message);
+        showToast(message, action);
     } else if (!pendingNotices.includes(message)) {
         pendingNotices.push(message);
     }
@@ -173,6 +190,7 @@ function navigate(view) {
     if (view === "notes" && !notesLoaded) send("GetNotes");
     if (view === "dashboard" || view === "home") send("GetMetrics", view);
     if (view === "settings") send("GetSettings");
+    if (view === "workspaces") send("GetWorkspaces");
     if (view === "home" && previousView !== null && previousView !== "home") advanceAlmanac();
     if (view === "home") {
         send("GetRecycleBin");
@@ -210,6 +228,7 @@ document.querySelectorAll("[data-launch]").forEach(button => {
 // (Super+Shift+R), windows, and save-workspace (name entry).
 
 const Palette = globalThis.ASCSPalette;
+const Workspaces = globalThis.ASCSWorkspaces;
 const USAGE_KEY = "ascs.palette.usage";
 
 const builtInCommands = [
@@ -1423,6 +1442,17 @@ function handleWebMessage(event) {
             gamesState.ra.state = "ok";
             gamesState.ra.updatedAt = Date.now();
             renderAchievements();
+        } else if (/^game:[1-9]\d{0,8}$/.test(kind)) {
+            const games = gamesState.ra.games;
+            games.delete(Number(kind.slice(5)));
+            games.set(Number(kind.slice(5)), rest.join("\n"));
+            while (games.size > 30) games.delete(games.keys().next().value);
+            gamesState.ra.gameErrors.delete(Number(kind.slice(5)));
+            renderAchievements();
+        } else if (kind === "unlocks") {
+            gamesState.ra.unlocks = rest.join("\n");
+            gamesState.ra.unlocksError = "";
+            renderAchievements();
         }
         return;
     }
@@ -1628,6 +1658,14 @@ function handleWebMessage(event) {
             $("gamesStatus").textContent = typeof data.message === "string" ? data.message : "Saved.";
             gamesState.covers.clear();
             gamesState.requested.clear();
+            break;
+        case "raExtra":
+            // A game or the recent unlocks couldn't be fetched (1.9.0).
+            if (typeof data.kind === "string" && typeof data.message === "string") {
+                if (data.kind === "unlocks") gamesState.ra.unlocksError = data.message;
+                else if (/^game:\d*$/.test(data.kind)) gamesState.ra.gameErrors.set(Number(data.kind.slice(5)) || gamesState.ra.openGame, data.message);
+                renderAchievements();
+            }
             break;
         case "retroAchievements":
             gamesState.ra.state = typeof data.state === "string" ? data.state : "off";
@@ -2172,30 +2210,96 @@ $("saveCommandsButton").addEventListener("click", () => {
 
 // ------------------------------------------------------------ workspace manager
 
+// The Workspaces view (1.9.0): a card for each saved layout, with a map of
+// its windows on each desktop (and monitor), Restore, Save over, Rename and
+// Delete. "Default" is the one Super + S and Super + R use.
+function workspaceMapNode(workspace) {
+    const groups = Workspaces.workspaceMap(workspace.layout, workspace.desktopNames);
+    const map = element("div", "workspace-map");
+    groups.forEach(group => {
+        const desktop = element("div", `workspace-desktop${group.key === "pinned" ? " is-pinned" : ""}`);
+        desktop.append(element("small", "", group.label));
+        const screens = element("div", "workspace-screens");
+        group.monitors.forEach(({ monitor, windows }) => {
+            const screen = element("div", "workspace-screen");
+            if (group.monitors.length > 1) screen.title = `Monitor ${monitor}`;
+            windows.forEach(win => {
+                const box = element("span", `workspace-window${win.maximized ? " is-maximized" : ""}`, win.app);
+                box.style.left = `${win.x * 100}%`;
+                box.style.top = `${win.y * 100}%`;
+                box.style.width = `${win.width * 100}%`;
+                box.style.height = `${win.height * 100}%`;
+                box.title = win.title ? `${win.app} · ${win.title}` : win.app;
+                screen.append(box);
+            });
+            screens.append(screen);
+        });
+        desktop.append(screens);
+        map.append(desktop);
+    });
+    return map;
+}
+
 function renderWorkspaceManager() {
     const list = $("workspaceList");
     list.replaceChildren();
     $("workspacesEmpty").hidden = savedWorkspaces.length > 0;
     savedWorkspaces.forEach(workspace => {
-        const item = document.createElement("li");
-        item.className = "workspace-item";
-        const copy = document.createElement("span");
-        copy.className = "workspace-copy";
-        const name = document.createElement("strong");
-        name.textContent = workspace.name;
-        const meta = document.createElement("small");
-        meta.textContent = `${workspace.windows} window${workspace.windows === 1 ? "" : "s"} · saved ${formatSavedTime(workspace.saved)}${workspace.name === "Default" ? " · Super+S / Super+R" : ""}`;
-        copy.append(name, meta);
-        const restore = document.createElement("button");
-        restore.type = "button";
-        restore.className = "secondary";
-        restore.textContent = "Restore";
-        restore.addEventListener("click", () => send("RestoreWorkspace", workspace.name));
-        const remove = document.createElement("button");
-        remove.type = "button";
-        remove.className = "secondary danger";
-        remove.textContent = "Delete";
-        remove.addEventListener("click", async () => {
+        const item = element("li", "workspace-card");
+        const head = element("div", "workspace-card-head");
+        const copy = element("span", "workspace-copy");
+        const desktops = new Set((workspace.layout || []).filter(w => !w.pinned && w.desktop >= 0).map(w => w.desktop)).size;
+        copy.append(element("strong", "", workspace.name), element("small", "",
+            `${workspace.windows} window${workspace.windows === 1 ? "" : "s"}${desktops > 1 ? ` on ${desktops} desktops` : ""} · saved ${formatSavedTime(workspace.saved)}${workspace.name === "Default" ? " · Super + S / Super + R" : ""}`));
+        head.append(copy);
+        const actions = element("span", "workspace-actions");
+        const button = (label, className, onClick, hint = "") => {
+            const node = element("button", className, label);
+            node.type = "button";
+            if (hint) node.title = hint;
+            node.addEventListener("click", onClick);
+            actions.append(node);
+            return node;
+        };
+        button("Restore", "primary", () => send("RestoreWorkspace", workspace.name), "Put these windows back, each on its desktop");
+        button("Save over", "secondary", async () => {
+            const ok = await confirmDialog({
+                title: `Save over “${workspace.name}”?`,
+                message: "It's replaced by the windows open now, on every desktop.",
+                confirmLabel: "Save over"
+            });
+            if (ok) send("SaveWorkspace", workspace.name);
+        }, "Replace it with the windows open now");
+        if (workspace.name !== "Default") {
+            button("Rename", "secondary", () => {
+                const input = element("input", "workspace-rename");
+                input.type = "text";
+                input.maxLength = 40;
+                input.value = workspace.name;
+                input.setAttribute("aria-label", `New name for ${workspace.name}`);
+                const finish = keep => {
+                    const name = input.value.trim();
+                    if (keep && name && name !== workspace.name) {
+                        if (!Palette.isValidWorkspaceName(name)) {
+                            showToast("Workspace names use letters, numbers, spaces, - and _ (up to 40 characters).");
+                            input.focus();
+                            return;
+                        }
+                        send("RenameWorkspace", `${workspace.name}|${name}`);
+                    }
+                    renderWorkspaceManager();
+                };
+                input.addEventListener("keydown", event => {
+                    if (event.key === "Enter") { event.preventDefault(); finish(true); }
+                    else if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); finish(false); }
+                });
+                input.addEventListener("blur", () => finish(true));
+                copy.firstChild.replaceWith(input);
+                input.focus();
+                input.select();
+            });
+        }
+        button("Delete", "secondary danger", async () => {
             const confirmed = await confirmDialog({
                 title: `Delete workspace “${workspace.name}”?`,
                 message: "The saved layout is removed. Open windows are not affected.",
@@ -2204,10 +2308,13 @@ function renderWorkspaceManager() {
             });
             if (confirmed) send("DeleteWorkspace", workspace.name);
         });
-        item.append(copy, restore, remove);
+        head.append(actions);
+        item.append(head, workspaceMapNode(workspace));
         list.append(item);
     });
 }
+
+$("openWorkspacesView").addEventListener("click", () => navigate("workspaces"));
 
 $("saveWorkspaceForm").addEventListener("submit", event => {
     event.preventDefault();
@@ -3348,7 +3455,11 @@ const gamesState = {
     items: [], loaded: false, filter: "all", sort: "recent", query: "",
     covers: new Map(), requested: new Set(), coversEnabled: false,
     openId: "", details: new Map(), pads: [], renaming: "", tester: null, testerTimer: null, testerBuilt: "",
-    ra: { state: "", summary: "", recent: "", message: "", updatedAt: 0 },
+    ra: { state: "", summary: "", recent: "", message: "", updatedAt: 0,
+        // 1.9.0, the achievement browser: games by RetroAchievements ID (raw
+        // replies), the open one, its filter and sort, and recent unlocks.
+        games: new Map(), gameErrors: new Map(), asked: new Set(), openGame: 0, filter: "all", sort: "order",
+        unlocks: "", unlocksError: "", unlocksOpen: false, unlockPage: 0 },
     raImages: new Map(), raRequested: new Set(),
     liveTimer: null, runningTimer: null, playing: [], nowTimer: null
 };
@@ -3996,6 +4107,162 @@ function updateRaTimestamp() {
     $("raUpdated").textContent = minutes < 1 ? "Updated just now" : `Updated ${minutes} m ago`;
 }
 
+// ---- the achievement browser (1.9.0)
+// A game's achievements (earned and locked, with dates, points, how rare
+// they are, and whether they're missable), "Next up" for the last game
+// played, and recent unlocks beyond six, paged. Games are fetched by
+// RetroAchievements ID when first wanted and kept for the session.
+function requestRaGame(id, refresh = false) {
+    if (!id || (!refresh && (gamesState.ra.games.has(id) || gamesState.ra.asked.has(id)))) return;
+    gamesState.ra.asked.add(id);
+    send("GetRaGame", refresh ? `refresh:${id}` : String(id));
+}
+
+function openRaGame(id) {
+    if (!id) return;
+    gamesState.ra.openGame = id;
+    gamesState.ra.filter = "all";
+    requestRaGame(id);
+    renderAchievements();
+    $("gamesAchievements").scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+const RA_TYPE_LABELS = { progression: "Progression", win_condition: "Win condition", missable: "Missable" };
+
+function raTypeTag(type) {
+    return type ? element("span", `ra-type is-${type.replace("_", "-")}`, RA_TYPE_LABELS[type]) : null;
+}
+
+const raDateText = text => {
+    const date = Games.parseLocal(text.replace(" ", "T"));
+    return date ? date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+};
+
+function raAchievementItem(item) {
+    const earned = Boolean(item.earned || item.earnedHardcore);
+    const row = element("li", `ra-with-image ra-achievement${earned ? " is-earned" : " is-locked"}`);
+    const body = element("div", "ra-item-body");
+    const head = element("div", "ra-unlock-head");
+    head.append(element("strong", "", item.title));
+    const tag = raTypeTag(item.type);
+    if (tag) head.append(tag);
+    const points = element("span", `ra-points${item.earnedHardcore ? " is-hardcore" : ""}`, `${item.points}`);
+    points.title = `${item.points} points${item.truePoints ? ` (${item.truePoints} true points)` : ""}`;
+    head.append(points);
+    body.append(head);
+    if (item.description) body.append(element("p", "", item.description));
+    const rarity = item.rarity === null ? "" : `${item.rarity < 1 ? "<1" : Math.round(item.rarity)}% of players`;
+    body.append(element("small", "", earned
+        ? [`Unlocked ${raDateText(item.earnedHardcore || item.earned)}`, item.earnedHardcore ? "hardcore" : "softcore", rarity].filter(Boolean).join(" · ")
+        : ["Locked", rarity].filter(Boolean).join(" · ")));
+    row.append(raImage(item.badge, `ra-badge${item.earnedHardcore ? " is-hardcore" : ""}${earned ? "" : " is-locked"}`), body);
+    return row;
+}
+
+function renderRaBrowser(box) {
+    const ra = gamesState.ra;
+    const id = ra.openGame;
+    const panel = element("div", "ra-browser");
+    const back = element("button", "link-button ra-back", "‹ Achievements");
+    back.type = "button";
+    back.addEventListener("click", () => { ra.openGame = 0; renderAchievements(); });
+    panel.append(back);
+    const raw = ra.games.get(id);
+    const game = raw ? Games.parseRaGame(raw) : null;
+    if (!game) {
+        panel.append(element("p", "settings-note", ra.gameErrors.get(id) || (raw ? "RetroAchievements sent something unexpected for this game." : "Loading…")));
+        box.append(panel);
+        return;
+    }
+    const head = element("div", "ra-browser-head");
+    const titles = element("div", "ra-item-body");
+    const award = { "mastered": "Mastered", "completed": "Completed", "beaten-hardcore": "Beaten (hardcore)", "beaten-softcore": "Beaten" }[game.award] || "";
+    titles.append(element("strong", "ra-browser-title", Games.displayTitle(game.title)));
+    titles.append(element("small", "", [game.console, award].filter(Boolean).join(" · ")));
+    const percent = game.achievements.length ? Math.round(game.earned / game.achievements.length * 100) : 0;
+    const bar = element("span", "ra-bar");
+    const fill = element("b");
+    fill.style.width = `${percent}%`;
+    bar.append(fill);
+    titles.append(bar, element("small", "", game.achievements.length
+        ? `${game.earned} of ${game.achievements.length} unlocked · ${game.pointsEarned.toLocaleString()} of ${game.points.toLocaleString()} points${game.earnedHardcore ? ` · ${game.earnedHardcore} hardcore` : ""}`
+        : "This game has no achievements yet."));
+    head.append(raImage(game.icon, "ra-icon ra-browser-icon"), titles);
+    panel.append(head);
+
+    const tools = element("div", "ra-browser-tools");
+    const counts = Games.raCounts(game.achievements);
+    const chips = element("div", "sound-presets ra-filters");
+    chips.setAttribute("role", "group");
+    chips.setAttribute("aria-label", "Show");
+    [["all", "All"], ["locked", "Locked"], ["earned", "Unlocked"], ["missable", "Missable"], ["progression", "Progression"]].forEach(([key, label]) => {
+        if (key !== "all" && key !== "locked" && key !== "earned" && !counts[key]) return;
+        const chip = element("button", `sound-preset${ra.filter === key ? " is-on" : ""}`);
+        chip.type = "button";
+        chip.setAttribute("aria-pressed", String(ra.filter === key));
+        chip.append(element("span", "", label), element("b", "", String(counts[key])));
+        chip.addEventListener("click", () => { ra.filter = key; renderAchievements(); });
+        chips.append(chip);
+    });
+    const sort = element("select", "ra-sort");
+    sort.setAttribute("aria-label", "Sort");
+    [["order", "Game order"], ["points", "Most points"], ["rarest", "Rarest first"]].forEach(([value, label]) => {
+        const option = element("option", "", label);
+        option.value = value;
+        sort.append(option);
+    });
+    sort.value = ra.sort;
+    sort.addEventListener("change", () => { ra.sort = sort.value; renderAchievements(); });
+    tools.append(chips, sort);
+    panel.append(tools);
+
+    const shown = Games.filterRaAchievements(game.achievements, ra.filter, ra.sort);
+    const list = element("ol", "ra-unlocks ra-list");
+    shown.forEach(item => list.append(raAchievementItem(item)));
+    if (!shown.length) list.append(element("li", "settings-note", "Nothing here."));
+    panel.append(list);
+    box.append(panel);
+    requestRaImages([game.icon, ...shown.map(item => item.badge)]);
+}
+
+// "Next up" for the last game played: its next locked progression step (or
+// the next locked achievement), and missable ones still open.
+function raNextUpCard(gameId) {
+    const raw = gamesState.ra.games.get(gameId);
+    requestRaGame(gameId);
+    const game = raw ? Games.parseRaGame(raw) : null;
+    if (!game || !game.achievements.length) return null;
+    const next = Games.nextUp(game);
+    const card = element("div", "ra-next");
+    const label = element("small", "", `NEXT UP · ${Games.displayTitle(game.title)}`);
+    card.append(label);
+    if (!next) {
+        card.append(element("p", "", "Every achievement unlocked."));
+        return card;
+    }
+    const item = element("div", "ra-with-image");
+    const body = element("div", "ra-item-body");
+    const head = element("div", "ra-unlock-head");
+    head.append(element("strong", "", next.achievement.title));
+    const tag = raTypeTag(next.achievement.type);
+    if (tag) head.append(tag);
+    head.append(element("span", "ra-points", `${next.achievement.points}`));
+    body.append(head);
+    if (next.achievement.description) body.append(element("p", "", next.achievement.description));
+    const foot = element("div", "ra-next-foot");
+    foot.append(element("small", "", `${next.locked} still locked`));
+    if (next.missableLeft) foot.append(element("small", "ra-missable-note", `${next.missableLeft} missable still open`));
+    const all = element("button", "link-button", "All achievements");
+    all.type = "button";
+    all.addEventListener("click", () => openRaGame(gameId));
+    foot.append(all);
+    body.append(foot);
+    item.append(raImage(next.achievement.badge, "ra-badge is-locked"), body);
+    card.append(item);
+    requestRaImages([next.achievement.badge]);
+    return card;
+}
+
 function renderAchievements() {
     const box = $("gamesAchievements");
     const ra = gamesState.ra;
@@ -4046,6 +4313,12 @@ function renderAchievements() {
         if (data.presence) now.append(element("p", "", data.presence));
         box.append(now);
     }
+    if (ra.openGame) {
+        renderRaBrowser(box);
+        return;
+    }
+    const nextCard = data.lastGameId ? raNextUpCard(data.lastGameId) : null;
+    if (nextCard) box.append(nextCard);
 
     const columns = element("div", "ra-columns");
     const progress = element("div", "ra-column");
@@ -4065,6 +4338,15 @@ function renderAchievements() {
         bar.append(fill);
         body.append(head, meta, bar);
         item.append(raImage(game.icon, "ra-icon"), body);
+        if (game.id) {
+            // Opens the game's achievements (1.9.0).
+            item.classList.add("is-openable");
+            item.tabIndex = 0;
+            item.setAttribute("role", "button");
+            item.title = "Show every achievement in this game";
+            item.addEventListener("click", () => openRaGame(game.id));
+            item.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openRaGame(game.id); } });
+        }
         progressList.append(item);
     });
     if (!progressList.children.length) progressList.append(element("li", "settings-note", "No recently played games."));
@@ -4073,7 +4355,13 @@ function renderAchievements() {
     const unlocks = element("div", "ra-column");
     unlocks.append(element("h3", "", "Recent unlocks"));
     const unlockList = element("ol", "ra-unlocks");
-    data.achievements.slice(0, 6).forEach(achievement => {
+    // Beyond six (1.9.0): the last 30 days, six to a page.
+    const PAGE = 6;
+    const all = ra.unlocksOpen && ra.unlocks ? Games.parseRaUnlocks(ra.unlocks) : null;
+    const pages = all ? Math.max(1, Math.ceil(all.length / PAGE)) : 1;
+    ra.unlockPage = Math.min(ra.unlockPage, pages - 1);
+    const shownUnlocks = all ? all.slice(ra.unlockPage * PAGE, ra.unlockPage * PAGE + PAGE) : data.achievements.slice(0, 6);
+    shownUnlocks.forEach(achievement => {
         const item = element("li", "ra-with-image");
         const body = element("div", "ra-item-body");
         const head = element("div", "ra-unlock-head");
@@ -4085,13 +4373,42 @@ function renderAchievements() {
         if (achievement.description) body.append(element("p", "", achievement.description));
         body.append(element("small", "", [achievement.game, Games.formatLastPlayed(achievement.date.replace(" ", "T"))].filter(Boolean).join(" · ")));
         item.append(raImage(achievement.badge, `ra-badge${achievement.hardcore ? " is-hardcore" : ""}`), body);
+        if (achievement.gameId) {
+            item.classList.add("is-openable");
+            item.title = `Show every achievement in ${achievement.game || "this game"}`;
+            item.addEventListener("click", () => openRaGame(achievement.gameId));
+        }
         unlockList.append(item);
     });
-    if (!unlockList.children.length) unlockList.append(element("li", "settings-note", "No recent unlocks."));
+    if (!unlockList.children.length) unlockList.append(element("li", "settings-note", ra.unlocksOpen ? (ra.unlocksError || (ra.unlocks ? "No unlocks in the last 30 days." : "Loading…")) : "No recent unlocks."));
     unlocks.append(unlockList);
+    const pager = element("div", "ra-pager");
+    const pageButton = (label, hint, disabled, onClick) => {
+        const button = element("button", "link-button", label);
+        button.type = "button";
+        button.title = hint;
+        button.disabled = disabled;
+        button.addEventListener("click", onClick);
+        return button;
+    };
+    if (!ra.unlocksOpen) {
+        if (data.achievements.length) {
+            pager.append(pageButton("More unlocks", "The last 30 days, six at a time", false, () => {
+                ra.unlocksOpen = true;
+                ra.unlockPage = 0;
+                if (!ra.unlocks) send("GetRaUnlocks");
+                renderAchievements();
+            }));
+        }
+    } else if (all) {
+        pager.append(pageButton("‹ Newer", "Newer unlocks", ra.unlockPage === 0, () => { ra.unlockPage--; renderAchievements(); }));
+        pager.append(element("small", "", all.length ? `${ra.unlockPage * PAGE + 1}–${Math.min(all.length, ra.unlockPage * PAGE + PAGE)} of ${all.length} in the last 30 days` : ""));
+        pager.append(pageButton("Older ›", "Older unlocks", ra.unlockPage >= pages - 1, () => { ra.unlockPage++; renderAchievements(); }));
+    }
+    if (pager.childElementCount) unlocks.append(pager);
     columns.append(progress, unlocks);
     box.append(columns);
-    requestRaImages([...data.games.slice(0, 6).map(game => game.icon), ...data.achievements.slice(0, 6).map(item => item.badge)]);
+    requestRaImages([...data.games.slice(0, 6).map(game => game.icon), ...shownUnlocks.map(item => item.badge)]);
 }
 
 // RetroAchievements badges and icons: requested by token once per session;
@@ -4116,7 +4433,7 @@ function requestRaImages(tokens) {
         .filter(token => !gamesState.raImages.has(token) && !gamesState.raRequested.has(token));
     if (!wanted.length) return;
     wanted.forEach(token => gamesState.raRequested.add(token));
-    send("GetRaImages", wanted.join(","));
+    for (let i = 0; i < wanted.length; i += 30) send("GetRaImages", wanted.slice(i, i + 30).join(","));
 }
 
 function handleRaImage(token, data) {
@@ -4181,7 +4498,11 @@ $("gameSearch").addEventListener("input", () => {
     gamesState.query = $("gameSearch").value;
     renderGames();
 });
-$("refreshAchievements").addEventListener("click", () => send("GetRetroAchievements", "refresh"));
+$("refreshAchievements").addEventListener("click", () => {
+    send("GetRetroAchievements", "refresh");
+    if (gamesState.ra.openGame) requestRaGame(gamesState.ra.openGame, true);
+    if (gamesState.ra.unlocksOpen) send("GetRaUnlocks", "refresh");
+});
 
 // ---- Preferences: Games & apps
 
@@ -4565,7 +4886,7 @@ send("GetAudioDevices");
 // sidebar's order, so new views take the next number. F1 (or the ? button in
 // the title bar) toggles the help.
 const HELP_INSIDE = [
-    [["Ctrl", "1–9"], "Go to a page"],
+    [["Ctrl", "1–9, 0"], "Go to a page"],
     [["Ctrl", "N"], "New note"],
     [["Ctrl", "E"], "New calendar event"],
     [["Ctrl", "F"], "Search this page"],
@@ -4611,10 +4932,10 @@ function toggleHelp(show = $("helpDialog").hidden) {
     $("helpInside").replaceChildren(...HELP_INSIDE.flatMap(keyRow));
     $("helpAnywhere").replaceChildren(...helpAnywhere().flatMap(keyRow));
     const current = document.querySelector(".view.active")?.id;
-    $("helpPages").replaceChildren(...sidebarViews().slice(0, 9).map((view, index) => {
+    $("helpPages").replaceChildren(...sidebarViews().slice(0, 10).map((view, index) => {
         const page = element("button", `help-page${view === current ? " is-current" : ""}`);
         page.type = "button";
-        page.append(element("kbd", "", String(index + 1)),
+        page.append(element("kbd", "", String((index + 1) % 10)),
             element("span", "", document.querySelector(`.nav[data-view="${view}"]`)?.title || view));
         if (view === current) page.setAttribute("aria-current", "page");
         page.addEventListener("click", () => { toggleHelp(false); navigate(view); });
@@ -4653,8 +4974,9 @@ document.addEventListener("keydown", event => {
     if (!$("launcher").hidden || [...document.querySelectorAll(".confirm-backdrop")].some(dialog => !dialog.hidden)) return;
     const ctrlOnly = event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey;
 
-    if (ctrlOnly && /^[1-9]$/.test(event.key)) {
-        const view = sidebarViews()[Number(event.key) - 1];
+    if (ctrlOnly && /^[0-9]$/.test(event.key)) {
+        // Ctrl + 1-9, then 0 for the tenth page (1.9.0).
+        const view = sidebarViews()[event.key === "0" ? 9 : Number(event.key) - 1];
         if (!view) return;
         event.preventDefault();
         navigate(view);
@@ -4688,12 +5010,13 @@ document.addEventListener("keydown", event => {
 function numberSidebar() {
     document.querySelectorAll(".nav[data-view]").forEach((button, index) => {
         button.querySelector(".nav-key")?.remove();
-        if (index >= 9) return;
-        const key = element("kbd", "nav-key", String(index + 1));
+        if (index >= 10) return;
+        const digit = String((index + 1) % 10);       // the tenth is Ctrl + 0
+        const key = element("kbd", "nav-key", digit);
         key.setAttribute("aria-hidden", "true");
-        key.title = `Ctrl + ${index + 1}`;
+        key.title = `Ctrl + ${digit}`;
         button.append(key);
-        button.setAttribute("aria-keyshortcuts", `Control+${index + 1}`);
+        button.setAttribute("aria-keyshortcuts", `Control+${digit}`);
     });
 }
 numberSidebar();

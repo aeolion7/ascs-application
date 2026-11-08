@@ -2,6 +2,32 @@
 
 All notable changes to the Aeolionware Super Command System. The newest release is first. For current behavior, see [README.md](README.md).
 
+## Version 1.9.0
+
+The Workspaces page and workspaces across desktops, the achievement browser, a finished calendar (resizing, dragging in Month, wheel pickers, Undo), and the large files split by feature with a smoke test. Manual pass: 18 of 19 items passed; E2 (startup sounds) is open, because `C:\Scripts\Configure-Startup.ps1` hasn't yet been re-run from an elevated session. 1,023 automated checks and a 15-check smoke test. Launch rules, routines, iPhone calendar sync and the console hub are not in this release; they move to the roadmap.
+
+### Fixed
+- A restored window landed a border's width to the left of where it was saved, and a little larger: positions are now saved as the visible frame.
+- **Only this one** keeps the occurrence in its series as a changed occurrence (the iCalendar way) instead of making a separate event, so later changes ask again, and putting it back as the series has it rejoins the series.
+- Day and Week keep their scroll position when stepping through days or weeks (it jumped back to 7:00 or to now); Today still goes to now.
+- Changing a repeating event in the editor now asks **Only this one** or **Every event in the series** in the same dialog as dragging, every time (the editor's small radio buttons, which defaulted to the whole series, are gone); Delete asks too.
+- **Where it lands** no longer disappears when the end is before the start, which shifted the editor's fields under the mouse wheel; it stays and says so.
+- Moving one event of a repeating series moves the series by whole days plus the clock change, so the series no longer slips an hour when the move crosses a daylight-saving change.
+
+### Changed
+- **The large files are split, with no change in behavior.** `ASCS.ahk` keeps the globals, WebView setup, navigation and the message allowlist; each feature moved verbatim into `lib\features` (18 files), included where it was, so the script AutoHotkey runs is byte-for-byte the same. `styles.css` is now 15 files in `frontend\styles`, in its original order (the cascade depends on it).
+
+### Added
+- **Workspaces page** (sidebar, Ctrl + 4): each saved workspace as a card with a map of its windows on each desktop and monitor, and Restore, Save over, Rename and Delete. Ctrl + 1–9 follow the sidebar, so pages after Calendar moved down one, and Preferences is Ctrl + 0.
+- **Workspaces across desktops** (with VirtualDesktopAccessor): windows from every desktop are saved (up to 48) and restored to their desktops, pinned windows pinned again; missing desktops are added only after asking.
+- **The achievement browser:** click a game in Achievements to see every achievement, unlocked and locked, with points, rarity, unlock dates and whether it's progression, the win condition or missable; filter (locked, unlocked, missable, progression) and sort (game order, points, rarest). **Next up** shows the last game's next locked progression step and the missable ones still open; **More unlocks** pages through the last 30 days.
+- **Resizing events** in Day and Week by their top and bottom edges, snapped to 15 minutes.
+- **Dragging in Month:** events and multi-day bars move between days, keeping their times, with the target day outlined.
+- **Wheel pickers** in the event editor: hour, minute and AM/PM, and month, day and year (start, end and repeat-until), each turn with the mouse wheel or the arrow keys, or take typed digits and A/P; dates keep their calendar pop-up.
+- **Undo** for every calendar change (drag, resize, Save, Delete, Back to the series), in its notice for 10 seconds; it never overwrites a change made elsewhere in between.
+- **Back to the series** in the editor of a changed occurrence.
+- **A smoke test** (`tests\smoke.js`, run by `run-tests.ps1`): the real page with a stand-in for WebView2 opens every view, failing on any script error and on any message ASCS doesn't accept.
+
 ## Version 1.8.1
 
 Startup sounds move into ASCS, leveling always starts from the original, and each sound can have its own level. Built at the owner's request after 1.8.0. Manual pass (`tests\manual-1.8.1.html`): 21 of 23 items passed; a real sign-in and shutdown (B2, B3) were left for the next restart. Reset levels came from the pass. 911 automated checks.

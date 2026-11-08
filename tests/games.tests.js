@@ -126,4 +126,52 @@
     equal("clock under an hour", G.formatClock(245), "4:05");
     equal("clock over an hour", G.formatClock(3723), "1:02:03");
     equal("clock rejects junk", G.formatClock(-5), "0:00");
+
+    // 1.9.0: the achievement browser
+    const gameJson = JSON.stringify({
+        ID: 14402, Title: "Super Mario Galaxy", ConsoleName: "Wii", ImageIcon: "/Images/012345.png", HighestAwardKind: "beaten-hardcore",
+        NumDistinctPlayers: 200,
+        Achievements: {
+            "3": { ID: 3, Title: "Boss", Description: "Beat Bowser", Points: 25, TrueRatio: 60, BadgeName: "333", DisplayOrder: 3, type: "win_condition", NumAwarded: 50 },
+            "1": { ID: 1, Title: "Star", Description: "First star", Points: 5, TrueRatio: 5, BadgeName: "111", DisplayOrder: 1, type: "progression", NumAwarded: 180, DateEarned: "2026-10-01 20:15:00", DateEarnedHardcore: "2026-10-01 20:15:00" },
+            "2": { ID: 2, Title: "Hidden coin", Description: "Before the door closes", Points: 10, TrueRatio: 40, BadgeName: "222", DisplayOrder: 2, type: "missable", NumAwarded: 20 },
+            "4": { ID: 4, Title: "<img src=x onerror=alert(1)>", Points: "lots", BadgeName: "../../evil", DisplayOrder: 4, type: "weird", DateEarned: "yesterday" },
+            "5": "not an achievement"
+        }
+    });
+    const raGame = G.parseRaGame(gameJson);
+    equal("ra game: parsed", raGame.title + " " + raGame.console + " " + raGame.icon, "Super Mario Galaxy Wii i:012345");
+    equal("ra game: in the game's order", raGame.achievements.map(a => a.id).join(), "1,2,3,4");
+    equal("ra game: counts", `${raGame.earned}/${raGame.achievements.length}, ${raGame.pointsEarned}/${raGame.points} points`, "1/4, 5/40 points");
+    const hostile = raGame.achievements[3];
+    equal("ra game: hostile title kept as text", hostile.title, "<img src=x onerror=alert(1)>");
+    equal("ra game: bad points are 0", hostile.points, 0);
+    equal("ra game: a badge that isn't a number is dropped", hostile.badge, "");
+    equal("ra game: an unknown type is none", hostile.type, "");
+    equal("ra game: a date that isn't a date is dropped", hostile.earned, "");
+    equal("ra game: rarity", Math.round(raGame.achievements[1].rarity), 10);
+    equal("ra game: not JSON", G.parseRaGame("<html>"), null);
+    equal("ra game: an array", G.parseRaGame("[]"), null);
+    equal("ra filter: locked", G.filterRaAchievements(raGame.achievements, "locked").map(a => a.id).join(), "2,3,4");
+    equal("ra filter: earned", G.filterRaAchievements(raGame.achievements, "earned").map(a => a.id).join(), "1");
+    equal("ra filter: missable", G.filterRaAchievements(raGame.achievements, "missable").map(a => a.id).join(), "2");
+    equal("ra filter: progression includes the win", G.filterRaAchievements(raGame.achievements, "progression").map(a => a.id).join(), "1,3");
+    equal("ra sort: points", G.filterRaAchievements(raGame.achievements, "all", "points").map(a => a.id).join(), "3,2,1,4");
+    equal("ra sort: rarest", G.filterRaAchievements(raGame.achievements, "all", "rarest").map(a => a.id).join(), "2,3,1,4");
+    equal("ra counts", JSON.stringify(G.raCounts(raGame.achievements)), JSON.stringify({ all: 4, locked: 3, earned: 1, missable: 1, progression: 2 }));
+    const next = G.nextUp(raGame);
+    equal("next up: the next progression or win", next.achievement.title, "Boss");
+    equal("next up: missable still locked", next.missableLeft, 1);
+    equal("next up: none when all are unlocked", G.nextUp({ achievements: [{ earned: "2026-01-01 10:00" }] }), null);
+    const unlocks = G.parseRaUnlocks(JSON.stringify([
+        { Date: "2026-11-01 10:00:00", HardcoreMode: 1, Title: "Older", BadgeName: "1", Points: 5, GameTitle: "A", GameID: 7, Type: "missable" },
+        { Date: "2026-11-03 09:00:00", HardcoreMode: 0, Title: "Newer", BadgeName: "2", Points: 10, GameTitle: "B", GameID: 8 },
+        { Date: "soon", Title: "No date" }, 42
+    ]));
+    equal("unlocks: newest first, undated dropped", unlocks.map(u => u.title).join(), "Newer,Older");
+    equal("unlocks: hardcore and game", `${unlocks[1].hardcore} ${unlocks[1].gameId} ${unlocks[1].type}`, "true 7 missable");
+    equal("unlocks: not a list", G.parseRaUnlocks("{}").length, 0);
+    const summaryIds = G.parseRetroAchievements(JSON.stringify({ User: "x", LastGameID: 14402 }), JSON.stringify([{ Title: "Galaxy", GameID: 14402 }]));
+    equal("ra: the last game's ID", summaryIds.lastGameId, 14402);
+    equal("ra: a recent game's ID", summaryIds.games[0].id, 14402);
 })();

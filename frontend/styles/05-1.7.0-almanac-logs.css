@@ -1,0 +1,540 @@
+/* ==========================================================================
+   1.7.0 stage 3: almanac strip, navigation groups, Logs, almanac preferences
+   ========================================================================== */
+
+/* ---- Almanac strip beneath the Command Center title ---- */
+.home-header {
+  flex-wrap: wrap;
+  row-gap: 0;
+}
+
+#homeAlmanac:not([hidden]) {
+  display: grid;
+  flex-basis: 100%;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  margin-top: 18px;
+  border: 1px solid rgba(167, 174, 202, .12);
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(29, 33, 48, .7), rgba(22, 25, 37, .75));
+  box-shadow: inset 0 1px rgba(255, 255, 255, .025);
+}
+
+.alm-cell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-left: 1px solid rgba(167, 174, 202, .1);
+}
+
+.alm-cell:first-child {
+  border-left: 0;
+}
+
+.alm-cell strong {
+  display: block;
+  color: #eef0f7;
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.alm-cell strong i {
+  color: #6f7489;
+  font-style: normal;
+}
+
+.alm-cell small {
+  display: block;
+  margin-top: 2px;
+  color: #8f94aa;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.alm-moon,
+.alm-sun {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+}
+
+.alm-moon-dark {
+  fill: rgba(167, 174, 202, .12);
+  stroke: rgba(167, 174, 202, .25);
+  stroke-width: 1;
+}
+
+.alm-moon-lit {
+  fill: #ecd49c;
+  filter: drop-shadow(0 0 4px rgba(236, 212, 156, .35));
+}
+
+.alm-sun {
+  fill: none;
+  stroke: var(--icon-gold, #d9b866);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.alm-story {
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.alm-story-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.alm-story-copy {
+  cursor: pointer;
+}
+
+button.alm-story-copy:hover p,
+button.alm-story-copy:focus-visible p {
+  color: #fff;
+  text-decoration: underline;
+  text-decoration-color: rgba(168, 146, 251, .6);
+  text-underline-offset: 3px;
+}
+
+button.alm-story-copy:focus-visible {
+  border-radius: 6px;
+  outline: 2px solid var(--indigo-300);
+  outline-offset: 4px;
+}
+
+.alm-label {
+  color: #a892fb;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+}
+
+.alm-story p {
+  overflow: hidden;
+  margin: 3px 0 0;
+  color: #d9dbe6;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alm-controls {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.alm-dots {
+  display: flex;
+  gap: 5px;
+}
+
+.alm-dots b {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(167, 174, 202, .25);
+}
+
+.alm-dots b.on {
+  background: #a892fb;
+}
+
+.alm-next {
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(167, 174, 202, .18);
+  border-radius: 8px;
+  background: transparent;
+  color: #a5aabd;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.alm-next:hover,
+.alm-next:focus-visible {
+  border-color: rgba(139, 111, 245, .5);
+  color: #f1ecff;
+}
+
+@media (max-width: 1100px) {
+  #homeAlmanac:not([hidden]) {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .alm-story {
+    grid-column: 1 / -1;
+    border-top: 1px solid rgba(167, 174, 202, .1);
+    border-left: 0;
+  }
+}
+
+/* ---- Navigation groups: WORKSPACE, SYSTEM, REFERENCE ---- */
+.nav-label.nav-label-group {
+  margin-top: 26px;
+  margin-bottom: 12px;
+}
+
+/* ---- Logs ---- */
+.logs-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 10px;
+  border: 1px solid rgba(167, 174, 202, .12);
+  border-radius: 12px;
+  background: rgba(16, 18, 27, .6);
+}
+
+.logs-sources,
+.logs-levels {
+  display: flex;
+  gap: 4px;
+}
+
+.logs-levels {
+  padding-left: 14px;
+  border-left: 1px solid rgba(167, 174, 202, .12);
+}
+
+.logs-sources button,
+.logs-levels button {
+  padding: 7px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #a5aabd;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.logs-sources button:hover,
+.logs-levels button:hover {
+  color: #eef0f7;
+}
+
+.logs-sources button[aria-selected="true"],
+.logs-sources button[aria-pressed="true"],
+.logs-levels button[aria-pressed="true"] {
+  border-color: rgba(139, 111, 245, .5);
+  background: var(--indigo-900);
+  color: #f1ecff;
+}
+
+.logs-levels span {
+  margin-left: 4px;
+  color: #7d8298;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.logs-levels button[aria-pressed="true"] span {
+  color: #c7b8fd;
+}
+
+.logs-search {
+  flex: 1 1 200px;
+  min-width: 160px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid rgba(167, 174, 202, .2);
+  border-radius: 9px;
+  background: var(--panel-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.logs-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.logs-meta {
+  margin: 14px 2px 10px;
+  color: #8f94aa;
+  font-size: 12px;
+}
+
+.log-list {
+  display: grid;
+  gap: 18px;
+}
+
+.log-day h2 {
+  position: sticky;
+  z-index: 2;
+  top: var(--titlebar-height);
+  margin: 0 0 6px;
+  padding: 6px 2px;
+  background: linear-gradient(180deg, var(--bg, #111218) 70%, transparent);
+  color: #a892fb;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.log-day ol {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid rgba(167, 174, 202, .1);
+  border-radius: 12px;
+  list-style: none;
+  background: rgba(22, 25, 37, .6);
+}
+
+.log-line {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 90px) minmax(0, 1fr);
+  gap: 12px;
+  padding: 7px 14px 7px 12px;
+  border-top: 1px solid rgba(167, 174, 202, .06);
+  border-left: 3px solid transparent;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.log-line:first-child {
+  border-top: 0;
+}
+
+.log-line time {
+  color: #7d8298;
+  font-variant-numeric: tabular-nums;
+}
+
+.log-kind {
+  overflow: hidden;
+  color: #8f94aa;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.log-text {
+  color: #d9dbe6;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.log-line[data-level="warn"] {
+  border-left-color: var(--gold, #c9a24a);
+  background: rgba(201, 162, 74, .05);
+}
+
+.log-line[data-level="warn"] .log-text {
+  color: #ecd9a8;
+}
+
+.log-line[data-level="error"] {
+  border-left-color: #c4587b;
+  background: rgba(138, 40, 70, .14);
+}
+
+.log-line[data-level="error"] .log-text {
+  color: #f2c4d2;
+}
+
+/* ---- Preferences: almanac ---- */
+#settings .settings-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 32px;
+  padding: 16px 0;
+  border-top: 1px solid rgba(167, 174, 202, .09);
+}
+
+#settings .settings-row > span:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+#settings .settings-row strong {
+  color: #e4e6f0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+#settings .settings-row small {
+  color: #a5aabd;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+#settings .settings-row-stack {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.settings-value {
+  color: #c7b8fd;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.countdown-rows {
+  display: grid;
+  gap: 8px;
+}
+
+.countdown-row {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.countdown-row input {
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid rgba(167, 174, 202, .2);
+  border-radius: 9px;
+  background: var(--panel-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.countdown-row .countdown-date {
+  font-variant-numeric: tabular-nums;
+}
+
+#prefAlmanac .settings-actions {
+  margin-top: 8px;
+}
+
+/* Sources without a kind column (the ASCS log) give the text the room. */
+.log-list[data-kinds="false"] .log-line {
+  grid-template-columns: 64px minmax(0, 1fr);
+}
+
+.log-list[data-kinds="false"] .log-kind {
+  display: none;
+}
+
+/* ---- Almanac rotation: a fixed two-line stage with directional motion ----
+   Every item gets the same two lines (longer text ends in an ellipsis; the
+   full text is in the tooltip), so the strip never changes height. Items
+   overlap in one grid cell while one leaves and the next arrives. */
+.alm-stage {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.alm-stage > * {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+
+.alm-story p {
+  display: -webkit-box;
+  min-height: calc(2 * 1.45em);
+  margin: 3px 0 0;
+  overflow: hidden;
+  line-height: 1.45;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.alm-story .is-leaving {
+  pointer-events: none;
+}
+
+.alm-step {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgba(167, 174, 202, .18);
+  border-radius: 8px;
+  background: transparent;
+  color: #a5aabd;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.alm-step:hover,
+.alm-step:focus-visible {
+  border-color: rgba(139, 111, 245, .5);
+  color: #f1ecff;
+}
+
+.alm-controls {
+  gap: 10px;
+}
+
+.enter-next { animation: alm-enter-next 420ms cubic-bezier(.2, .7, .2, 1) both; }
+.enter-prev { animation: alm-enter-prev 420ms cubic-bezier(.2, .7, .2, 1) both; }
+.leave-next { animation: alm-leave-next 280ms cubic-bezier(.4, 0, .9, .5) both; }
+.leave-prev { animation: alm-leave-prev 280ms cubic-bezier(.4, 0, .9, .5) both; }
+
+@keyframes alm-enter-next { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+@keyframes alm-enter-prev { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+@keyframes alm-leave-next { to { opacity: 0; transform: translateX(-28px); } }
+@keyframes alm-leave-prev { to { opacity: 0; transform: translateX(28px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .enter-next, .enter-prev { animation: alm-fade-in 200ms ease both; }
+  .leave-next, .leave-prev { animation: alm-fade-out 160ms ease both; }
+}
+
+@keyframes alm-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes alm-fade-out { to { opacity: 0; } }
+
+/* The stage reserves the label plus two lines; shorter items sit centered in
+   it rather than leaving an empty line beneath. */
+.alm-stage {
+  min-height: 56px;
+}
+
+.alm-stage > .alm-story-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.alm-story p {
+  min-height: 0;
+}
+
+/* ---- Almanac countdown cell (beside daylight) ---- */
+#homeAlmanac.has-countdown:not([hidden]) {
+  grid-template-columns: auto auto auto minmax(0, 1fr);
+}
+
+.alm-countdown-cell {
+  cursor: default;
+}
+
+.alm-countdown rect,
+.alm-countdown path {
+  fill: none;
+}
+
+@media (max-width: 1100px) {
+  #homeAlmanac.has-countdown:not([hidden]) {
+    grid-template-columns: auto auto minmax(0, 1fr);
+  }
+}
+

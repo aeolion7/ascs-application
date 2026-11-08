@@ -195,4 +195,86 @@ END:VCALENDAR</C:calendar-data></prop><status>HTTP/1.1 200 OK</status></propstat
     equal("drag: the end stays within the day", C.snapStart(1430, 0, 90), 1350);
     equal("drag: a 50-minute event can start at 11 PM", C.snapStart(1439, 0, 50), 1380);
     equal("drag: other steps", C.snapStart(611, 0, 30, 5), 610);
+
+    // 1.9.0: resizing
+    equal("resize: the end snaps to 15 minutes", C.resizeEdge(667, 540, "end"), 660);
+    equal("resize: at least one step long", C.resizeEdge(500, 540, "end"), 555);
+    equal("resize: the end stays within the day", C.resizeEdge(1500, 540, "end"), 1440);
+    equal("resize: the start snaps", C.resizeEdge(488, 600, "start"), 495);
+    equal("resize: the start keeps one step", C.resizeEdge(700, 600, "start"), 585);
+    equal("resize: not before midnight", C.resizeEdge(-40, 600, "start"), 0);
+
+    // 1.9.0: moving between days in Month
+    equal("days: forward", C.daysBetween(new Date(2026, 10, 4, 15).getTime(), new Date(2026, 10, 12, 1).getTime()), 8);
+    equal("days: backward", C.daysBetween(new Date(2026, 10, 4).getTime(), new Date(2026, 9, 30).getTime()), -5);
+    equal("days: across daylight saving", C.daysBetween(new Date(2026, 2, 7).getTime(), new Date(2026, 2, 9).getTime()), 2);
+    const moved = new Date(C.shiftDays(new Date(2026, 2, 6, 15, 30).getTime(), 3));
+    equal("days: the clock time is kept across daylight saving", `${moved.getDate()} ${moved.getHours()}:${moved.getMinutes()}`, "9 15:30");
+
+    // 1.9.0: the wheel time picker
+    equal("time: parts", JSON.stringify(C.timeParts("14:05")), JSON.stringify({ hour: 2, minute: 5, meridiem: "PM" }));
+    equal("time: midnight is 12 AM", C.timeParts("00:30").hour + C.timeParts("00:30").meridiem, "12AM");
+    equal("time: noon is 12 PM", C.timeParts("12:00").hour + C.timeParts("12:00").meridiem, "12PM");
+    equal("time: hour up crosses into PM", C.stepTime("11:30", "hour", 1), "12:30");
+    equal("time: hour wraps at midnight", C.stepTime("23:15", "hour", 1), "00:15");
+    equal("time: hour down", C.stepTime("00:15", "hour", -1), "23:15");
+    equal("time: minutes step by 5", C.stepTime("09:30", "minute", 1), "09:35");
+    equal("time: minutes snap up first", C.stepTime("09:07", "minute", 1), "09:10");
+    equal("time: minutes snap down first", C.stepTime("09:07", "minute", -1), "09:05");
+    equal("time: minutes carry into the hour", C.stepTime("09:55", "minute", 1), "10:00");
+    equal("time: minutes borrow from the hour", C.stepTime("10:00", "minute", -1), "09:55");
+    equal("time: AM to PM", C.stepTime("09:30", "meridiem", 1), "21:30");
+    equal("time: PM to AM either way", C.stepTime("21:30", "meridiem", -1), "09:30");
+    equal("time: nothing to read starts at 9 AM", C.stepTime("", "minute", 0), "09:00");
+    equal("time: typed hour keeps PM", C.setTimePart("14:20", "hour", 3), "15:20");
+    equal("time: typed 12 in the morning is midnight", C.setTimePart("09:20", "hour", 12), "00:20");
+    equal("time: typed minute", C.setTimePart("14:20", "minute", 45), "14:45");
+    equal("time: typed PM", C.setTimePart("09:20", "meridiem", "PM"), "21:20");
+    equal("time: out of range is ignored", C.setTimePart("09:20", "minute", 75), "09:20");
+
+    // 1.9.0: the wheel date picker
+    equal("date: parts", JSON.stringify(C.dateParts("2026-11-05")), JSON.stringify({ month: 11, day: 5, year: 2026 }));
+    equal("date: day up", C.stepDate("2026-11-05", "day", 1), "2026-11-06");
+    equal("date: day carries into the next month", C.stepDate("2026-11-30", "day", 1), "2026-12-01");
+    equal("date: day carries into the next year", C.stepDate("2026-12-31", "day", 1), "2027-01-01");
+    equal("date: day borrows from the month before", C.stepDate("2026-03-01", "day", -1), "2026-02-28");
+    equal("date: month keeps the day where it can", C.stepDate("2026-01-31", "month", 1), "2026-02-28");
+    equal("date: month across the year", C.stepDate("2026-12-15", "month", 1), "2027-01-15");
+    equal("date: month back across the year", C.stepDate("2026-01-15", "month", -1), "2025-12-15");
+    equal("date: year from a leap day", C.stepDate("2028-02-29", "year", 1), "2029-02-28");
+    equal("date: not past 2100", C.stepDate("2100-06-01", "year", 1), "2100-06-01");
+    equal("date: typed month keeps the day where it can", C.setDatePart("2026-03-31", "month", 4), "2026-04-30");
+    equal("date: typed day", C.setDatePart("2026-11-05", "day", 23), "2026-11-23");
+    equal("date: a day the month lacks is ignored", C.setDatePart("2026-02-10", "day", 30), "2026-02-10");
+    equal("date: typed year", C.setDatePart("2026-11-05", "year", 2027), "2027-11-05");
+    equal("date: a year out of range is ignored", C.setDatePart("2026-11-05", "year", 1850), "2026-11-05");
+    equal("date: nothing to read stays empty", C.stepDate("", "day", 1), "");
+
+    // 1.9.0: "Only this one" stays in its series (an override)
+    const weekly = { summary: "Standup", location: "", description: "", start: new Date(2026, 10, 2, 9, 30).getTime(), end: new Date(2026, 10, 2, 9, 45).getTime(),
+        allDay: false, rrule: { freq: "WEEKLY", interval: 1, byday: [] }, exdates: [], reminder: 5 };
+    const seriesText = C.newResource("standup@ascs", weekly, 0);
+    const second = new Date(2026, 10, 9, 9, 30).getTime();
+    const changed = { ...C.fieldsOf(C.readResource(seriesText).master), start: new Date(2026, 10, 9, 11, 0).getTime(), end: new Date(2026, 10, 9, 11, 30).getTime(), rrule: null };
+    const withOverride = C.overrideOccurrence(seriesText, second, changed, 0);
+    const parsedOverride = C.readResource(withOverride);
+    equal("override: kept in the same resource", parsedOverride.overrides.length, 1);
+    equal("override: it replaces that date", parsedOverride.overrides[0].recurrenceId, second);
+    equal("override: same UID as the series", parsedOverride.overrides[0].uid, parsedOverride.master.uid);
+    const week = C.occurrences(parsedOverride, new Date(2026, 10, 8).getTime(), new Date(2026, 10, 10).getTime());
+    equal("override: shown at its new time, once", week.map(o => new Date(o.start).getHours()).join(), "11");
+    equal("override: still knows its date in the series", week[0].original, second);
+    equal("override: the series keeps no gap (no EXDATE)", parsedOverride.master.exdates.length, 0);
+    const changedAgain = C.overrideOccurrence(withOverride, second, { ...changed, summary: "Standup (long)" }, 0);
+    equal("override: changing it again edits the same override", C.readResource(changedAgain).overrides.length, 1);
+    const putBack = C.overrideOccurrence(withOverride, second, { ...changed, start: second, end: second + 15 * 60000 }, 0);
+    equal("override: back exactly as the series has it rejoins", C.readResource(putBack).overrides.length, 0);
+    equal("override: a different title doesn't count as back", C.readResource(C.overrideOccurrence(withOverride, second, { ...changed, start: second, end: second + 15 * 60000, summary: "Other" }, 0)).overrides.length, 1);
+    equal("override: Back to the series", C.readResource(C.restoreOccurrence(withOverride, second)).overrides.length, 0);
+    const later = ms => ms + 3600000;
+    const shifted = C.readResource(C.moveOverrides(withOverride, later, null, null, 0));
+    equal("override: moves with the series (its date)", shifted.overrides[0].recurrenceId, later(second));
+    equal("override: moves with the series (its own time)", new Date(shifted.overrides[0].start).getHours(), 12);
+    const editedOne = C.readResource(C.moveOverrides(withOverride, later, second, { ...changed, summary: "Renamed", start: later(changed.start), end: later(changed.end) }, 0));
+    equal("override: the edited one takes the edit", editedOne.overrides[0].summary, "Renamed");
 })();

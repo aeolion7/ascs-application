@@ -1,6 +1,8 @@
 /data/*
 # Written when tests/core.tests.ahk is run directly
 tests/core.results.txt
+# Manual test checklists stay local
+tests/manual-*.html
 *.code-workspace
 # Local Claude Code instructions
 CLAUDE.md

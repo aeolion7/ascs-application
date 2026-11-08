@@ -145,7 +145,7 @@
     function parseRetroAchievements(summaryRaw, recentRaw) {
         const result = {
             user: "", points: 0, softcore: 0, truePoints: 0, rank: 0, ranked: 0, presence: "",
-            lastGame: "", lastConsole: "", games: [], achievements: []
+            lastGame: "", lastConsole: "", lastGameId: 0, games: [], achievements: []
         };
         const summary = parseJson(summaryRaw);
         if (summary && typeof summary === "object" && !Array.isArray(summary)) {
@@ -156,6 +156,7 @@
             result.rank = count(summary.Rank);
             result.ranked = count(summary.TotalRanked);
             result.presence = clean(summary.RichPresenceMsg, 160);
+            result.lastGameId = count(summary.LastGameID);
             if (summary.LastGame && typeof summary.LastGame === "object") {
                 result.lastGame = clean(summary.LastGame.Title, 120);
                 result.lastConsole = clean(summary.LastGame.ConsoleName, 60);
@@ -173,6 +174,7 @@
                             badge: imageToken("b", item.BadgeName),
                             description: clean(item.Description, 200),
                             game: clean(item.GameTitle, 120),
+                            gameId: count(item.GameID),
                             points: count(item.Points),
                             date: clean(item.DateAwarded, 19),
                             hardcore: item.HardcoreAchieved === 1 || item.HardcoreAchieved === "1" || item.HardcoreAchieved === true
@@ -187,6 +189,7 @@
         if (Array.isArray(recent)) {
             result.games = recent.slice(0, 12).map(game => ({
                 title: clean(game?.Title, 120),
+                id: count(game?.GameID),
                 console: clean(game?.ConsoleName, 60),
                 achieved: count(game?.NumAchieved),
                 icon: imageToken("i", game?.ImageIcon),
@@ -201,6 +204,88 @@
             }));
         }
         return result;
+    }
+
+    // ---- the achievement browser (1.9.0)
+    const RA_TYPES = new Set(["progression", "win_condition", "missable"]);
+    const raDate = value => {
+        const text = clean(value, 19);
+        return /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$/.test(text) ? text : "";
+    };
+
+    // One game with the user's progress (API_GetGameInfoAndUserProgress).
+    // Every value is checked; anything unexpected is left out.
+    function parseRaGame(raw) {
+        const data = parseJson(raw);
+        if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+        const players = count(data.NumDistinctPlayers) || count(data.NumDistinctPlayersCasual) + count(data.NumDistinctPlayersHardcore);
+        const source = data.Achievements && typeof data.Achievements === "object" ? Object.values(data.Achievements).slice(0, 2000) : [];
+        const achievements = source.filter(item => item && typeof item === "object").map(item => {
+            const awarded = count(item.NumAwarded);
+            return {
+                id: count(item.ID), title: clean(item.Title, 120), description: clean(item.Description, 300),
+                points: count(item.Points), truePoints: count(item.TrueRatio), badge: imageToken("b", item.BadgeName),
+                order: count(item.DisplayOrder), type: RA_TYPES.has(item.type) ? item.type : "",
+                earned: raDate(item.DateEarned), earnedHardcore: raDate(item.DateEarnedHardcore),
+                rarity: players && item.NumAwarded !== undefined && item.NumAwarded !== null && item.NumAwarded !== "" ? Math.min(100, awarded / players * 100) : null
+            };
+        }).filter(item => item.title && item.id)
+            .sort((a, b) => a.order - b.order || a.id - b.id);
+        const earned = achievements.filter(item => item.earned || item.earnedHardcore);
+        return {
+            id: count(data.ID), title: clean(data.Title, 120), console: clean(data.ConsoleName, 60),
+            icon: imageToken("i", data.ImageIcon), award: clean(data.HighestAwardKind, 20), achievements,
+            earned: earned.length, earnedHardcore: achievements.filter(item => item.earnedHardcore).length,
+            points: achievements.reduce((sum, item) => sum + item.points, 0),
+            pointsEarned: earned.reduce((sum, item) => sum + item.points, 0)
+        };
+    }
+
+    const isEarned = item => Boolean(item.earned || item.earnedHardcore);
+
+    // The browser's filters: all, locked, earned, missable (earned or not),
+    // and progression (including the win condition); sorted in the game's
+    // own order, by points, or rarest first.
+    function filterRaAchievements(list, filter = "all", sort = "order") {
+        const kept = list.filter(item => filter === "locked" ? !isEarned(item)
+            : filter === "earned" ? isEarned(item)
+            : filter === "missable" ? item.type === "missable"
+            : filter === "progression" ? item.type === "progression" || item.type === "win_condition"
+            : true);
+        if (sort === "points") return [...kept].sort((a, b) => b.points - a.points || a.order - b.order);
+        if (sort === "rarest") return [...kept].sort((a, b) => (a.rarity ?? 101) - (b.rarity ?? 101) || a.order - b.order);
+        return kept;
+    }
+
+    function raCounts(list) {
+        return {
+            all: list.length, locked: list.filter(item => !isEarned(item)).length, earned: list.filter(isEarned).length,
+            missable: list.filter(item => item.type === "missable").length,
+            progression: list.filter(item => item.type === "progression" || item.type === "win_condition").length
+        };
+    }
+
+    // "Next up" for a game: the first locked progression (or win) achievement
+    // in the game's order, else the first locked one; with how many missable
+    // ones are still locked. null when everything is unlocked.
+    function nextUp(game) {
+        if (!game?.achievements?.length) return null;
+        const locked = game.achievements.filter(item => !isEarned(item));
+        if (!locked.length) return null;
+        const next = locked.find(item => item.type === "progression" || item.type === "win_condition") || locked[0];
+        return { achievement: next, locked: locked.length, missableLeft: locked.filter(item => item.type === "missable").length };
+    }
+
+    // The last days' unlocks (API_GetUserRecentAchievements), newest first.
+    function parseRaUnlocks(raw) {
+        const data = parseJson(raw);
+        if (!Array.isArray(data)) return [];
+        return data.slice(0, 1000).filter(item => item && typeof item === "object").map(item => ({
+            title: clean(item.Title, 120), description: clean(item.Description, 200), badge: imageToken("b", item.BadgeName),
+            game: clean(item.GameTitle, 120), gameId: count(item.GameID), points: count(item.Points),
+            type: RA_TYPES.has(item.Type) ? item.Type : "", date: raDate(item.Date),
+            hardcore: item.HardcoreMode === 1 || item.HardcoreMode === "1" || item.HardcoreMode === true
+        })).filter(item => item.title && item.date).sort((a, b) => b.date.localeCompare(a.date));
     }
 
     // "Top 12%" from a rank among ranked players; "" when unknown.
@@ -240,6 +325,6 @@
     global.ASCSGames = {
         EMULATORS, systemName, formatDuration, formatLastPlayed, parseLocal, displayTitle, sortGames,
         filterGames, totalsByEmulator, gameFromWindowTitle, parseRetroAchievements, rankPercentile, titleKey, imageToken,
-        matchPlayingGame, formatClock
+        matchPlayingGame, formatClock, parseRaGame, filterRaAchievements, raCounts, nextUp, parseRaUnlocks
     };
 })(globalThis);

@@ -1,0 +1,127 @@
+/* ==========================================================================
+   1.9.0: the Workspaces view. A card for each saved layout, with a map of
+   its windows on each desktop: a screen per monitor, windows drawn where
+   they sit, labeled with their app.
+   ========================================================================== */
+
+#workspaces .section-title-row {
+  align-items: flex-end;
+  gap: 16px;
+}
+
+#workspaces .workspace-save {
+  min-width: min(420px, 100%);
+  margin-top: 0;
+}
+
+.workspace-cards {
+  display: grid;
+  gap: 16px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workspace-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid rgba(167, 174, 202, .12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .02);
+}
+
+.workspace-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.workspace-card .workspace-copy strong {
+  font-size: 15px;
+}
+
+.workspace-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspace-rename {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(168, 146, 251, .6);
+  border-radius: 8px;
+  background: var(--panel-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* The map: one block per desktop, side by side. */
+.workspace-map {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.workspace-desktop {
+  display: grid;
+  gap: 6px;
+}
+
+.workspace-desktop small {
+  color: #a4a9bb;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.workspace-desktop.is-pinned small {
+  color: var(--gold-text);
+}
+
+.workspace-screens {
+  display: flex;
+  gap: 6px;
+}
+
+.workspace-screen {
+  position: relative;
+  width: 168px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid rgba(167, 174, 202, .18);
+  border-radius: 6px;
+  background: rgba(10, 11, 18, .6);
+}
+
+.workspace-window {
+  position: absolute;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 2px 4px;
+  border: 1px solid rgba(168, 146, 251, .55);
+  border-radius: 3px;
+  background: rgba(139, 111, 245, .22);
+  color: #e4defc;
+  font-size: 9.5px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-window.is-maximized {
+  border-color: rgba(168, 146, 251, .35);
+  background: rgba(139, 111, 245, .14);
+}
+
+.workspace-desktop.is-pinned .workspace-window {
+  border-color: var(--gold-border);
+  background: var(--gold-soft);
+  color: var(--gold-text);
+}

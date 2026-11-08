@@ -21,7 +21,7 @@ const calState = {
     calendars: [], resources: new Map(), loaded: false, loading: false, error: "",
     mode: "month", cursor: startOfDay(Date.now()),
     requests: new Map(), nextRequest: 1,
-    editing: null, editingCalendar: null, scrolledWeek: ""
+    editing: null, editingCalendar: null, scrollToNow: false
 };
 
 function loadCalPrefs() {
@@ -364,6 +364,9 @@ function renderMonth(main) {
     ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].forEach(d => head.append(element("span", "cal-weekday", d)));
     month.append(head);
     const today = startOfDay(Date.now());
+    // Where each week row and day is, for dragging between days (1.9.0).
+    calState.monthRows = [];
+    calState.monthDays = new Map();
     // At most two lanes of bars and three lines per day in all (bars, events,
     // then "+N more"), so every week row keeps the same height and the month
     // fits the window whatever the data.
@@ -371,6 +374,7 @@ function renderMonth(main) {
     for (let w = 0; w < 6; w++) {
         const rowStart = addDays(gridStart, 7 * w);
         const row = element("div", "cal-week-row");
+        calState.monthRows.push({ row, start: rowStart });
         const bars = Cal.layoutSpans(spanning, rowStart, 7);
         const lanes = Math.min(MAX_LANES, bars.reduce((n, b) => Math.max(n, b.lane + 1), 0));
         row.style.setProperty("--lanes", String(lanes));
@@ -391,11 +395,16 @@ function renderMonth(main) {
             const items = element("div", "cal-day-items");
             items.style.gridColumn = String(d + 1);
             items.style.gridRow = String(2 + lanes);
+            calState.monthDays.set(day, { cell, items });
             const chips = single.filter(o => o.start < next && o.end > day);
             const hiddenBars = bars.filter(b => b.lane >= MAX_LANES && b.startCol <= d && b.endCol >= d).length;
             const room = Math.max(1, ROWS - lanes);
             const shown = chips.length + hiddenBars > room ? room - 1 : room;
-            chips.slice(0, Math.max(0, shown)).forEach(o => items.append(chip(o)));
+            chips.slice(0, Math.max(0, shown)).forEach(o => {
+                const node = chip(o);
+                if (o.resource?.editable) enableMonthDrag(node, o);
+                items.append(node);
+            });
             const hidden = hiddenBars + Math.max(0, chips.length - Math.max(0, shown));
             if (hidden > 0) {
                 const more = element("button", "cal-more", `+${hidden} more`);
@@ -405,7 +414,11 @@ function renderMonth(main) {
             }
             row.append(items);
         }
-        bars.filter(b => b.lane < MAX_LANES).forEach(b => row.append(spanBar(b, 1)));
+        bars.filter(b => b.lane < MAX_LANES).forEach(b => {
+            const node = spanBar(b, 1);
+            if (b.resource?.editable) enableMonthDrag(node, b);
+            row.append(node);
+        });
         month.append(row);
     }
     main.replaceChildren(month);
@@ -427,13 +440,26 @@ function spanBar(bar, offset) {
     return node;
 }
 
-// ---- dragging events in Day and Week (1.8.0)
+// ---- dragging events (1.8.0; resizing and Month in 1.9.0)
 // Press on an event and move: an outline in its color snaps to 15-minute
 // steps (keeping its length, and across days in Week) with the new time.
-// Dropping saves; Esc, or dropping where it started, cancels. A short click
-// still opens the editor. Repeating events ask: only this one, or every one.
+// The grips at an event's top and bottom change when it starts or ends
+// instead (1.9.0). In Month, events and multi-day bars move between days,
+// keeping their times (1.9.0). Dropping saves; Esc, or dropping where it
+// started, cancels. A short click still opens the editor. Repeating events
+// ask: only this one, or every one.
 const DRAG_STEP = 15;
 let calDrag = null;
+
+// The click that ends a drag doesn't open the editor.
+function suppressClickAfterDrag(node) {
+    node.addEventListener("click", event => {
+        if (node.dataset.dragged !== "1") return;
+        delete node.dataset.dragged;
+        event.stopImmediatePropagation();
+        event.preventDefault();
+    }, true);
+}
 
 function enableEventDrag(block, occ, columns) {
     block.addEventListener("pointerdown", event => {
@@ -442,18 +468,53 @@ function enableEventDrag(block, occ, columns) {
         if (!home) return;
         const rect = home.column.getBoundingClientRect();
         calDrag = {
-            block, occ, columns, pointerId: event.pointerId, x: event.clientX, y: event.clientY, started: false,
+            kind: "move", block, occ, columns, pointerId: event.pointerId, x: event.clientX, y: event.clientY, started: false,
             grab: (event.clientY - rect.top) / HOUR_HEIGHT * 60 - (occ.start - home.day) / 60000,
             duration: (occ.end - occ.start) / 60000, target: null, ghost: null
         };
     });
-    // The click that ends a drag doesn't open the editor.
-    block.addEventListener("click", event => {
-        if (block.dataset.dragged !== "1") return;
-        delete block.dataset.dragged;
-        event.stopImmediatePropagation();
-        event.preventDefault();
-    }, true);
+    suppressClickAfterDrag(block);
+}
+
+// A grip at the top ("start") or bottom ("end") of an event in Day or Week.
+function enableResize(grip, block, occ, columns, edge) {
+    grip.addEventListener("pointerdown", event => {
+        if (event.button !== 0 || calDrag) return;
+        event.stopPropagation();                 // the event itself doesn't start moving
+        const home = columns.find(entry => entry.column === block.parentElement);
+        if (!home) return;
+        calDrag = { kind: "resize", edge, block, occ, home, pointerId: event.pointerId, x: event.clientX, y: event.clientY, started: false, target: null, ghost: null };
+    });
+}
+
+// Minutes into a day (0-1440) of a time on that day, or the day's edge.
+function minutesInto(ms, day) {
+    if (!sameDay(ms, day)) return ms > day ? 1440 : 0;
+    const t = new Date(ms);
+    return t.getHours() * 60 + t.getMinutes();
+}
+const atMinutes = (day, minutes) => { const d = new Date(day); return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, minutes).getTime(); };
+
+function enableMonthDrag(node, occ) {
+    node.addEventListener("pointerdown", event => {
+        if (event.button !== 0 || calDrag) return;
+        calDrag = { kind: "month", block: node, occ, from: monthDayAt(event.clientX, event.clientY), pointerId: event.pointerId, x: event.clientX, y: event.clientY, started: false, target: null, ghost: null };
+    });
+    node.style.touchAction = "none";
+    suppressClickAfterDrag(node);
+}
+
+// The Month day under a point (the nearest week row, and the column by x).
+function monthDayAt(x, y) {
+    let best = null, distance = Infinity;
+    for (const entry of calState.monthRows || []) {
+        const rect = entry.row.getBoundingClientRect();
+        const gap = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
+        if (gap < distance) { distance = gap; best = { entry, rect }; }
+    }
+    if (!best) return null;
+    const column = Math.max(0, Math.min(6, Math.floor((x - best.rect.left) / (best.rect.width / 7))));
+    return addDays(best.entry.start, column);
 }
 
 function dragColumnAt(drag, x) {
@@ -475,10 +536,14 @@ function moveDrag(event) {
         drag.started = true;
         try { drag.block.setPointerCapture(event.pointerId); } catch { /* the drag still works */ }
         drag.block.classList.add("is-drag-source");
-        document.body.classList.add("is-dragging-event");
-        drag.ghost = element("div", "cal-drop-ghost");
+        document.body.classList.add(drag.kind === "resize" ? "is-resizing-event" : "is-dragging-event");
+        drag.ghost = element("div", `cal-drop-ghost${drag.kind === "month" ? " is-month" : ""}`);
         drag.ghost.style.setProperty("--cal-color", drag.occ.calendar.color);
         drag.ghost.append(element("strong", ""), element("span", "", drag.occ.event.summary || "(No title)"));
+    }
+    if (drag.kind === "month") {
+        moveMonthDrag(event, drag);
+        return;
     }
     // Near the top or bottom edge, the hours scroll.
     const scroller = drag.block.closest(".cal-week-scroll");
@@ -486,6 +551,10 @@ function moveDrag(event) {
         const box = scroller.getBoundingClientRect();
         if (event.clientY < box.top + 28) scroller.scrollTop -= 14;
         else if (event.clientY > box.bottom - 28) scroller.scrollTop += 14;
+    }
+    if (drag.kind === "resize") {
+        moveResizeDrag(event, drag);
+        return;
     }
     const hit = dragColumnAt(drag, event.clientX);
     const rect = hit.column.getBoundingClientRect();
@@ -503,13 +572,61 @@ function moveDrag(event) {
     ghost.firstChild.textContent = `${sameDayAsBefore ? "" : `${fmt(start, { weekday: "short" })} `}${timeText(start)} – ${timeText(end)}`;
 }
 
+// Resizing: the grip's edge follows the pointer within the event's day; the
+// other edge stays exactly where it was.
+function moveResizeDrag(event, drag) {
+    const { column, day } = drag.home;
+    const rect = column.getBoundingClientRect();
+    const pointer = (event.clientY - rect.top) / HOUR_HEIGHT * 60;
+    const startMinutes = minutesInto(drag.occ.start, day), endMinutes = minutesInto(drag.occ.end, day);
+    const from = drag.edge === "start" ? Cal.resizeEdge(pointer, endMinutes, "start", DRAG_STEP) : startMinutes;
+    const to = drag.edge === "end" ? Cal.resizeEdge(pointer, startMinutes, "end", DRAG_STEP) : endMinutes;
+    const start = drag.edge === "start" ? atMinutes(day, from) : drag.occ.start;
+    const end = drag.edge === "end" ? atMinutes(day, to) : drag.occ.end;
+    drag.target = { start, end };
+    const ghost = drag.ghost;
+    if (ghost.parentElement !== column) column.append(ghost);
+    const height = (to - from) / 60 * HOUR_HEIGHT;
+    ghost.style.top = `${from / 60 * HOUR_HEIGHT}px`;
+    ghost.style.height = `${Math.max(20, height - 2)}px`;
+    ghost.classList.toggle("is-short", height < 38);
+    ghost.firstChild.textContent = `${timeText(start)} – ${timeText(end)}`;
+}
+
+// Month: the event moves by whole days, at the same times; its outline sits
+// at the top of the day it will start on.
+function moveMonthDrag(event, drag) {
+    const day = monthDayAt(event.clientX, event.clientY);
+    if (day === null || drag.from === null) return;
+    const days = Cal.daysBetween(drag.from, day);
+    const start = Cal.shiftDays(drag.occ.start, days);
+    const end = Cal.shiftDays(drag.occ.end, days);
+    drag.target = { start, end };
+    const firstDay = startOfDay(start);
+    const place = calState.monthDays.get(firstDay) || calState.monthDays.get(day);
+    if (!place) return;
+    if (drag.cell !== place.cell) {
+        drag.cell?.classList.remove("is-drop-target");
+        place.cell.classList.add("is-drop-target");
+        drag.cell = place.cell;
+        place.items.prepend(drag.ghost);
+    }
+    const multi = Cal.spansDays(drag.occ);
+    const last = drag.occ.allDay ? addDays(end, -1) : end;
+    ghostLabel(drag).textContent = multi
+        ? `${fmt(start, { month: "short", day: "numeric" })} – ${fmt(last, { month: "short", day: "numeric" })}`
+        : drag.occ.allDay ? "All day" : timeText(start);       // the outlined day shows the date
+}
+const ghostLabel = drag => drag.ghost.firstChild;
+
 function endDrag(keepGhost = false) {
     const drag = calDrag;
     calDrag = null;
     if (!drag) return;
     if (drag.started) drag.block.dataset.dragged = "1";
     try { drag.block.releasePointerCapture(drag.pointerId); } catch { /* already released */ }
-    document.body.classList.remove("is-dragging-event");
+    document.body.classList.remove("is-dragging-event", "is-resizing-event");
+    drag.cell?.classList.remove("is-drop-target");
     if (!keepGhost) {
         drag.block.classList.remove("is-drag-source");
         drag.ghost?.remove();
@@ -520,14 +637,17 @@ async function dropDrag(event) {
     const drag = calDrag;
     if (!drag || event.pointerId !== drag.pointerId) return;
     const target = drag.started ? drag.target : null;
-    if (!target || target.start === drag.occ.start) {
+    if (!target || (target.start === drag.occ.start && target.end === drag.occ.end)) {
         endDrag();
         return;
     }
     endDrag(true);                           // the outline stays until the calendar redraws
     const { occ } = drag;
+    const when = drag.kind === "resize"
+        ? `${timeText(target.start)} – ${timeText(target.end)}`
+        : `${fmt(target.start, { weekday: "short", month: "short", day: "numeric" })}${occ.allDay ? "" : `, ${timeText(target.start)}`}`;
     const repeating = Boolean(occ.resource.parsed.master.rrule);
-    const scope = repeating ? await askMoveScope(occ, target.start) : "all";
+    const scope = repeating ? await askScope(occ, drag.kind === "resize" ? "Change" : "Move", `${drag.kind === "resize" ? "Change it to" : "Move it to"} ${when}`) : "all";
     if (!scope) {
         drag.block.classList.remove("is-drag-source");
         drag.ghost?.remove();
@@ -536,10 +656,10 @@ async function dropDrag(event) {
     const base = repeating && scope === "all" ? Cal.fieldsOf(occ.resource.parsed.master) : Cal.fieldsOf(occ.event);
     const fields = { ...base, start: target.start, end: target.end, calendar: occ.resource.calendar, ...(scope === "one" ? { rrule: null } : {}) };
     try {
-        await writeEventChange(occ, fields, scope);
-        showNotice(`Moved “${occ.event.summary || "(No title)"}” to ${fmt(target.start, { weekday: "short", month: "short", day: "numeric" })}, ${timeText(target.start)}.`);
+        const undo = await writeEventChange(occ, fields, scope);
+        showNotice(`${drag.kind === "resize" ? "Changed" : "Moved"} “${occ.event.summary || "(No title)"}” to ${when}${scope === "one" && repeating ? " (only this one)" : ""}.`, undoAction(undo));
     } catch (error) {
-        showNotice(`Not moved: ${error.message}`);
+        showNotice(`${drag.kind === "resize" ? "Not changed" : "Not moved"}: ${error.message}`);
     }
     refreshCalendar();
 }
@@ -554,11 +674,15 @@ document.addEventListener("keydown", event => {
     endDrag();
 }, true);
 
-// "Only this one", "Every event in the series", or Cancel (null).
-function askMoveScope(occ, start) {
+// Every change to a repeating event asks (1.9.0: dragging, resizing, the
+// editor's Save and Delete): "Only this one", "Every event in the series",
+// or Cancel (null). The verb names it ("Move a repeating event"); the action
+// reads like "Move it to Thu, Nov 12, 3:00 PM".
+function askScope(occ, verb, action) {
     return new Promise(resolve => {
         const dialog = $("calMoveDialog");
-        $("calMoveText").textContent = `“${occ.event.summary || "(No title)"}” repeats. Move it to ${fmt(start, { weekday: "long", month: "short", day: "numeric" })}, ${timeText(start)}:`;
+        $("calMoveHeading").textContent = `${verb} a repeating event`;
+        $("calMoveText").textContent = `“${occ.event.summary || "(No title)"}” repeats. ${action}:`;
         const finish = scope => {
             dialog.hidden = true;
             dialog.removeEventListener("keydown", onKey);
@@ -648,7 +772,17 @@ function renderHours(main, start, count) {
             if (height < 38) block.classList.add("is-short");   // time and title on one line
             block.style.left = `calc(${(o.lane / o.lanes) * 100}% + 2px)`;
             block.style.width = `calc(${100 / o.lanes}% - 4px)`;
-            if (o.source.resource?.editable) enableEventDrag(block, o.source, columns);
+            if (o.source.resource?.editable) {
+                enableEventDrag(block, o.source, columns);
+                // Grips at the top and bottom change when it starts or ends (1.9.0).
+                [["start", "Drag to change when it starts"], ["end", "Drag to change when it ends"]].forEach(([edge, hint]) => {
+                    const grip = element("span", `cal-resize is-${edge}`);
+                    grip.title = hint;
+                    grip.setAttribute("aria-hidden", "true");
+                    enableResize(grip, block, o.source, columns, edge);
+                    block.append(grip);
+                });
+            }
             column.append(block);
         });
         if (day === today) {
@@ -678,11 +812,12 @@ function renderHours(main, start, count) {
     const previous = main.querySelector(".cal-week-scroll")?.scrollTop;
     main.replaceChildren(wrap);
     fitCalendarWeek();
-    // Open at 7:00 (or an hour before now on this week) the first time a week
-    // is shown; redrawing the same week keeps where it was scrolled to.
-    const key = `${start}/${count}`;
-    if (calState.scrolledWeek !== key || previous === undefined) {
-        calState.scrolledWeek = key;
+    // Open at 7:00 (or an hour before now when today is shown) when the hours
+    // first appear; after that the hours stay where they were scrolled to,
+    // whether the same days are redrawn or ‹ › steps to other days (1.9.0:
+    // stepping used to jump back to 7:00 or to now).
+    if (previous === undefined || calState.scrollToNow) {
+        calState.scrollToNow = false;              // Today: back to the current time
         const hour = start <= Date.now() && Date.now() < end ? Math.max(0, new Date().getHours() - 1) : 7;
         scroller.scrollTop = hour * HOUR_HEIGHT;
     } else {
@@ -791,9 +926,151 @@ function updateRepeatControls() {
     const allDay = $("calAllDay").checked;
     $("calStartTime").hidden = allDay;
     $("calEndTime").hidden = allDay;
+    refreshPickers();
     const start = fromInputs($("calStartDate").value, "00:00");
     if (Number.isFinite(start)) fillMonthlyChoices(start);
 }
+
+// ---- the wheel pickers (1.9.0): times and dates
+// Each part (hour, minute, AM/PM; month, day, year) turns with the mouse
+// wheel over it or the arrow keys; digits type a value, moving on once it's
+// complete; Left and Right move between parts. The field underneath still
+// holds the value the editor reads; the picker shows and sets it. Dates also
+// keep a button for the calendar pop-up.
+const wheelPickers = [];
+
+const TIME_PICKER = {
+    kind: "time",
+    hint: "Turn the wheel over the hour, minute or AM/PM, or type",
+    parts: [
+        { name: "hour", label: "hour", digits: 2, min: 1, max: 12 },
+        { name: "minute", label: "minute", digits: 2, min: 0, max: 59, before: ":" },
+        { name: "meridiem", label: "AM or PM", letters: { a: "AM", p: "PM" } }
+    ],
+    show: value => {
+        const { hour, minute, meridiem } = Cal.timeParts(value);
+        return { hour: [String(hour), hour], minute: [String(minute).padStart(2, "0"), minute], meridiem: [meridiem, null] };
+    },
+    step: (value, part, delta) => Cal.stepTime(value, part, delta),
+    set: (value, part, typed) => Cal.setTimePart(value, part, typed)
+};
+
+const DATE_PICKER = {
+    kind: "date",
+    hint: "Turn the wheel over the month, day or year, or type",
+    parts: [
+        { name: "month", label: "month", digits: 2, min: 1, max: 12 },
+        { name: "day", label: "day", digits: 2, min: 1, max: 31, before: "/" },
+        { name: "year", label: "year", digits: 4, min: 1900, max: 2100, before: "/" }
+    ],
+    show: value => {
+        const { month, day, year } = Cal.dateParts(value);
+        return { month: [String(month).padStart(2, "0"), month], day: [String(day).padStart(2, "0"), day], year: [String(year), year] };
+    },
+    step: (value, part, delta) => Cal.stepDate(value, part, delta),
+    set: (value, part, typed) => Cal.setDatePart(value, part, typed)
+};
+
+function makeWheelPicker(input, spec) {
+    const box = element("div", `cal-spin is-${spec.kind}`);
+    box.setAttribute("role", "group");
+    const label = input.getAttribute("aria-label") || (spec.kind === "date" ? "Date" : "Time");
+    box.setAttribute("aria-label", label);
+    box.title = spec.hint;
+    const nodes = {};
+    let typed = "", typedAt = 0, wheel = 0;
+    const set = value => {
+        if (!value || value === input.value) return;
+        input.value = value;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        refresh();
+    };
+    const focusPart = (index, step) => nodes[spec.parts[Math.max(0, Math.min(spec.parts.length - 1, index + step))].name].focus();
+    spec.parts.forEach((part, index) => {
+        if (part.before) box.append(element("span", "cal-spin-sep", part.before));
+        const node = element("span", `cal-spin-part is-${part.name}`);
+        node.tabIndex = 0;
+        node.setAttribute("role", "spinbutton");
+        node.setAttribute("aria-label", `${label}, ${part.label}`);
+        if (part.min !== undefined) {
+            node.setAttribute("aria-valuemin", String(part.min));
+            node.setAttribute("aria-valuemax", String(part.max));
+        }
+        node.addEventListener("wheel", event => {
+            event.preventDefault();
+            // A mouse notch is one step; a touchpad's small deltas add up.
+            wheel += event.deltaMode === 0 ? event.deltaY : event.deltaY * 40;
+            if (Math.abs(wheel) < 40) return;
+            const step = wheel < 0 ? 1 : -1;
+            wheel = 0;
+            set(spec.step(input.value, part.name, step));
+        }, { passive: false });
+        node.addEventListener("focus", () => { typed = ""; });
+        node.addEventListener("keydown", event => {
+            const key = event.key;
+            if (key === "ArrowUp" || key === "ArrowDown") set(spec.step(input.value, part.name, key === "ArrowUp" ? 1 : -1));
+            else if (key === "ArrowLeft" || key === "ArrowRight") focusPart(index, key === "ArrowLeft" ? -1 : 1);
+            else if (part.letters && part.letters[key.toLowerCase()]) set(spec.set(input.value, part.name, part.letters[key.toLowerCase()]));
+            else if (part.digits && /^\d$/.test(key)) {
+                // Digits typed within a second build one number (1 then 0 is 10).
+                const now = Date.now();
+                typed = (now - typedAt < 1000 ? typed + key : key).slice(-part.digits);
+                typedAt = now;
+                const number = Number(typed);
+                if (part.digits === 4) {
+                    if (typed.length === 4) { set(spec.set(input.value, part.name, number)); typed = ""; focusPart(index, 1); }
+                } else if (number >= part.min && number <= part.max) {
+                    set(spec.set(input.value, part.name, number));
+                    if (typed.length === part.digits || number * 10 > part.max) { typed = ""; focusPart(index, 1); }
+                } else if (typed.length === part.digits || number > part.max) {
+                    typed = number > part.max ? key : "";        // a fresh start with this digit
+                }
+            } else return;
+            event.preventDefault();
+        });
+        nodes[part.name] = node;
+        box.append(node);
+    });
+    if (spec.kind === "date") {
+        // The calendar pop-up: the date field, invisible over the picker, opens it.
+        const open = element("button", "cal-spin-open");
+        open.type = "button";
+        open.title = "Choose from a calendar";
+        open.setAttribute("aria-label", `${label}: choose from a calendar`);
+        open.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3"/></svg>';
+        open.addEventListener("click", () => {
+            try { input.showPicker(); } catch { /* not available: the parts still work */ }
+        });
+        box.append(open);
+    }
+    function refresh() {
+        const shown = spec.show(input.value);
+        spec.parts.forEach(part => {
+            const [text, value] = shown[part.name];
+            nodes[part.name].textContent = text;
+            if (value === null) nodes[part.name].setAttribute("aria-valuetext", text);
+            else nodes[part.name].setAttribute("aria-valuenow", String(value));
+        });
+        box.hidden = input.hidden;
+    }
+    input.classList.add(`cal-${spec.kind}-native`);
+    input.after(box);
+    if (spec.kind === "date") box.append(input);      // under the picker, for its pop-up
+    input.addEventListener("change", refresh);        // a date chosen in the pop-up
+    wheelPickers.push(refresh);
+    refresh();
+}
+
+function refreshPickers() {
+    wheelPickers.forEach(refresh => refresh());
+}
+
+makeWheelPicker($("calStartDate"), DATE_PICKER);
+makeWheelPicker($("calStartTime"), TIME_PICKER);
+makeWheelPicker($("calEndDate"), DATE_PICKER);
+makeWheelPicker($("calEndTime"), TIME_PICKER);
+makeWheelPicker($("calUntil"), DATE_PICKER);
 
 function buildWeekdayChips(selected) {
     const box = $("calWeekdays");
@@ -855,11 +1132,10 @@ function openEventEditor({ occurrence = null, date = null, minutes = null, allDa
     if (![...$("calReminder").options].some(o => o.value === $("calReminder").value)) $("calReminder").value = "15";
     $("calLocation").value = fields?.location || "";
     $("calNotes").value = fields?.description || "";
-    const repeating = Boolean(occurrence && master?.rrule);
-    $("calScope").hidden = !repeating;
-    document.querySelector('input[name="calScope"][value="all"]').checked = true;
     $("calDeleteEvent").hidden = !occurrence;
     $("calPinCountdown").hidden = !occurrence;
+    // A changed occurrence of a series (an override) can go back to the series.
+    $("calRejoinSeries").hidden = !(occurrence && master?.rrule && occurrence.event !== master);
     $("calEventError").hidden = true;
     updateRepeatControls();
     $("calEventDialog").hidden = false;
@@ -895,22 +1171,28 @@ function keepEventDuration() {
     const end = allDay ? addDays(start, Math.max(1, Math.round(duration / 86400000))) : start + duration;
     $("calEndDate").value = isoDate(allDay ? addDays(end, -1) : end);
     if (!allDay) $("calEndTime").value = isoTime(end);
+    refreshPickers();
 }
 
 // The slot being set, on a strip of its day (1.8.0): the day's other timed
 // events in gray, this one in its calendar's color, and a note when they
 // overlap. Redrawn as the times change, so a move is seen before saving.
+// 1.9.0: when the end isn't after the start, the strip stays where it is
+// (so nothing below it moves while turning the wheel) and says so.
 function renderSlotPreview() {
     const box = $("calSlotPreview");
-    const { allDay, start, end } = editorTimes();
-    if (!Number.isFinite(start) || !(end > start)) {
-        box.hidden = true;
+    const { allDay, start, end: chosenEnd } = editorTimes();
+    if (!Number.isFinite(start)) {
+        box.replaceChildren(slotProblem("Choose when it starts"), element("div", "cal-slot-track is-invalid"), element("div", "cal-slot-scale"));
+        box.hidden = false;
         return;
     }
+    const invalid = !(chosenEnd > start);
     if (allDay) {
-        renderDaySpanPreview(box, start, end);
+        renderDaySpanPreview(box, start, invalid ? addDays(start, 1) : chosenEnd, invalid);
         return;
     }
+    const end = invalid ? start + 3600000 : chosenEnd;    // the hours shown around the start
     const day = startOfDay(start);
     const dayEnd = addDays(day, 1);
     const hourMs = 3600000;
@@ -952,6 +1234,12 @@ function renderSlotPreview() {
         track.append(block);
     });
     const color = calState.calendars.find(c => c.id === $("calCalendar").value)?.color || CAL_COLORS[0];
+    if (invalid) {
+        track.classList.add("is-invalid");
+        box.replaceChildren(slotProblem(`Ends before it starts (${timeText(start)})`), track, scale);
+        box.hidden = false;
+        return;
+    }
     const slot = element("span", "cal-slot-this");
     slot.style.setProperty("--cal-color", color);
     place(slot, start, end);
@@ -967,7 +1255,13 @@ function renderSlotPreview() {
 // All-day and multi-day events: a strip of the days around them (at least a
 // week), the days they cover in their calendar's color and other all-day
 // events in gray.
-function renderDaySpanPreview(box, start, end) {
+function slotProblem(text) {
+    const caption = element("div", "cal-slot-caption is-invalid");
+    caption.append(element("strong", "", text));
+    return caption;
+}
+
+function renderDaySpanPreview(box, start, end, invalid = false) {
     const DAY = 86400000;
     const days = Math.max(1, Math.round((end - start) / DAY));
     const before = Math.max(2, Math.floor((7 - days) / 2));
@@ -994,7 +1288,8 @@ function renderDaySpanPreview(box, start, end) {
     const slot = element("span", "cal-slot-this");
     slot.style.setProperty("--cal-color", calState.calendars.find(c => c.id === $("calCalendar").value)?.color || CAL_COLORS[0]);
     place(slot, start, end);
-    track.append(slot);
+    if (!invalid) track.append(slot);
+    else track.classList.add("is-invalid");
     const scale = element("div", "cal-slot-scale is-days");
     for (let i = 0; i < count; i++) {
         const day = addDays(from, i);
@@ -1002,6 +1297,11 @@ function renderDaySpanPreview(box, start, end) {
         const mark = element("span", "", count > 14 ? date : `${fmt(day, { weekday: "short" })} ${date}`);
         mark.style.left = `${(i + 0.5) / count * 100}%`;
         scale.append(mark);
+    }
+    if (invalid) {
+        box.replaceChildren(slotProblem(`Ends before it starts (${fmt(start, { month: "short", day: "numeric" })})`), track, scale);
+        box.hidden = false;
+        return;
     }
     const last = addDays(end, -1);
     const caption = element("div", "cal-slot-caption");
@@ -1058,11 +1358,20 @@ async function saveEvent(event) {
         showCalError("calEventError", error.message);
         return;
     }
+    const occ = editing?.occurrence;
+    let scope = "all";
+    if (occ?.resource.parsed.master.rrule) {
+        scope = await askScope(occ, "Change", "Save your changes to");
+        if (!scope) {
+            $("calSaveEvent").focus();           // back to the editor, nothing saved
+            return;
+        }
+    }
     $("calSaveEvent").disabled = true;
     try {
-        const scope = document.querySelector('input[name="calScope"]:checked')?.value || "all";
-        await writeEventChange(editing?.occurrence, fields, scope);
+        const undo = await writeEventChange(occ, fields, scope);
         closeCalDialogs();
+        showNotice(`Saved “${fields.summary || "(No title)"}”${occ && scope === "one" && occ.resource.parsed.master.rrule ? " (only this one)" : ""}.`, undoAction(undo));
     } catch (error) {
         showCalError("calEventError", error.message);
     } finally {
@@ -1071,42 +1380,60 @@ async function saveEvent(event) {
     refreshCalendar();
 }
 
-// Writes an event change (from the editor, or a drop in Day or Week). For an
-// occurrence of a repeating event, "one" changes only that date (the series
-// skips it and the change becomes an event of its own); "all" moves the
-// whole series by the same amount.
+// Writes an event change (from the editor, or a drag) and returns its Undo
+// steps. For an occurrence of a repeating event, "one" changes only that date
+// (1.9.0: as an override that stays in the series, so it's asked about again
+// and can go back; moved to another calendar it still becomes an event of
+// its own); "all" moves the whole series by the same amount, its changed
+// occurrences with it.
 async function writeEventChange(occ, fields, scope) {
+    const undo = [];
     if (!occ) {
-        await putNew(fields.calendar, fields);
+        undo.push(await putNew(fields.calendar, fields));
+    } else if (occ.resource.parsed.master.rrule && scope === "one" && fields.calendar === occ.resource.calendar) {
+        undo.push(await putExisting(occ.resource, Cal.overrideOccurrence(occ.resource.text, occ.original, fields)));
     } else if (occ.resource.parsed.master.rrule && scope === "one") {
-        // The series skips this date; the edited occurrence becomes an event of its own.
-        const skipped = Cal.skipOccurrence(occ.resource.text, occ.original);
-        await putExisting(occ.resource, skipped);
-        await putNew(fields.calendar, { ...fields, rrule: null });
+        // To another calendar: the series skips this date; the occurrence becomes an event there.
+        undo.push(await putExisting(occ.resource, Cal.skipOccurrence(occ.resource.text, occ.original)));
+        undo.push(await putNew(fields.calendar, { ...fields, rrule: null }));
     } else {
         const master = occ.resource.parsed.master;
-        // Moving an occurrence moves the whole series by the same amount.
-        const delta = fields.start - occ.start;
+        // Moving an occurrence moves the whole series by the same amount: the
+        // same number of days and the same change of clock time (1.9.0: not
+        // raw milliseconds, which slip an hour across a daylight-saving change).
+        const days = Cal.daysBetween(occ.start, fields.start);
+        const clock = fields.start - Cal.shiftDays(occ.start, days);
+        const move = ms => Cal.shiftDays(ms, days) + clock;
         const seriesFields = master.rrule
-            ? { ...fields, start: master.start + delta, end: master.start + delta + (fields.end - fields.start), exdates: master.exdates.map(ms => ms + delta) }
+            ? { ...fields, start: move(master.start), end: move(master.start) + (fields.end - fields.start), exdates: master.exdates.map(move) }
             : { ...fields, exdates: [] };
-        const text = Cal.editResource(occ.resource.text, seriesFields);
+        let text = Cal.editResource(occ.resource.text, seriesFields);
+        // The series' changed occurrences move with it; the one being edited
+        // (if it is one) takes this edit.
+        if (master.rrule && occ.resource.parsed.overrides.length) {
+            text = Cal.moveOverrides(text, move, occ.event.recurrenceId !== null && occ.event.recurrenceId !== undefined ? occ.original : null, { ...fields, rrule: null });
+        }
         if (fields.calendar !== occ.resource.calendar) {
-            await putNew(fields.calendar, null, text, occ.resource.name);
+            undo.push(await putNew(fields.calendar, null, text, occ.resource.name));
             const removed = await calRequest("deleteEvent", occ.resource.calendar, occ.resource.name, occ.resource.etag);
             if (removed.status >= 300 && removed.status !== 404) throw new Error(`The old copy couldn't be removed (${removed.status}).`);
+            undo.push({ op: "recreate", calendar: occ.resource.calendar, name: occ.resource.name, text: occ.resource.text });
         } else {
-            await putExisting(occ.resource, text);
+            undo.push(await putExisting(occ.resource, text));
         }
     }
+    return undo;
 }
 
+// Each returns its Undo step: a new event is removed again; a changed one
+// gets its previous text back (only if it's still the version saved here).
 async function putNew(calendar, fields, text = null, name = null) {
     const uid = name || Cal.uidNew();
     const body = text || Cal.newResource(`${uid}@ascs`, fields);
     const reply = await calRequest("putEvent", calendar, uid, "", body);
     if (reply.status === 412) throw new Error("An event with that id already exists there.");
     if (reply.status >= 300) throw new Error(`The event wasn't saved (${reply.status}).`);
+    return { op: "remove", calendar, name: uid, etag: reply.etag || "" };
 }
 
 async function putExisting(resource, text) {
@@ -1114,13 +1441,62 @@ async function putExisting(resource, text) {
     const reply = await calRequest("putEvent", resource.calendar, resource.name, resource.etag || "", text);
     if (reply.status === 412) throw new Error("This event was changed elsewhere since it was shown. It has been reloaded; try again.");
     if (reply.status >= 300) throw new Error(`The event wasn't saved (${reply.status}).`);
+    return { op: "restore", calendar: resource.calendar, name: resource.name, text: resource.text, etag: reply.etag || "" };
+}
+
+// ---- Undo (1.9.0)
+// Every calendar change (drag, resize, Save, Delete, Back to the series)
+// offers Undo in its notice for 10 seconds. Undo puts back exactly what was
+// there, step by step in reverse; it uses the version saved here, so a
+// change made elsewhere in between is never overwritten (it stops and says so).
+async function runUndo(steps) {
+    for (const step of [...steps].reverse()) {
+        let reply;
+        if (step.op === "restore") reply = await calRequest("putEvent", step.calendar, step.name, step.etag, step.text);
+        else if (step.op === "remove") reply = await calRequest("deleteEvent", step.calendar, step.name, step.etag);
+        else reply = await calRequest("putEvent", step.calendar, step.name, "", step.text);      // recreate
+        if (reply.status === 412) throw new Error("it was changed again since");
+        if (reply.status >= 300 && !(step.op === "remove" && reply.status === 404)) throw new Error(`the calendar server said ${reply.status}`);
+    }
+}
+
+function undoAction(steps) {
+    if (!steps?.length) return null;
+    return {
+        label: "Undo",
+        run: async () => {
+            try {
+                await runUndo(steps);
+                showNotice("Undone.");
+            } catch (error) {
+                showNotice(`Not undone: ${error.message}.`);
+            }
+            refreshCalendar();
+        }
+    };
+}
+
+// "Back to the series" (1.9.0): a changed occurrence takes the series' time
+// and details again (its override is removed); Undo brings the change back.
+async function rejoinSeries() {
+    const occ = calState.editing?.occurrence;
+    if (!occ || occ.event === occ.resource.parsed.master) return;
+    try {
+        const undo = [await putExisting(occ.resource, Cal.restoreOccurrence(occ.resource.text, occ.original))];
+        closeCalDialogs();
+        showNotice(`“${occ.event.summary || "(No title)"}” is back in step with its series.`, undoAction(undo));
+    } catch (error) {
+        showCalError("calEventError", error.message);
+    }
+    refreshCalendar();
 }
 
 async function deleteEvent() {
     const occ = calState.editing?.occurrence;
     if (!occ) return;
     const repeating = Boolean(occ.resource.parsed.master.rrule);
-    const scope = document.querySelector('input[name="calScope"]:checked')?.value || "all";
+    const scope = repeating ? await askScope(occ, "Delete", "Delete") : "all";
+    if (!scope) return;
     const title = occ.event.summary || "this event";
     const confirmed = await confirmDialog({
         title: repeating && scope === "all" ? "Delete the whole series?" : "Delete this event?",
@@ -1129,14 +1505,17 @@ async function deleteEvent() {
     });
     if (!confirmed) return;
     try {
+        let undo;
         if (repeating && scope === "one") {
-            await putExisting(occ.resource, Cal.skipOccurrence(occ.resource.text, occ.original));
+            undo = [await putExisting(occ.resource, Cal.skipOccurrence(occ.resource.text, occ.original))];
         } else {
             const reply = await calRequest("deleteEvent", occ.resource.calendar, occ.resource.name, occ.resource.etag || "");
             if (reply.status === 412) throw new Error("This event was changed elsewhere; it has been reloaded.");
             if (reply.status >= 300 && reply.status !== 404) throw new Error(`The event wasn't deleted (${reply.status}).`);
+            undo = [{ op: "recreate", calendar: occ.resource.calendar, name: occ.resource.name, text: occ.resource.text }];
         }
         closeCalDialogs();
+        showNotice(`Deleted “${occ.event.summary || "(No title)"}”${repeating && scope === "one" ? " (only this one)" : ""}.`, undoAction(undo));
     } catch (error) {
         showCalError("calEventError", error.message);
     }
@@ -1240,7 +1619,7 @@ async function deleteCalendar() {
 
 // ---- controls
 
-$("calToday").addEventListener("click", () => { calState.cursor = startOfDay(Date.now()); calState.scrolledWeek = ""; renderCalendar(); });
+$("calToday").addEventListener("click", () => { calState.cursor = startOfDay(Date.now()); calState.scrollToNow = true; renderCalendar(); });
 $("calPrev").addEventListener("click", () => stepCalendar(-1));
 $("calNext").addEventListener("click", () => stepCalendar(1));
 document.querySelectorAll("[data-cal-mode]").forEach(b => b.addEventListener("click", () => setCalMode(b.dataset.calMode)));
@@ -1249,6 +1628,7 @@ $("calNewCalendar").addEventListener("click", () => openCalendarEditor(null));
 $("calEventForm").addEventListener("submit", saveEvent);
 $("calCalendarForm").addEventListener("submit", saveCalendar);
 $("calDeleteEvent").addEventListener("click", deleteEvent);
+$("calRejoinSeries").addEventListener("click", rejoinSeries);
 $("calDeleteCalendar").addEventListener("click", deleteCalendar);
 $("calManageCountdowns").addEventListener("click", () => { closeCalDialogs(); openOccurrence({ countdown: true }); });
 ["calRepeat", "calRepeatEnd", "calAllDay", "calStartDate"].forEach(id => $(id).addEventListener("change", updateRepeatControls));

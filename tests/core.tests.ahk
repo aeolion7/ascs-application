@@ -413,6 +413,32 @@ era := ParseSoundEra("(1998) Windows 98")
 Equal("era: year and label", era["year"] " " era["label"], "1998 Windows 98")
 Equal("era: long label kept", ParseSoundEra("(2015) Windows 10 (Beta) (Insider Preview builds 10074 - 10127)")["label"], "Windows 10 (Beta) (Insider Preview builds 10074 - 10127)")
 Equal("era: your own folder", ParseSoundEra("Aeolionware Startup")["year"], 0)
+
+; 1.9.0: workspaces across desktops
+targets := WorkspaceDesktopTargets(Map(0, "", 1, "", 2, ""), ["", "", ""])
+Equal("desktops: same numbers when unnamed", targets[0] "," targets[1] "," targets[2], "0,1,2")
+targets := WorkspaceDesktopTargets(Map(0, "", 2, "Games"), ["Games", "", ""])
+Equal("desktops: a named desktop follows its name", targets[2], 0)
+Equal("desktops: unnamed keeps its number", targets[0], 0)
+targets := WorkspaceDesktopTargets(Map(0, "", 1, "", 3, ""), ["", ""])
+Equal("desktops: a missing one has no target", targets[3], -1)
+Equal("desktops: one that exists keeps it", targets[1], 1)
+Equal("desktops: how many to add for the missing one", WorkspaceDesktopsMissing(targets, ["", ""]), 2)
+Equal("desktops: none missing", WorkspaceDesktopsMissing(WorkspaceDesktopTargets(Map(0, ""), [""]), [""]), 0)
+targets := WorkspaceDesktopTargets(Map(0, "work", 1, "WORK"), ["Work", ""])
+Equal("desktops: a name is taken only once", targets[0] "," targets[1], "0,1")
+Equal("desktops: names compare without case", WorkspaceDesktopTargets(Map(4, "music"), ["", "Music"])[4], 1)
+
+; 1.9.0: the achievement browser's game IDs
+Equal("ra game: an ID", ValidateRaGameId("14402"), "14402")
+for bad in ["", "0", "012", "1234567890", "12a", "1 2", "-5", "14402&u=x"] {
+    try {
+        ValidateRaGameId(bad)
+        Equal("ra game: refused " bad, "accepted", "refused")
+    } catch {
+        Equal("ra game: refused " bad, "refused", "refused")
+    }
+}
 WavHeader(dataSize, byteRate, withList := false) {
     hex := "52494646" "00000000" "57415645" (withList ? "4C495354" "04000000" "494E464F" : "")
         . "666D7420" "10000000" "0100" "0100" "401F0000" NumHex(byteRate) "0200" "1000"

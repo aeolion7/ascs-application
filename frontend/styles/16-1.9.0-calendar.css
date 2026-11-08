@@ -1,0 +1,251 @@
+/* ==========================================================================
+   1.9.0: Calendar. Resizing events by their top and bottom edges, moving
+   events between days in Month, and the wheel time picker.
+   ========================================================================== */
+
+/* Resize grips: the top and bottom 6 px of an event in Day and Week, with a
+   short bar that shows on hover. */
+.cal-resize {
+  position: absolute;
+  z-index: 1;
+  right: 0;
+  left: 0;
+  height: 6px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.cal-resize.is-start {
+  top: 0;
+}
+
+.cal-resize.is-end {
+  bottom: 0;
+}
+
+.cal-resize::after {
+  position: absolute;
+  left: 50%;
+  width: 18px;
+  height: 2px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, .55);
+  content: "";
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity .12s ease;
+}
+
+.cal-resize.is-start::after {
+  top: 2px;
+}
+
+.cal-resize.is-end::after {
+  bottom: 2px;
+}
+
+.cal-block:hover .cal-resize::after {
+  opacity: 1;
+}
+
+body.is-resizing-event,
+body.is-resizing-event * {
+  cursor: ns-resize !important;
+  user-select: none;
+}
+
+/* Month: the event dims where it was; the day it will start on is outlined,
+   with the outline of the event at the top of its list. */
+.cal-chip.is-drag-source {
+  opacity: .35;
+}
+
+.cal-day.is-drop-target {
+  background: rgba(139, 111, 245, .12);
+  box-shadow: inset 0 0 0 1.5px rgba(168, 146, 251, .55);
+}
+
+.cal-drop-ghost.is-month {
+  position: static;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+  margin-bottom: 2px;
+  padding: 1px 6px;
+  font-size: 11.5px;
+}
+
+.cal-drop-ghost.is-month strong {
+  font-size: 11px;
+}
+
+/* The wheel pickers (times and dates): they look like the fields they
+   replace. A date's own field sits invisibly under its picker, so the
+   calendar pop-up opens in place. */
+.cal-time-native {
+  display: none !important;
+}
+
+.cal-spin {
+  position: relative;
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 0;
+  padding: 0 8px;
+  border: 1px solid rgba(167, 174, 202, .2);
+  border-radius: 8px;
+  background: var(--panel-input);
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-spin[hidden] {
+  display: none;
+}
+
+.cal-spin:focus-within {
+  border-color: rgba(168, 146, 251, .6);
+}
+
+.cal-dialog .cal-spin input.cal-date-native {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cal-spin-part {
+  min-width: 2ch;
+  padding: 2px 1px;
+  border-radius: 4px;
+  cursor: default;
+  outline: none;
+  text-align: center;
+  user-select: none;
+}
+
+.cal-spin-part.is-meridiem {
+  margin-left: 5px;
+  padding: 2px 3px;
+}
+
+.cal-spin-part.is-hour {
+  text-align: right;
+}
+
+.cal-spin-part.is-year {
+  min-width: 4ch;
+}
+
+.cal-spin-part:hover {
+  background: rgba(139, 111, 245, .14);
+}
+
+.cal-spin-part:focus-visible,
+.cal-spin-part:focus {
+  background: rgba(139, 111, 245, .32);
+  color: #ffffff;
+}
+
+.cal-spin-sep {
+  color: #a4a9bb;
+}
+
+.cal-spin-open {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  margin-left: 8px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #a4a9bb;
+  cursor: pointer;
+}
+
+.cal-spin-open svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.4;
+}
+
+.cal-spin-open:hover,
+.cal-spin-open:focus-visible {
+  background: rgba(139, 111, 245, .2);
+  color: #ffffff;
+  outline: none;
+}
+
+/* Where it lands keeps its height: one line of caption (a long overlap note
+   is cut short), and when the end isn't after the start the strip stays,
+   empty, and says so in burgundy. */
+.cal-slot-caption {
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.cal-slot-caption > * {
+  flex: 0 0 auto;
+}
+
+.cal-slot-caption .cal-slot-clash {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cal-slot-caption.is-invalid strong {
+  color: var(--burgundy-bright);
+}
+
+.cal-slot-track.is-invalid {
+  border-color: rgba(196, 88, 123, .45);
+  background: repeating-linear-gradient(135deg, rgba(196, 88, 123, .08) 0 6px, transparent 6px 12px);
+}
+
+/* A toast with an action (Undo): it can be clicked, and the button sits at
+   the end of its text. */
+.toast.has-action {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.toast.has-action.show {
+  pointer-events: auto;
+}
+
+.toast-action {
+  flex: 0 0 auto;
+  padding: 3px 10px;
+  border: 1px solid rgba(168, 146, 251, .45);
+  border-radius: 6px;
+  background: rgba(139, 111, 245, .18);
+  color: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.toast-action:hover,
+.toast-action:focus-visible {
+  background: rgba(139, 111, 245, .34);
+  outline: none;
+}
