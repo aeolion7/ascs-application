@@ -117,7 +117,11 @@ function handleStartupSounds(data) {
         file: String(item.file || ""), id: String(item.id || ""), origin: String(item.origin || ""),
         exists: item.exists === true, changed: item.changed === true, weight: Number.isFinite(item.weight) ? item.weight : 0
     } : null;
-    soundState.startup = { signin: (Array.isArray(data.signin) ? data.signin : []).map(entry).filter(Boolean).slice(0, 8), shutdown: entry(data.shutdown) };
+    soundState.startup = {
+        signin: (Array.isArray(data.signin) ? data.signin : []).map(entry).filter(Boolean).slice(0, 8),
+        shutdown: entry(data.shutdown),
+        taskWarning: typeof data.taskWarning === "string" ? data.taskWarning.slice(0, 300) : ""
+    };
     soundState.oddsDraft = null;
     startupRows().forEach(row => { if (soundState.inUse.has(row.key) && soundState.inUse.get(row.key).file !== row.file) forgetInUse(row.key); });
     renderSoundAssignments();
@@ -1178,7 +1182,10 @@ const STARTUP_BOARD = {
         button.addEventListener("click", () => send("RestoreStartupSound", "all"));
         return button;
     },
-    head: head => head.append(startupOddsLine())
+    head: head => {
+        if (soundState.startup.taskWarning) head.append(element("p", "startup-task-warning", soundState.startup.taskWarning));
+        head.append(startupOddsLine());
+    }
 };
 
 function renderSoundAssignments() {

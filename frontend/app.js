@@ -189,6 +189,7 @@ function navigate(view) {
 
     if (view === "notes" && !notesLoaded) send("GetNotes");
     if (view === "dashboard" || view === "home") send("GetMetrics", view);
+    if (view === "dashboard") send("GetSignInHistory");
     if (view === "settings") send("GetSettings");
     if (view === "workspaces") send("GetWorkspaces");
     if (view === "home" && previousView !== null && previousView !== "home") advanceAlmanac();
@@ -1581,6 +1582,9 @@ function handleWebMessage(event) {
         case "almanac":
             loadAlmanacSettings(data);
             break;
+        case "signInHistory":
+            renderSignInHistory(data.items);
+            break;
         case "games":
             gamesState.items = Array.isArray(data.items) ? data.items.filter(game =>
                 game && typeof game.id === "string" && typeof game.title === "string" && typeof game.emulator === "string"
@@ -1712,6 +1716,32 @@ function handleWebMessage(event) {
 }
 
 window.chrome?.webview?.addEventListener("message", handleWebMessage);
+
+// System Dashboard: one bar per sign-in, newest first (1.9.1). Each row carries
+// its own value, and its title gives the other times.
+function renderSignInHistory(items) {
+    const seconds = ms => `${(ms / 1000).toFixed(1)} s`;
+    const rows = (Array.isArray(items) ? items : []).filter(item => item && typeof item.time === "string" && Number.isFinite(item.retrobar) && item.retrobar >= 0).slice(0, 10);
+    const box = $("signInHistory");
+    if (!rows.length) return;
+    const longest = Math.max(1, ...rows.map(item => item.retrobar));
+    const sorted = rows.map(item => item.retrobar).sort((a, b) => a - b);
+    $("signInHistorySummary").textContent = `Middle of the last ${rows.length}: ${seconds(sorted[Math.floor(sorted.length / 2)])}, after SignIn.ahk starts`;
+    box.replaceChildren(...rows.map(item => {
+        const row = element("div", "signin-row");
+        const date = new Date(item.time);
+        const when = Number.isNaN(date.getTime()) ? item.time : date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+        const bar = element("span", "signin-bar");
+        const fill = element("b");
+        fill.style.width = `${item.retrobar / longest * 100}%`;
+        bar.append(fill);
+        row.append(element("span", "signin-when", when), bar, element("strong", "", seconds(item.retrobar)));
+        const stage = (label, ms) => Number.isFinite(ms) && ms >= 0 ? `${label} ${seconds(ms)}` : "";
+        row.title = [stage("Windows taskbar", item.taskbar), stage("RetroBar ready", item.retrobar), stage("Other apps", item.apps), stage("Keychron", item.keychron),
+            typeof item.sound === "string" ? item.sound : ""].filter(Boolean).join(" · ");
+        return row;
+    }));
+}
 
 function loadSettings(data) {
     $("searchTemplate").value = typeof data.searchTemplate === "string" ? data.searchTemplate : "";
@@ -3699,7 +3729,7 @@ function renderNowPlaying() {
         const head = element("div", "now-ra-head");
         head.append(element("small", "", "ACHIEVEMENTS"),
             element("strong", "", progress.mastered ? "Mastered" : progress.completed ? "Completed" : `${progress.achieved} of ${progress.possible} · ${progress.percent}%`));
-        const bar = element("span", "ra-bar");
+        const bar = element("span", Games.raBarClass(progress.mastered));
         const fill = element("b");
         fill.style.width = `${progress.percent}%`;
         bar.append(fill);
@@ -4180,7 +4210,7 @@ function renderRaBrowser(box) {
     titles.append(element("strong", "ra-browser-title", Games.displayTitle(game.title)));
     titles.append(element("small", "", [game.console, award].filter(Boolean).join(" · ")));
     const percent = game.achievements.length ? Math.round(game.earned / game.achievements.length * 100) : 0;
-    const bar = element("span", "ra-bar");
+    const bar = element("span", Games.raBarClass(game.award === "mastered"));
     const fill = element("b");
     fill.style.width = `${percent}%`;
     bar.append(fill);

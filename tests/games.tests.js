@@ -4,6 +4,9 @@
     const G = globalThis.ASCSGames;
     const { check, equal } = globalThis.TestHarness;
 
+    equal("bar: mastered is gold", G.raBarClass(true), "ra-bar is-mastered");
+    equal("bar: otherwise plain", G.raBarClass(false), "ra-bar");
+    equal("bar: no data is plain", G.raBarClass(undefined), "ra-bar");
     equal("duration hours and minutes", G.formatDuration(41406), "11 h 30 m");
     equal("duration minutes", G.formatDuration(780), "13 m");
     equal("duration whole hours", G.formatDuration(7200), "2 h");
@@ -53,6 +56,8 @@
     equal("Dolphin window title", G.gameFromWindowTitle("dolphin", "Dolphin 2512 | JIT64 DC | D3D12 | HLE | Super Paper Mario (R8PP01)"), "Super Paper Mario");
     equal("Dolphin at its menu", G.gameFromWindowTitle("dolphin", "Dolphin 2512"), "");
     equal("RetroArch window title", G.gameFromWindowTitle("retroarch", "RetroArch Beetle PSX HW 0.9.44 || Brave Fencer Musashi (USA) || FPS: 60"), "Brave Fencer Musashi (USA)");
+    equal("RetroArch: a game ASCS added", G.gameFromWindowTitle("retroarch", "RetroArch || Golden Axe (World)"), "Golden Axe (World)");
+    equal("RetroArch: FPS isn't a game", G.gameFromWindowTitle("retroarch", "RetroArch X || FPS: 60"), "");
     equal("RetroArch at its menu", G.gameFromWindowTitle("retroarch", "RetroArch"), "");
     equal("PCSX2 window title", G.gameFromWindowTitle("pcsx2", "Okami [SLUS-21115]"), "Okami");
     equal("PCSX2 at its menu", G.gameFromWindowTitle("pcsx2", "PCSX2 v2.4.0"), "");

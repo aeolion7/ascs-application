@@ -349,7 +349,9 @@ LaunchCommand(command, thisHotkey := "", forceNew := false, *) {
         switch command {
             case "explorer":
                 RunAndActivateExplorer(
-                    forceNew ? "explorer.exe /n" : "explorer.exe",
+                    ; Always a new window, at the "Open File Explorer to" setting;
+                    ; /n would ignore that setting and open Documents.
+                    "explorer.exe",
                     false,
                     forceNew
                 )

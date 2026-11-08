@@ -48,6 +48,36 @@
             const allowed = new Set(window.SMOKE_ALLOWLIST || []);
             checks.push(["the allowlist was read", allowed.size >= 50 ? [] : [`only ${allowed.size} message types`]]);
             checks.push(["every message sent is allowlisted", [...sent].filter(type => !allowed.has(type)).map(type => `${type} isn't allowlisted`)]);
+
+            // 1.9.1: rules and rendering the unit tests can't see.
+            navigate("games");
+            const shelf = getComputedStyle(document.querySelector(".games-continue"));
+            const px = value => parseFloat(value) || 0;
+            checks.push(["Continue playing has room for a hovered, focused tile",
+                px(shelf.paddingTop) >= 6 && px(shelf.paddingLeft) >= 4 && px(shelf.paddingRight) >= 4 ? [] : [`padding ${shelf.padding}`]]);
+            checks.push(["its tiles stay lined up with the page",
+                px(shelf.marginTop) === -px(shelf.paddingTop) && px(shelf.marginLeft) === -px(shelf.paddingLeft) ? [] : [`margin ${shelf.margin}, padding ${shelf.padding}`]]);
+            const fillOf = className => {
+                const bar = document.createElement("span");
+                bar.className = className;
+                const fill = bar.appendChild(document.createElement("b"));
+                document.body.append(bar);
+                const paint = getComputedStyle(fill).backgroundImage;
+                bar.remove();
+                return paint;
+            };
+            checks.push(["a mastered bar is painted differently", fillOf(Games.raBarClass(true)) !== fillOf(Games.raBarClass(false)) ? [] : ["same paint"]]);
+            navigate("sounds");
+            handleStartupSounds({ signin: [{ weight: 100, file: "a.wav", id: "a.wav", origin: "a.wav", exists: true, changed: false }], shutdown: null, taskWarning: "Test warning" });
+            checks.push(["Sounds > Startup shows the sign-in task warning",
+                document.querySelector("#soundStartup .startup-task-warning")?.textContent === "Test warning" ? [] : ["not shown"]]);
+            handleStartupSounds({ signin: [{ weight: 100, file: "a.wav", id: "a.wav", origin: "a.wav", exists: true, changed: false }], shutdown: null, taskWarning: "" });
+            checks.push(["and shows none when all is well", document.querySelector("#soundStartup .startup-task-warning") ? ["still shown"] : []]);
+            navigate("dashboard");
+            handleWebMessage({ data: { type: "signInHistory", items: [{ time: "2026-11-08T10:28:15", retrobar: 4937, taskbar: 2515, apps: 5171, keychron: 5515, sound: "<b>x</b>" }, { retrobar: "junk" }] } });
+            checks.push(["System Dashboard compares sign-ins",
+                document.querySelectorAll("#signInHistory .signin-row").length === 1 && !document.querySelector("#signInHistory b b") ? [] : ["wrong rows"]]);
+            checks.push(["no errors from the 1.9.1 checks", errors.splice(0)]);
             report(checks);
         }, 800);
     }, 300));

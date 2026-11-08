@@ -1,0 +1,73 @@
+/* ==========================================================================
+   1.9.1: fixes
+   ========================================================================== */
+
+/* A mastered game's bar is gold wherever it's shown (the list already was). */
+.ra-bar.is-mastered b {
+  background: var(--metal-gold, #c9a24a);
+  box-shadow: 0 0 6px rgba(227, 192, 114, .5);
+}
+
+/* Continue playing scrolls sideways, so it clips on every side. Room for a
+   tile's 2px lift and its focus outline (2px, 2px away), with matching negative
+   margins so the tiles stay lined up with the rest of the page. */
+.games-continue {
+  margin: -6px -4px 0;
+  padding: 6px 4px 4px;
+  scroll-padding-inline: 4px;
+}
+
+/* Sounds > Startup: the settings below aren't reaching sign-in. */
+.startup-task-warning {
+  margin: 6px 0 0;
+  padding: 8px 12px;
+  border-left: 2px solid var(--burgundy-text);
+  background: rgba(122, 28, 58, .16);
+  color: var(--burgundy-text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* System Dashboard: the sign-in comparison. Thin bars, values in text. */
+.signin-section {
+  margin-top: 28px;
+}
+
+.signin-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.signin-row {
+  display: grid;
+  grid-template-columns: 150px 1fr 56px;
+  gap: 14px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.signin-when {
+  color: #a4a9bb;
+}
+
+.signin-row strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.signin-bar {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, .05);
+}
+
+.signin-bar b {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  border-radius: 4px;
+  background: var(--indigo-300);
+}

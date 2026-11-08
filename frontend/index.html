@@ -26,6 +26,7 @@
   <link rel="stylesheet" href="styles/16-1.9.0-calendar.css">
   <link rel="stylesheet" href="styles/17-1.9.0-achievements.css">
   <link rel="stylesheet" href="styles/18-1.9.0-workspaces.css">
+  <link rel="stylesheet" href="styles/19-1.9.1-fixes.css">
 </head>
 <body>
   <div class="app-shell">
@@ -99,7 +100,7 @@
 
       <div class="sidebar-bottom">
         <span class="sidebar-status">
-          <strong id="sidebarVersion">ASCS <span>1.9.0</span></strong>
+          <strong id="sidebarVersion">ASCS <span>1.9.1</span></strong>
           <small><span class="status-indicator" aria-hidden="true"></span>Standing by</small>
         </span>
         <span class="key-hint" aria-label="Super key">Super</span>
@@ -551,6 +552,13 @@
             <div id="physicalStorage" class="physical-storage-list" aria-live="polite">
               <p class="physical-storage-empty">Detecting physical drives…</p>
             </div>
+          </section>
+          <section class="signin-section" aria-labelledby="signInHistoryTitle">
+            <div class="section-title-row">
+              <div><span class="section-overline">PERFORMANCE</span><h3 id="signInHistoryTitle">Sign-in: time until the taskbar is ready</h3></div>
+              <span class="section-shortcut" id="signInHistorySummary"></span>
+            </div>
+            <div id="signInHistory" class="signin-history" aria-live="polite"><p class="physical-storage-empty">No sign-ins recorded yet.</p></div>
           </section>
         </section>
       </section>

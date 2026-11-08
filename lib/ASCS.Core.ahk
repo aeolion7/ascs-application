@@ -754,6 +754,59 @@ GetWorkspaceLaunchCommand(record) {
     return '"' record["path"] '"'
 }
 
+; 1.9.1: Windows keeps suspended windows (Settings, the input panel) that look
+; cloaked by the shell, as a window on another desktop does, but belong to no
+; desktop. A real window on another desktop always reports its desktop.
+IsGhostDesktopWindow(cloakedByShell, desktop, pinned) {
+    return cloakedByShell && desktop < 0 && !pinned
+}
+
+; One of those saved before 1.9.1: desktop -1 without the pin. (-1 with the pin
+; is pinned to all desktops; -2 means "the current desktop".)
+IsGhostWorkspaceRecord(desktop, pinned) {
+    return desktop = -1 && !pinned
+}
+
+; "1 window", "5 windows", "3 windows across 2 desktops".
+WorkspaceCountText(windows, desktops := 0) {
+    return windows (windows = 1 ? " window" : " windows")
+        . (desktops > 1 ? " across " desktops " desktops" : "")
+}
+
+; ---- the sign-in task (1.9.1)
+; C:\Scripts\Configure-Startup.ps1 registers the first and removes the others;
+; keep these in step with $LegacyTasks there and $RetiredTasks in
+; Show-StartupStatus.ps1. While a retired task is left, SignIn.ahk doesn't run,
+; so the chances and levels in Sounds > Startup have no effect.
+StartupSignInTask() {
+    return "Startup - Sign-in"
+}
+
+RetiredStartupTasks() {
+    return ["Play the Windows XP Startup Sound", "Keychron Assistant - Start Minimized",
+        "Startup - Startup Folder", "Startup - Play XP Startup Sound", "Startup - RetroBar",
+        "Startup - Open-Shell", "Startup - Keychron Assistant", "Startup - Startup Items"]
+}
+
+; The warning for the tasks found registered, or "" when all is as it should be.
+StartupTaskWarning(present) {
+    hasSignIn := false
+    hasRetired := false
+    retired := RetiredStartupTasks()
+    for name in present {
+        if (name = StartupSignInTask())
+            hasSignIn := true
+        for old in retired
+            if (name = old)
+                hasRetired := true
+    }
+    if (hasSignIn && !hasRetired)
+        return ""
+    return "Startup sounds aren't in effect: "
+        . (hasRetired ? "an older startup task still plays its own sound." : "the sign-in task is missing.")
+        . " Run C:\Scripts\Configure-Startup.ps1 once, approve the prompt, then restart."
+}
+
 JoinArray(items, separator) {
     output := ""
     for index, item in items
@@ -845,6 +898,96 @@ ContentBaseName(path) {
     path := StrSplit(path, "#")[1]
     SplitPath(path, , , , &name)
     return name
+}
+
+; ---- which game RetroArch is running (1.9.1)
+; RetroArch 1.22 doesn't name the game in its window title. The game it was
+; started with is the last argument that isn't an option or an option's value.
+RetroArchContentFromCommandLine(commandLine) {
+    static withValue := ",-L,--libretro,-c,--config,--appendconfig,--subsystem,-s,--save,-S,--savestate,-e,--entryslot,-r,--record,--size,--max-frames,--eof-exit,--set-shader,-P,--bsvplay,-R,--bsvrecord,"
+    content := ""
+    position := 1
+    index := 0
+    skipNext := false
+    while (position := RegExMatch(commandLine, '"([^"]*)"|(\S+)', &m, position)) {
+        position += m.Len
+        index++
+        if (index = 1)              ; the program itself
+            continue
+        if skipNext {
+            skipNext := false
+            continue
+        }
+        if (m[2] != "" && SubStr(m[2], 1, 1) = "-") {
+            skipNext := InStr(withValue, "," m[2] ",", true) > 0
+            continue
+        }
+        content := m[1] != "" ? m[1] : m[2]
+    }
+    return content = "" ? "" : ContentBaseName(content)
+}
+
+; Started from RetroArch's own menu: the newest history entry for the core the
+; title names ("RetroArch Genesis Plus GX 1.7.4"). A title with no core is the menu.
+RetroArchGameFromHistory(items, title) {
+    if !RetroArchShowsCore(title)
+        return ""
+    head := Trim(StrSplit(title, "||")[1])
+    for item in items
+        if (RegExMatch(item["coreName"], "\(([^()]+)\)\s*$", &core) && InStr(head, core[1]))
+            return ContentBaseName(item["path"])
+    return ""
+}
+
+; A loaded game's title names its core; the menu's is just "RetroArch".
+RetroArchShowsCore(title) {
+    return RegExMatch(Trim(StrSplit(title, "||")[1]), "i)^RetroArch\s+\S") > 0
+}
+
+; The game from the command line, until it has loaded and then closed (Close
+; Content): RetroArch keeps running, and the next game may be a different one.
+RetroArchKeptGame(name, coreSeen, title) {
+    return (coreSeen && !RetroArchShowsCore(title)) ? "" : name
+}
+
+; The title Now playing reads, naming the game if the window's title doesn't.
+; At the menu no game is running, whatever RetroArch was started with.
+RetroArchTitleWithGame(title, name) {
+    return (name = "" || !RetroArchShowsCore(title) || EmulatorGameName("retroarch", title) != "") ? title : "RetroArch || " name
+}
+
+; ---- sign-in timings (1.9.1), from the log SignIn.ahk writes
+; One "Sign-in: Timeline" line, or "" for other lines and test runs: those start
+; no taskbar (no RetroBar time) or find Windows' taskbar already up, which it
+; never is that early in a real sign-in.
+ParseSignInTimeline(line) {
+    if !RegExMatch(line, "^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\s+Sign-in: Timeline \(ms\): (.*)$", &m)
+        return ""
+    times := Map("time", StrReplace(m[1], " ", "T"))
+    for key, label in Map("retrobar", "RetroBar bar shown", "taskbar", "taskbar shown", "apps", "apps started", "keychron", "Keychron started")
+        times[key] := RegExMatch(m[2], label " (-?\d{1,6})\b", &value) ? Integer(value[1]) : -1
+    if (times["retrobar"] < 0 || times["taskbar"] < 100)
+        return ""
+    times["sound"] := RegExMatch(m[2], "; startup sound (.+?)(?:\.wav)?\s*$", &sound) ? sound[1] : ""
+    return times
+}
+
+; The newest real sign-ins in the log's text as a JSON array, newest first.
+SignInHistoryJson(text, limit := 10) {
+    json := ""
+    count := 0
+    lines := StrSplit(text, "`n", "`r")
+    index := lines.Length
+    while (index >= 1 && count < limit) {
+        times := ParseSignInTimeline(lines[index--])
+        if !IsObject(times)
+            continue
+        json .= (count ? "," : "") '{"time":' JsonQuote(times["time"]) ',"retrobar":' times["retrobar"]
+            . ',"taskbar":' times["taskbar"] ',"apps":' times["apps"] ',"keychron":' times["keychron"]
+            . ',"sound":' JsonQuote(SubStr(times["sound"], 1, 120)) '}'
+        count++
+    }
+    return "[" json "]"
 }
 
 ; The archive or file RetroArch should open (the part before any "#").
@@ -1619,7 +1762,7 @@ EmulatorGameName(emulator, title) {
             for part in StrSplit(title, "||")
                 if ((part := Trim(part)) != "")
                     parts.Push(part)
-            return (parts.Length >= 2 && !RegExMatch(parts[2], "i)^retroarch")) ? parts[2] : ""
+            return (parts.Length >= 2 && !RegExMatch(parts[2], "i)^(retroarch|fps\b|frames\b)")) ? parts[2] : ""
         case "pcsx2":
             return RegExMatch(title, "i)^pcsx2\b") ? "" : RegExReplace(title, "\s+\[[^\]]*\]$")
     }

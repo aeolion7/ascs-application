@@ -28,6 +28,14 @@ WorkspaceInfoJson(name, path) {
     Loop Min(Max(windows, 0), 48) {
         section := "Window" A_Index
         try {
+            ; Saved before 1.9.1: a suspended system window, not one of yours.
+            if IsGhostWorkspaceRecord(
+                WorkspaceInteger(IniRead(path, section, "desktop", "-2"), -2),
+                IniRead(path, section, "pinned", "0") = "1"
+            ) {
+                windows--
+                continue
+            }
             app := RegExReplace(IniRead(path, section, "process", ""), "i)\.exe$")
             layout .= (layout = "" ? "" : ",") '{"app":' JsonQuote(SubStr(app, 1, 60))
                 . ',"title":' JsonQuote(SubStr(IniRead(path, section, "title", ""), 1, 120))

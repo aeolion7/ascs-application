@@ -544,7 +544,41 @@ SendStartupSounds() {
     roll := ""
     for item in sounds["signin"]
         roll .= (roll = "" ? "" : ",") '{"weight":' item["weight"] "," StartupSoundJson(item["path"]) '}'
-    SendToFrontend('{"type":"startupSounds","signin":[' roll '],"shutdown":{' StartupSoundJson(sounds["shutdown"]) '}}')
+    SendToFrontend('{"type":"startupSounds","signin":[' roll '],"shutdown":{' StartupSoundJson(sounds["shutdown"])
+        . '},"taskWarning":' JsonQuote(StartupTaskCheck()) '}')
+}
+
+; The warning for the sign-in task (1.9.1), or "" if all is well or Task
+; Scheduler can't be asked. Read-only, about 20 ms; it never changes a task.
+StartupTaskCheck() {
+    try {
+        service := ComObject("Schedule.Service")
+        service.Connect()
+        root := service.GetFolder("\")
+    } catch as err {
+        WriteLog("Startup tasks: couldn't ask Task Scheduler: " err.Message)
+        return ""
+    }
+    present := []
+    names := RetiredStartupTasks()
+    names.Push(StartupSignInTask())
+    for name in names {
+        ; GetTask throws for a task that isn't registered.
+        try {
+            root.GetTask(name)
+            present.Push(name)
+        }
+    }
+    return StartupTaskWarning(present)
+}
+
+; Once, some time after ASCS starts: says so in the log and Recent Activity.
+ReportStartupTasks() {
+    warning := StartupTaskCheck()
+    if (warning = "")
+        return
+    WriteLog(warning)
+    RecordActivity("error", warning)
 }
 
 ; Puts a WAV in a sign-in slot ("1".."8"), adds it to the roll ("add", with a
