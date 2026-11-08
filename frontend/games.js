@@ -114,7 +114,7 @@
         }
         if (emulator === "retroarch") {
             const parts = text.split("||").map(part => part.trim()).filter(Boolean);
-            return parts.length >= 2 && !/^retroarch/i.test(parts[1]) ? parts[1] : "";
+            return parts.length >= 2 && !/^(retroarch|fps\b|frames\b)/i.test(parts[1]) ? parts[1] : "";
         }
         if (emulator === "pcsx2") return /^pcsx2\b/i.test(text) ? "" : text.replace(/\s+\[[^\]]*\]$/, "");
         return text;
@@ -322,8 +322,11 @@
         return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${secs}` : `${minutes}:${secs}`;
     }
 
+    // A progress bar's classes: mastered games get the gold one (1.9.1).
+    const raBarClass = mastered => (mastered ? "ra-bar is-mastered" : "ra-bar");
+
     global.ASCSGames = {
-        EMULATORS, systemName, formatDuration, formatLastPlayed, parseLocal, displayTitle, sortGames,
+        raBarClass, EMULATORS, systemName, formatDuration, formatLastPlayed, parseLocal, displayTitle, sortGames,
         filterGames, totalsByEmulator, gameFromWindowTitle, parseRetroAchievements, rankPercentile, titleKey, imageToken,
         matchPlayingGame, formatClock, parseRaGame, filterRaAchievements, raCounts, nextUp, parseRaUnlocks
     };

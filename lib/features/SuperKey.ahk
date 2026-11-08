@@ -543,7 +543,8 @@ SaveWorkspace(name := "") {
                 if desktops {
                     pinned := WindowPinned(hwnd)
                     record["pinned"] := pinned ? 1 : 0
-                    record["desktop"] := pinned ? -1 : WindowDesktop(hwnd)
+                    desktop := WindowDesktop(hwnd)
+                    record["desktop"] := pinned ? -1 : (desktop >= 0 ? desktop : -2)
                 }
                 windows.Push(record)
             } catch as err {
@@ -577,12 +578,12 @@ SaveWorkspace(name := "") {
                 IniWrite(value, tempPath, section, key)
         }
         FileMove(tempPath, workspacePath, 1)
-        summary := "Workspace “" displayName "” saved (" windows.Length " windows"
-            . (spread.Count > 1 ? " on " spread.Count " desktops" : "")
+        counted := WorkspaceCountText(windows.Length, spread.Count)
+        summary := "Workspace “" displayName "” saved (" counted
             . (skipped ? ", " skipped " skipped" : "") ")."
         ShowDesktopTooltip(summary)
         NotifyFrontend(summary)
-        RecordActivity("workspace", "Saved workspace “" displayName "” (" windows.Length " windows)")
+        RecordActivity("workspace", "Saved workspace “" displayName "” (" counted ")")
         SendWorkspaces()
     } catch as err {
         WriteLog("Workspace save failed: " err.Message)
@@ -608,12 +609,18 @@ IsWorkspaceWindow(hwnd, allowMinimized := false, otherDesktops := false) {
             || !DllCall("IsWindowVisible", "Ptr", hwnd, "Int")
             || (IsWindowCloaked(hwnd) && !(otherDesktops && IsCloakedByShell(hwnd))))
             return false
+        if (otherDesktops && IsCloakedByShell(hwnd)
+            && IsGhostDesktopWindow(true, WindowDesktop(hwnd), WindowPinned(hwnd)))
+            return false
         if (WinGetExStyle(windowTitle) & 0x80)   ; WS_EX_TOOLWINDOW
             return false
         if (DllCall("GetWindow", "Ptr", hwnd, "UInt", 4, "Ptr"))   ; owned popup
             return false
         windowClass := WinGetClass(windowTitle)
+        ; A CoreWindow is the inside of a Store app's frame (the frame is the
+        ; window to keep), or part of the shell.
         if (windowClass = "Progman" || windowClass = "WorkerW"
+            || windowClass = "Windows.UI.Core.CoreWindow"
             || windowClass = "Shell_TrayWnd"
             || windowClass = "Shell_SecondaryTrayWnd")
             return false
@@ -694,6 +701,12 @@ RestoreWorkspace(name := "") {
             section := "Window" index
             path := IniRead(workspacePath, section, "path", "")
             process := IniRead(workspacePath, section, "process", "")
+            ; Saved before 1.9.1: a suspended system window, never one to reopen.
+            if IsGhostWorkspaceRecord(
+                WorkspaceInteger(IniRead(workspacePath, section, "desktop", "-2"), -2),
+                IniRead(workspacePath, section, "pinned", "0") = "1"
+            )
+                continue
             if !IsValidWorkspaceExecutable(path, process) {
                 WriteLog("Skipped an invalid or unavailable workspace executable: " path)
                 continue

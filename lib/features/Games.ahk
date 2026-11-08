@@ -651,6 +651,20 @@ RunningGameApps() {
     return running
 }
 
+; System Dashboard's sign-in comparison (1.9.1): the end of the log SignIn.ahk
+; writes, read only when the page opens.
+SendSignInHistory() {
+    text := ""
+    try {
+        log := FileOpen(EnvGet("LOCALAPPDATA") "\StartupTasks.log", "r", "UTF-8")
+        if (log.Length > 65536)
+            log.Pos := log.Length - 65536
+        text := log.Read()
+        log.Close()
+    }
+    SendToFrontend('{"type":"signInHistory","items":' SignInHistoryJson(text) '}')
+}
+
 SendRunningApps() {
     running := RunningGameApps()
     json := ""
@@ -1109,6 +1123,8 @@ CurrentlyPlaying(running := 0) {
         exe := GameProcessName(name)
         pid := ProcessExist(exe)
         title := EmulatorWindowTitle(name, exe)
+        if (name = "retroarch")
+            title := RetroArchPlayingTitle(pid, title)
         ; Timed by the game's name, not the raw title, so a changing FPS
         ; counter or window title doesn't restart the session.
         since := Observe(name, pid, EmulatorGameName(name, title), () => ProcessStartUnix(pid))
@@ -1129,6 +1145,44 @@ CurrentlyPlaying(running := 0) {
         if !seen.Has(source)
             ASCS_PlaySessions.Delete(source)
     return playing
+}
+
+; RetroArch's title with its game (1.9.1): from the command line it was started
+; with (read once per process), else its history and the core in its title
+; (read again only when the title or the history changes).
+RetroArchPlayingTitle(pid, title) {
+    static knownPid := 0, fromCommand := "", coreSeen := false, historyKey := "", fromHistory := ""
+    if (pid != knownPid) {
+        knownPid := pid
+        fromCommand := "", coreSeen := false, historyKey := "", fromHistory := ""
+        try {
+            for found in ComObjGet("winmgmts:").ExecQuery("Select CommandLine from Win32_Process where ProcessId=" Integer(pid))
+                fromCommand := RetroArchContentFromCommandLine(String(found.CommandLine))
+        } catch as err {
+            WriteLog("RetroArch command line: " err.Message)
+        }
+        if (fromCommand = "")
+            WriteLog("RetroArch started without a game; window title: " title)
+    }
+    if (fromCommand != "") {
+        fromCommand := RetroArchKeptGame(fromCommand, coreSeen, title)
+        coreSeen := coreSeen || RetroArchShowsCore(title)
+        if (fromCommand != "")
+            return RetroArchTitleWithGame(title, fromCommand)
+        WriteLog("RetroArch closed the game it started with; window title: " title)
+    }
+    try {
+        SplitPath(ProcessGetPath(pid), , &folder)
+        history := folder "\playlists\builtin\content_history.lpl"
+        key := StrSplit(title, "||")[1] "|" FileGetTime(history, "M")
+        if (key != historyKey) {
+            historyKey := key
+            fromHistory := RetroArchGameFromHistory(ParseRetroArchHistory(FileRead(history, "UTF-8")), title)
+        }
+    } catch {
+        fromHistory := ""       ; no history to read: it stays "At the menu"
+    }
+    return RetroArchTitleWithGame(title, fromHistory)
 }
 
 TrackPlaySessions() {

@@ -8,7 +8,7 @@ SetWorkingDir(A_ScriptDir)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 1.9.0
+; Version 1.9.1
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -18,7 +18,7 @@ SetWorkingDir(A_ScriptDir)
 ; GLOBAL VARIABLES
 ; ==========================================
 
-global ASCS_Version := "1.9.0"
+global ASCS_Version := "1.9.1"
 global ASCS_App := ""
 global ASCS_WindowIcon := 0
 global ASCS_IconPath := A_ScriptDir "\frontend\assets\ascs.ico"
@@ -162,6 +162,7 @@ SetTimer(PruneRaImageCache, -60000)             ; trim the image cache once, off
 SetTimer(TrackPlaySessions, 10000)              ; Now playing's session timer
 SetTimer(AscsStartupSound, -1500)               ; "on start" sound, unless Windows just signed in
 SetTimer(StartCalendarServer, -2000)            ; the calendar's Radicale server, off the start-up path
+SetTimer(ReportStartupTasks, -20000)            ; warns if the old sign-in tasks are still in place
 OnExit(StopCalendarServer)
 
 if !FileExist(ASCS_NotesFile)
@@ -656,6 +657,9 @@ HandleWebMessage(sender, args) {
             case "GetLog":
                 if (StrLen(content) <= 32)
                     HandleGetLog(content)
+
+            case "GetSignInHistory":
+                SendSignInHistory()
 
             case "GetGames":
                 SendGames()

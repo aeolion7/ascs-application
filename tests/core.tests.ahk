@@ -93,6 +93,74 @@ Equal("Explorer relaunch opens folder",
 Equal("Explorer missing folder falls back",
     GetWorkspaceLaunchCommand(Map("process", "explorer.exe", "folder", "C:\no\such\folder", "path", "")),
     "explorer.exe")
+; 1.9.1: Super+E and Super+Shift+E both follow "Open File Explorer to"; /n opens Documents.
+launcherSource := FileRead(A_ScriptDir "\..\lib\features\Launcher.ahk", "UTF-8")
+Check("Explorer is never opened with /n", !InStr(launcherSource, 'explorer.exe /n'))
+
+; 1.9.1: which game RetroArch is running.
+Equal("RetroArch: started by ASCS", RetroArchContentFromCommandLine('"C:\Retroarch\retroarch.exe" -L "C:\Retroarch\cores\gx.dll" "J:\Sega\Golden Axe (World).zip#Golden Axe (World).md"'), "Golden Axe (World)")
+Equal("RetroArch: no game", RetroArchContentFromCommandLine('"C:\Retroarch\retroarch.exe"'), "")
+Equal("RetroArch: only options", RetroArchContentFromCommandLine('retroarch.exe -f --verbose -c "C:\x.cfg"'), "")
+Equal("RetroArch: flag then game", RetroArchContentFromCommandLine('retroarch.exe -f "J:\PS1\Musashi.cue"'), "Musashi")
+raHistory := [Map("path", "J:\a\Golden Axe (World).zip#g.md", "coreName", "Sega - MS/GG/MD/CD (Genesis Plus GX)"),
+    Map("path", "J:\b\Musashi.cue", "coreName", "Sony - PlayStation (Beetle PSX)")]
+Equal("RetroArch history: by the core in the title", RetroArchGameFromHistory(raHistory, "RetroArch Beetle PSX 0.9.44"), "Musashi")
+Equal("RetroArch history: the menu names no core", RetroArchGameFromHistory(raHistory, "RetroArch"), "")
+Equal("RetroArch history: an unknown core", RetroArchGameFromHistory(raHistory, "RetroArch Snes9x 1.6"), "")
+Equal("RetroArch title: adds the game", RetroArchTitleWithGame("RetroArch Beetle PSX 0.9", "Musashi"), "RetroArch || Musashi")
+Equal("RetroArch title: none at the menu", RetroArchTitleWithGame("RetroArch", "Musashi"), "RetroArch")
+Check("RetroArch: a core in the title", RetroArchShowsCore("RetroArch Beetle PSX 0.9 || FPS: 60"))
+Check("RetroArch: the menu shows no core", !RetroArchShowsCore("RetroArch"))
+Equal("RetroArch: kept while loading", RetroArchKeptGame("Musashi", false, "RetroArch"), "Musashi")
+Equal("RetroArch: kept while running", RetroArchKeptGame("Musashi", true, "RetroArch Beetle PSX"), "Musashi")
+Equal("RetroArch: dropped after Close Content", RetroArchKeptGame("Musashi", true, "RetroArch"), "")
+Equal("RetroArch title: and reads back", EmulatorGameName("retroarch", RetroArchTitleWithGame("RetroArch Beetle PSX", "Musashi")), "Musashi")
+Equal("RetroArch title: keeps a title with a game", RetroArchTitleWithGame("RetroArch X || Zelda || FPS: 60", "Other"), "RetroArch X || Zelda || FPS: 60")
+Equal("RetroArch title: FPS isn't a game", EmulatorGameName("retroarch", "RetroArch X || FPS: 60"), "")
+
+; 1.9.1: sign-in timings.
+signInLine := "2026-11-08 10:28:15  Sign-in: Timeline (ms): taskbar created 2515, Open-Shell started -1, taskbar shown 2515, RetroBar started 2625, RetroBar bar shown 4937, apps started 5171, Keychron started 5515; startup sound The Microsoft Sound (+2.0 dB).wav"
+signInTimes := ParseSignInTimeline(signInLine)
+Equal("sign-in: RetroBar", signInTimes["retrobar"], 4937)
+Equal("sign-in: apps", signInTimes["apps"], 5171)
+Equal("sign-in: sound", signInTimes["sound"], "The Microsoft Sound (+2.0 dB)")
+Equal("sign-in: time", signInTimes["time"], "2026-11-08T10:28:15")
+testRunLine := "2026-11-04 17:23:29  Sign-in: Timeline (ms): taskbar created -1, Open-Shell started -1, taskbar shown -1, RetroBar started -1, RetroBar bar shown -1, apps started 63, Keychron started -1"
+Check("sign-in: a test run is left out", !IsObject(ParseSignInTimeline(testRunLine)))
+Check("sign-in: a test with the taskbar already up is left out", !IsObject(ParseSignInTimeline("2026-11-03 13:31:01  Sign-in: Timeline (ms): taskbar created 16, Open-Shell started 16, taskbar shown 16, RetroBar started 141, RetroBar bar shown 1250, apps started 1250, Keychron started 1594")))
+Check("sign-in: other lines are left out", !IsObject(ParseSignInTimeline("2026-11-08 10:24:31  Configure: done")))
+Check("sign-in: newest first", InStr(SignInHistoryJson(StrReplace(signInLine, "10:28:15", "09:00:00") "`r`n" testRunLine "`r`n" signInLine), '[{"time":"2026-11-08T10:28:15"') = 1)
+Equal("sign-in: an empty log", SignInHistoryJson(""), "[]")
+Check("sign-in: at most ten", StrSplit(SignInHistoryJson(signInLine "`n" signInLine "`n" signInLine, 2), '"time"').Length = 3)
+
+; 1.9.1: suspended system windows aren't part of a workspace.
+Check("ghost: cloaked, no desktop, not pinned", IsGhostDesktopWindow(true, -1, false))
+Check("ghost: a real window on another desktop stays", !IsGhostDesktopWindow(true, 2, false))
+Check("ghost: desktop 0 counts as a desktop", !IsGhostDesktopWindow(true, 0, false))
+Check("ghost: a pinned window stays", !IsGhostDesktopWindow(true, -1, true))
+Check("ghost: an uncloaked window stays", !IsGhostDesktopWindow(false, -1, false))
+Check("saved ghost: -1 without the pin", IsGhostWorkspaceRecord(-1, false))
+Check("saved ghost: -1 with the pin is pinned to all", !IsGhostWorkspaceRecord(-1, true))
+Check("saved ghost: -2 is the current desktop", !IsGhostWorkspaceRecord(-2, false))
+Check("saved ghost: a real desktop stays", !IsGhostWorkspaceRecord(1, false))
+Equal("count: one window", WorkspaceCountText(1), "1 window")
+Equal("count: one window, one desktop", WorkspaceCountText(1, 1), "1 window")
+Equal("count: several on one desktop", WorkspaceCountText(5, 1), "5 windows")
+Equal("count: no desktop information", WorkspaceCountText(2, 0), "2 windows")
+Equal("count: across desktops", WorkspaceCountText(3, 2), "3 windows across 2 desktops")
+
+; 1.9.1: the sign-in task check.
+Equal("sign-in task: all well", StartupTaskWarning(["Startup - Sign-in"]), "")
+Check("sign-in task: an old task is named as the cause",
+    InStr(StartupTaskWarning(["Startup - Sign-in", "Startup - Play XP Startup Sound"]), "older startup task"))
+Check("sign-in task: the state found on 2026-11-08 warns",
+    InStr(StartupTaskWarning(["Startup - Play XP Startup Sound", "Startup - RetroBar", "Startup - Open-Shell",
+        "Startup - Keychron Assistant", "Startup - Startup Items"]), "Configure-Startup.ps1"))
+Check("sign-in task: missing", InStr(StartupTaskWarning([]), "sign-in task is missing"))
+Check("sign-in task: names ignore case", StartupTaskWarning(["startup - sign-in"]) = "")
+Equal("sign-in task: every name is listed once", RetiredStartupTasks().Length, 8)
+Check("sign-in task: the warning fits the activity feed", StrLen(StartupTaskWarning([])) <= 200)
+
 Equal("Terminal relaunch uses wt",
     GetWorkspaceLaunchCommand(Map("process", "WindowsTerminal.exe", "folder", "", "path", "x")),
     "wt.exe -w new")

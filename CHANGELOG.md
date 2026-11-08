@@ -2,6 +2,24 @@
 
 All notable changes to the Aeolionware Super Command System. The newest release is first. For current behavior, see [README.md](README.md).
 
+## Version 1.9.1
+
+Fixes from the 1.9.0 pass. 1,077 automated checks and a 22-check smoke test. Manual pass: every item passed after two Now playing fixes for RetroArch, found in the first pass (17 of 18) and its retest. This closes 1.9.0's E2. Launch rules, routines, iPhone calendar sync and the console hub stay on the roadmap.
+
+### Fixed
+- **Startup sounds had no effect** (1.9.0's E2): chances and levels in Sounds › Startup were ignored, and XP played at 0%. `SignIn.ahk` reads those settings, but `C:\Scripts\Configure-Startup.ps1` hadn't been run since it moved sign-in to that one script, so five older tasks kept running, one playing a fixed file. It needs one elevated run and a restart.
+- **Super + Shift + E opened Documents** while Super + E opened This PC. Both now follow "Open File Explorer to".
+- **Now playing said "At the menu" in RetroArch** while a game was running: RetroArch 1.22 doesn't name the game in its window title. ASCS now reads it from the command line, or from RetroArch's history for a game started from its own menu. After Close Content it says "At the menu" again.
+- **Mastered games have a gold bar** in Now playing and the achievement browser, as they already did in the Progress list.
+- **Continue playing cut off** the top and left of a hovered or focused tile.
+- **Workspace saves counted hidden system windows:** a closed Settings and the input panel were saved as windows, and a real Settings window on another desktop counted twice. Their missing desktop also hid the "across desktops" wording. Older saves ignore those entries, and restoring them no longer tries to launch them. The notice now reads "3 windows across 2 desktops", or "1 window".
+- **`Startup Status.cmd` reported old tasks as OK** and showed test runs as the last sign-in's timeline. It now flags retired tasks, a missing sign-in task, and a stale timeline.
+
+### Added
+- **A warning when sign-in isn't using your settings:** Sounds › Startup, the log and Recent Activity say so if an old task is left or the sign-in task is missing. The check only reads Task Scheduler.
+- **Sign-in comparison** in System Dashboard: the last 10 sign-ins, with the time until the taskbar was ready.
+- `Configure-Startup.ps1` checks its own result, says if it didn't finish, and records the outcome for `Startup Status.cmd`.
+
 ## Version 1.9.0
 
 The Workspaces page and workspaces across desktops, the achievement browser, a finished calendar (resizing, dragging in Month, wheel pickers, Undo), and the large files split by feature with a smoke test. Manual pass: 18 of 19 items passed; E2 (startup sounds) is open, because `C:\Scripts\Configure-Startup.ps1` hasn't yet been re-run from an elevated session. 1,023 automated checks and a 15-check smoke test. Launch rules, routines, iPhone calendar sync and the console hub are not in this release; they move to the roadmap.
