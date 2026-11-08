@@ -534,6 +534,54 @@ targets := WorkspaceDesktopTargets(Map(0, "work", 1, "WORK"), ["Work", ""])
 Equal("desktops: a name is taken only once", targets[0] "," targets[1], "0,1")
 Equal("desktops: names compare without case", WorkspaceDesktopTargets(Map(4, "music"), ["", "Music"])[4], 1)
 
+; 1.10.0: launch rules' app paths
+Equal("rule path: an app", ValidateRulePath("C:\Program Files\Microsoft VS Code\Code.exe"), "C:\Program Files\Microsoft VS Code\Code.exe")
+Equal("rule path: trimmed", ValidateRulePath("  D:\Games\a.EXE "), "D:\Games\a.EXE")
+for bad in ["", "Code.exe", "C:\Tools\script.ahk", "\\server\share\a.exe", "C:\a\..\b.exe", "C:\a<b>.exe", "C:\x.exe`n", "C:\" StrRepeat("a", 300) ".exe"]
+    Throws("rule path refused: " SubStr(bad, 1, 24), ValidateRulePath.Bind(bad), "full path")
+
+; 1.10.0: a window that fills the usable screen counts as maximized
+Check("fills: exactly", WorkspaceFillsMonitor(0, 0, 1, 1))
+Check("fills: off by a few pixels", WorkspaceFillsMonitor(0.002, -0.002, 0.998, 1.003))
+Check("fills: not when narrower", !WorkspaceFillsMonitor(0, 0, 0.98, 1))
+Check("fills: not when moved over", !WorkspaceFillsMonitor(0.02, 0, 1, 1))
+Check("fills: not when it also covers the taskbar", !WorkspaceFillsMonitor(0, 0, 1, 1.02))
+
+; 1.10.0: editing a saved workspace
+Throws("workspace name with a trailing newline refused", () => ValidateWorkspaceName("Coding`n"), "letters")
+edited := ParseWorkspaceWindowEdit("Coding|2|1|1|0.3|0|0.45|1.0000|0|0|1")
+Equal("edit: name", edited["name"], "Coding")
+Equal("edit: index", edited["index"], 2)
+Equal("edit: desktop", edited["desktop"], 1)
+Equal("edit: width", edited["width"], 0.45)
+Equal("edit: height", edited["height"], 1.0)
+Equal("edit: maximized off", edited["maximized"], false)
+Equal("edit: enabled on", edited["enabled"], true)
+Equal("edit: Default in any case", ParseWorkspaceWindowEdit("default|1|0|1|0|0|1|1|1|0|1")["name"], "Default")
+Equal("edit: pinned goes to every desktop", ParseWorkspaceWindowEdit("Coding|1|2|1|0|0|0.5|0.5|0|1|1")["desktop"], -1)
+Equal("edit: a window saved without desktops", ParseWorkspaceWindowEdit("Coding|1|-2|1|0|0|0.5|0.5|0|0|1")["desktop"], -2)
+Equal("edit: just inside after rounding", ParseWorkspaceWindowEdit("Coding|1|0|1|0.6667|0|0.3334|1|0|0|1")["x"], 0.6667)
+for bad in ["Coding|1|0|1|0|0|1|1|0|0", "Coding|1|0|1|0|0|1|1|0|0|1|1", "a/b|1|0|1|0|0|1|1|0|0|1",
+    "Coding|0|0|1|0|0|1|1|0|0|1", "Coding|49|0|1|0|0|1|1|0|0|1", "Coding|x|0|1|0|0|1|1|0|0|1",
+    "Coding|1|20|1|0|0|1|1|0|0|1", "Coding|1|-3|1|0|0|1|1|0|0|1", "Coding|1|-1|1|0|0|1|1|0|0|1",
+    "Coding|1|0|0|0|0|1|1|0|0|1", "Coding|1|0|17|0|0|1|1|0|0|1",
+    "Coding|1|0|1|-0.1|0|1|1|0|0|1", "Coding|1|0|1|1.5|0|1|1|0|0|1", "Coding|1|0|1|0.12345|0|0.5|1|0|0|1", "Coding|1|0|1|1e-1|0|0.5|1|0|0|1",
+    "Coding|1|0|1|0|0|0.03|1|0|0|1", "Coding|1|0|1|0|0|1|0.03|0|0|1", "Coding|1|0|1|0.7|0|0.5|1|0|0|1", "Coding|1|0|1|0|0.7|1|0.5|0|0|1",
+    "Coding|1|0|1|0|0|1|1|2|0|1", "Coding|1|0|1|0|0|1|1|0|x|1", "Coding|1|0|1|0|0|1|1|0|0|1`n", "Coding|1`n|0|1|0|0|1|1|0|0|1"]
+    Throws("edit refused: " StrReplace(bad, "`n", "\n"), ParseWorkspaceWindowEdit.Bind(bad))
+windowRef := ParseWorkspaceWindowRef("Coding|3")
+Equal("window ref: name", windowRef["name"], "Coding")
+Equal("window ref: index", windowRef["index"], 3)
+Equal("window ref: Default", ParseWorkspaceWindowRef("|1")["name"], "Default")
+for bad in ["Coding", "Coding|1|2", "Coding|0", "Coding|49", "Coding|one", "a/b|1", "Coding|1`n"]
+    Throws("window ref refused: " StrReplace(bad, "`n", "\n"), ParseWorkspaceWindowRef.Bind(bad))
+Equal("add: an unnamed desktop keeps its number", WorkspaceAddDesktopIndex(["", ""], 1, ""), 1)
+Equal("add: found by name", WorkspaceAddDesktopIndex(["Work", "Games"], 0, "Games"), 1)
+Equal("add: a new name doesn't take a named desktop's number", WorkspaceAddDesktopIndex(["Work", "Games"], 0, "Mail"), 2)
+Equal("add: a new name on an unnamed desktop", WorkspaceAddDesktopIndex(["", "Games"], 0, "Mail"), 0)
+Equal("add: past the end keeps its number", WorkspaceAddDesktopIndex(["Work"], 3, ""), 3)
+Equal("add: a new name past the end", WorkspaceAddDesktopIndex(["Work"], 3, "Mail"), 3)
+
 ; 1.9.0: the achievement browser's game IDs
 Equal("ra game: an ID", ValidateRaGameId("14402"), "14402")
 for bad in ["", "0", "012", "1234567890", "12a", "1 2", "-5", "14402&u=x"] {

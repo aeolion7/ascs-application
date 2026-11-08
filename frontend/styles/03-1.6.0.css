@@ -320,8 +320,7 @@ body {
 }
 
 .command-row input[type="text"],
-.command-row select,
-.workspace-save input {
+.command-row select {
   min-width: 0;
   min-height: 36px;
   padding: 0 10px;
@@ -345,52 +344,6 @@ body {
 }
 
 .command-target input {
-  flex: 1;
-}
-
-.workspace-list {
-  display: grid;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.workspace-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 10px;
-  border: 1px solid rgba(167, 174, 202, .1);
-  border-left: 2px solid var(--burgundy-border);
-  border-radius: 10px;
-}
-
-.workspace-copy {
-  display: grid;
-  flex: 1;
-  min-width: 0;
-  gap: 2px;
-}
-
-.workspace-copy strong {
-  color: #eef0f7;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.workspace-copy small {
-  color: #a5aabd;
-  font-size: 12px;
-}
-
-.workspace-save {
-  display: flex;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.workspace-save input {
   flex: 1;
 }
 

@@ -190,7 +190,11 @@ function navigate(view) {
     if (view === "dashboard" || view === "home") send("GetMetrics", view);
     if (view === "dashboard") send("GetSignInHistory");
     if (view === "settings") send("GetSettings");
-    if (view === "workspaces") send("GetWorkspaces");
+    if (view === "workspaces") {
+        send("GetWorkspaces");
+        send("GetLaunchRules");
+        send("GetWindows");
+    }
     if (view === "home" && previousView !== null && previousView !== "home") advanceAlmanac();
     if (view === "home") preloadGames();
     if (view === "sounds") openSoundsView();
@@ -1545,13 +1549,18 @@ function handleWebMessage(event) {
             break;
         case "workspaces":
             savedWorkspaces = Array.isArray(data.items) ? data.items : [];
-            renderWorkspaceManager();
+            renderWorkspaceManager(data.monitors);
             renderQuickActions();
             if (!$("launcher").hidden) renderLauncherResults();
             break;
         case "windows":
             launcherWindows = Array.isArray(data.items) ? data.items : [];
             if (!$("launcher").hidden) renderLauncherResults();
+            renderWorkspaceManager();
+            break;
+        case "launchRules":
+            launchRules = Array.isArray(data.items) ? data.items.filter(item => item && typeof item.path === "string") : [];
+            renderWorkspaceManager();
             break;
         case "browseResult":
             applyBrowseResult(data.row, data.path);
@@ -2298,125 +2307,6 @@ $("saveCommandsButton").addEventListener("click", () => {
     if (!send("SaveCommands", lines.map(fields => fields.join("\t")).join("\n"))) {
         $("commandsStatus").textContent = "Unable to contact ASCS.";
     }
-});
-
-// ------------------------------------------------------------ workspace manager
-
-// The Workspaces view (1.9.0): a card for each saved layout, with a map of
-// its windows on each desktop (and monitor), Restore, Save over, Rename and
-// Delete. "Default" is the one Super + S and Super + R use.
-function workspaceMapNode(workspace) {
-    const groups = Workspaces.workspaceMap(workspace.layout, workspace.desktopNames);
-    const map = element("div", "workspace-map");
-    groups.forEach(group => {
-        const desktop = element("div", `workspace-desktop${group.key === "pinned" ? " is-pinned" : ""}`);
-        desktop.append(element("small", "", group.label));
-        const screens = element("div", "workspace-screens");
-        group.monitors.forEach(({ monitor, windows }) => {
-            const screen = element("div", "workspace-screen");
-            if (group.monitors.length > 1) screen.title = `Monitor ${monitor}`;
-            windows.forEach(win => {
-                const box = element("span", `workspace-window${win.maximized ? " is-maximized" : ""}`, win.app);
-                box.style.left = `${win.x * 100}%`;
-                box.style.top = `${win.y * 100}%`;
-                box.style.width = `${win.width * 100}%`;
-                box.style.height = `${win.height * 100}%`;
-                box.title = win.title ? `${win.app} · ${win.title}` : win.app;
-                screen.append(box);
-            });
-            screens.append(screen);
-        });
-        desktop.append(screens);
-        map.append(desktop);
-    });
-    return map;
-}
-
-function renderWorkspaceManager() {
-    const list = $("workspaceList");
-    list.replaceChildren();
-    $("workspacesEmpty").hidden = savedWorkspaces.length > 0;
-    savedWorkspaces.forEach(workspace => {
-        const item = element("li", "workspace-card");
-        const head = element("div", "workspace-card-head");
-        const copy = element("span", "workspace-copy");
-        const desktops = new Set((workspace.layout || []).filter(w => !w.pinned && w.desktop >= 0).map(w => w.desktop)).size;
-        copy.append(element("strong", "", workspace.name), element("small", "",
-            `${workspace.windows} window${workspace.windows === 1 ? "" : "s"}${desktops > 1 ? ` on ${desktops} desktops` : ""} · saved ${formatSavedTime(workspace.saved)}${workspace.name === "Default" ? " · Super + S / Super + R" : ""}`));
-        head.append(copy);
-        const actions = element("span", "workspace-actions");
-        const button = (label, className, onClick, hint = "") => {
-            const node = element("button", className, label);
-            node.type = "button";
-            if (hint) node.title = hint;
-            node.addEventListener("click", onClick);
-            actions.append(node);
-            return node;
-        };
-        button("Restore", "primary", () => send("RestoreWorkspace", workspace.name), "Put these windows back, each on its desktop");
-        button("Save over", "secondary", async () => {
-            const ok = await confirmDialog({
-                title: `Save over “${workspace.name}”?`,
-                message: "It's replaced by the windows open now, on every desktop.",
-                confirmLabel: "Save over"
-            });
-            if (ok) send("SaveWorkspace", workspace.name);
-        }, "Replace it with the windows open now");
-        if (workspace.name !== "Default") {
-            button("Rename", "secondary", () => {
-                const input = element("input", "workspace-rename");
-                input.type = "text";
-                input.maxLength = 40;
-                input.value = workspace.name;
-                input.setAttribute("aria-label", `New name for ${workspace.name}`);
-                const finish = keep => {
-                    const name = input.value.trim();
-                    if (keep && name && name !== workspace.name) {
-                        if (!Palette.isValidWorkspaceName(name)) {
-                            showToast("Workspace names use letters, numbers, spaces, - and _ (up to 40 characters).");
-                            input.focus();
-                            return;
-                        }
-                        send("RenameWorkspace", `${workspace.name}|${name}`);
-                    }
-                    renderWorkspaceManager();
-                };
-                input.addEventListener("keydown", event => {
-                    if (event.key === "Enter") { event.preventDefault(); finish(true); }
-                    else if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); finish(false); }
-                });
-                input.addEventListener("blur", () => finish(true));
-                copy.firstChild.replaceWith(input);
-                input.focus();
-                input.select();
-            });
-        }
-        button("Delete", "secondary danger", async () => {
-            const confirmed = await confirmDialog({
-                title: `Delete workspace “${workspace.name}”?`,
-                message: "The saved layout is removed. Open windows are not affected.",
-                confirmLabel: "Delete workspace",
-                danger: true
-            });
-            if (confirmed) send("DeleteWorkspace", workspace.name);
-        });
-        head.append(actions);
-        item.append(head, workspaceMapNode(workspace));
-        list.append(item);
-    });
-}
-
-
-
-$("saveWorkspaceForm").addEventListener("submit", event => {
-    event.preventDefault();
-    const name = $("workspaceName").value.trim();
-    if (!Palette.isValidWorkspaceName(name)) {
-        showToast("Workspace names use letters, numbers, spaces, - and _ (up to 40 characters).");
-        return;
-    }
-    send("SaveWorkspace", name);
-    $("workspaceName").value = "";
 });
 
 // ------------------------------------------------------------ title bar

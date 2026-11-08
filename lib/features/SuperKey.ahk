@@ -512,40 +512,9 @@ SaveWorkspace(name := "") {
 
             ; One unusual window must not abort the whole snapshot.
             try {
-                windowTitle := "ahk_id " hwnd
-                path := WinGetProcessPath(windowTitle)
-                process := WinGetProcessName(windowTitle)
-                if (path = "" || process = "")
+                record := CaptureWorkspaceWindow(hwnd, explorerFolders, desktops)
+                if !record
                     continue
-
-                WinGetPos(&x, &y, &width, &height, windowTitle)
-                context := GetWindowPlacementContext(hwnd)
-                ; The visible frame, without Windows' invisible borders: what a
-                ; restore places (1.9.0; before, restores landed a border's
-                ; width off and a little larger).
-                x += context["leftInset"], y += context["topInset"]
-                width -= context["leftInset"] + context["rightInset"]
-                height -= context["topInset"] + context["bottomInset"]
-                workWidth := Max(1, context["workRight"] - context["workLeft"])
-                workHeight := Max(1, context["workBottom"] - context["workTop"])
-                record := Map(
-                    "path", path,
-                    "process", process,
-                    "title", WinGetTitle(windowTitle),
-                    "folder", explorerFolders.Has(hwnd) ? explorerFolders[hwnd] : "",
-                    "monitor", context["monitor"],
-                    "x", (x - context["workLeft"]) / workWidth,
-                    "y", (y - context["workTop"]) / workHeight,
-                    "width", width / workWidth,
-                    "height", height / workHeight,
-                    "maximized", WinGetMinMax(windowTitle) = 1
-                )
-                if desktops {
-                    pinned := WindowPinned(hwnd)
-                    record["pinned"] := pinned ? 1 : 0
-                    desktop := WindowDesktop(hwnd)
-                    record["desktop"] := pinned ? -1 : (desktop >= 0 ? desktop : -2)
-                }
                 windows.Push(record)
             } catch as err {
                 skipped++
@@ -561,6 +530,9 @@ SaveWorkspace(name := "") {
         IniWrite(windows.Length, tempPath, "Workspace", "WindowCount")
         IniWrite(displayName, tempPath, "Workspace", "Name")
         IniWrite(FormatTime(A_Now, "yyyy-MM-dd'T'HH:mm:ss"), tempPath, "Workspace", "Saved")
+        ; Each monitor's shape (1.10.0), so the Workspaces page draws it true.
+        Loop MonitorGetCount()
+            IniWrite(Format("{:.4f}", WorkspaceAspect("", A_Index)), tempPath, "Monitors", A_Index)
         spread := Map()
         if desktops {
             ; The desktops' names, so a restore can find a renamed or reordered one.
@@ -594,6 +566,46 @@ SaveWorkspace(name := "") {
                 FileDelete(tempPath)
         }
     }
+}
+
+; One open window as a saved record; 0 if its app can't be told.
+CaptureWorkspaceWindow(hwnd, explorerFolders, desktops) {
+    windowTitle := "ahk_id " hwnd
+    path := WinGetProcessPath(windowTitle)
+    process := WinGetProcessName(windowTitle)
+    if (path = "" || process = "")
+        return 0
+
+    WinGetPos(&x, &y, &width, &height, windowTitle)
+    context := GetWindowPlacementContext(hwnd)
+    ; The visible frame, without Windows' invisible borders: what a
+    ; restore places (1.9.0; before, restores landed a border's
+    ; width off and a little larger).
+    x += context["leftInset"], y += context["topInset"]
+    width -= context["leftInset"] + context["rightInset"]
+    height -= context["topInset"] + context["bottomInset"]
+    workWidth := Max(1, context["workRight"] - context["workLeft"])
+    workHeight := Max(1, context["workBottom"] - context["workTop"])
+    record := Map(
+        "path", path,
+        "process", process,
+        "title", WinGetTitle(windowTitle),
+        "folder", explorerFolders.Has(hwnd) ? explorerFolders[hwnd] : "",
+        "monitor", context["monitor"],
+        "x", (x - context["workLeft"]) / workWidth,
+        "y", (y - context["workTop"]) / workHeight,
+        "width", width / workWidth,
+        "height", height / workHeight,
+        "maximized", WinGetMinMax(windowTitle) = 1
+            || WorkspaceFillsMonitor((x - context["workLeft"]) / workWidth, (y - context["workTop"]) / workHeight, width / workWidth, height / workHeight)
+    )
+    if desktops {
+        pinned := WindowPinned(hwnd)
+        record["pinned"] := pinned ? 1 : 0
+        desktop := WindowDesktop(hwnd)
+        record["desktop"] := pinned ? -1 : (desktop >= 0 ? desktop : -2)
+    }
+    return record
 }
 
 ; Top-level application windows on the current desktop that a workspace
@@ -707,6 +719,9 @@ RestoreWorkspace(name := "") {
                 IniRead(workspacePath, section, "pinned", "0") = "1"
             )
                 continue
+            ; Switched off on the Workspaces page (1.10.0): kept, not restored.
+            if (IniRead(workspacePath, section, "enabled", "1") = "0")
+                continue
             if !IsValidWorkspaceExecutable(path, process) {
                 WriteLog("Skipped an invalid or unavailable workspace executable: " path)
                 continue
@@ -722,7 +737,7 @@ RestoreWorkspace(name := "") {
                 "y", Float(IniRead(workspacePath, section, "y", "0")),
                 "width", Float(IniRead(workspacePath, section, "width", "0.8")),
                 "height", Float(IniRead(workspacePath, section, "height", "0.8")),
-                "maximized", IniRead(workspacePath, section, "maximized", "0") = "1",
+                "maximized", SavedWindowMaximized(workspacePath, section),
                 "deadline", A_TickCount + 20000,
                 "launched", false,
                 ; 1.9.0: its desktop (-1 pinned to all; -2 from before 1.9.0 or
@@ -735,7 +750,7 @@ RestoreWorkspace(name := "") {
 
         if !pending.Length {
             ShowWorkspaceMessage(
-                "None of the applications in the saved workspace are available.",
+                "Nothing to restore: the saved workspace's apps aren't available, or its windows are switched off.",
                 "Icon!"
             )
             return

@@ -8,7 +8,7 @@ SetWorkingDir(A_ScriptDir)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 1.9.2
+; Version 1.10.0
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -18,7 +18,7 @@ SetWorkingDir(A_ScriptDir)
 ; GLOBAL VARIABLES
 ; ==========================================
 
-global ASCS_Version := "1.9.2"
+global ASCS_Version := "1.10.0"
 global ASCS_App := ""
 global ASCS_WindowIcon := 0
 global ASCS_IconPath := A_ScriptDir "\frontend\assets\ascs.ico"
@@ -31,6 +31,9 @@ global ASCS_VirtualDesktopDllPath := A_ScriptDir "\lib\VirtualDesktopAccessor.dl
 global ASCS_SettingsFile := ASCS_DataDir "\settings.ini"
 global ASCS_WorkspaceFile := ASCS_DataDir "\workspace.ini"
 global ASCS_WorkspaceDir := ASCS_DataDir "\workspaces"
+global ASCS_RulesFile := ASCS_DataDir "\rules.ini"       ; 1.10.0: launch rules
+global ASCS_LaunchRules := Map()
+global ASCS_RuleAppliedPids := Map()
 global ASCS_CommandsFile := ASCS_DataDir "\commands.ini"
 global ASCS_ActivityFile := ASCS_DataDir "\activity.log"
 
@@ -154,6 +157,7 @@ LoadUserSettings()
 LoadAlmanacSettings()
 LoadGameSettings()
 LoadSoundSettings()
+StartLaunchRules()      ; 1.10.0: the shell hook for launch rules
 LoadCustomCommands()
 LoadActivity()
 
@@ -928,6 +932,44 @@ HandleWebMessage(sender, args) {
                 if (StrLen(content) <= 130)
                     RenameWorkspace(content)
 
+            case "SetWorkspaceWindow":
+                ; One saved window's place and switches (1.10.0); all validated.
+                if (StrLen(content) <= 120)
+                    SetWorkspaceWindow(content)
+
+            case "RemoveWorkspaceWindow":
+                if (StrLen(content) <= 50)
+                    RemoveWorkspaceWindow(content)
+
+            case "AddWorkspaceWindow":
+                ; "name|window handle"; AHK reads the app from the window itself.
+                if (StrLen(content) <= 70)
+                    SetTimer(AddWorkspaceWindow.Bind(content), -1)
+
+            case "DuplicateWorkspace":
+                if (StrLen(content) <= 130)
+                    DuplicateWorkspace(content)
+
+            case "GetLaunchRules":
+                SendLaunchRules()
+
+            case "RememberWindowRule":
+                ; A window handle from the open-window list (1.10.0).
+                if (StrLen(content) <= 20)
+                    RememberWindowRule(content)
+
+            case "RuleFromWorkspaceWindow":
+                if (StrLen(content) <= 50)
+                    RuleFromWorkspaceWindow(content)
+
+            case "SetLaunchRuleEnabled":
+                if (StrLen(content) <= 270)
+                    SetLaunchRuleEnabled(content)
+
+            case "DeleteLaunchRule":
+                if (StrLen(content) <= 270)
+                    DeleteLaunchRule(content)
+
             case "GetWindows":
                 SendWindowList()
 
@@ -1055,6 +1097,7 @@ SendToFrontend(json) {
 #Include lib\features\Power.ahk
 #Include lib\features\Workspaces.ahk
 #Include lib\features\Desktops.ahk
+#Include lib\features\Rules.ahk
 #Include lib\features\Commands.ahk
 #Include lib\features\QuickCapture.ahk
 #Include lib\features\PaletteWindows.ahk

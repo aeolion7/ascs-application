@@ -6,6 +6,7 @@
 (() => {
     const errors = [];
     const sent = new Set();
+    const messages = [];
     window.addEventListener("error", event => {
         errors.push(`${event.message} (${String(event.filename || "").split("/").pop()}:${event.lineno})`);
     });
@@ -14,7 +15,10 @@
     });
     window.chrome = window.chrome || {};
     window.chrome.webview = {
-        postMessage: message => sent.add(String(message).split("\n")[0]),
+        postMessage: message => {
+            sent.add(String(message).split("\n")[0]);
+            messages.push(String(message));
+        },
         addEventListener() {},
         removeEventListener() {}
     };
@@ -112,6 +116,153 @@
             checks.push(["and closes, with polling stopped", $("logsDialog").hidden && logState.timer === null ? [] : ["still open or polling"]]);
             checks.push(["Ctrl numbers end at nine pages", sidebarViews().length === 9 && sidebarViews()[8] === "settings" ? [] : [sidebarViews().join()]]);
             checks.push(["no errors from the 1.9.1 and 1.9.2 checks", errors.splice(0)]);
+
+            // 1.10.0: the Workspaces page.
+            navigate("workspaces");
+            const place = (index, app, title, desktop, x, width, extra = {}) => ({ index, app, title, desktop, monitor: 1, x, y: 0, width, height: 1, maximized: false, pinned: false, enabled: true, missing: false, ...extra });
+            handleWebMessage({ data: { type: "workspaces", monitors: 1, items: [
+                { name: "Default", windows: 3, saved: "2026-11-08T10:00:00", desktopNames: ["", ""], aspects: { 1: 2.4571 }, layout: [
+                    place(1, "<b>Code</b>", "<img src=x onerror=alert(1)>", 0, 0, 0.5),
+                    place(2, "Edge", "News", 0, 0.5, 0.5),
+                    place(3, "Dolphin", "Metroid Prime", 1, 0, 1, { maximized: true })
+                ] },
+                { name: "Coding", windows: 1, saved: "2026-11-08T10:00:00", desktopNames: [""], aspects: { 1: 2.4571 }, layout: [place(1, "Terminal", "pwsh", 0, 0, 1)] },
+                { name: "Later", windows: 1, saved: "2026-11-08T10:00:00", desktopNames: ["", ""], aspects: { 1: 2.4571 }, layout: [place(1, "Notepad", "notes", 1, 0, 1)] }
+            ] } });
+            handleWebMessage({ data: { type: "launchRules", items: [{ path: "C:\\Apps\\a.exe", app: "<i>App</i>", enabled: true, monitor: 1, x: 0, y: 0, width: 0.5, height: 1, maximized: false, desktop: 0, desktopName: "", pinned: false }, { noPath: true }] } });
+            const workspaceChips = document.querySelectorAll("#workspaceStrip .ws-chip[data-ws-chip]");
+            checks.push(["the strip has each workspace and the launch rules", workspaceChips.length === 4 ? [] : [`${workspaceChips.length} chips`]]);
+            checks.push(["the first workspace is open", $("workspaceTitle").textContent === "Default" ? [] : [$("workspaceTitle").textContent]]);
+            checks.push(["each desktop has a tab", document.querySelectorAll("#workspaceTabs .ws-tab").length === 2 ? [] : ["wrong tabs"]]);
+            const screen = document.querySelector("#workspaceScreens .ws-screen").getBoundingClientRect();
+            checks.push(["the canvas has the monitor's real shape", Math.abs(screen.width / screen.height - 2.4571) < 0.02 ? [] : [`${screen.width}x${screen.height}`]]);
+            const tooSmall = ["#workspaces .ws-window strong", "#workspaces .ws-window > span", "#workspaces .ws-row small", "#workspaces .ws-tab em", "#workspaces .ws-chip small", "#workspaces .ws-number span", "#workspaces .ws-place"]
+                .filter(selector => parseFloat(getComputedStyle(document.querySelector(selector)).fontSize) < 12.5);
+            checks.push(["nothing on the page is smaller than 12.5 px", tooSmall]);
+            checks.push(["a window's name and title stay text", document.querySelector("#workspaceScreens b, #workspaceScreens img, #workspaceInspector img") ? ["markup ran"] : []]);
+            checks.push(["the first window is selected", document.querySelector(".ws-window.is-selected")?.dataset.index === "1" ? [] : ["none"]]);
+
+            messages.length = 0;
+            [...document.querySelectorAll("#workspaceInspector .ws-place")].find(node => node.textContent.includes("Right")).click();
+            const editOf = () => messages.filter(message => message.startsWith("SetWorkspaceWindow")).pop() || "";
+            checks.push(["a place button sends the edit", /\|1\|0\|1\|0\.6667\|0\.0000\|0\.3333\|1\.0000\|0\|0\|1$/.test(editOf()) ? [] : [editOf()]]);
+            checks.push(["and shows it at once", Math.abs(parseFloat(document.querySelector('.ws-window[data-index="1"]').style.left) - 66.67) < 0.01 ? [] : ["not moved"]]);
+            const numberInput = document.querySelector('#workspaceInspector [data-ws-field="width"]');
+            numberInput.value = "20";
+            numberInput.dispatchEvent(new Event("change", { bubbles: true }));
+            checks.push(["a typed size sends the edit", /\|0\.2000\|1\.0000\|0\|0\|1$/.test(editOf()) ? [] : [editOf()]]);
+            document.querySelector('#workspaceInspector [data-ws-focus="enabled"]').click();
+            checks.push(["switching a window off sends the edit", /\|0$/.test(editOf()) ? [] : [editOf()]]);
+            checks.push(["and shows it", document.querySelector('.ws-window[data-index="1"]').classList.contains("is-off") ? [] : ["not dimmed"]]);
+            document.querySelector('#workspaceInspector [data-ws-focus="enabled"]').click();
+            messages.length = 0;
+            const desktopSelect = document.querySelector('#workspaceInspector [data-ws-focus="desktop"]');
+            desktopSelect.value = "1";
+            desktopSelect.dispatchEvent(new Event("change", { bubbles: true }));
+            checks.push(["moving to another desktop follows the window", document.querySelector('#workspaceTabs [aria-pressed="true"]')?.textContent.startsWith("Desktop 2") && document.querySelector(".ws-window.is-selected")?.dataset.index === "1" ? [] : ["didn't follow"]]);
+            const backSelect = document.querySelector('#workspaceInspector [data-ws-focus="desktop"]');
+            backSelect.value = "0";
+            backSelect.dispatchEvent(new Event("change", { bubbles: true }));
+
+            // A drag, with the pointer events the page gets.
+            messages.length = 0;
+            const canvas = $("workspaceScreens");
+            const target = document.querySelector('.ws-window[data-index="2"]');
+            const box = target.getBoundingClientRect();
+            const pointer = (node, type, x, y) => node.dispatchEvent(new PointerEvent(type, { pointerId: 7, button: 0, buttons: 1, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+            pointer(target, "pointerdown", box.left + 40, box.top + 40);
+            checks.push(["pressing a window selects it", document.querySelector(".ws-window.is-selected")?.dataset.index === "2" ? [] : ["not selected"]]);
+            pointer(canvas, "pointermove", box.left + 40 - screen.width * 0.2, box.top + 40);
+            const dragged = parseFloat(document.querySelector('.ws-window[data-index="2"]').style.left);
+            checks.push(["a drag moves it live", dragged < 50 ? [] : [`left ${dragged}`]]);
+            checks.push(["and sends nothing yet", editOf() ? ["sent early"] : []]);
+            pointer(canvas, "pointerup", box.left + 40 - screen.width * 0.2, box.top + 40);
+            checks.push(["letting go sends one edit", messages.filter(message => message.startsWith("SetWorkspaceWindow")).length === 1 ? [] : [messages.join(";")]]);
+            const before = editOf();
+            const next = document.querySelector('.ws-window[data-index="2"]');
+            pointer(next, "pointerdown", box.left + 40, box.top + 40);
+            pointer(canvas, "pointermove", box.left + 90, box.top + 40);
+            next.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+            checks.push(["Esc cancels a drag", editOf() === before && parseFloat(document.querySelector('.ws-window[data-index="2"]').style.left) === dragged ? [] : ["kept"]]);
+            pointer(canvas, "pointerup", box.left + 90, box.top + 40);
+            const keyTarget = document.querySelector('.ws-window[data-index="2"]');
+            keyTarget.focus();
+            keyTarget.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }));
+            checks.push(["an arrow key moves it and keeps the focus", document.activeElement?.dataset.index === "2" && parseFloat(document.querySelector('.ws-window[data-index="2"]').style.left) > dragged ? [] : ["lost"]]);
+
+            workspaceChips[1].click();
+            checks.push(["choosing another workspace opens it", $("workspaceTitle").textContent === "Coding" ? [] : [$("workspaceTitle").textContent]]);
+            checks.push(["one desktop needs no tabs", $("workspaceTabs").hidden ? [] : ["tabs shown"]]);
+            document.querySelectorAll("#workspaceStrip .ws-chip[data-ws-chip]")[2].click();
+            checks.push(["a workspace opens on the first desktop with windows", document.querySelector('#workspaceTabs [aria-pressed="true"]')?.textContent.startsWith("Desktop 2") ? [] : ["wrong tab"]]);
+            const stripChips = document.querySelectorAll("#workspaceStrip .ws-chip[data-ws-chip]");
+            stripChips[stripChips.length - 1].click();
+            checks.push(["the launch rules take the page", !$("rulesPage").hidden && $("workspacePage").hidden && document.querySelectorAll("#ruleList .ws-rule").length === 1 ? [] : ["not shown"]]);
+            checks.push(["and keep a rule's name as text", document.querySelector("#ruleList i:not(.is-pinned):not([style])") ? ["markup ran"] : []]);
+            handleWebMessage({ data: { type: "workspaces", monitors: 1, items: [] } });
+            document.querySelector("#workspaceStrip .ws-chip-add")?.click();
+            checks.push(["the save field opens", document.querySelector("#workspaceStrip .ws-save input") ? [] : ["no field"]]);
+            handleWebMessage({ data: { type: "windows", items: [] } });
+            checks.push(["and a reply doesn't lose what's typed", document.querySelector("#workspaceStrip .ws-save input") ? [] : ["field rebuilt"]]);
+
+            // The notes from the 1.10.0 pass.
+            const twoWindows = { name: "Later", windows: 2, saved: "2026-11-08T10:00:00", desktopNames: ["", ""], aspects: { 1: 2.4571 }, layout: [place(1, "Notepad", "notes", 0, 0, 0.5), place(2, "Edge", "News", 0, 0.5, 0.5)] };
+            const oneWindow = { ...twoWindows, windows: 1, layout: [twoWindows.layout[0]] };
+            const chipText = () => document.querySelector("#workspaceStrip .ws-chip[data-ws-chip] small")?.textContent || "";
+            document.querySelector("#workspaceStrip .ws-save input").value = "typing";
+            handleWebMessage({ data: { type: "workspaces", monitors: 1, items: [twoWindows] } });
+            checks.push(["with the save field open, the strip shows the count", chipText().startsWith("2 windows") ? [] : [chipText() || "no chip"]]);
+            handleWebMessage({ data: { type: "workspaces", monitors: 1, items: [oneWindow] } });
+            checks.push(["and updates it after a removal", chipText().startsWith("1 window") ? [] : [chipText() || "no chip"]]);
+            checks.push(["while keeping what's typed", document.querySelector("#workspaceStrip .ws-save input")?.value === "typing" ? [] : ["lost"]]);
+            document.querySelector("#workspaceStrip .ws-save input")?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+            document.querySelector("#workspaceStrip .ws-chip[data-ws-chip]").click();
+            document.querySelector("#workspaceTabs .ws-tab").click();
+
+            messages.length = 0;
+            document.querySelector("#workspaceInspector .secondary.danger").click();
+            checks.push(["the last window says so at once, without a dialog", $("confirmDialog").hidden && $("toast").textContent.includes("last window") ? [] : ["dialog or no notice"]]);
+            checks.push(["and asks AHK for nothing", messages.some(message => message.startsWith("RemoveWorkspaceWindow")) ? ["sent"] : []]);
+            if (!$("confirmDialog").hidden) $("confirmDialogCancel").click();
+            handleWebMessage({ data: { type: "workspaces", monitors: 1, items: [twoWindows] } });
+            document.querySelector("#workspaceInspector .secondary.danger").click();
+            checks.push(["with more than one, Remove still confirms", !$("confirmDialog").hidden ? [] : ["no dialog"]]);
+            $("confirmDialogCancel").click();
+
+            const headAction = label => [...$("workspaceActions").children].find(node => node.textContent === label);
+            const nameKey = key => document.querySelector("#workspaceTitle .ws-name")?.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+            messages.length = 0;
+            headAction("Duplicate").click();
+            nameKey("Enter");
+            checks.push(["Duplicate accepts the suggested name", messages.includes("DuplicateWorkspace\nLater|Later copy") ? [] : [messages.join(";") || "nothing sent"]]);
+            handleWebMessage({ data: { type: "workspaces", monitors: 1, items: [twoWindows] } });
+            messages.length = 0;
+            headAction("Rename").click();
+            nameKey("Enter");
+            checks.push(["Rename with the same name sends nothing", messages.some(message => message.startsWith("RenameWorkspace")) ? ["sent"] : []]);
+
+            document.querySelector("#workspaceAdd .secondary").click();
+            handleWebMessage({ data: { type: "windows", items: [{ id: "101", app: "Code", title: "x", minimized: false }] } });
+            const addSelect = document.querySelector("#workspaceAdd select");
+            addSelect.value = "101";
+            addSelect.dispatchEvent(new Event("change", { bubbles: true }));
+            $("workspaceAdd").requestSubmit();
+            handleWebMessage({ data: { type: "workspaces", monitors: 1, items: [{ ...twoWindows, windows: 3, layout: [...twoWindows.layout, place(3, "Code", "x", 1, 0, 1)] }] } });
+            checks.push(["an added window opens on its desktop, selected", document.querySelector(".ws-window.is-selected")?.dataset.index === "3" && document.querySelector('#workspaceTabs [aria-pressed="true"]')?.textContent.startsWith("Desktop 2") ? [] : ["not shown"]]);
+
+            document.querySelector("#workspaceTabs .ws-tab").click();
+            messages.length = 0;
+            const widthInput = document.querySelector('#workspaceInspector [data-ws-field="width"]');
+            widthInput.value = "100";
+            widthInput.dispatchEvent(new Event("change", { bubbles: true }));
+            const fullWindow = document.querySelector(".ws-window.is-selected")?.dataset.index;
+            checks.push(["a window sized to 100% by 100% says Full", document.querySelector(".ws-row.is-selected small")?.textContent.includes("Full") && !document.querySelector(".ws-row.is-selected small")?.textContent.includes("100%") ? [] : [document.querySelector(".ws-row.is-selected small")?.textContent || `window ${fullWindow}`]]);
+            checks.push(["and is sent as maximized", /\|1\|0\|1$/.test(messages.filter(message => message.startsWith("SetWorkspaceWindow")).pop() || "") ? [] : [messages.join(";")]]);
+            checks.push(["and lights the Full button", document.querySelector("#workspaceInspector .ws-place.is-on")?.textContent === "Full" ? [] : ["not lit"]]);
+
+            const allowedNow = new Set(window.SMOKE_ALLOWLIST || []);
+            checks.push(["the Workspaces page sends only allowlisted messages", [...new Set(messages.map(message => message.split("\n")[0]))].filter(type => !allowedNow.has(type))]);
+            checks.push(["no errors from the Workspaces page", errors.splice(0)]);
             report(checks);
         }, 800);
     }, 300));

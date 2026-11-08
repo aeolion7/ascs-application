@@ -46,7 +46,7 @@ ValidateWorkspaceName(name) {
     name := Trim(name)
     if (name = "")
         throw Error("Enter a workspace name.")
-    if !RegExMatch(name, "^[A-Za-z0-9][A-Za-z0-9 _-]{0,39}$")
+    if !RegExMatch(name, "^[A-Za-z0-9][A-Za-z0-9 _-]{0,39}\z")
         throw Error("Workspace names use letters, numbers, spaces, - and _ (up to 40 characters).")
     if RegExMatch(name, "i)^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$")
         throw Error("That name is reserved by Windows.")
@@ -1946,6 +1946,107 @@ WorkspaceDesktopTargets(saved, current) {
         if !targets.Has(number)
             targets[number] := number < current.Length ? number : -1
     return targets
+}
+
+; Whether a window fills its monitor's work area, to within a few pixels
+; (1.10.0): treated as maximized even if Windows doesn't call it that. One that
+; also covers the taskbar, such as a borderless game, isn't this. Keep in step
+; with fillsMonitor in frontend\workspaces.js.
+WorkspaceFillsMonitor(x, y, width, height) {
+    return Abs(x) <= 0.005 && Abs(y) <= 0.005 && Abs(width - 1) <= 0.005 && Abs(height - 1) <= 0.005
+}
+
+; A launch rule's app (1.10.0): a full path to an .exe on a drive, without
+; characters Windows forbids in paths, up to 260 characters. Returned trimmed.
+ValidateRulePath(path) {
+    path := Trim(path)
+    if (StrLen(path) > 260 || !RegExMatch(path, 'i)^[A-Z]:\\(?:[^<>:"/\\|?*\x00-\x1F]+\\)*[^<>:"/\\|?*\x00-\x1F]+\.exe\z'))
+        throw Error("That isn't an app's full path.")
+    if InStr(path, "\..\")
+        throw Error("That isn't an app's full path.")
+    return path
+}
+
+; ---- editing a saved workspace (1.10.0)
+; The page sends places and switches, never an app's path or command: Restore
+; launches what the file holds, and only AHK writes that, from a real window.
+
+WorkspaceEditInteger(text, low, high) {
+    if !RegExMatch(text, "^-?\d{1,3}\z")
+        throw Error("Malformed request.")
+    value := Integer(text)
+    if (value < low || value > high)
+        throw Error("Malformed request.")
+    return value
+}
+
+; A fraction of a monitor's work area: 0 to 1, up to four decimals.
+WorkspaceEditFraction(text) {
+    if !RegExMatch(text, "^(?:0(?:\.\d{1,4})?|1(?:\.0{1,4})?)\z")
+        throw Error("Malformed request.")
+    return Float(text)
+}
+
+WorkspaceEditFlag(text) {
+    if !(text == "0" || text == "1")
+        throw Error("Malformed request.")
+    return text == "1"
+}
+
+WorkspaceEditName(name) {
+    return IsDefaultWorkspaceName(name) ? "Default" : ValidateWorkspaceName(name)
+}
+
+; "name|index|desktop|monitor|x|y|width|height|maximized|pinned|enabled"
+ParseWorkspaceWindowEdit(content) {
+    parts := StrSplit(content, "|")
+    if (parts.Length != 11)
+        throw Error("Malformed request.")
+    parsed := Map(
+        "name", WorkspaceEditName(parts[1]),
+        "index", WorkspaceEditInteger(parts[2], 1, 48),
+        "desktop", WorkspaceEditInteger(parts[3], -2, 19),
+        "monitor", WorkspaceEditInteger(parts[4], 1, 16),
+        "x", WorkspaceEditFraction(parts[5]),
+        "y", WorkspaceEditFraction(parts[6]),
+        "width", WorkspaceEditFraction(parts[7]),
+        "height", WorkspaceEditFraction(parts[8]),
+        "maximized", WorkspaceEditFlag(parts[9]),
+        "pinned", WorkspaceEditFlag(parts[10]),
+        "enabled", WorkspaceEditFlag(parts[11])
+    )
+    if (parsed["width"] < 0.04 || parsed["height"] < 0.04
+        || parsed["x"] + parsed["width"] > 1.0001 || parsed["y"] + parsed["height"] > 1.0001)
+        throw Error("That place doesn't fit on the monitor.")
+    if parsed["pinned"]
+        parsed["desktop"] := -1
+    else if (parsed["desktop"] = -1)
+        throw Error("Malformed request.")
+    return parsed
+}
+
+; "name|index"
+ParseWorkspaceWindowRef(content) {
+    parts := StrSplit(content, "|")
+    if (parts.Length != 2)
+        throw Error("Malformed request.")
+    return Map("name", WorkspaceEditName(parts[1]), "index", WorkspaceEditInteger(parts[2], 1, 48))
+}
+
+; Which saved desktop a window added later belongs on. saved: Array of the
+; file's desktop names (saved desktop n at n + 1). A desktop named in Task View
+; goes to the saved one with that name; a name the file has given to another
+; desktop gets a new number, so a restore doesn't mix them up. Otherwise the
+; same number, which may be past the end: the caller extends the file.
+WorkspaceAddDesktopIndex(saved, current, name) {
+    if (name != "") {
+        for index, existing in saved
+            if (existing = name)
+                return index - 1
+        if (current < saved.Length && saved[current + 1] != "")
+            return saved.Length
+    }
+    return current
 }
 
 ; How many desktops must be added so every saved desktop without a target

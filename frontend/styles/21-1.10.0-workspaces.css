@@ -1,0 +1,724 @@
+/* ==========================================================================
+   1.10.0: the Workspaces view. A strip chooses a workspace or the launch rules;
+   a canvas draws one desktop at its monitor's real shape, and a panel beside
+   it edits the selected window.
+   ========================================================================== */
+
+#workspaces .page-heading {
+  margin-bottom: 18px;
+}
+
+.ws-tabs[hidden],
+.ws-panel[hidden],
+.ws-add[hidden] {
+  display: none;
+}
+
+#workspacesEmpty {
+  font-size: 14px;
+}
+
+.ws-strip {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding-bottom: 6px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.ws-strip-gap {
+  flex: 1 1 auto;
+}
+
+.ws-chip {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+  max-width: 300px;
+  padding: 9px 16px 9px 11px;
+  border: 1px solid rgba(167, 174, 202, .14);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .025);
+  color: #c9ccd8;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--dur-fast, .12s) ease, background var(--dur-fast, .12s) ease;
+}
+
+.ws-chip:hover {
+  border-color: rgba(139, 111, 245, .35);
+}
+
+.ws-chip[aria-pressed="true"] {
+  border-color: rgba(139, 111, 245, .55);
+  background: rgba(74, 32, 170, .32);
+  color: #f0f1f8;
+}
+
+.ws-chip-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.ws-chip-copy strong {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-chip-copy small {
+  color: #a4a9bb;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.ws-chip[aria-pressed="true"] small {
+  color: var(--gold-text);
+}
+
+.ws-chip-add {
+  padding-left: 16px;
+  border-style: dashed;
+  color: #d6d0ef;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ws-save {
+  gap: 8px;
+  padding: 7px 8px;
+  cursor: default;
+}
+
+.ws-save input {
+  width: 190px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(167, 174, 202, .25);
+  border-radius: 8px;
+  background: var(--panel-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.ws-thumb {
+  position: relative;
+  flex: 0 0 auto;
+  display: block;
+  width: 58px;
+  height: 24px;
+  overflow: hidden;
+  border: 1px solid rgba(167, 174, 202, .25);
+  border-radius: 3px;
+  background: rgba(10, 11, 18, .6);
+}
+
+.ws-thumb i {
+  position: absolute;
+  border-radius: 1px;
+  background: rgba(168, 146, 251, .65);
+  box-shadow: 0 0 0 1px rgba(10, 11, 18, .9) inset;
+}
+
+.ws-thumb i.is-pinned {
+  background: var(--gold-text);
+}
+
+/* The workspace's heading and actions. */
+.ws-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.ws-head h2 {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.15;
+}
+
+.ws-head p {
+  margin: 4px 0 0;
+  color: #b8bccb;
+  font-size: 14px;
+}
+
+.ws-name {
+  width: 340px;
+  max-width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid rgba(168, 146, 251, .6);
+  border-radius: 8px;
+  background: var(--panel-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.ws-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ws-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.ws-tab {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  border: 1px solid rgba(167, 174, 202, .14);
+  border-radius: 8px;
+  background: transparent;
+  color: #c9ccd8;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ws-tab:hover {
+  border-color: rgba(139, 111, 245, .35);
+}
+
+.ws-tab em {
+  margin-left: 7px;
+  color: #a4a9bb;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 500;
+}
+
+.ws-tab.is-pinned {
+  color: var(--gold-text);
+}
+
+.ws-tab[aria-pressed="true"] {
+  border-color: rgba(139, 111, 245, .55);
+  background: rgba(74, 32, 170, .32);
+  color: #fff;
+}
+
+.ws-tab.is-pinned[aria-pressed="true"] {
+  color: var(--gold-text);
+}
+
+.ws-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  align-items: start;
+  gap: 18px;
+}
+
+/* The canvas. */
+.ws-screens {
+  display: flex;
+  gap: 10px;
+  touch-action: none;
+}
+
+.ws-monitor {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.ws-monitor-label {
+  color: #a4a9bb;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ws-screen {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(167, 174, 202, .22);
+  border-radius: 8px;
+  background: rgba(10, 11, 18, .65);
+}
+
+.ws-window {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  overflow: hidden;
+  padding: 8px 10px;
+  border: 1px solid rgba(168, 146, 251, .55);
+  border-radius: 5px;
+  background: #2a2350;
+  color: #efeaff;
+  font: inherit;
+  text-align: left;
+  cursor: grab;
+}
+
+.ws-window:active {
+  cursor: grabbing;
+}
+
+.ws-window strong,
+.ws-window > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-window strong {
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.ws-window > span {
+  margin-top: 2px;
+  color: #c8c1e6;
+  font-size: 13px;
+}
+
+.ws-window.is-selected {
+  border: 2px solid #c9b8ff;
+  background: #3a2d78;
+  box-shadow: 0 0 0 3px rgba(168, 146, 251, .25);
+}
+
+.ws-window:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -4px;
+}
+
+.ws-window.is-pinned {
+  border-color: var(--gold-border);
+  background: #3a3218;
+  color: var(--gold-text);
+}
+
+.ws-window.is-pinned > span {
+  color: #d6c98f;
+}
+
+.ws-window.is-pinned.is-selected {
+  border-color: var(--gold-text);
+  box-shadow: 0 0 0 3px var(--gold-soft);
+}
+
+.ws-window.is-off {
+  border-style: dashed;
+  background: rgba(42, 35, 80, .35);
+  color: #a4a9bb;
+}
+
+.ws-window.is-off > span {
+  color: #8d92a6;
+}
+
+/* Grab points on the selected window: a thin strip along each edge, and a
+   visible square in each corner. */
+.ws-handle {
+  position: absolute;
+  z-index: 2;
+}
+
+.ws-handle-n, .ws-handle-s { left: 12px; right: 12px; height: 8px; cursor: ns-resize; }
+.ws-handle-e, .ws-handle-w { top: 12px; bottom: 12px; width: 8px; cursor: ew-resize; }
+.ws-handle-n { top: 0; }
+.ws-handle-s { bottom: 0; }
+.ws-handle-e { right: 0; }
+.ws-handle-w { left: 0; }
+
+.ws-handle-nw, .ws-handle-ne, .ws-handle-se, .ws-handle-sw {
+  width: 10px;
+  height: 10px;
+  border: 2px solid #c9b8ff;
+  border-radius: 2px;
+  background: #0e1017;
+}
+
+.ws-handle-nw { top: 2px; left: 2px; cursor: nwse-resize; }
+.ws-handle-ne { top: 2px; right: 2px; cursor: nesw-resize; }
+.ws-handle-se { right: 2px; bottom: 2px; cursor: nwse-resize; }
+.ws-handle-sw { bottom: 2px; left: 2px; cursor: nesw-resize; }
+
+/* The list under the canvas: every window, even one hidden behind another. */
+.ws-rows {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.ws-row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ws-row:hover {
+  background: rgba(255, 255, 255, .03);
+}
+
+.ws-row.is-selected {
+  background: rgba(74, 32, 170, .28);
+}
+
+.ws-row strong {
+  overflow: hidden;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-row span {
+  overflow: hidden;
+  color: #b8bccb;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-row small {
+  color: #a4a9bb;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.ws-row.is-off strong,
+.ws-row.is-off span {
+  color: #8d92a6;
+}
+
+.ws-empty {
+  margin: 8px 12px;
+  color: #a4a9bb;
+  font-size: 14px;
+}
+
+.ws-add {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ws-add select,
+.ws-field select,
+.ws-numbers input {
+  min-height: 34px;
+  border: 1px solid rgba(167, 174, 202, .25);
+  border-radius: 8px;
+  background: var(--panel-input);
+  color: var(--text);
+  color-scheme: dark;
+  font: inherit;
+  font-size: 14px;
+}
+
+.ws-add select {
+  flex: 1;
+  min-width: 0;
+  padding: 0 8px;
+}
+
+/* The panel. */
+.ws-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(167, 174, 202, .14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .025);
+}
+
+.ws-panel-head h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.ws-panel-head p {
+  margin: 2px 0 0;
+  color: #b8bccb;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.ws-warning {
+  margin: 0;
+  color: var(--gold-text);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.ws-field {
+  display: grid;
+  gap: 5px;
+}
+
+.ws-field > span {
+  color: #c4c8d7;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ws-field select {
+  width: 100%;
+  padding: 0 8px;
+}
+
+.ws-places {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.ws-place {
+  padding: 7px 4px;
+  border: 1px solid rgba(167, 174, 202, .2);
+  border-radius: 7px;
+  background: transparent;
+  color: #d9dbe6;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ws-place:hover {
+  border-color: rgba(139, 111, 245, .45);
+}
+
+.ws-place.is-on {
+  border-color: rgba(139, 111, 245, .7);
+  background: rgba(74, 32, 170, .32);
+  color: #fff;
+}
+
+.ws-numbers {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.ws-number {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ws-number span {
+  color: #a4a9bb;
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.ws-numbers input {
+  width: 100%;
+  min-width: 0;
+  padding: 0 2px;
+  text-align: center;
+  appearance: textfield;
+}
+
+.ws-numbers input::-webkit-outer-spin-button,
+.ws-numbers input::-webkit-inner-spin-button {
+  appearance: none;
+}
+
+/* A plain checkbox drawn as a switch. */
+.ws-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #e5e6ee;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.ws-switch input {
+  position: relative;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 18px;
+  margin: 0;
+  border-radius: 9px;
+  background: #3b3f52;
+  cursor: pointer;
+  appearance: none;
+}
+
+.ws-switch input::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #d5d7e2;
+  transition: left var(--dur-fast, .12s) ease;
+}
+
+.ws-switch input:checked {
+  background: #6b48e0;
+}
+
+.ws-switch input:checked::after {
+  left: 18px;
+  background: #fff;
+}
+
+.ws-switch input:focus-visible {
+  outline: 2px solid #c9b8ff;
+  outline-offset: 2px;
+}
+
+.ws-panel-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(167, 174, 202, .12);
+}
+
+.ws-panel-links .secondary {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+/* Launch rules. */
+.ws-rule-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  align-items: start;
+  gap: 18px;
+}
+
+.ws-rule-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ws-rule {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(167, 174, 202, .1);
+}
+
+.ws-rule:first-child {
+  border-top: 0;
+}
+
+.ws-rule .ws-thumb {
+  width: 92px;
+  height: 38px;
+}
+
+.ws-rule.is-off .ws-thumb,
+.ws-rule.is-off .ws-rule-copy {
+  opacity: .55;
+}
+
+.ws-rule-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.ws-rule-copy strong {
+  font-size: 14.5px;
+  font-weight: 650;
+}
+
+.ws-rule-copy small {
+  color: #c4c8d7;
+  font-size: 13.5px;
+}
+
+.ws-rule .link-button.is-danger {
+  color: var(--burgundy-bright);
+  font-size: 13.5px;
+}
+
+.ws-rule-windows {
+  display: grid;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.ws-rule-window {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(167, 174, 202, .14);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ws-rule-window:hover {
+  border-color: rgba(139, 111, 245, .4);
+}
+
+.ws-rule-window.is-on {
+  border-color: rgba(139, 111, 245, .65);
+  background: rgba(74, 32, 170, .25);
+}
+
+.ws-rule-window strong {
+  flex: 0 0 auto;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.ws-rule-window small {
+  overflow: hidden;
+  color: #a4a9bb;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .ws-grid,
+  .ws-rule-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -2,6 +2,26 @@
 
 All notable changes to the Aeolionware Super Command System. The newest release is first. For current behavior, see [README.md](README.md).
 
+## Version 1.10.0
+
+The Workspaces page rebuilt so a saved workspace can be read and edited, with a canvas at the monitor's real shape, and launch rules. Manual pass: 30 of 31 items passed, and the other, Save current as…, was then confirmed good with no change. The notes from that pass were fixed afterward, and all 6 retest items passed. 1,265 automated checks and a 76-check smoke test. Routines, iPhone calendar sync and the console hub stay on the roadmap.
+
+### Changed
+- **The Workspaces page is rebuilt.** A strip chooses a workspace, and the whole page shows it, with text you can read: window names were 9.5 px and are now 15 px. A tab for each desktop shows it on a canvas at your monitor's real shape, where screens used to be forced to 16:9, with a list of every window under it.
+- **Restore and Launch rules are one chip away,** and **Save current as…** now asks before replacing a workspace.
+
+### Added
+- **Edit a saved workspace.** Change a window's desktop, monitor and place with ready-made thirds and halves or exact percentages, drag it to move or resize it (edges stick to thirds, the middle and other windows; Esc cancels), or use the arrow keys. Pin it to every desktop, switch it off so Restore leaves it alone, remove it, or add an open window. **Duplicate** copies a workspace. Editing changes only the saved file, never an open window.
+- **Launch rules.** When an app starts, its first window goes where you remembered, on the same monitor and desktop. Remember an open window, or use **Always open here** on a saved one. Rules only move windows; they never open anything.
+- **A window that fills the usable screen is Full,** and is restored maximized, however it got there: saved that way, typed, dragged, or from an older workspace. This also applies to launch rules.
+
+### Fixed
+- A workspace name ending in a line break got past the name check.
+
+### Performance and security
+- Launch rules add one shell hook that tells ASCS when top-level windows are created, and only do work for an app with a rule; nothing polls. Edits are small file writes, and a drag sends one message, on release. No new listener, network use, elevation or hotkey.
+- The page can never set an app's path or command for a saved window, because Restore launches what the file holds. Only AHK writes a path, from a real window, and it's checked again at restore. Every new message is validated in AHK.
+
 ## Version 1.9.2
 
 A cleaner shell with no tagline or footer, power options in a tray on every view, ASCS Logs as a dialog, Games loaded ahead of time with its first-load freeze fixed, a sideways wheel in more places, and the sign-in history as a compact graph. Manual pass: all 21 items passed, and all 6 retest items passed after the notes from that pass were fixed. 1,114 automated checks and a 36-check smoke test. Launch rules, routines, iPhone calendar sync and the console hub stay on the roadmap.

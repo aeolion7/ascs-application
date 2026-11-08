@@ -25,9 +25,9 @@
   <link rel="stylesheet" href="styles/15-1.8.1-sounds.css">
   <link rel="stylesheet" href="styles/16-1.9.0-calendar.css">
   <link rel="stylesheet" href="styles/17-1.9.0-achievements.css">
-  <link rel="stylesheet" href="styles/18-1.9.0-workspaces.css">
   <link rel="stylesheet" href="styles/19-1.9.1-fixes.css">
   <link rel="stylesheet" href="styles/20-1.9.2-ux.css">
+  <link rel="stylesheet" href="styles/21-1.10.0-workspaces.css">
 </head>
 <body>
   <div class="app-shell">
@@ -102,7 +102,7 @@
 
       <div class="sidebar-bottom">
         <span class="sidebar-status">
-          <strong id="sidebarVersion">ASCS <span>1.9.2</span></strong>
+          <strong id="sidebarVersion">ASCS <span>1.10.0</span></strong>
           <small><span class="status-indicator" aria-hidden="true"></span>Standing by</small>
         </span>
         <span class="key-hint" aria-label="Super key">Super</span>
@@ -338,23 +338,49 @@
         <div class="page-heading">
           <span class="eyebrow"><span class="eyebrow-line"></span> ARRANGE</span>
           <h1 id="workspacesTitle">Workspaces<span class="title-period">.</span></h1>
-          <p>Your windows, saved across every desktop and put back where they were. Super + S and Super + R save and restore “Default”.</p>
         </div>
-        <section class="content-section" aria-labelledby="workspaceLayoutsHeading">
-          <div class="section-title-row">
+        <div class="ws-strip" id="workspaceStrip" role="group" aria-label="Saved workspaces and launch rules"></div>
+        <p id="workspacesEmpty" class="settings-note">No saved workspaces yet. Arrange your windows on your desktops, then save them here (or press Super + S).</p>
+        <div id="workspacePage" hidden>
+          <div class="ws-head">
             <div>
-              <span class="eyebrow">SAVED LAYOUTS</span>
-              <h2 id="workspaceLayoutsHeading">Workspaces</h2>
+              <h2 id="workspaceTitle"></h2>
+              <p id="workspaceMeta"></p>
             </div>
-            <form id="saveWorkspaceForm" class="workspace-save">
-              <label class="sr-only" for="workspaceName">Workspace name</label>
-              <input id="workspaceName" type="text" maxlength="40" placeholder="Name, such as Coding" autocomplete="off">
-              <button class="primary" type="submit">Save current as…</button>
-            </form>
+            <div class="ws-actions" id="workspaceActions"></div>
           </div>
-          <ul id="workspaceList" class="workspace-cards"></ul>
-          <p id="workspacesEmpty" class="settings-note">No saved workspaces yet. Arrange your windows on your desktops, then save them here (or press Super + S).</p>
-        </section>
+          <div class="ws-tabs" id="workspaceTabs" role="group" aria-label="Desktops"></div>
+          <div class="ws-grid">
+            <div>
+              <div class="ws-screens" id="workspaceScreens"></div>
+              <div class="ws-rows" id="workspaceRows"></div>
+              <form class="ws-add" id="workspaceAdd"></form>
+            </div>
+            <aside class="ws-panel" id="workspaceInspector" aria-label="The selected window"></aside>
+          </div>
+        </div>
+        <div id="rulesPage" hidden>
+          <div class="ws-head">
+            <div>
+              <h2>Launch rules</h2>
+              <p>When an app starts, its first window within 15 seconds goes where you remembered. Rules only move windows; they never open anything.</p>
+            </div>
+          </div>
+          <div class="ws-rule-grid">
+            <div>
+              <ul class="ws-rule-list" id="ruleList"></ul>
+              <p id="rulesEmpty" class="settings-note">No launch rules yet.</p>
+            </div>
+            <aside class="ws-panel" aria-labelledby="ruleAddHeading">
+              <div class="ws-panel-head">
+                <h3 id="ruleAddHeading">Add a rule</h3>
+                <p>Put a window where you want it, then choose it here.</p>
+              </div>
+              <div class="ws-rule-windows" id="ruleWindows"></div>
+              <button class="primary" type="button" id="ruleRemember" disabled>Remember where it goes</button>
+            </aside>
+          </div>
+        </div>
       </section>
 
       <section class="view" id="games" aria-labelledby="gamesTitle">
@@ -1078,5 +1104,6 @@
   <script src="app.js"></script>
   <script src="soundsview.js"></script>
   <script src="calendarview.js"></script>
+  <script src="workspacesview.js"></script>
 </body>
 </html>
