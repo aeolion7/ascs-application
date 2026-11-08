@@ -109,7 +109,7 @@ FocusExistingApplication(windows, applicationName) {
     global ASCS_VirtualDesktopDllPath
 
     if !FileExist(ASCS_VirtualDesktopDllPath) {
-        ShowDesktopTooltip(
+        ShowNotice(
             "Add VirtualDesktopAccessor.dll to focus apps across desktops."
         )
         throw Error(

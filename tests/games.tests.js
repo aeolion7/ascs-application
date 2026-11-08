@@ -179,4 +179,45 @@
     const summaryIds = G.parseRetroAchievements(JSON.stringify({ User: "x", LastGameID: 14402 }), JSON.stringify([{ Title: "Galaxy", GameID: 14402 }]));
     equal("ra: the last game's ID", summaryIds.lastGameId, 14402);
     equal("ra: a recent game's ID", summaryIds.games[0].id, 14402);
+    // 1.11.0: site badges, in the shape API_GetUserAwards really sends.
+    const award = (type, extra, id, title, when, more = {}) => ({ AwardedAt: when, Title: title, ConsoleID: 4, ConsoleName: "Game Boy", Flags: null, ImageIcon: `/Images/${String(id).padStart(6, "0")}.png`, display_award_tier: null, AwardType: type, AwardData: id, AwardDataExtra: extra, DisplayOrder: 0, ...more });
+    const awardsRaw = JSON.stringify({
+        TotalAwardsCount: 7, HiddenAwardsCount: 2,
+        VisibleUserAwards: [
+            award("Game Beaten", 1, 10, "Both", "2020-01-01T12:00:00+00:00"),
+            award("Mastery/Completion", 1, 10, "Both", "2021-06-15T16:00:00+00:00"),
+            award("Mastery/Completion", 0, 20, "Done", "2022-01-01T12:00:00+00:00"),
+            award("Game Beaten", 0, 30, "Soft", "2019-01-01T12:00:00+00:00"),
+            award("Game Beaten", 0, 40, "Twice", "2018-01-01T12:00:00+00:00"),
+            award("Game Beaten", 1, 40, "Twice", "2018-02-01T12:00:00+00:00"),
+            award("Event", 0, 160, "Launch Event", "2024-11-16T02:01:32+00:00", { ConsoleName: "Events" }),
+            award("Certified Legend", 0, 1, null, "2023-01-01T12:00:00+00:00", { ImageIcon: null, ConsoleName: null }),
+            "junk", null, { Title: "", AwardType: "Mastery/Completion" }
+        ]
+    });
+    const awards = G.parseRaAwards(awardsRaw);
+    equal("awards: junk and untitled are dropped", awards.awards.length, 8);
+    equal("awards: newest first", awards.awards[0].title, "Launch Event");
+    equal("awards: hardcore mastery is mastered", awards.awards.find(a => a.time === Date.parse("2021-06-15T16:00:00+00:00")).kind, "mastered");
+    equal("awards: softcore mastery is completed", awards.awards.find(a => a.title === "Done").kind, "completed");
+    equal("awards: beaten keeps its mode", awards.awards.find(a => a.title === "Soft").kind, "beaten-softcore");
+    equal("awards: counts", JSON.stringify(awards.counts), JSON.stringify({ all: 6, mastered: 1, completed: 1, beaten: 3, event: 1, community: 1 }));
+    equal("awards: hidden are counted", awards.hidden, 2);
+    equal("awards: All has each game once, at its highest", G.awardsInTab(awards, "all").filter(a => a.gameId === 10).map(a => a.kind).join(), "mastered");
+    equal("awards: Beaten has a game once, its best mode", G.awardsInTab(awards, "beaten").filter(a => a.gameId === 40).map(a => a.kind).join(), "beaten-hardcore");
+    equal("awards: a mastered game still counts as beaten", G.awardsInTab(awards, "beaten").some(a => a.gameId === 10), true);
+    equal("awards: a game opens by its ID", awards.awards.find(a => a.title === "Done").gameId, 20);
+    equal("awards: an event's number isn't a game", awards.awards.find(a => a.title === "Launch Event").gameId, 0);
+    equal("awards: an event has art", awards.awards.find(a => a.title === "Launch Event").icon, "i:000160");
+    equal("awards: a community award is named by its type", awards.awards.find(a => a.kind === "community").title, "Certified Legend");
+    equal("awards: a community award has no art", awards.awards.find(a => a.kind === "community").icon, "");
+    equal("awards: an address is never taken as art", G.parseRaAwards(JSON.stringify({ VisibleUserAwards: [award("Event", 0, 1, "x", "", { ImageIcon: "https://evil.example/a.png" })] })).awards[0].icon, "");
+    equal("awards: a hostile title stays text", G.parseRaAwards(JSON.stringify({ VisibleUserAwards: [award("Event", 0, 1, "<b>x</b>", "")] })).awards[0].title, "<b>x</b>");
+    equal("awards: text says when", G.awardText(awards.awards.find(a => a.title === "Done")), "Completed on Jan 1, 2022");
+    equal("awards: text with no date", G.awardText({ kind: "mastered", time: 0 }), "Mastered");
+    equal("awards: a bad date sorts last", G.parseRaAwards(JSON.stringify({ VisibleUserAwards: [award("Event", 0, 1, "Bad", "soon"), award("Event", 0, 2, "Good", "2020-01-01T00:00:00+00:00")] })).awards[0].title, "Good");
+    equal("awards: not JSON", G.parseRaAwards("<html>").counts.all, 0);
+    equal("awards: nothing", G.parseRaAwards("").awards.length, 0);
+    equal("awards: not a list", G.parseRaAwards('{"VisibleUserAwards":"x"}').awards.length, 0);
+    equal("awards: a tab of nothing", G.awardsInTab(null, "all").length, 0);
 })();

@@ -123,7 +123,7 @@ RunCustomCommand(index, source := "", *) {
     } catch as err {
         WriteLog("Custom command failed: " command["name"] " | " err.Message)
         RecordActivity("error", command["name"] ": " err.Message)
-        ShowDesktopTooltip("Unable to run " command["name"] ".")
+        ShowNotice("Unable to run " command["name"] ".")
     }
 }
 

@@ -1452,6 +1452,10 @@ function handleWebMessage(event) {
             gamesState.ra.unlocks = rest.join("\n");
             gamesState.ra.unlocksError = "";
             renderAchievements();
+        } else if (kind === "awards") {
+            gamesState.ra.awards = rest.join("\n");
+            gamesState.ra.awardsError = "";
+            renderAchievements();
         }
         return;
     }
@@ -1670,6 +1674,7 @@ function handleWebMessage(event) {
             // A game or the recent unlocks couldn't be fetched (1.9.0).
             if (typeof data.kind === "string" && typeof data.message === "string") {
                 if (data.kind === "unlocks") gamesState.ra.unlocksError = data.message;
+                else if (data.kind === "awards") gamesState.ra.awardsError = data.message;
                 else if (/^game:\d*$/.test(data.kind)) gamesState.ra.gameErrors.set(Number(data.kind.slice(5)) || gamesState.ra.openGame, data.message);
                 renderAchievements();
             }
@@ -3475,7 +3480,9 @@ const gamesState = {
         // 1.9.0, the achievement browser: games by RetroAchievements ID (raw
         // replies), the open one, its filter and sort, and recent unlocks.
         games: new Map(), gameErrors: new Map(), asked: new Set(), openGame: 0, filter: "all", sort: "order",
-        unlocks: "", unlocksError: "", unlocksOpen: false, unlockPage: 0 },
+        unlocks: "", unlocksError: "", unlocksOpen: false, unlockPage: 0,
+        // 1.11.0, the site badges: the raw reply, and the tab showing.
+        awards: "", awardsError: "", awardsAsked: false, awardsTab: "all" },
     raImages: new Map(), raRequested: new Set(),
     liveTimer: null, runningTimer: null, playing: [], nowTimer: null
 };
@@ -4179,7 +4186,7 @@ function renderRaBrowser(box) {
     const ra = gamesState.ra;
     const id = ra.openGame;
     const panel = element("div", "ra-browser");
-    const back = element("button", "link-button ra-back", "‹ Achievements");
+    const back = element("button", "secondary ra-back", "‹ Achievements");
     back.type = "button";
     back.addEventListener("click", () => { ra.openGame = 0; renderAchievements(); });
     panel.append(back);
@@ -4319,6 +4326,11 @@ function renderAchievements() {
     stat("HARDCORE POINTS", data.points.toLocaleString(), data.truePoints ? `${data.truePoints.toLocaleString()} true points` : "");
     if (data.softcore) stat("SOFTCORE", data.softcore.toLocaleString());
     stat("RANK", data.rank ? `#${data.rank.toLocaleString()}` : "—", Games.rankPercentile(data.rank, data.ranked));
+    if (ra.awards) {
+        const { counts } = Games.parseRaAwards(ra.awards);
+        stat("MASTERED", String(counts.mastered));
+        if (counts.completed) stat("COMPLETED", String(counts.completed));
+    }
     box.append(stats);
 
     // What's being played (rich presence comes from the game itself).
@@ -4424,6 +4436,7 @@ function renderAchievements() {
     if (pager.childElementCount) unlocks.append(pager);
     columns.append(progress, unlocks);
     box.append(columns);
+    renderRaAwards(box);
     requestRaImages([...data.games.slice(0, 6).map(game => game.icon), ...shownUnlocks.map(item => item.badge)]);
 }
 
@@ -4481,6 +4494,7 @@ function startGamesPolling() {
     send("GetGames");
     send("GetGamesLive");
     send("GetRetroAchievements");
+    askForRaAwards();
     gamesState.liveTimer = setInterval(() => {
         if ($("games").classList.contains("active") && !document.hidden) send("GetGamesLive");
         else stopGamesPolling();
@@ -4528,6 +4542,7 @@ $("refreshAchievements").addEventListener("click", () => {
     send("GetRetroAchievements", "refresh");
     if (gamesState.ra.openGame) requestRaGame(gamesState.ra.openGame, true);
     if (gamesState.ra.unlocksOpen) send("GetRaUnlocks", "refresh");
+    if (gamesState.ra.awardsAsked) send("GetRaAwards", "refresh");
 });
 
 // ---- Preferences: Games & apps

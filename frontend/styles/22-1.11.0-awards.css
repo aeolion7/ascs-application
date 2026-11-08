@@ -1,0 +1,221 @@
+/* ==========================================================================
+   1.11.0: site badges in Games. A grid of game art with tabs; mastered games
+   get the gold frame, and one card follows the pointer or focus.
+   ========================================================================== */
+
+/* The stats above them: equal columns on one line, every label and value on
+   the same line as its neighbors, with a note only adding below. */
+.ra-stats {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(167, 174, 202, .12);
+}
+
+.ra-stats span {
+  gap: 4px;
+  min-width: 0;
+}
+
+.ra-stats small {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: .6px;
+}
+
+.ra-stats strong {
+  overflow: hidden;
+  font-size: 22px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ra-stats em {
+  color: #a4a9bb;
+  font-size: 12.5px;
+}
+
+@media (max-width: 1100px) {
+  .ra-stats {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+}
+
+/* Back from a game's achievements: a real button, easy to hit. */
+.ra-back {
+  min-height: 40px;
+  padding: 0 16px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ra-awards {
+  position: relative;
+  margin-top: 24px;
+}
+
+.ra-awards-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-bottom: 10px;
+}
+
+.ra-awards-head h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.ra-awards-head span {
+  color: #a4a9bb;
+  font-size: 13.5px;
+}
+
+.ra-award-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.ra-award-tab {
+  flex: 0 0 auto;
+  padding: 7px 13px;
+  border: 1px solid rgba(167, 174, 202, .14);
+  border-radius: 8px;
+  background: transparent;
+  color: #c9ccd8;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ra-award-tab:hover {
+  border-color: rgba(139, 111, 245, .35);
+}
+
+.ra-award-tab em {
+  margin-left: 7px;
+  color: #a4a9bb;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 500;
+}
+
+.ra-award-tab[aria-pressed="true"] {
+  border-color: rgba(139, 111, 245, .55);
+  background: rgba(74, 32, 170, .32);
+  color: #fff;
+}
+
+.ra-award-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 10px;
+}
+
+.ra-award {
+  display: block;
+  box-sizing: border-box;
+  aspect-ratio: 1;
+  padding: 0;
+  overflow: hidden;
+  border: 2px solid rgba(167, 174, 202, .28);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .04);
+  transition: transform .12s ease, border-color .12s ease;
+}
+
+button.ra-award {
+  cursor: pointer;
+}
+
+.ra-award:hover {
+  transform: translateY(-2px);
+}
+
+.ra-award:focus-visible {
+  outline: 2px solid #c9b8ff;
+  outline-offset: 2px;
+}
+
+.ra-award.is-mastered {
+  border-color: var(--gold-text);
+  box-shadow: 0 0 0 1px rgba(227, 192, 114, .28), 0 0 12px rgba(227, 192, 114, .16);
+}
+
+.ra-award.is-completed {
+  border-color: rgba(168, 146, 251, .75);
+}
+
+.ra-award .ra-award-art {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+}
+
+.ra-award-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.ra-award-labels:first-child {
+  margin-top: 0;
+}
+
+.ra-award-label {
+  padding: 6px 11px;
+  border: 1px solid var(--gold-border);
+  border-radius: 999px;
+  color: var(--gold-text);
+  font-size: 13.5px;
+}
+
+.ra-award-tip {
+  position: absolute;
+  z-index: 5;
+  display: grid;
+  gap: 2px;
+  max-width: 320px;
+  padding: 10px 12px;
+  border: 1px solid rgba(139, 111, 245, .55);
+  border-radius: 10px;
+  background: #1b1830;
+  box-shadow: var(--panel-shadow);
+  pointer-events: none;
+}
+
+.ra-award-tip[hidden] {
+  display: none;
+}
+
+.ra-award-tip strong {
+  font-size: 14.5px;
+}
+
+.ra-award-tip small {
+  color: #c4c8d7;
+  font-size: 13px;
+}
+
+.ra-award-tip em {
+  color: #c4c8d7;
+  font-size: 13px;
+  font-style: normal;
+}
+
+.ra-award-tip em.is-mastered {
+  color: var(--gold-text);
+}

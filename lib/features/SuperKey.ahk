@@ -43,7 +43,7 @@ LaunchSnipping() {
         Run("ms-screenclip:")
     } catch as err {
         WriteLog("Snipping overlay launch failed: " err.Message)
-        ShowDesktopTooltip("Unable to open the Snipping Tool.")
+        ShowNotice("Unable to open the Snipping Tool.")
     }
 }
 
@@ -553,14 +553,12 @@ SaveWorkspace(name := "") {
         counted := WorkspaceCountText(windows.Length, spread.Count)
         summary := "Workspace “" displayName "” saved (" counted
             . (skipped ? ", " skipped " skipped" : "") ")."
-        ShowDesktopTooltip(summary)
-        NotifyFrontend(summary)
+        ShowNotice(summary)
         RecordActivity("workspace", "Saved workspace “" displayName "” (" counted ")")
         SendWorkspaces()
     } catch as err {
         WriteLog("Workspace save failed: " err.Message)
-        ShowDesktopTooltip("Unable to save workspace: " err.Message)
-        NotifyFrontend("Unable to save workspace: " err.Message)
+        ShowNotice("Unable to save workspace: " err.Message)
         try {
             if (IsSet(tempPath) && FileExist(tempPath))
                 FileDelete(tempPath)
@@ -789,7 +787,7 @@ StartWorkspaceRestore(displayName, pending) {
     global ASCS_WorkspaceClaimed
     ASCS_WorkspaceRestorePending := pending
     ASCS_WorkspaceClaimed := Map()
-    ShowDesktopTooltip("Restoring workspace “" displayName "”.")
+    ShowNotice("Restoring workspace “" displayName "”.")
     RecordActivity("workspace", "Restored workspace “" displayName "”")
     RestoreWorkspaceWindows()
     if ASCS_WorkspaceRestorePending.Length
@@ -954,7 +952,7 @@ SwitchVirtualDesktop(number, thisHotkey := "") {
             WriteLog("Virtual desktop switching is disabled: VirtualDesktopAccessor.dll is missing.")
             ASCS_DesktopAccessorWarningShown := true
         }
-        ShowDesktopTooltip("Add VirtualDesktopAccessor.dll to lib to switch desktops.")
+        ShowNotice("Add VirtualDesktopAccessor.dll to lib to switch desktops.")
         return
     }
 
@@ -979,7 +977,7 @@ SwitchVirtualDesktop(number, thisHotkey := "") {
             throw Error("VirtualDesktopAccessor could not switch desktops.")
     } catch as err {
         WriteLog("VirtualDesktopAccessor failed; desktop switch was not performed: " err.Message)
-        ShowDesktopTooltip("Virtual desktop switch failed.")
+        ShowNotice("Virtual desktop switch failed.")
     }
 }
 
@@ -991,7 +989,7 @@ MoveActiveWindowToDesktop(number, thisHotkey := "") {
         return
 
     if !FileExist(ASCS_VirtualDesktopDllPath) {
-        ShowDesktopTooltip("Add VirtualDesktopAccessor.dll to move windows between desktops.")
+        ShowNotice("Add VirtualDesktopAccessor.dll to move windows between desktops.")
         return
     }
 
@@ -1023,26 +1021,18 @@ MoveActiveWindowToDesktop(number, thisHotkey := "") {
             throw Error("VirtualDesktopAccessor could not switch desktops.")
     } catch as err {
         WriteLog("Window desktop move failed: " err.Message)
-        ShowDesktopTooltip("Unable to move the window to that desktop.")
+        ShowNotice("Unable to move the window to that desktop.")
     }
 }
 
 ShowMissingDesktopTooltip(number, desktopCount) {
-    ShowDesktopTooltip(
+    ShowNotice(
         "Desktop " number " does not exist ("
         desktopCount (desktopCount = 1 ? " desktop is" : " desktops are")
         " open)."
     )
 }
 
-ShowDesktopTooltip(message) {
-    ToolTip(message)
-    SetTimer(ClearDesktopTooltip, -2000)
-}
-
-ClearDesktopTooltip(*) {
-    ToolTip()
-}
 
 HandleWindowDirection(direction) {
     global ASCS_PendingWindowDirection
@@ -1337,7 +1327,7 @@ MoveActiveWindowToAdjacentMonitor(direction) {
         }
 
         if !bestMonitor {
-            ShowDesktopTooltip("No monitor in that direction.")
+            ShowNotice("No monitor in that direction.")
             return
         }
 

@@ -31,7 +31,7 @@ SetupTrayMenu() {
 ; frontend changes). Used by Ctrl+Alt+Shift+A, the tray menu, and the palette.
 ReloadASCS(*) {
     WriteLog("Reload requested.")
-    ShowDesktopTooltip("Reloading ASCS…")
+    ShowNotice("Reloading ASCS…")
     FlushNotesThen(() => Reload())
 }
 

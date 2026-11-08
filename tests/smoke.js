@@ -48,6 +48,7 @@
             checks.push([`the ${view} view opens`, [...errors.splice(0), ...(shown ? [] : ["not shown"]), ...(titled ? [] : ["no breadcrumb title"])]]);
         });
         setTimeout(() => {
+            try {
             checks.push(["no errors after opening the views", errors.splice(0)]);
             const allowed = new Set(window.SMOKE_ALLOWLIST || []);
             checks.push(["the allowlist was read", allowed.size >= 50 ? [] : [`only ${allowed.size} message types`]]);
@@ -260,9 +261,58 @@
             checks.push(["and is sent as maximized", /\|1\|0\|1$/.test(messages.filter(message => message.startsWith("SetWorkspaceWindow")).pop() || "") ? [] : [messages.join(";")]]);
             checks.push(["and lights the Full button", document.querySelector("#workspaceInspector .ws-place.is-on")?.textContent === "Full" ? [] : ["not lit"]]);
 
+            // 1.11.0: the site badges.
+            navigate("games");
+            const awardEntry = (type, extra, id, title, when) => ({ AwardedAt: when, Title: title, ConsoleName: "Game Boy", ImageIcon: `/Images/${id}.png`, AwardType: type, AwardData: id, AwardDataExtra: extra });
+            handleWebMessage({ data: "RA\nsummary\n" + JSON.stringify({ User: "Player", TotalPoints: 10, Rank: 5, TotalRanked: 100 }) });
+            handleWebMessage({ data: "RA\nrecent\n[]" });
+            checks.push(["site badges wait for their reply", $("gamesAchievements").querySelector(".ra-awards .settings-note")?.textContent === "Loading…" ? [] : ["no note"]]);
+            handleWebMessage({ data: "RA\nawards\n" + JSON.stringify({ HiddenAwardsCount: 1, VisibleUserAwards: [
+                awardEntry("Mastery/Completion", 1, 100, "<img src=x onerror=alert(1)>", "2026-01-01T12:00:00+00:00"),
+                awardEntry("Game Beaten", 1, 100, "Same game", "2025-01-01T12:00:00+00:00"),
+                awardEntry("Game Beaten", 0, 200, "Beaten one", "2024-01-01T12:00:00+00:00"),
+                awardEntry("Event", 0, 160, "An event", "2023-01-01T12:00:00+00:00")
+            ] }) });
+            const awardBox = $("gamesAchievements");
+            checks.push(["All shows each game once", awardBox.querySelectorAll(".ra-award").length === 3 ? [] : [`${awardBox.querySelectorAll(".ra-award").length} tiles`]]);
+            checks.push(["and the stats count mastered games", [...awardBox.querySelectorAll(".ra-stats small")].some(node => node.textContent === "MASTERED") ? [] : ["not there"]]);
+            const statTops = selector => new Set([...awardBox.querySelectorAll(selector)].map(node => Math.round(node.getBoundingClientRect().top))).size;
+            checks.push(["the stats' labels and values line up, with a note under one", awardBox.querySelector(".ra-stats em") && statTops(".ra-stats small") === 1 && statTops(".ra-stats strong") === 1 ? [] : ["out of line"]]);
+            checks.push(["and their labels are readable", parseFloat(getComputedStyle(awardBox.querySelector(".ra-stats small")).fontSize) >= 12.5 ? [] : ["too small"]]);
+            checks.push(["empty tabs are hidden", [...awardBox.querySelectorAll(".ra-award-tab")].map(node => node.dataset.tab).join() === "all,mastered,beaten,event" ? [] : [[...awardBox.querySelectorAll(".ra-award-tab")].map(node => node.dataset.tab).join()]]);
+            checks.push(["a mastered game has the gold frame", getComputedStyle(awardBox.querySelector(".ra-award.is-mastered")).borderTopColor !== getComputedStyle(awardBox.querySelector(".ra-award.is-beaten")).borderTopColor ? [] : ["same frame"]]);
+            checks.push(["a title stays text", awardBox.querySelector(".ra-awards img") ? ["markup ran"] : []]);
+            awardBox.querySelector(".ra-award.is-mastered").dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+            const awardTip = awardBox.querySelector(".ra-award-tip");
+            checks.push(["hovering shows the game and date", !awardTip.hidden && awardTip.textContent.includes("Mastered on") && awardTip.textContent.includes("Game Boy") && !awardTip.querySelector("img") ? [] : [awardTip.textContent]]);
+            checks.push(["the card stays inside the section", awardTip.offsetLeft >= 0 && awardTip.offsetLeft + awardTip.offsetWidth <= awardBox.querySelector(".ra-awards").offsetWidth ? [] : [`left ${awardTip.offsetLeft}`]]);
+            awardBox.querySelector('.ra-award-tab[data-tab="event"]').click();
+            checks.push(["a tab shows only its awards", awardBox.querySelectorAll(".ra-award").length === 1 && awardBox.querySelector(".ra-award.is-event") ? [] : ["wrong tiles"]]);
+            checks.push(["an event isn't a button, because it opens nothing", awardBox.querySelector(".ra-award.is-event").tagName === "SPAN" ? [] : ["a button"]]);
+            handleWebMessage({ data: "RA\nsummary\n" + JSON.stringify({ User: "Player", TotalPoints: 11 }) });
+            checks.push(["the tab stays when the section is redrawn", awardBox.querySelector('.ra-award-tab[aria-pressed="true"]')?.dataset.tab === "event" ? [] : ["went back"]]);
+            awardBox.querySelector('.ra-award-tab[data-tab="all"]').click();
+            messages.length = 0;
+            awardBox.querySelector(".ra-award.is-mastered").click();
+            checks.push(["a badge opens its game", gamesState.ra.openGame === 100 ? [] : [`open ${gamesState.ra.openGame}`]]);
+            checks.push(["the back control is easy to hit", (awardBox.querySelector(".ra-back")?.getBoundingClientRect().height || 0) >= 38 ? [] : ["too small"]]);
+            gamesState.ra.openGame = 0;
+            handleWebMessage({ data: { type: "raExtra", kind: "awards", ok: false, message: "Unavailable" } });
+            gamesState.ra.awards = "";
+            renderAchievements();
+            checks.push(["a failure says so", awardBox.querySelector(".ra-awards .settings-note")?.textContent === "Unavailable" ? [] : ["no message"]]);
+            gamesState.ra.awardsError = "";
+            handleWebMessage({ data: "RA\nawards\n" + JSON.stringify({ VisibleUserAwards: [] }) });
+            checks.push(["no awards says so", awardBox.querySelector(".ra-awards .settings-note")?.textContent === "No awards yet." ? [] : ["no message"]]);
+            checks.push(["asking for awards is allowlisted", new Set(window.SMOKE_ALLOWLIST || []).has("GetRaAwards") ? [] : ["not allowlisted"]]);
+
             const allowedNow = new Set(window.SMOKE_ALLOWLIST || []);
             checks.push(["the Workspaces page sends only allowlisted messages", [...new Set(messages.map(message => message.split("\n")[0]))].filter(type => !allowedNow.has(type))]);
             checks.push(["no errors from the Workspaces page", errors.splice(0)]);
+            } catch (error) {
+                // A step that throws is a failure to read, not a run with no report.
+                checks.push(["the checks ran to the end", [`${error.message} ${String(error.stack).split("\n")[1] || ""}`]]);
+            }
             report(checks);
         }, 800);
     }, 300));

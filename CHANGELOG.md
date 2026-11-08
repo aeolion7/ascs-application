@@ -2,6 +2,21 @@
 
 All notable changes to the Aeolionware Super Command System. The newest release is first. For current behavior, see [README.md](README.md).
 
+## Version 1.11.0
+
+Toasts at the top of the screen in place of cursor tooltips, and site badges in Games with mastered games marked. Manual pass: all 17 items passed, and both retest items passed after the two visual notes from that pass were fixed. 1,306 automated checks and a 94-check smoke test. Routines, iPhone calendar sync and the console hub stay on the roadmap.
+
+### Added
+- **Site badges in Games.** Your RetroAchievements awards as a grid of game art, newest first, with tabs for All, Mastered, Completed, Beaten and Events (and Community when you have any). Mastered games have a gold frame, totals join the stats, a card shows the game and date, and clicking a game's badge opens its achievements.
+
+### Changed
+- **The Achievements stats line up:** equal columns, with every label and value on one line. The back control in a game's achievements is a larger button.
+- **Toasts at the top of the screen replace the tooltips at the cursor.** A short notice about what a hotkey just did shows at the top center of the active monitor. Up to three stack, and a repeat shows a count. It never takes focus, clicks go through it, and it shows over fullscreen games. While ASCS is in front, you get its own toast instead, so saving a workspace no longer notifies twice.
+
+### Performance and security
+- The toast is a small native window, built only while there's something to show (about 5 ms each), with one timer while it's up. It takes no input. No new listener, elevation or hotkey.
+- Site badges add one request to retroachievements.org, with the same key, only once the Achievements section is on screen, kept for 10 minutes. Images load as they scroll near view, through the existing route. No address is ever taken from a response.
+
 ## Version 1.10.0
 
 The Workspaces page rebuilt so a saved workspace can be read and edited, with a canvas at the monitor's real shape, and launch rules. Manual pass: 30 of 31 items passed, and the other, Save current as…, was then confirmed good with no change. The notes from that pass were fixed afterward, and all 6 retest items passed. 1,265 automated checks and a 76-check smoke test. Routines, iPhone calendar sync and the console hub stay on the roadmap.

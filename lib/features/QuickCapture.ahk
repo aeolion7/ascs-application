@@ -9,7 +9,7 @@ QuickCapture() {
     global ASCS_PageReady
 
     if !ASCS_PageReady {
-        ShowDesktopTooltip("ASCS is still starting; try again in a moment.")
+        ShowNotice("ASCS is still starting; try again in a moment.")
         return
     }
 
@@ -28,7 +28,7 @@ QuickCapture() {
         fromClipboard := true
     }
     if (Trim(captured, " `t`r`n") = "") {
-        ShowDesktopTooltip(
+        ShowNotice(
             "Nothing to capture. Select or copy text, then press Super+Shift+C."
         )
         return
@@ -41,7 +41,7 @@ QuickCapture() {
         ',"source":' JsonQuote(SubStr(source, 1, 120)) '}'
     )
     what := fromClipboard ? "clipboard" : "selection"
-    ShowDesktopTooltip("Captured " what " to Quick Notes.")
+    ShowNotice("Captured " what " to Quick Notes.")
     RecordActivity("note", "Captured " what (source != "" ? " from " SubStr(source, 1, 60) : ""))
 }
 
@@ -61,7 +61,7 @@ PasteNote(text, *) {
     target := ASCS_PreviousWindow
     if !(target && WinExist("ahk_id " target)) {
         A_Clipboard := text
-        ShowDesktopTooltip("Note copied to the clipboard.")
+        ShowNotice("Note copied to the clipboard.")
         return
     }
 
@@ -87,7 +87,7 @@ PasteNote(text, *) {
     } catch as err {
         A_Clipboard := text
         WriteLog("Note paste failed: " err.Message)
-        ShowDesktopTooltip("Note copied to the clipboard; paste it with Ctrl+V.")
+        ShowNotice("Note copied to the clipboard; paste it with Ctrl+V.")
     }
 }
 

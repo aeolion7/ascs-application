@@ -322,12 +322,85 @@
         return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${secs}` : `${minutes}:${secs}`;
     }
 
+    // ---- site badges (1.11.0): API_GetUserAwards. Only the visible awards, as
+    // text and numbers; art only by a numbered token, like every other image.
+    const AWARD_TABS = [
+        { id: "all", label: "All" },
+        { id: "mastered", label: "Mastered" },
+        { id: "completed", label: "Completed" },
+        { id: "beaten", label: "Beaten" },
+        { id: "event", label: "Events" },
+        { id: "community", label: "Community" }
+    ];
+    const AWARD_TEXT = {
+        mastered: "Mastered", completed: "Completed", "beaten-hardcore": "Beaten in hardcore",
+        "beaten-softcore": "Beaten in softcore", event: "Event award", community: "Community award"
+    };
+    const AWARD_RANK = { mastered: 4, completed: 3, "beaten-hardcore": 2, "beaten-softcore": 1 };
+
+    function awardKind(type, extra) {
+        const hardcore = extra === 1 || extra === "1";
+        if (type === "Mastery/Completion") return hardcore ? "mastered" : "completed";
+        if (type === "Game Beaten") return hardcore ? "beaten-hardcore" : "beaten-softcore";
+        return type === "Event" ? "event" : "community";
+    }
+
+    // Each game once, at its highest award; events and community awards aren't games.
+    function strongestPerGame(awards) {
+        const best = new Map();
+        awards.forEach(item => {
+            const rank = AWARD_RANK[item.kind];
+            if (!rank || !item.gameId) return;
+            const held = best.get(item.gameId);
+            if (!held || rank > AWARD_RANK[held.kind]) best.set(item.gameId, item);
+        });
+        return awards.filter(item => !AWARD_RANK[item.kind] || !item.gameId || best.get(item.gameId) === item);
+    }
+
+    function awardsInTab(parsed, tab) {
+        const awards = Array.isArray(parsed?.awards) ? parsed.awards : [];
+        if (tab === "all") return strongestPerGame(awards);
+        const inGroup = awards.filter(item => item.group === tab);
+        return tab === "beaten" ? strongestPerGame(inGroup) : inGroup;
+    }
+
+    function parseRaAwards(raw) {
+        const data = parseJson(raw);
+        const list = data && Array.isArray(data.VisibleUserAwards) ? data.VisibleUserAwards : [];
+        const awards = list.slice(0, 2000).filter(item => item && typeof item === "object").map(item => {
+            const type = clean(item.AwardType, 60);
+            const kind = awardKind(type, item.AwardDataExtra);
+            const stamp = clean(item.AwardedAt, 40);
+            const time = /^\d{4}-\d{2}-\d{2}T/.test(stamp) ? Date.parse(stamp) : NaN;
+            return {
+                kind, group: kind.startsWith("beaten") ? "beaten" : kind,
+                title: clean(item.Title, 120) || (kind === "community" ? type : ""),
+                console: clean(item.ConsoleName, 60),
+                // An event's number isn't a game's, so it can't open one.
+                gameId: AWARD_RANK[kind] ? count(item.AwardData) : 0,
+                icon: imageToken("i", item.ImageIcon),
+                time: Number.isFinite(time) ? time : 0
+            };
+        }).filter(item => item.title).sort((a, b) => b.time - a.time || a.title.localeCompare(b.title));
+        const parsed = { awards, hidden: count(data?.HiddenAwardsCount), counts: {} };
+        AWARD_TABS.forEach(tab => { parsed.counts[tab.id] = awardsInTab(parsed, tab.id).length; });
+        return parsed;
+    }
+
+    // "Mastered on Oct 12, 2026".
+    function awardText(item) {
+        const label = AWARD_TEXT[item?.kind] || "Award";
+        if (!item?.time) return label;
+        return `${label} on ${new Date(item.time).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+    }
+
     // A progress bar's classes: mastered games get the gold one (1.9.1).
     const raBarClass = mastered => (mastered ? "ra-bar is-mastered" : "ra-bar");
 
     global.ASCSGames = {
         raBarClass, EMULATORS, systemName, formatDuration, formatLastPlayed, parseLocal, displayTitle, sortGames,
         filterGames, totalsByEmulator, gameFromWindowTitle, parseRetroAchievements, rankPercentile, titleKey, imageToken,
-        matchPlayingGame, formatClock, parseRaGame, filterRaAchievements, raCounts, nextUp, parseRaUnlocks
+        matchPlayingGame, formatClock, parseRaGame, filterRaAchievements, raCounts, nextUp, parseRaUnlocks,
+        AWARD_TABS, parseRaAwards, awardsInTab, awardText
     };
 })(globalThis);

@@ -1332,6 +1332,15 @@ FetchRaUnlocks(force := false) {
         FetchRaCached("unlocks", "API_GetUserRecentAchievements.php", "&m=43200", credentials, force)
 }
 
+; The awards on the user's profile (1.11.0), for the site badges.
+FetchRaAwards(force := false) {
+    try credentials := RetroAchievementsCredentials()
+    catch
+        return
+    if credentials
+        FetchRaCached("awards", "API_GetUserAwards.php", "", credentials, force)
+}
+
 FetchRaCached(kind, endpoint, params, credentials, force := false) {
     global ASCS_RaExtraCache
     if ASCS_RaExtraCache.Has(kind) {

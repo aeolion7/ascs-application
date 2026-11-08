@@ -540,6 +540,46 @@ Equal("rule path: trimmed", ValidateRulePath("  D:\Games\a.EXE "), "D:\Games\a.E
 for bad in ["", "Code.exe", "C:\Tools\script.ahk", "\\server\share\a.exe", "C:\a\..\b.exe", "C:\a<b>.exe", "C:\x.exe`n", "C:\" StrRepeat("a", 300) ".exe"]
     Throws("rule path refused: " SubStr(bad, 1, 24), ValidateRulePath.Bind(bad), "full path")
 
+; 1.11.0: toasts at the top of the screen
+NoticesText(notices) {
+    out := ""
+    for notice in notices
+        out .= (out = "" ? "" : " / ") NoticeLine(notice)
+    return out
+}
+stack := []
+NoticeAdd(stack, "One", 1000)
+Equal("notice: added", NoticesText(stack), "One")
+Equal("notice: lasts three seconds", NoticeNextExpiry(stack, 1000), 3000)
+NoticeAdd(stack, "Two", 1500)
+NoticeAdd(stack, "One", 2000)
+Equal("notice: a repeat moves down and counts", NoticesText(stack), "Two / One ×2")
+Equal("notice: a repeat restarts its time", stack[2]["expires"], 5000)
+Equal("notice: the next to go is the soonest", NoticeNextExpiry(stack, 2000), 2500)
+NoticeAdd(stack, "Three", 2100)
+NoticeAdd(stack, "Four", 2200)
+Equal("notice: at most three, the oldest goes", NoticesText(stack), "One ×2 / Three / Four")
+NoticeExpire(stack, 5000)
+Equal("notice: gone when its time is up", NoticesText(stack), "Three / Four")
+NoticeExpire(stack, 5200)
+Equal("notice: all gone", stack.Length, 0)
+Equal("notice: nothing left to wait for", NoticeNextExpiry(stack, 6000), 0)
+Check("notice: a late timer still waits a little", (NoticeAdd(stack, "Late", 0), NoticeNextExpiry(stack, 9000) = 1))
+stack := []
+NoticeAdd(stack, "   ", 0)
+Equal("notice: nothing to say", stack.Length, 0)
+NoticeAdd(stack, "a`tb`r`nc", 0)
+Equal("notice: control characters go, line breaks stay", stack[1]["text"], "a b `nc")
+stack := []
+NoticeAdd(stack, StrRepeat("x", 500), 0)
+Equal("notice: long text is cut", StrLen(stack[1]["text"]), 240)
+stack := []
+NoticeAdd(stack, "Case", 0), NoticeAdd(stack, "case", 0)
+Equal("notice: different case is a different message", stack.Length, 2)
+Check("notice: a short line needs no wrap", !NoticeNeedsWrap("Captured selection to Quick Notes."))
+Check("notice: a long line wraps", NoticeNeedsWrap(StrRepeat("x", 71)))
+Check("notice: short lines together don't", !NoticeNeedsWrap(StrRepeat("x", 60) "`n" StrRepeat("y", 60)))
+
 ; 1.10.0: a window that fills the usable screen counts as maximized
 Check("fills: exactly", WorkspaceFillsMonitor(0, 0, 1, 1))
 Check("fills: off by a few pixels", WorkspaceFillsMonitor(0.002, -0.002, 0.998, 1.003))

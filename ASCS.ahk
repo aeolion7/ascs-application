@@ -8,7 +8,7 @@ SetWorkingDir(A_ScriptDir)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 1.10.0
+; Version 1.11.0
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -18,7 +18,7 @@ SetWorkingDir(A_ScriptDir)
 ; GLOBAL VARIABLES
 ; ==========================================
 
-global ASCS_Version := "1.10.0"
+global ASCS_Version := "1.11.0"
 global ASCS_App := ""
 global ASCS_WindowIcon := 0
 global ASCS_IconPath := A_ScriptDir "\frontend\assets\ascs.ico"
@@ -34,6 +34,8 @@ global ASCS_WorkspaceDir := ASCS_DataDir "\workspaces"
 global ASCS_RulesFile := ASCS_DataDir "\rules.ini"       ; 1.10.0: launch rules
 global ASCS_LaunchRules := Map()
 global ASCS_RuleAppliedPids := Map()
+global ASCS_Notices := []          ; 1.11.0: toasts at the top of the screen
+global ASCS_NoticeWindow := 0
 global ASCS_CommandsFile := ASCS_DataDir "\commands.ini"
 global ASCS_ActivityFile := ASCS_DataDir "\activity.log"
 
@@ -756,6 +758,10 @@ HandleWebMessage(sender, args) {
                 ; One game's achievements for the achievement browser (1.9.0).
                 FetchRaGame(content)
 
+            case "GetRaAwards":
+                ; The profile's awards (1.11.0); "refresh" to ask again.
+                FetchRaAwards(content = "refresh")
+
             case "GetRaUnlocks":
                 ; The last 30 days of unlocks (1.9.0); "refresh" to ask again.
                 FetchRaUnlocks(content = "refresh")
@@ -1098,6 +1104,7 @@ SendToFrontend(json) {
 #Include lib\features\Workspaces.ahk
 #Include lib\features\Desktops.ahk
 #Include lib\features\Rules.ahk
+#Include lib\features\Notices.ahk
 #Include lib\features\Commands.ahk
 #Include lib\features\QuickCapture.ahk
 #Include lib\features\PaletteWindows.ahk

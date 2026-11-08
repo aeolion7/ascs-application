@@ -1948,6 +1948,58 @@ WorkspaceDesktopTargets(saved, current) {
     return targets
 }
 
+; ---- toasts at the top of the screen (1.11.0)
+; notices is an Array of Map("text", "count", "expires"), oldest first: at most
+; three, each for three seconds. The same message again moves to the end with
+; its time restarted and a count, rather than adding a line.
+
+NoticeAdd(notices, message, now, lifetime := 3000, limit := 3) {
+    text := Trim(RegExReplace(SubStr(message, 1, 240), "[\x00-\x09\x0B-\x1F\x7F]", " "), " `n")
+    if (text = "")
+        return
+    times := 1
+    for index, notice in notices {
+        if (notice["text"] == text) {
+            times := notice["count"] + 1
+            notices.RemoveAt(index)
+            break
+        }
+    }
+    notices.Push(Map("text", text, "count", times, "expires", now + lifetime))
+    while (notices.Length > limit)
+        notices.RemoveAt(1)
+}
+
+NoticeExpire(notices, now) {
+    index := notices.Length
+    while (index >= 1) {
+        if (notices[index]["expires"] <= now)
+            notices.RemoveAt(index)
+        index--
+    }
+}
+
+; Milliseconds until the next one goes (at least 1); 0 when there are none.
+NoticeNextExpiry(notices, now) {
+    soonest := 0
+    for notice in notices
+        if (!soonest || notice["expires"] < soonest)
+            soonest := notice["expires"]
+    return soonest ? Max(1, soonest - now) : 0
+}
+
+NoticeLine(notice) {
+    return notice["text"] (notice["count"] > 1 ? " ×" notice["count"] : "")
+}
+
+; A line long enough to need a fixed width, so it wraps instead of running on.
+NoticeNeedsWrap(text) {
+    for line in StrSplit(text, "`n")
+        if (StrLen(line) > 70)
+            return true
+    return false
+}
+
 ; Whether a window fills its monitor's work area, to within a few pixels
 ; (1.10.0): treated as maximized even if Windows doesn't call it that. One that
 ; also covers the taskbar, such as a borderless game, isn't this. Keep in step
