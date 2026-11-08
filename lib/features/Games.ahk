@@ -654,6 +654,7 @@ RunningGameApps() {
 ; System Dashboard's sign-in comparison (1.9.1): the end of the log SignIn.ahk
 ; writes, read only when the page opens.
 SendSignInHistory() {
+    global ASCS_SoundLibrary
     text := ""
     try {
         log := FileOpen(EnvGet("LOCALAPPDATA") "\StartupTasks.log", "r", "UTF-8")
@@ -662,7 +663,7 @@ SendSignInHistory() {
         text := log.Read()
         log.Close()
     }
-    SendToFrontend('{"type":"signInHistory","items":' SignInHistoryJson(text) '}')
+    SendToFrontend('{"type":"signInHistory","items":' SignInHistoryJson(text, , logged => SignInSoundLabel(logged, ASCS_SoundLibrary, SignInSoundOrigin)) '}')
 }
 
 SendRunningApps() {

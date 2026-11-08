@@ -74,10 +74,44 @@
             handleStartupSounds({ signin: [{ weight: 100, file: "a.wav", id: "a.wav", origin: "a.wav", exists: true, changed: false }], shutdown: null, taskWarning: "" });
             checks.push(["and shows none when all is well", document.querySelector("#soundStartup .startup-task-warning") ? ["still shown"] : []]);
             navigate("dashboard");
-            handleWebMessage({ data: { type: "signInHistory", items: [{ time: "2026-11-08T10:28:15", retrobar: 4937, taskbar: 2515, apps: 5171, keychron: 5515, sound: "<b>x</b>" }, { retrobar: "junk" }] } });
-            checks.push(["System Dashboard compares sign-ins",
-                document.querySelectorAll("#signInHistory .signin-row").length === 1 && !document.querySelector("#signInHistory b b") ? [] : ["wrong rows"]]);
-            checks.push(["no errors from the 1.9.1 checks", errors.splice(0)]);
+            sent.clear(); handleWebMessage({ data: { type: "signInHistory", items: [{ time: "2026-11-08T10:28:15", retrobar: 4937, taskbar: 2515, apps: 5171, keychron: 5515, sound: "<b>x</b>" }, { retrobar: "junk" }] } });
+            showSignInTip(0);
+            const tipText = $("signInTip").textContent;
+            checks.push(["the graph's card shows a point's times", !$("signInTip").hidden && tipText.includes("4.9 s") && tipText.includes("Keychron") && tipText.includes("Sound: ") ? [] : ["wrong card"]]);
+            checks.push(["and keeps hostile text as text", $("signInTip").querySelector("b") ? ["markup ran"] : []]);
+            checks.push(["points no longer use the plain tooltip", document.querySelector("#signInPoints [title]") ? ["title found"] : []]);
+            hideSignInTip();
+            checks.push(["System Dashboard graphs sign-ins",
+                document.querySelectorAll("#signInPoints .signin-point").length === 1 && !document.querySelector("#signInPoints b") ? [] : ["wrong points"]]);
+
+            // 1.9.2: the tray, the Logs dialog, and what's gone.
+            const gone = [".app-footer", ".home-tagline", "#prefWorkspaces", '.nav[data-view="logs"]', "#home .system-bar"].filter(selector => document.querySelector(selector));
+            checks.push(["the tagline, footer, Logs tab and old bars are gone", gone]);
+            checks.push(["no CLICK label", document.body.textContent.includes("CLICK") ? ["still there"] : []]);
+            const pickable = paletteSources("pick");
+            const pattern = new RegExp(window.SMOKE_QUICK_PATTERN);
+            checks.push(["ASCS accepts everything the quick action picker offers", pickable.filter(item => !pattern.test(item.id)).map(item => item.id)]);
+            checks.push(["and each of them can run", pickable.filter(item => !item.run && !item.view && !item.launch && !item.mode).map(item => item.id)]);
+            navigate("home");
+            const stepBefore = almanacState.step;
+            $("homeAlmanac").dispatchEvent(new WheelEvent("wheel", { deltaX: -400, deltaMode: 0, cancelable: true, bubbles: true }));
+            checks.push(["a sideways wheel steps the almanac", almanacState.step === stepBefore + 1 ? [] : [`step ${almanacState.step} from ${stepBefore}`]]);
+            checks.push(["the ASCS sounds aren't named in Preferences", /\bXP\b|logon/i.test(document.querySelector("label[for=ascsSounds]").textContent) ? ["still named"] : []]);
+            navigate("calendar");
+            sent.clear();
+            togglePowerTray(true);
+            checks.push(["the power tray opens from any view, and only then reads", !$("powerTray").hidden && sent.has("GetRecycleBin") && sent.has("GetAudioDevices") ? [] : ["not opened or no reading"]]);
+            checks.push(["its hold buttons are all there", document.querySelectorAll("#powerTray [data-power-hold]").length === 5 ? [] : ["wrong count"]]);
+            togglePowerTray(false);
+            navigate("dashboard");
+            sent.clear();
+            $("openLogsButton").click();
+            checks.push(["ASCS Logs opens from System Dashboard and reads", !$("logsDialog").hidden && sent.has("GetLog") ? [] : ["not opened"]]);
+            checks.push(["the log list is inside it", $("logsDialog").contains($("logList")) ? [] : ["list elsewhere"]]);
+            toggleLogs(false);
+            checks.push(["and closes, with polling stopped", $("logsDialog").hidden && logState.timer === null ? [] : ["still open or polling"]]);
+            checks.push(["Ctrl numbers end at nine pages", sidebarViews().length === 9 && sidebarViews()[8] === "settings" ? [] : [sidebarViews().join()]]);
+            checks.push(["no errors from the 1.9.1 and 1.9.2 checks", errors.splice(0)]);
             report(checks);
         }, 800);
     }, 300));

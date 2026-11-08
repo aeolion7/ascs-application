@@ -1,6 +1,6 @@
 "use strict";
 
-// Page errors are written to the ASCS log (and so the Logs tab), at most ten
+// Page errors are written to the ASCS log (and so ASCS Logs), at most ten
 // per session, so a problem in the page is never invisible.
 let reportedPageErrors = 0;
 function reportPageError(message, where) {
@@ -19,7 +19,7 @@ window.addEventListener("unhandledrejection", event =>
     reportPageError(event.reason?.message || event.reason, "(promise)"));
 
 const $ = id => document.getElementById(id);
-const validViews = new Set(["home", "notes", "calendar", "workspaces", "games", "sounds", "dashboard", "logs", "commands", "settings"]);
+const validViews = new Set(["home", "notes", "calendar", "workspaces", "games", "sounds", "dashboard", "commands", "settings"]);
 const viewLabels = {
     home: "COMMAND CENTER",
     notes: "QUICK NOTES",
@@ -28,7 +28,6 @@ const viewLabels = {
     games: "GAMES",
     sounds: "SOUNDS",
     dashboard: "SYSTEM DASHBOARD",
-    logs: "LOGS",
     commands: "SUPER COMMANDS",
     settings: "PREFERENCES"
 };
@@ -193,14 +192,9 @@ function navigate(view) {
     if (view === "settings") send("GetSettings");
     if (view === "workspaces") send("GetWorkspaces");
     if (view === "home" && previousView !== null && previousView !== "home") advanceAlmanac();
-    if (view === "home") {
-        send("GetRecycleBin");
-        send("GetAudioDevices");
-    }
-    if (view === "logs") startLogPolling();
+    if (view === "home") preloadGames();
     if (view === "sounds") openSoundsView();
     if (view === "calendar") openCalendarView();
-    else stopLogPolling();
     if (view === "games") startGamesPolling();
     else stopGamesPolling();
     if (view === "commands") startRunningPolling();
@@ -241,8 +235,8 @@ const builtInCommands = [
     { id: "view:dashboard", label: "System Dashboard", description: "View live system metrics and hardware", keywords: "dashboard metrics hardware", view: "dashboard", hotkey: "dashboard" },
     { id: "view:commands", label: "Shortcut Reference", description: "Browse the complete Super shortcut list", keywords: "commands shortcuts help", view: "commands" },
     { id: "view:games", label: "Games", description: "Play time, recent games, and achievements", keywords: "play emulator retroarch dolphin pcsx2 pso achievements", view: "games" },
-    { id: "view:logs", label: "Logs", description: "ASCS, activity and Code key logs, newest first", keywords: "log diagnostics errors journal history", view: "logs" },
-    { id: "view:settings", label: "Preferences", description: "Drives, snapping, shortcuts, custom commands, and workspaces", keywords: "settings options configure", view: "settings" },
+    { id: "view:logs", label: "Logs", description: "ASCS, activity and Code key logs, newest first", keywords: "log diagnostics errors journal history", run: () => toggleLogs(true) },
+    { id: "view:settings", label: "Preferences", description: "Drives, snapping, shortcuts, and custom commands", keywords: "settings options configure", view: "settings" },
     { id: "mode:snippets", label: "Paste a note…", description: "Paste a note into the window you were using", keywords: "snippet paste insert text note", mode: "snippets", shortcut: "Super+Shift+P" },
     { id: "mode:workspaces", label: "Restore a workspace…", description: "Choose a saved window layout", keywords: "workspace layout restore", mode: "workspaces", shortcut: "Super+Shift+R" },
     { id: "mode:save-workspace", label: "Save workspace as…", description: "Save the current window layout under a name", keywords: "workspace layout save name", mode: "save-workspace" },
@@ -265,7 +259,7 @@ const builtInCommands = [
 ];
 
 const paletteModes = {
-    all: { chip: "", title: "At your command.", placeholder: "Search commands, notes, windows… (= math, ? web, + event)" },
+    all: { chip: "", title: "Commands", placeholder: "Search commands, notes, windows… (= math, ? web, + event)" },
     snippets: { chip: "Paste", title: "Paste a note", placeholder: "Filter notes…" },
     ask: { chip: "Fill in", title: "Fill in the blanks", placeholder: "" },
     workspaces: { chip: "Workspaces", title: "Restore a workspace", placeholder: "Filter saved workspaces…" },
@@ -775,7 +769,7 @@ document.querySelectorAll("[data-window-action]").forEach(button => {
 
 window.addEventListener("focus", () => {
     flushNotices();
-    if (!$("confirmDialog").hidden || !$("launcher").hidden || !$("helpDialog").hidden) return;
+    if (!$("confirmDialog").hidden || !$("launcher").hidden || !$("helpDialog").hidden || !$("logsDialog").hidden) return;
     const activeView = document.querySelector(".view.active")?.id;
     if (activeView) requestAnimationFrame(() => focusPrimaryInput(activeView));
 });
@@ -1492,10 +1486,10 @@ function handleWebMessage(event) {
             if (view === "notes" && !notesLoaded) send("GetNotes");
             if (view === "home") {
                 advanceAlmanac();
-                send("GetRecycleBin");
-                send("GetAudioDevices");
+                preloadGames();
             }
-            if (view === "logs") startLogPolling();
+            if (!$("logsDialog").hidden) startLogPolling();
+            if (!$("powerTray").hidden) refreshPowerTray();
             if (view === "sounds") openSoundsView();
             if (view === "calendar") openCalendarView();
             if (view === "games") startGamesPolling();
@@ -1717,31 +1711,99 @@ function handleWebMessage(event) {
 
 window.chrome?.webview?.addEventListener("message", handleWebMessage);
 
-// System Dashboard: one bar per sign-in, newest first (1.9.1). Each row carries
-// its own value, and its title gives the other times.
+// System Dashboard: recent sign-ins as a graph with data points, oldest on the
+// left (1.9.2). The pointer anywhere over the graph picks the nearest point and
+// shows its card; on the keyboard, Tab reaches the latest and the arrows move.
+const signInState = { rows: [], points: [], middle: 0 };
+const signInSeconds = ms => `${(ms / 1000).toFixed(1)} s`;
+
+function signInWhen(item) {
+    const date = new Date(item.time);
+    return Number.isNaN(date.getTime()) ? item.time : date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
 function renderSignInHistory(items) {
-    const seconds = ms => `${(ms / 1000).toFixed(1)} s`;
-    const rows = (Array.isArray(items) ? items : []).filter(item => item && typeof item.time === "string" && Number.isFinite(item.retrobar) && item.retrobar >= 0).slice(0, 10);
-    const box = $("signInHistory");
+    const rows = (Array.isArray(items) ? items : []).filter(item => item && typeof item.time === "string" && Number.isFinite(item.retrobar) && item.retrobar >= 0).slice(0, 20).reverse();
     if (!rows.length) return;
-    const longest = Math.max(1, ...rows.map(item => item.retrobar));
+    const graph = ASCSCharts.pointGraph(rows.map(item => item.retrobar), 300, 56);
+    const plot = $("signInPlot");
+    plot.querySelector(".sparkline-area").setAttribute("d", graph.area);
+    plot.querySelector(".sparkline-line").setAttribute("d", graph.line);
     const sorted = rows.map(item => item.retrobar).sort((a, b) => a - b);
-    $("signInHistorySummary").textContent = `Middle of the last ${rows.length}: ${seconds(sorted[Math.floor(sorted.length / 2)])}, after SignIn.ahk starts`;
-    box.replaceChildren(...rows.map(item => {
-        const row = element("div", "signin-row");
-        const date = new Date(item.time);
-        const when = Number.isNaN(date.getTime()) ? item.time : date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-        const bar = element("span", "signin-bar");
-        const fill = element("b");
-        fill.style.width = `${item.retrobar / longest * 100}%`;
-        bar.append(fill);
-        row.append(element("span", "signin-when", when), bar, element("strong", "", seconds(item.retrobar)));
-        const stage = (label, ms) => Number.isFinite(ms) && ms >= 0 ? `${label} ${seconds(ms)}` : "";
-        row.title = [stage("Windows taskbar", item.taskbar), stage("RetroBar ready", item.retrobar), stage("Other apps", item.apps), stage("Keychron", item.keychron),
-            typeof item.sound === "string" ? item.sound : ""].filter(Boolean).join(" · ");
-        return row;
+    signInState.rows = rows;
+    signInState.points = graph.points;
+    signInState.middle = sorted[Math.floor(sorted.length / 2)];
+    $("signInLatest").textContent = signInSeconds(rows[rows.length - 1].retrobar);
+    $("signInSummary").textContent = `Latest time until the taskbar is ready, after SignIn.ahk starts. Middle of the last ${rows.length}: ${signInSeconds(signInState.middle)}.`;
+    $("signInFirst").textContent = signInWhen(rows[0]);
+    $("signInLast").textContent = rows.length > 1 ? signInWhen(rows[rows.length - 1]) : "";
+    hideSignInTip();
+    $("signInPoints").replaceChildren(...rows.map((item, index) => {
+        const last = index === rows.length - 1;
+        const point = element("span", `signin-point${last ? " is-latest" : ""}`);
+        point.style.left = `${graph.points[index].x}%`;
+        point.style.top = `${graph.points[index].y}%`;
+        point.tabIndex = last ? 0 : -1;
+        point.setAttribute("role", "img");
+        point.setAttribute("aria-label", `${signInWhen(item)}: ${signInSeconds(item.retrobar)}`);
+        point.addEventListener("focus", () => showSignInTip(index));
+        point.addEventListener("blur", hideSignInTip);
+        point.addEventListener("keydown", event => {
+            if (event.key === "Escape") return hideSignInTip();
+            const step = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+            const next = point.parentElement.children[index + step];
+            if (!step || !next) return;
+            event.preventDefault();
+            point.tabIndex = -1;
+            next.tabIndex = 0;
+            next.focus();
+        });
+        return point;
     }));
 }
+
+function showSignInTip(index) {
+    const item = signInState.rows[index];
+    if (!item) return;
+    const tip = $("signInTip");
+    const rule = $("signInRule");
+    const { x, y } = signInState.points[index];
+    const head = element("div", "signin-tip-head");
+    const difference = item.retrobar - signInState.middle;
+    head.append(element("strong", "", signInSeconds(item.retrobar)), element("small", "", Math.abs(difference) < 50
+        ? "About the usual" : `${signInSeconds(Math.abs(difference))} ${difference > 0 ? "over" : "under"} the middle`));
+    const stages = element("dl", "signin-tip-stages");
+    [["Windows taskbar", item.taskbar], ["RetroBar ready", item.retrobar], ["Other apps", item.apps], ["Keychron", item.keychron]]
+        .filter(([, ms]) => Number.isFinite(ms) && ms >= 0)
+        .forEach(([label, ms]) => stages.append(element("dt", "", label), element("dd", "", signInSeconds(ms))));
+    tip.replaceChildren(element("span", "signin-tip-when", signInWhen(item)), head, stages);
+    if (typeof item.sound === "string" && item.sound) tip.append(element("span", "signin-tip-sound", `Sound: ${item.sound}`));
+    tip.hidden = false;
+    rule.hidden = false;
+    rule.style.left = `${x}%`;
+    // Beside the point, kept inside the graph; above it, unless that would go
+    // under the title bar.
+    const plot = $("signInPlot").getBoundingClientRect();
+    const middle = plot.width * x / 100;
+    tip.style.left = `${Math.max(0, Math.min(plot.width - tip.offsetWidth, middle - tip.offsetWidth / 2))}px`;
+    const above = plot.top + plot.height * y / 100 - tip.offsetHeight - 14 > ($("signInPlot").closest(".main")?.querySelector(".topbar")?.getBoundingClientRect().bottom ?? 0);
+    tip.classList.toggle("is-below", !above);
+    tip.style.top = above ? `${plot.height * y / 100 - tip.offsetHeight - 14}px` : `${plot.height * y / 100 + 14}px`;
+    document.querySelectorAll("#signInPoints .signin-point").forEach((point, i) => point.classList.toggle("is-active", i === index));
+}
+
+function hideSignInTip() {
+    $("signInTip").hidden = true;
+    $("signInRule").hidden = true;
+    document.querySelectorAll("#signInPoints .is-active").forEach(point => point.classList.remove("is-active"));
+}
+
+$("signInPlot").addEventListener("pointermove", event => {
+    if (!signInState.points.length) return;
+    const box = event.currentTarget.getBoundingClientRect();
+    showSignInTip(ASCSCharts.nearestPoint(signInState.points, (event.clientX - box.left) / box.width * 100));
+});
+$("signInPlot").addEventListener("pointerleave", hideSignInTip);
 
 function loadSettings(data) {
     $("searchTemplate").value = typeof data.searchTemplate === "string" ? data.searchTemplate : "";
@@ -2344,7 +2406,7 @@ function renderWorkspaceManager() {
     });
 }
 
-$("openWorkspacesView").addEventListener("click", () => navigate("workspaces"));
+
 
 $("saveWorkspaceForm").addEventListener("submit", event => {
     event.preventDefault();
@@ -3342,7 +3404,7 @@ $("saveCountdownsButton").addEventListener("click", saveAlmanacPreferences);
 
 // ------------------------------------------------------------ logs (1.7.0)
 // Read-only tails of three fixed log files. ASCS sends the text as a plain
-// string; ASCSLogs parses it, and lines are rendered as text. While the tab
+// string; ASCSLogs parses it, and lines are rendered as text. While the dialog
 // is visible it asks for a refresh every 3 seconds, which ASCS answers only
 // when the file has changed.
 
@@ -3426,7 +3488,7 @@ function startLogPolling() {
     stopLogPolling();
     requestLog();
     logState.timer = setInterval(() => {
-        if ($("logs").classList.contains("active") && !document.hidden) requestLog(true);
+        if (!$("logsDialog").hidden && !document.hidden) requestLog(true);
         else stopLogPolling();
     }, 3000);
 }
@@ -3445,6 +3507,40 @@ document.querySelectorAll("[data-log-level]").forEach(button =>
             other.setAttribute("aria-pressed", String(other === button)));
         renderLogs();
     }));
+// ASCS Logs, a dialog opened from System Dashboard or the palette (1.9.2).
+let logsPreviousFocus = null;
+function toggleLogs(show = $("logsDialog").hidden) {
+    const dialog = $("logsDialog");
+    if (!show) {
+        dialog.hidden = true;
+        stopLogPolling();
+        if (logsPreviousFocus instanceof HTMLElement && logsPreviousFocus.isConnected) logsPreviousFocus.focus();
+        return;
+    }
+    logsPreviousFocus = document.activeElement;
+    dialog.hidden = false;
+    startLogPolling();
+    requestAnimationFrame(() => $("logSearch").focus());
+}
+$("openLogsButton").addEventListener("click", () => toggleLogs(true));
+$("logsClose").addEventListener("click", () => toggleLogs(false));
+$("logsDialog").addEventListener("click", event => { if (event.target === $("logsDialog")) toggleLogs(false); });
+$("logsDialog").addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+        event.preventDefault();
+        toggleLogs(false);
+    } else if (event.key.toLowerCase() === "f" && event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey) {
+        event.preventDefault();
+        $("logSearch").focus();
+        $("logSearch").select();
+    } else if (event.key === "Tab") {
+        // Keep focus inside the dialog.
+        const focusable = [...$("logsDialog").querySelectorAll("button:not(:disabled), input")];
+        const index = focusable.indexOf(document.activeElement);
+        event.preventDefault();
+        focusable[(index + (event.shiftKey ? -1 : 1) + focusable.length) % focusable.length].focus();
+    }
+});
 $("logSearch").addEventListener("input", () => {
     logState.query = $("logSearch").value;
     renderLogs();
@@ -3626,7 +3722,7 @@ function renderGames() {
         : !items.length ? "No play time found yet. Check the programs in Preferences › Games & apps."
             : !visible.length ? "No games match."
                 : `${visible.length} game${visible.length === 1 ? "" : "s"}${visible.length > shown.length ? ` (showing ${shown.length})` : ""}`;
-    requestCovers([...recent, ...shown.slice(0, 40)]);
+    if ($("games").classList.contains("active")) requestCovers([...recent, ...shown.slice(0, 40)]);
 }
 
 function renderGamesLive(data) {
@@ -4480,6 +4576,16 @@ function handleRaImage(token, data) {
 
 $("raProfile").addEventListener("click", () => send("OpenRetroAchievementsProfile"));
 
+// The library loads once, in the background, after the Command Center first
+// opens, so Games opens with it in place (1.9.2). It sends only the local
+// library: nothing from RetroAchievements, and covers wait until Games is open.
+let gamesPreloadStarted = false;
+function preloadGames() {
+    if (gamesPreloadStarted) return;
+    gamesPreloadStarted = true;
+    setTimeout(() => { if (!gamesState.loaded) send("GetGames"); }, 2000);
+}
+
 function startGamesPolling() {
     stopGamesPolling();
     send("GetGames");
@@ -4782,6 +4888,41 @@ document.querySelectorAll("[data-power-hold]").forEach(button => {
 });
 $("powerCancel").addEventListener("click", () => send("PowerCancel"));
 $("powerAnyway").addEventListener("click", () => send("PowerAnyway"));
+// The power tray, from the sidebar on every view (1.9.2). Its readings are
+// asked for only while it's open.
+function refreshPowerTray() {
+    send("GetRecycleBin");
+    send("GetAudioDevices");
+}
+function togglePowerTray(show = $("powerTray").hidden) {
+    const tray = $("powerTray");
+    const button = $("powerTrayButton");
+    if (!show) {
+        tray.hidden = true;
+        button.setAttribute("aria-expanded", "false");
+        $("audioMenu").hidden = true;
+        return;
+    }
+    const box = button.getBoundingClientRect();
+    tray.style.left = `${Math.round(box.right + 12)}px`;
+    tray.style.bottom = `${Math.max(12, Math.round(innerHeight - box.bottom))}px`;
+    tray.hidden = false;
+    button.setAttribute("aria-expanded", "true");
+    refreshPowerTray();
+    // Focus goes to the tray, not a button, so a second Enter can't lock the PC.
+    requestAnimationFrame(() => tray.focus());
+}
+$("powerTrayButton").addEventListener("click", () => togglePowerTray());
+$("powerTray").addEventListener("keydown", event => {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    togglePowerTray(false);
+    $("powerTrayButton").focus();
+});
+document.addEventListener("pointerdown", event => {
+    if (!$("powerTray").hidden && !event.target.closest("#powerTray, #powerTrayButton")) togglePowerTray(false);
+});
 $("audioButton").addEventListener("click", () => {
     const menu = $("audioMenu");
     menu.hidden = !menu.hidden;
@@ -4811,6 +4952,20 @@ function selectedIndex(buttons) {
 }
 
 function enableTabWheel(strip, selector) {
+    enableWheelStep(strip, direction => {
+        const buttons = [...strip.querySelectorAll(selector)].filter(button => !button.disabled && !button.hidden);
+        const current = selectedIndex(buttons);
+        const next = buttons[Math.max(0, Math.min(buttons.length - 1, (current < 0 ? 0 : current) + direction))];
+        if (next && buttons.indexOf(next) !== current) {
+            next.click();
+            next.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+        }
+    });
+    enableDragScroll(strip);
+}
+
+// One step per notch of a sideways gesture over an element; onStep gets -1 or 1.
+function enableWheelStep(strip, onStep) {
     let travel = 0;
     let lastStep = 0;
     strip.addEventListener("wheel", event => {
@@ -4828,15 +4983,8 @@ function enableTabWheel(strip, selector) {
         const direction = Math.sign(travel);
         travel = 0;
         lastStep = now;
-        const buttons = [...strip.querySelectorAll(selector)].filter(button => !button.disabled && !button.hidden);
-        const current = selectedIndex(buttons);
-        const next = buttons[Math.max(0, Math.min(buttons.length - 1, (current < 0 ? 0 : current) + direction))];
-        if (next && buttons.indexOf(next) !== current) {
-            next.click();
-            next.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
-        }
+        onStep(direction);
     }, { passive: false });
-    enableDragScroll(strip);
 }
 
 // Click and drag moves a horizontal strip that overflows. A press only
@@ -4881,6 +5029,13 @@ enableTabWheel(document.querySelector("#logs .logs-sources"), "[data-log-source]
 enableTabWheel(document.querySelector("#logs .logs-levels"), "[data-log-level]");
 enableTabWheel(document.querySelector(".games-toolbar .logs-sources"), "[data-game-filter]");
 enableTabWheel(document.querySelector(".games-toolbar .logs-levels"), "[data-game-sort]");
+// Sideways over the almanac strip steps through its items (1.9.2).
+enableWheelStep($("homeAlmanac"), direction => {
+    stepAlmanac(direction);
+    restartAlmanacTimer();
+});
+// Sideways over the Calendar steps through days, weeks or months (1.9.2).
+enableWheelStep($("calendar"), direction => $(direction > 0 ? "calNext" : "calPrev").click());
 
 // The shelf fades at its right edge only while more games are off to the side.
 function updateShelfFade() {
@@ -4923,7 +5078,7 @@ const HELP_INSIDE = [
     [["F1"], "Open or close this help"],
     [["Esc"], "Close a dialog or the palette"]
 ];
-const VIEW_SEARCH = { notes: "notesFilter", games: "gameSearch", sounds: "soundSearch", logs: "logSearch", commands: "commandSearch" };
+const VIEW_SEARCH = { notes: "notesFilter", games: "gameSearch", sounds: "soundSearch", commands: "commandSearch" };
 
 function sidebarViews() {
     return [...document.querySelectorAll(".nav[data-view]")].map(button => button.dataset.view).filter(view => validViews.has(view));

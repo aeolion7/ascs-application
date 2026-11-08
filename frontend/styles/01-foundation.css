@@ -934,8 +934,7 @@ textarea:focus-visible {
   letter-spacing: .9px;
 }
 
-.editor-footer-mark i,
-.app-footer i {
+.editor-footer-mark i {
   padding: 0 5px;
   color: var(--accent-secondary);
   font-style: normal;
@@ -1224,21 +1223,6 @@ textarea:focus-visible {
   height: 5px;
 }
 
-.app-footer {
-  width: 100%;
-  max-width: 1120px;
-  margin: auto auto 0;
-  padding-top: 33px;
-  color: #626376;
-  font-size: 10px;
-  letter-spacing: .8px;
-}
-
-.app-footer > span {
-  color: #85859a;
-  font-weight: 700;
-}
-
 .toast {
   position: fixed;
   z-index: 10;
@@ -1270,8 +1254,7 @@ textarea:focus-visible {
     padding-left: clamp(62px, calc((100vw - 1500px) / 5), 170px);
   }
 
-  .view,
-  .app-footer {
+  .view {
     max-width: 2000px;
   }
 
@@ -1483,10 +1466,6 @@ textarea:focus-visible {
   .dashboard-value > span,
   .dashboard-footer {
     font-size: 15px;
-  }
-
-  .app-footer {
-    font-size: 13px;
   }
 
   .command-intro {
@@ -2045,10 +2024,6 @@ textarea:focus-visible {
     flex-direction: column;
   }
 
-  .app-footer {
-    padding-top: 24px;
-    font-size: 8px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

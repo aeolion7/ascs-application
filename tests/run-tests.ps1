@@ -76,7 +76,10 @@ $allowed = [regex]::Matches($dispatch.Value, '(?m)^\s*case (.+):\s*$') | ForEach
     [regex]::Matches($_.Groups[1].Value, '"([A-Za-z]+)"') | ForEach-Object { $_.Groups[1].Value }
 }
 $allowlist = Join-Path $work "smoke-allowlist.js"
-Set-Content $allowlist ("window.SMOKE_ALLOWLIST = " + (ConvertTo-Json @($allowed | Sort-Object -Unique) -Compress) + ";") -Encoding utf8
+# What ASCS accepts as a quick action, so the test can hold every item the picker offers to it.
+$quickPattern = [regex]::Match((Get-Content "$root\lib\ASCS.Core.ahk" -Raw), '(?s)ValidateQuickActionId\(id\).*?RegExMatch\(id, "([^"]+)"\)').Groups[1].Value
+if (-not $quickPattern) { throw "The quick action rule was not found." }
+Set-Content $allowlist ("window.SMOKE_ALLOWLIST = " + (ConvertTo-Json @($allowed | Sort-Object -Unique) -Compress) + ";`nwindow.SMOKE_QUICK_PATTERN = " + (ConvertTo-Json $quickPattern) + ";") -Encoding utf8
 $inject = "  <script src=`"file:///$($allowlist.Replace('\', '/'))`"></script>`n  <script src=`"file:///$($root.Replace('\', '/'))/tests/smoke.js`"></script>`n"
 $first = $page.IndexOf("  <script src=")
 if ($first -lt 0) { throw "No scripts found in index.html." }

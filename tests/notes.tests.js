@@ -50,6 +50,19 @@
     equal("sparkline average", s.average, 50);
     equal("sparkline clamps", C.sparkline([-20, 150], 10, 10, 0).line, "M0 10 L10 0");
     equal("sparkline needs two points", C.sparkline([42], 10, 10).line, "");
+    const points = C.pointGraph([1000, 2000], 300, 56);
+    equal("point graph: left and right", `${points.points[0].x},${points.points[1].x}`, "0,100");
+    equal("point graph: starts from zero", points.points[0].y > points.points[1].y, true);
+    equal("point graph: the largest stays inside", points.points[1].y > 0, true);
+    equal("point graph: a line through them", points.line.startsWith("M0 "), true);
+    equal("point graph: one point sits mid-way", C.pointGraph([5], 300, 56).points[0].x, 50);
+    equal("point graph: one point has no line", C.pointGraph([5], 300, 56).line, "");
+    equal("point graph: all zero is safe", C.pointGraph([0, 0], 300, 56).points[0].y, 100);
+    equal("point graph: ignores junk", C.pointGraph([1, "x", -4, null, 2], 300, 56).points.length, 3);
+    equal("point graph: nothing to draw", C.pointGraph(null, 300, 56).points.length, 0);
+    equal("nearest point: the closer one", C.nearestPoint([{ x: 0 }, { x: 50 }, { x: 100 }], 60), 1);
+    equal("nearest point: past the end", C.nearestPoint([{ x: 0 }, { x: 100 }], 140), 1);
+    equal("nearest point: none", C.nearestPoint([], 10), -1);
     equal("sparkline ignores junk", C.sparkline([10, "x", null, 20], 10, 10, 0).count, 3);
 
     // Placeholders (filled when a note is pasted or copied from the palette)

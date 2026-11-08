@@ -539,6 +539,28 @@ StartupSoundJson(path) {
         . ',"exists":' (FileExist(path) ? "true" : "false") ',"changed":' (origin != path ? "true" : "false")
 }
 
+; The original behind a sound in the sign-in log (1.9.2). The log has held whole
+; paths since 1.9.2; older lines hold a file name, found through the record of
+; leveled copies or today's sign-in sounds. "" if it can't be told; never a guess
+; from the name alone, since several Windows versions share one.
+SignInSoundOrigin(logged) {
+    global ASCS_OriginsFile, ASCS_SoundLibrary
+    leveled := ASCS_SoundLibrary "\ASCS Leveled\"
+    hasPath := InStr(logged, "\") > 0
+    if (hasPath && InStr(logged, leveled) != 1)
+        return logged
+    SplitPath(logged, &name)
+    origin := IniRead(ASCS_OriginsFile, "Origins", name, "")
+    if (origin != "" || hasPath)
+        return origin
+    for item in StartupSounds()["signin"] {
+        SplitPath(item["path"], &candidate)
+        if (candidate = name)
+            return item["path"]
+    }
+    return ""
+}
+
 SendStartupSounds() {
     sounds := StartupSounds()
     roll := ""

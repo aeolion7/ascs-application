@@ -432,7 +432,7 @@
         vevent.props = vevent.props.filter(p => p.name !== "SEQUENCE").concat({ name: "SEQUENCE", params: {}, value: "0" });
         const calendar = { name: "VCALENDAR", props: [
             { name: "VERSION", params: {}, value: "2.0" },
-            { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 1.9.1//EN" },
+            { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 1.9.2//EN" },
             { name: "CALSCALE", params: {}, value: "GREGORIAN" }
         ], children: [vevent] };
         return serializeComponent(calendar) + "\r\n";
@@ -822,7 +822,7 @@
             uid,
             text: serializeComponent({ name: "VCALENDAR", props: [
                 { name: "VERSION", params: {}, value: "2.0" },
-                { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 1.9.1//EN" }
+                { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 1.9.2//EN" }
             ], children: [...zones, ...vevents] }) + "\r\n"
         }));
     }
@@ -852,7 +852,7 @@
                 else if (c.name === "VEVENT") events.push(c);
             });
         });
-        const props = [{ name: "VERSION", params: {}, value: "2.0" }, { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 1.9.1//EN" }, { name: "CALSCALE", params: {}, value: "GREGORIAN" }];
+        const props = [{ name: "VERSION", params: {}, value: "2.0" }, { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 1.9.2//EN" }, { name: "CALSCALE", params: {}, value: "GREGORIAN" }];
         if (name) props.push({ name: "X-WR-CALNAME", params: {}, value: escapeText(name) });
         return serializeComponent({ name: "VCALENDAR", props, children: [...zones.values(), ...events] }) + "\r\n";
     }

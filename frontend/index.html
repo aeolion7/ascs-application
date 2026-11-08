@@ -27,6 +27,7 @@
   <link rel="stylesheet" href="styles/17-1.9.0-achievements.css">
   <link rel="stylesheet" href="styles/18-1.9.0-workspaces.css">
   <link rel="stylesheet" href="styles/19-1.9.1-fixes.css">
+  <link rel="stylesheet" href="styles/20-1.9.2-ux.css">
 </head>
 <body>
   <div class="app-shell">
@@ -80,10 +81,6 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 9.5h3l4.5-4v13l-4.5-4h-3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1Z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
           <span>Sounds</span>
         </button>
-        <button class="nav" type="button" data-view="logs" aria-controls="logs" title="Logs">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6.5h.01M5 12h.01M5 17.5h.01M9 6.5h10M9 12h10M9 17.5h6"/></svg>
-          <span>Logs</span>
-        </button>
       </nav>
 
       <div class="nav-label nav-label-group">REFERENCE</div>
@@ -98,9 +95,14 @@
         </button>
       </nav>
 
+      <button class="nav sidebar-power" type="button" id="powerTrayButton" aria-haspopup="dialog" aria-expanded="false" title="Power and audio">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v8"/><path d="M7.2 6.6a7.5 7.5 0 1 0 9.6 0"/></svg>
+        <span>Power</span>
+      </button>
+
       <div class="sidebar-bottom">
         <span class="sidebar-status">
-          <strong id="sidebarVersion">ASCS <span>1.9.1</span></strong>
+          <strong id="sidebarVersion">ASCS <span>1.9.2</span></strong>
           <small><span class="status-indicator" aria-hidden="true"></span>Standing by</small>
         </span>
         <span class="key-hint" aria-label="Super key">Super</span>
@@ -109,6 +111,22 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 7-5 5 5 5"/></svg>
       </button>
     </aside>
+          <div class="system-bar power-tray" id="powerTray" tabindex="-1" role="dialog" aria-label="Power and audio" hidden>
+            <div class="system-group" role="group" aria-label="Instant">
+              <button class="system-button" type="button" data-power-now="lock" title="Lock"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg><span>Lock</span></button>
+              <button class="system-button" type="button" id="audioButton" aria-haspopup="true" aria-expanded="false" title="Choose the audio output"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 9.5h3l4-3.5v12l-4-3.5h-3z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg><span id="audioCurrent">Audio</span></button>
+            </div>
+            <div class="system-group is-guarded" role="group" aria-label="Press and hold to confirm">
+              <span class="system-group-label" id="powerHint" title="Press and hold for 1.5 seconds; let go to cancel"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" opacity=".35"/><path d="M12 4a8 8 0 0 1 8 8"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/></svg>HOLD</span>
+              <button class="system-button is-guarded" type="button" data-power-hold="recycle" title="Hold to recycle bin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12.5h8L17 7M10.5 10.5v6M13.5 10.5v6"/></svg><span>Recycle Bin</span><small id="recycleSize"></small></button>
+              <button class="system-button is-guarded" type="button" data-power-hold="sleep" title="Hold to sleep"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5Z"/></svg><span>Sleep</span></button>
+              <button class="system-button is-guarded" type="button" data-power-hold="restart" title="Hold to restart"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></svg><span>Restart</span></button>
+              <button class="system-button is-guarded" type="button" data-power-hold="shutdown" title="Hold to shut down"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v8"/><path d="M7.2 6.6a7.5 7.5 0 1 0 9.6 0"/></svg><span>Shut down</span></button>
+              <button class="system-button is-guarded" type="button" data-power-hold="signout" title="Hold to sign out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4.5h4.5a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H14"/><path d="M10 8l-4 4 4 4M6 12h9"/></svg><span>Sign out</span></button>
+            </div>
+            <div class="audio-menu" id="audioMenu" role="menu" aria-label="Audio output" hidden></div>
+            <div class="power-confirm" id="powerConfirm" role="alert" hidden></div>
+          </div>
 
     <main class="main">
       <header class="topbar">
@@ -153,26 +171,8 @@
       <section class="view active" id="home" aria-labelledby="homeTitle">
         <header class="home-header">
           <div class="home-header-copy">
-            <span class="eyebrow"><span class="eyebrow-line"></span> <span id="homeDate">AT YOUR COMMAND</span></span>
+            <span class="eyebrow"><span class="eyebrow-line"></span> <span id="homeDate"></span></span>
             <h1 id="homeTitle">Command Center<span class="title-period">.</span></h1>
-            <p class="home-tagline"><strong>AEOLIONWARE, at your command.</strong> <span>Every window, tool, and thought, one key away.</span></p>
-          </div>
-          <div class="system-bar" aria-label="System">
-            <div class="system-group" role="group" aria-label="Instant">
-              <span class="system-group-label">CLICK</span>
-              <button class="system-button" type="button" data-power-now="lock" title="Lock"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg><span>Lock</span></button>
-              <button class="system-button" type="button" id="audioButton" aria-haspopup="true" aria-expanded="false" title="Choose the audio output"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 9.5h3l4-3.5v12l-4-3.5h-3z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg><span id="audioCurrent">Audio</span></button>
-            </div>
-            <div class="system-group is-guarded" role="group" aria-label="Press and hold to confirm">
-              <span class="system-group-label" id="powerHint" title="Press and hold for 1.5 seconds; let go to cancel"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" opacity=".35"/><path d="M12 4a8 8 0 0 1 8 8"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/></svg>HOLD</span>
-              <button class="system-button is-guarded" type="button" data-power-hold="recycle" title="Hold to recycle bin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12.5h8L17 7M10.5 10.5v6M13.5 10.5v6"/></svg><span>Recycle Bin</span><small id="recycleSize"></small></button>
-              <button class="system-button is-guarded" type="button" data-power-hold="sleep" title="Hold to sleep"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5Z"/></svg><span>Sleep</span></button>
-              <button class="system-button is-guarded" type="button" data-power-hold="restart" title="Hold to restart"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></svg><span>Restart</span></button>
-              <button class="system-button is-guarded" type="button" data-power-hold="shutdown" title="Hold to shut down"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v8"/><path d="M7.2 6.6a7.5 7.5 0 1 0 9.6 0"/></svg><span>Shut down</span></button>
-              <button class="system-button is-guarded" type="button" data-power-hold="signout" title="Hold to sign out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4.5h4.5a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H14"/><path d="M10 8l-4 4 4 4M6 12h9"/></svg><span>Sign out</span></button>
-            </div>
-            <div class="audio-menu" id="audioMenu" role="menu" aria-label="Audio output" hidden></div>
-            <div class="power-confirm" id="powerConfirm" role="alert" hidden></div>
           </div>
           <div class="home-almanac" id="homeAlmanac" hidden></div>
         </header>
@@ -527,7 +527,22 @@
         <div class="dashboard-footer">
           <span class="refresh-indicator"><span class="status-indicator" aria-hidden="true"></span> UPDATES AUTOMATICALLY</span>
           <span id="metricsUpdated">Waiting for system metrics</span>
+          <button class="secondary" type="button" id="openLogsButton">ASCS Logs</button>
         </div>
+        <article class="metric-card signin-card" aria-labelledby="signInHistoryTitle">
+          <div class="signin-head">
+            <span class="metric-label" id="signInHistoryTitle">SIGN-IN</span>
+            <strong id="signInLatest">--</strong>
+            <small id="signInSummary">Time until the taskbar is ready. No sign-ins recorded yet.</small>
+          </div>
+          <div class="signin-plot" id="signInPlot">
+            <svg class="signin-lines" viewBox="0 0 300 56" preserveAspectRatio="none" aria-hidden="true"><path class="sparkline-area"/><path class="sparkline-line"/></svg>
+            <span class="signin-rule" id="signInRule" hidden></span>
+            <div class="signin-points" id="signInPoints"></div>
+            <div class="signin-tip" id="signInTip" hidden></div>
+          </div>
+          <div class="signin-axis" aria-hidden="true"><span id="signInFirst"></span><span id="signInLast"></span></div>
+        </article>
         <section class="hardware-section" aria-labelledby="hardwareHeading">
           <div class="section-title-row">
             <div>
@@ -553,41 +568,7 @@
               <p class="physical-storage-empty">Detecting physical drives…</p>
             </div>
           </section>
-          <section class="signin-section" aria-labelledby="signInHistoryTitle">
-            <div class="section-title-row">
-              <div><span class="section-overline">PERFORMANCE</span><h3 id="signInHistoryTitle">Sign-in: time until the taskbar is ready</h3></div>
-              <span class="section-shortcut" id="signInHistorySummary"></span>
-            </div>
-            <div id="signInHistory" class="signin-history" aria-live="polite"><p class="physical-storage-empty">No sign-ins recorded yet.</p></div>
-          </section>
         </section>
-      </section>
-
-      <section class="view" id="logs" aria-labelledby="logsTitle">
-        <div class="page-heading">
-          <span class="eyebrow"><span class="eyebrow-line"></span> DIAGNOSTICS</span>
-          <h1 id="logsTitle">Logs<span class="title-period">.</span></h1>
-          <p>What ASCS and its helpers have been doing, newest first.</p>
-        </div>
-        <div class="logs-toolbar">
-          <div class="logs-sources" role="tablist" aria-label="Log source">
-            <button type="button" role="tab" data-log-source="ascs" aria-selected="true">ASCS</button>
-            <button type="button" role="tab" data-log-source="activity" aria-selected="false">Activity</button>
-            <button type="button" role="tab" data-log-source="codebutton" aria-selected="false">Code key</button>
-          </div>
-          <div class="logs-levels" role="group" aria-label="Show">
-            <button type="button" data-log-level="all" aria-pressed="true">All <span data-count="all"></span></button>
-            <button type="button" data-log-level="issues" aria-pressed="false">Issues <span data-count="issues"></span></button>
-            <button type="button" data-log-level="errors" aria-pressed="false">Errors <span data-count="errors"></span></button>
-          </div>
-          <input id="logSearch" class="logs-search" type="search" placeholder="Filter lines" autocomplete="off" spellcheck="false" aria-label="Filter log lines" data-primary-input>
-          <span class="logs-actions">
-            <button class="secondary" type="button" id="copyLogButton">Copy</button>
-            <button class="secondary" type="button" id="openLogButton">Open file</button>
-          </span>
-        </div>
-        <p class="logs-meta" id="logMeta" role="status">Loading…</p>
-        <div id="logList" class="log-list"></div>
       </section>
 
       <section class="view" id="commands" aria-labelledby="commandsTitle">
@@ -761,7 +742,6 @@
           <button type="button" role="tab" id="tab-prefCountdowns" data-section="prefCountdowns" aria-controls="prefCountdowns" aria-selected="false">Countdowns</button>
           <button type="button" role="tab" id="tab-prefGames" data-section="prefGames" aria-controls="prefGames" aria-selected="false">Games &amp; apps</button>
           <button type="button" role="tab" id="tab-prefCommands" data-section="prefCommands" aria-controls="prefCommands" aria-selected="false">Custom commands</button>
-          <button type="button" role="tab" id="tab-prefWorkspaces" data-section="prefWorkspaces" aria-controls="prefWorkspaces" aria-selected="false">Workspaces</button>
         </div>
         <form id="settingsForm" class="settings-grid">
           <section class="settings-card" id="prefGeneral" role="tabpanel" aria-labelledby="driveSettingsTitle">
@@ -770,9 +750,9 @@
             <label class="settings-field" for="snapGap"><span>Snap gap <output id="snapGapValue">0 px</output></span><input id="snapGap" name="snapGap" type="range" min="0" max="48" step="2" value="0"><small>Space around snapped windows and between tiles.</small></label>
             <label class="settings-toggle" for="preserveWindowSize"><input id="preserveWindowSize" name="preserveSize" type="checkbox" checked><span><strong>Preserve size when moving monitors</strong><small>Keep the window's size and relative position on its new display.</small></span></label>
             <label class="settings-toggle" for="notesSpellcheck"><input id="notesSpellcheck" type="checkbox" checked><span><strong>Spell-check in Quick Notes</strong><small>Underlines misspellings in text notes, never in code notes. Applies at once.</small></span></label>
-            <div class="settings-heading settings-subheading"><h2>Power and sounds</h2><p>The System bar's hold buttons, and the sounds ASCS itself plays.</p></div>
+            <div class="settings-heading settings-subheading"><h2>Power and sounds</h2><p>The power tray's hold buttons, and the sounds ASCS itself plays.</p></div>
             <label class="settings-field" for="powerDelay"><span>Delay before power actions</span><select id="powerDelay"><option value="0">None: act as soon as the hold completes</option><option value="5">5 seconds</option><option value="30">30 seconds</option></select><small>For Restart, Shut down, Sign out and Sleep: a countdown with Cancel on the banner. Apps with unsaved work can still stop a restart or shutdown.</small></label>
-            <label class="settings-field" for="ascsSounds"><span>ASCS sounds</span><select id="ascsSounds"><option value="show">When ASCS shows and hides</option><option value="start">When ASCS starts and exits</option><option value="off">Off</option></select><small>Windows XP's logon and logoff sounds, unless changed in Sounds › In use. Never at Windows sign-in or shutdown.</small></label>
+            <label class="settings-field" for="ascsSounds"><span>ASCS sounds</span><select id="ascsSounds"><option value="show">When ASCS shows and hides</option><option value="start">When ASCS starts and exits</option><option value="off">Off</option></select><small>Plays the sounds set in Sounds › In use. Never at Windows sign-in or shutdown.</small></label>
           </section>
           <section class="settings-card" id="prefShortcuts" role="tabpanel" aria-labelledby="shortcutSettingsTitle">
             <div class="settings-heading"><h2 id="shortcutSettingsTitle">Super-key shortcuts</h2><p>Choose unique letters for these app and view commands. Changes apply immediately.</p></div>
@@ -840,17 +820,13 @@
             <p class="settings-note">Applications must be .exe or .lnk files and start without arguments. Letters follow the same rules as the Shortcuts tab and must be unique.</p>
             <div class="settings-actions"><span id="commandsStatus" role="status">Stored in data\commands.ini.</span><span class="settings-action-buttons"><button class="secondary" type="button" id="addCommandButton">Add command</button><button class="primary" type="button" id="saveCommandsButton">Save commands</button></span></div>
           </section>
-          <section class="settings-card settings-card-wide" id="prefWorkspaces" role="tabpanel" aria-labelledby="workspaceSettingsTitle">
-            <div class="settings-heading"><h2 id="workspaceSettingsTitle">Workspaces</h2><p>Saved window layouts now have their own page, with a map of each one across your desktops. Super + S and Super + R use “Default”; Super + Shift + S saves under a new name; Super + Shift + R lists them all.</p></div>
-            <div class="settings-actions"><span class="settings-note">Save, restore, rename and delete them there.</span><span class="settings-action-buttons"><button class="primary" type="button" id="openWorkspacesView">Open Workspaces</button></span></div>
-          </section>
         </div>
       </section>
 
       <div class="launcher-backdrop" id="launcher" hidden>
         <section class="launcher-dialog" role="dialog" aria-modal="true" aria-labelledby="launcherTitle">
           <div class="launcher-heading"><span class="eyebrow">COMMAND PALETTE</span><button class="secondary" id="closeLauncher" type="button" aria-label="Close command launcher">Esc</button></div>
-          <h2 id="launcherTitle">At your command.</h2>
+          <h2 id="launcherTitle">Commands</h2>
           <label class="sr-only" for="launcherSearch">Search commands</label>
           <div class="launcher-search-row">
             <span class="launcher-mode" id="launcherMode" hidden></span>
@@ -870,6 +846,40 @@
             <button class="secondary" type="button" id="confirmDialogCancel">Cancel</button>
             <button class="primary" type="button" id="confirmDialogConfirm">Confirm</button>
           </div>
+        </section>
+      </div>
+
+      <div class="confirm-backdrop help-backdrop" id="logsDialog" hidden>
+        <section class="help-dialog logs-dialog" id="logs" role="dialog" aria-modal="true" aria-labelledby="logsTitle">
+          <header class="help-header">
+            <div>
+              <span class="eyebrow">DIAGNOSTICS</span>
+              <h2 id="logsTitle">ASCS Logs</h2>
+              <p class="help-meta">What ASCS and its helpers have been doing, newest first.</p>
+            </div>
+            <button class="help-close" type="button" id="logsClose" aria-label="Close logs" title="Close (Esc)">
+              <svg viewBox="0 0 10 10" aria-hidden="true"><path d="m1.5 1.5 7 7m0-7-7 7"/></svg>
+            </button>
+          </header>
+        <div class="logs-toolbar">
+          <div class="logs-sources" role="tablist" aria-label="Log source">
+            <button type="button" role="tab" data-log-source="ascs" aria-selected="true">ASCS</button>
+            <button type="button" role="tab" data-log-source="activity" aria-selected="false">Activity</button>
+            <button type="button" role="tab" data-log-source="codebutton" aria-selected="false">Code key</button>
+          </div>
+          <div class="logs-levels" role="group" aria-label="Show">
+            <button type="button" data-log-level="all" aria-pressed="true">All <span data-count="all"></span></button>
+            <button type="button" data-log-level="issues" aria-pressed="false">Issues <span data-count="issues"></span></button>
+            <button type="button" data-log-level="errors" aria-pressed="false">Errors <span data-count="errors"></span></button>
+          </div>
+          <input id="logSearch" class="logs-search" type="search" placeholder="Filter lines" autocomplete="off" spellcheck="false" aria-label="Filter log lines" data-primary-input>
+          <span class="logs-actions">
+            <button class="secondary" type="button" id="copyLogButton">Copy</button>
+            <button class="secondary" type="button" id="openLogButton">Open file</button>
+          </span>
+        </div>
+        <p class="logs-meta" id="logMeta" role="status">Loading…</p>
+        <div id="logList" class="log-list"></div>
         </section>
       </div>
 
@@ -1052,7 +1062,6 @@
       </div>
 
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
-      <footer class="app-footer"><span>AEOLIONWARE</span><i>·</i> Super Command System <i>·</i> Crafted for the keyboard.</footer>
     </main>
   </div>
   <script src="palette.js"></script>

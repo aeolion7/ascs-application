@@ -829,9 +829,7 @@ function renderHours(main, start, count) {
 function fitCalendarWeek() {
     const scroller = document.querySelector(".cal-week-scroll");
     if (!scroller || !$("calendar").classList.contains("active")) return;
-    const footer = document.querySelector(".app-footer");
-    const footerSpace = footer ? Math.max(0, document.documentElement.scrollHeight - (footer.getBoundingClientRect().top + scrollY)) + 24 : 24;
-    scroller.style.height = `${Math.max(320, Math.floor(innerHeight - scroller.getBoundingClientRect().top - footerSpace))}px`;
+    scroller.style.height = `${Math.max(320, Math.floor(innerHeight - scroller.getBoundingClientRect().top - 24))}px`;
 }
 window.addEventListener("resize", () => { if (calState.mode === "week" || calState.mode === "day") fitCalendarWeek(); });
 

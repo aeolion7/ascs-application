@@ -655,17 +655,6 @@ textarea {
   font-size: 12px;
 }
 
-.app-footer {
-  padding-top: 28px;
-  color: #858b9f;
-  font-size: 11px;
-  letter-spacing: .65px;
-}
-
-.app-footer > span {
-  color: #b4b8c8;
-}
-
 .toast {
   right: 28px;
   bottom: 26px;
@@ -813,8 +802,7 @@ textarea {
 }
 
 @media (max-width: 1279px) {
-  .view,
-  .app-footer {
+  .view {
     max-width: 1120px;
   }
 
@@ -1184,10 +1172,6 @@ textarea {
     font-size: 12px;
   }
 
-  .app-footer {
-    padding-top: 24px;
-    font-size: 10px;
-  }
 }
 
 @media (min-width: 1280px) and (max-width: 1699px) and (max-height: 820px) {

@@ -168,13 +168,13 @@ IsWebUrl(url) {
 ; Quick actions (1.7.0)
 ; ------------------------------------------
 
-; A quick action is a palette item id such as "view:notes", "launch:terminal",
+; A quick action is a palette item id such as "view:notes", "calendar:new", "launch:terminal",
 ; "cmd:My tool", "ws:coding", "snippet:n_123", or "note:n_123". ASCS stores
 ; these strings only; the frontend resolves them to items, and running one
 ; goes through the same validated messages the palette uses.
 ValidateQuickActionId(id) {
     id := Trim(id)
-    if !RegExMatch(id, "^(view|launch|mode|cmd|ws|snippet|note):[^\x00-\x1F|]{1,80}$")
+    if !RegExMatch(id, "^(view|calendar|launch|mode|cmd|ws|snippet|note):[^\x00-\x1F|]{1,80}$")
         throw Error("A quick action is not valid.")
     return id
 }
@@ -968,12 +968,41 @@ ParseSignInTimeline(line) {
         times[key] := RegExMatch(m[2], label " (-?\d{1,6})\b", &value) ? Integer(value[1]) : -1
     if (times["retrobar"] < 0 || times["taskbar"] < 100)
         return ""
-    times["sound"] := RegExMatch(m[2], "; startup sound (.+?)(?:\.wav)?\s*$", &sound) ? sound[1] : ""
+    times["sound"] := RegExMatch(m[2], "; startup sound (.+?)\s*$", &sound) ? sound[1] : ""
     return times
 }
 
+; The Windows version a startup sound came from, by its library folder ("(1998)
+; Windows 98\The Microsoft Sound.wav" -> "Windows 98"). "" for anything else: your
+; own folders, leveled copies (give their original), and a Windows version's
+; other sounds, including start.wav, which is the Start click and not a startup.
+SoundOsFromPath(path, library) {
+    if (InStr(path, library "\") != 1)
+        return ""
+    parts := StrSplit(SubStr(path, StrLen(library) + 2), "\")
+    if (parts.Length < 2)
+        return ""
+    era := ParseSoundEra(parts[1])
+    if (!era["year"] || !RegExMatch(era["label"], "^Windows\b"))
+        return ""
+    return RegExMatch(parts[parts.Length], "i)^(The Microsoft Sound\b|(.*\b)?Startup\b|.*\bLogon Sound\b)") ? era["label"] : ""
+}
+
+; What the sign-in graph calls a logged sound: its Windows version if it's a
+; Windows startup sound, else its file name. originOf gives the original's path.
+SignInSoundLabel(logged, library, originOf) {
+    os := SoundOsFromPath(originOf(logged), library)
+    if (os != "")
+        return os
+    name := RegExReplace(RegExReplace(logged, "^.*\\"), "i)\.wav$")
+    ; Windows' own copy, which SignIn.ahk falls back to, is outside the library.
+    return RegExMatch(name, "i)^Windows XP Startup") ? "Windows XP" : name
+}
+
 ; The newest real sign-ins in the log's text as a JSON array, newest first.
-SignInHistoryJson(text, limit := 10) {
+SignInHistoryJson(text, limit := 20, soundLabel := "") {
+    if !IsObject(soundLabel)
+        soundLabel := logged => RegExReplace(RegExReplace(logged, "^.*\\"), "i)\.wav$")
     json := ""
     count := 0
     lines := StrSplit(text, "`n", "`r")
@@ -984,7 +1013,7 @@ SignInHistoryJson(text, limit := 10) {
             continue
         json .= (count ? "," : "") '{"time":' JsonQuote(times["time"]) ',"retrobar":' times["retrobar"]
             . ',"taskbar":' times["taskbar"] ',"apps":' times["apps"] ',"keychron":' times["keychron"]
-            . ',"sound":' JsonQuote(SubStr(times["sound"], 1, 120)) '}'
+            . ',"sound":' JsonQuote(SubStr(times["sound"] = "" ? "" : soundLabel(times["sound"]), 1, 120)) '}'
         count++
     }
     return "[" json "]"
@@ -1026,6 +1055,14 @@ IsPrefixedPathAt(buffer, size, offset) {
         && (NumGet(buffer, offset + 6, "UChar") = 0x5C || NumGet(buffer, offset + 6, "UChar") = 0x2F)
 }
 
+; The offset of a byte at or after from and before size, or -1. Only reads.
+FindByte(buffer, size, value, from) {
+    if (from < 0 || from >= size || size > buffer.Size)
+        return -1
+    found := DllCall("msvcrt\memchr", "Ptr", buffer.Ptr + from, "Int", value, "UPtr", size - from, "Ptr")
+    return found ? found - buffer.Ptr : -1
+}
+
 ; PCSX2 cache\gamelist.cache: "GLCE", a version, then entries that start
 ; with path, serial and title strings. Returns serial -> Map(path, title).
 ParsePcsx2GameList(buffer, size) {
@@ -1059,14 +1096,17 @@ ParseDolphinGameList(buffer, size) {
     games := Map()
     if (size > 50000000)
         return games
+    ; The file is mostly banner images, and this runs on the thread hotkeys use,
+    ; so the byte searches are native: about 3 s becomes a few ms on 6 MB (1.9.2).
     starts := []
-    offset := 0
-    while (offset + 8 <= size) {
-        if IsPrefixedPathAt(buffer, size, offset) {
+    position := 5
+    while ((colon := FindByte(buffer, size, 0x3A, position)) >= 0) {
+        offset := colon - 5         ; the length, then the drive letter, before the colon
+        if (offset >= 0 && IsPrefixedPathAt(buffer, size, offset)) {
             starts.Push(offset)
-            offset += 4 + NumGet(buffer, offset, "UInt")
+            position := offset + 4 + NumGet(buffer, offset, "UInt")
         } else {
-            offset++
+            position := colon + 1
         }
         if (starts.Length >= 5000)
             break
@@ -1078,7 +1118,7 @@ ParseDolphinGameList(buffer, size) {
         file := ReadPrefixedString(buffer, size, &offset, 512)
         id := ""
         scan := offset
-        while (scan + 10 <= stop) {
+        while ((scan := FindByte(buffer, stop, 6, scan)) >= 0 && scan + 10 <= stop) {
             if (NumGet(buffer, scan, "UInt") = 6) {
                 candidate := StrGet(buffer.Ptr + scan + 4, 6, "CP0")
                 if RegExMatch(candidate, "^[A-Z0-9]{6}$") {
@@ -1087,8 +1127,7 @@ ParseDolphinGameList(buffer, size) {
                 }
             }
             scan++
-        }
-        if (id != "" && path != "" && !games.Has(id))
+        }        if (id != "" && path != "" && !games.Has(id))
             games[id] := Map("path", path, "file", file)
     }
     return games

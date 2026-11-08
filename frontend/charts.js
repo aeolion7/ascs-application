@@ -22,5 +22,32 @@
         return { line, area, peak, average, count: points.length };
     }
 
-    global.ASCSCharts = { sparkline };
+    // values: numbers of any size (oldest first), drawn from 0 up to a little
+    // above the largest. Returns SVG paths, plus each point's place as percents
+    // of the box, for markers laid over a stretched line. One point sits
+    // mid-way with no line.
+    function pointGraph(values, width, height) {
+        const numbers = (Array.isArray(values) ? values : []).map(Number).filter(v => Number.isFinite(v) && v >= 0);
+        if (!numbers.length) return { line: "", area: "", points: [] };
+        const top = Math.max(...numbers) * 1.15 || 1;
+        const percent = value => Math.round(value * 10) / 10;
+        const points = numbers.map((v, i) => ({
+            x: numbers.length > 1 ? percent(i / (numbers.length - 1) * 100) : 50,
+            y: percent(100 - v / top * 100)
+        }));
+        if (points.length < 2) return { line: "", area: "", points };
+        const line = points.map((p, i) => `${i ? "L" : "M"}${percent(p.x / 100 * width)} ${percent(p.y / 100 * height)}`).join(" ");
+        return { line, area: `${line} L${width} ${height} L0 ${height} Z`, points };
+    }
+
+    // The index of the point nearest a position across the graph, or -1.
+    function nearestPoint(points, x) {
+        let best = -1;
+        (Array.isArray(points) ? points : []).forEach((point, index) => {
+            if (best < 0 || Math.abs(point.x - x) < Math.abs(points[best].x - x)) best = index;
+        });
+        return best;
+    }
+
+    global.ASCSCharts = { sparkline, pointGraph, nearestPoint };
 })(globalThis);

@@ -706,7 +706,7 @@ function renderSoundDetail() {
         presets.setAttribute("aria-label", "Set the target");
         const thisLevel = Math.round(level.rmsDb * 10) / 10;
         [["Your startup sounds", -26.4, "The level your startup sounds were matched to"],
-            ["Your ASCS sounds", -33.7, "The level of your ASCS logon and logoff sounds"],
+            ["Your ASCS sounds", -33.7, "The level of your ASCS show and hide sounds"],
             ["This sound", thisLevel, "Make this sound's level the target, then level others to match it"]].forEach(([name, value, hint]) => {
             if (!Number.isFinite(value)) return;
             const chip = element("button", `sound-preset${Math.abs(soundPrefs.reference - value) < 0.05 ? " is-on" : ""}`);
@@ -1562,6 +1562,7 @@ $("soundLibraryForm").addEventListener("submit", event => {
 });
 $("soundReindex").addEventListener("click", () => send("GetSoundLibrary", "refresh"));
 enableTabWheel($("soundEras"), ".sound-era");
+enableTabWheel(document.querySelector(".sound-side-tabs"), "[role='tab']");
 
 // The side column fits the space left below its top edge, which moves as the
 // page scrolls (it is sticky), so it never makes the page longer than the
@@ -1575,13 +1576,7 @@ function fitSoundSide() {
         side.style.maxHeight = "";
         return;
     }
-    // Leave room for the page footer below (from its top to the page's end,
-    // plus the gap above it).
-    const footer = document.querySelector(".app-footer");
-    const footerSpace = footer
-        ? Math.max(0, document.documentElement.scrollHeight - (footer.getBoundingClientRect().top + scrollY)) + 24
-        : 24;
-    const room = innerHeight - side.getBoundingClientRect().top - footerSpace;
+    const room = innerHeight - side.getBoundingClientRect().top - 24;
     side.style.maxHeight = `${Math.max(320, Math.floor(room))}px`;
 }
 const queueSoundSideFit = () => { cancelAnimationFrame(soundSideFrame); soundSideFrame = requestAnimationFrame(fitSoundSide); };

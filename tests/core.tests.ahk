@@ -93,6 +93,10 @@ Equal("Explorer relaunch opens folder",
 Equal("Explorer missing folder falls back",
     GetWorkspaceLaunchCommand(Map("process", "explorer.exe", "folder", "C:\no\such\folder", "path", "")),
     "explorer.exe")
+; 1.9.2: a new calendar event can be a quick action.
+Equal("quick action: new calendar event", ValidateQuickActionId("calendar:new"), "calendar:new")
+Throws("quick action: an unknown kind", () => ValidateQuickActionId("calc:1"))
+
 ; 1.9.1: Super+E and Super+Shift+E both follow "Open File Explorer to"; /n opens Documents.
 launcherSource := FileRead(A_ScriptDir "\..\lib\features\Launcher.ahk", "UTF-8")
 Check("Explorer is never opened with /n", !InStr(launcherSource, 'explorer.exe /n'))
@@ -123,7 +127,25 @@ signInLine := "2026-11-08 10:28:15  Sign-in: Timeline (ms): taskbar created 2515
 signInTimes := ParseSignInTimeline(signInLine)
 Equal("sign-in: RetroBar", signInTimes["retrobar"], 4937)
 Equal("sign-in: apps", signInTimes["apps"], 5171)
-Equal("sign-in: sound", signInTimes["sound"], "The Microsoft Sound (+2.0 dB)")
+Equal("sign-in: sound", signInTimes["sound"], "The Microsoft Sound (+2.0 dB).wav")
+Check("sign-in: the plain history shows the file's name", InStr(SignInHistoryJson(signInLine), '"sound":"The Microsoft Sound (+2.0 dB)"'))
+soundLibrary := "C:\Sounds"
+Equal("sound OS: The Microsoft Sound", SoundOsFromPath("C:\Sounds\(1998) Windows 98\The Microsoft Sound.wav", soundLibrary), "Windows 98")
+Equal("sound OS: a Startup file", SoundOsFromPath("C:\Sounds\(2001) Windows XP\Windows XP Startup.wav", soundLibrary), "Windows XP")
+Equal("sound OS: plain Startup.wav", SoundOsFromPath("C:\Sounds\(2009) Windows 7\Startup.wav", soundLibrary), "Windows 7")
+Equal("sound OS: in a theme folder", SoundOsFromPath("C:\Sounds\(2009) Windows 7\Delta\Windows Logon Sound.wav", soundLibrary), "Windows 7")
+Equal("sound OS: start.wav is the Start click", SoundOsFromPath("C:\Sounds\(1998) Windows 98\START.WAV", soundLibrary), "")
+Equal("sound OS: another Windows sound", SoundOsFromPath("C:\Sounds\(1998) Windows 98\Chord.wav", soundLibrary), "")
+Equal("sound OS: your own folder", SoundOsFromPath("C:\Sounds\My Sounds\Startup.wav", soundLibrary), "")
+Equal("sound OS: outside the library", SoundOsFromPath("D:\Music\The Microsoft Sound.wav", soundLibrary), "")
+same := path => path
+Equal("sound label: a Windows startup sound", SignInSoundLabel("C:\Sounds\(2000) Windows Me\The Microsoft Sound.wav", soundLibrary, same), "Windows Me")
+Equal("sound label: a leveled copy by its original", SignInSoundLabel("C:\Sounds\ASCS Leveled\The Microsoft Sound (+2.0 dB).wav", soundLibrary, path => "C:\Sounds\(2000) Windows Me\The Microsoft Sound.wav"), "Windows Me")
+Equal("sound label: a custom sound keeps its name", SignInSoundLabel("D:\Music\Fanfare.wav", soundLibrary, same), "Fanfare")
+Equal("sound label: no original known keeps its name", SignInSoundLabel("The Microsoft Sound (+9.0 dB).wav", soundLibrary, path => ""), "The Microsoft Sound (+9.0 dB)")
+Equal("sound label: Windows' own XP copy", SignInSoundLabel("C:\Windows\Media\Windows XP Startup.wav", soundLibrary, same), "Windows XP")
+Check("sign-in: the history uses the label", InStr(SignInHistoryJson(signInLine, , logged => "Windows Me"), '"sound":"Windows Me"'))
+Check("sign-in: a logged path isn't taken for a time", ParseSignInTimeline(StrReplace(signInLine, "The Microsoft Sound (+2.0 dB).wav", "C:\Sounds\(1998) Windows 98\The Microsoft Sound.wav"))["retrobar"] = 4937)
 Equal("sign-in: time", signInTimes["time"], "2026-11-08T10:28:15")
 testRunLine := "2026-11-04 17:23:29  Sign-in: Timeline (ms): taskbar created -1, Open-Shell started -1, taskbar shown -1, RetroBar started -1, RetroBar bar shown -1, apps started 63, Keychron started -1"
 Check("sign-in: a test run is left out", !IsObject(ParseSignInTimeline(testRunLine)))
@@ -360,6 +382,21 @@ Equal("PCSX2 game list title", ps2games["SLUS-21115"]["title"], "Okami")
 Equal("PCSX2 game list path", ps2games["SLES-50358"]["path"], "J:\Retro Library\PS2\Devil May Cry (Europe).iso")
 bad := MakeBinary("raw:NOPE", 1, "J:\x.iso", "SLUS-00001", "X")
 Equal("PCSX2 game list needs its signature", ParsePcsx2GameList(bad, bad.Size).Count, 0)
+
+; 1.9.2: the native byte search, with guard bytes after the range it may read.
+guarded := Buffer(16, 0xCC)
+Loop 8
+    NumPut("UChar", A_Index, guarded, A_Index - 1)
+Equal("find byte: first position", FindByte(guarded, 8, 1, 0), 0)
+Equal("find byte: last position", FindByte(guarded, 8, 8, 0), 7)
+Equal("find byte: not before from", FindByte(guarded, 8, 2, 2), -1)
+Equal("find byte: stops at the guard", FindByte(guarded, 8, 0xCC, 0), -1)
+Equal("find byte: from at the end", FindByte(guarded, 8, 1, 8), -1)
+Equal("find byte: a size past the buffer", FindByte(guarded, 17, 1, 0), -1)
+guardIntact := true
+Loop 8
+    guardIntact := guardIntact && NumGet(guarded, 7 + A_Index, "UChar") = 0xCC
+Check("find byte: guard bytes unchanged", guardIntact)
 
 gc := MakeBinary(27, 0, "J:/Retro Library/GCN/Animal Crossing (USA).nkit.iso", "Animal Crossing (USA).nkit.iso", 1, 1, 15, "raw:Animal Crossing", "AnimalCrossing", "GAFE01", "GAFE01", "J:/Retro Library/Wii/Wii Sports (USA).rvz", "Wii Sports (USA).rvz", "RSPE01")
 gcgames := ParseDolphinGameList(gc, gc.Size)

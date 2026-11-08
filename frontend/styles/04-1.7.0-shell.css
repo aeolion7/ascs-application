@@ -326,18 +326,6 @@ body.sidebar-collapsed .sidebar-bottom {
   line-height: 1.1;
 }
 
-.home-tagline {
-  margin: 0;
-  color: #a4a9bb;
-  font-size: 14px;
-}
-
-.home-tagline strong {
-  margin-right: 6px;
-  color: #e2e2ed;
-  font-weight: 600;
-}
-
 #home > .content-section:first-of-type {
   margin-top: 22px;
 }
@@ -974,14 +962,6 @@ body.sidebar-collapsed .nav-label::after {
 }
 
 .page-heading > p,
-.home-tagline {
-  max-width: none;
-  margin: 0;
-  color: #a4a9bb;
-  font-size: 14.5px;
-  line-height: 1.5;
-}
-
 #home > .content-section:first-of-type {
   margin-top: 0;
 }

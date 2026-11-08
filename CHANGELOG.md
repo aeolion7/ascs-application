@@ -2,6 +2,26 @@
 
 All notable changes to the Aeolionware Super Command System. The newest release is first. For current behavior, see [README.md](README.md).
 
+## Version 1.9.2
+
+A cleaner shell with no tagline or footer, power options in a tray on every view, ASCS Logs as a dialog, Games loaded ahead of time with its first-load freeze fixed, a sideways wheel in more places, and the sign-in history as a compact graph. Manual pass: all 21 items passed, and all 6 retest items passed after the notes from that pass were fixed. 1,114 automated checks and a 36-check smoke test. Launch rules, routines, iPhone calendar sync and the console hub stay on the roadmap.
+
+### Changed
+- **Power options are in a tray on every view:** **Power** at the bottom of the sidebar opens Lock, audio output and the hold-to-confirm actions, which work as before. They've left the Command Center.
+- **Logs moved out of the sidebar** into a dialog, **ASCS Logs**, from System Dashboard or the palette. Preferences is now Ctrl + 9 and Super Commands Ctrl + 8.
+- **The sign-in history is a graph with data points,** one short row in System Dashboard, in place of the bars, and shows the last 20 sign-ins. Hovering shows a card with that sign-in's date, stage times and sound, named by its Windows version when it's a Windows startup sound.
+- **Games opens with its library in place:** it loads once in the background after the Command Center first opens. Covers and RetroAchievements still wait until Games is open.
+- **Sideways wheel:** on the Calendar it steps through days, weeks or months, on the Sounds panel it switches tabs, and on the Command Center's almanac it steps through its items. Continue playing and code in notes already scrolled sideways.
+
+### Removed
+- The tagline, the footer on every view, and the CLICK label.
+- Preferences › Workspaces, which only linked to the Workspaces page.
+
+### Fixed
+- **New calendar event** could be chosen as a quick action, but ASCS refused to save it, which also dropped any other change saved with it.
+- Preferences no longer names the ASCS sounds, which can be anything set in Sounds › In use.
+- The first load of Games froze hotkeys for about 3 seconds while reading Dolphin's game list. It now takes about 15 ms.
+
 ## Version 1.9.1
 
 Fixes from the 1.9.0 pass. 1,077 automated checks and a 22-check smoke test. Manual pass: every item passed after two Now playing fixes for RetroArch, found in the first pass (17 of 18) and its retest. This closes 1.9.0's E2. Launch rules, routines, iPhone calendar sync and the console hub stay on the roadmap.
