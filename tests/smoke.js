@@ -14,12 +14,20 @@
         errors.push(`Unhandled rejection: ${event.reason?.message || event.reason}`);
     });
     window.chrome = window.chrome || {};
+    // As in the real app, AHK can answer Ready before the page's later scripts
+    // have run. A reply handled then calls functions that don't exist yet.
+    const listeners = [];
+    const earlyNote = { id: "early", title: "Early note", type: "note", content: "here", pinned: false, created: "2020-01-01T00:00:00.000Z", updated: "2020-01-01T00:00:00.000Z" };
     window.chrome.webview = {
         postMessage: message => {
             sent.add(String(message).split("\n")[0]);
             messages.push(String(message));
+            if (String(message).split("\n")[0] !== "Ready") return;
+            [{ type: "notes", data: JSON.stringify({ version: 2, activeId: "early", notes: [earlyNote] }), recovered: false },
+                { type: "workspaces", monitors: 1, items: [] }]
+                .forEach(data => listeners.forEach(listener => listener({ data })));
         },
-        addEventListener() {},
+        addEventListener: (type, listener) => { if (type === "message") listeners.push(listener); },
         removeEventListener() {}
     };
 
@@ -35,6 +43,7 @@
 
     window.addEventListener("load", () => setTimeout(() => {
         const checks = [["the page loads without errors", errors.splice(0)]];
+        checks.push(["replies that arrive before the last script still draw the notes list", $("notesList").textContent.includes("Early note") ? [] : ["list is empty"]]);
         const views = [...new Set([...document.querySelectorAll("[data-view]")].map(node => node.dataset.view))];
         checks.push(["every view is reachable", views.length >= 9 ? [] : [`only ${views.length} views found`]]);
         views.forEach(view => {
@@ -47,7 +56,7 @@
             const titled = (document.getElementById("breadcrumb")?.textContent || "").trim() !== "";
             checks.push([`the ${view} view opens`, [...errors.splice(0), ...(shown ? [] : ["not shown"]), ...(titled ? [] : ["no breadcrumb title"])]]);
         });
-        setTimeout(() => {
+        setTimeout(async () => {
             try {
             checks.push(["no errors after opening the views", errors.splice(0)]);
             const allowed = new Set(window.SMOKE_ALLOWLIST || []);
@@ -305,6 +314,117 @@
             handleWebMessage({ data: "RA\nawards\n" + JSON.stringify({ VisibleUserAwards: [] }) });
             checks.push(["no awards says so", awardBox.querySelector(".ra-awards .settings-note")?.textContent === "No awards yet." ? [] : ["no message"]]);
             checks.push(["asking for awards is allowlisted", new Set(window.SMOKE_ALLOWLIST || []).has("GetRaAwards") ? [] : ["not allowlisted"]]);
+
+            // 1.11.1: per-game notes.
+            navigate("games");
+            gamesState.items = [];
+            const nowBox = () => $("gamesNowNotes").querySelector(".game-notes-text");
+            const live = (title, since = Date.now() / 1000 - 65) => handleWebMessage({ data: { type: "gamesLive", playing: title === null ? [] : [{ emulator: "steam", title, since }], apps: {}, controllers: [] } });
+            const typeInto = (area, text) => { area.value = text; area.dispatchEvent(new Event("input", { bubbles: true })); };
+            const gameTitle = "<img src=x onerror=alert(1)> Game";
+            const gameKey = Games.gameNoteKey(gameTitle);
+            notesLoaded = false;
+            notesData = { version: 2, activeId: null, notes: [] };
+            live(gameTitle);
+            checks.push(["Now playing has a notes box", nowBox() && !$("gamesNowNotes").hidden ? [] : ["none"]]);
+            checks.push(["it can't be typed in before the notes have loaded", nowBox()?.disabled ? [] : ["enabled"]]);
+            typeInto(nowBox(), "too soon");
+            checks.push(["and typing then makes no note, which a save would wipe the others with", notesData.notes.length === 0 ? [] : ["note made"]]);
+            const otherNote = { id: "other", title: "Other", type: "note", content: "keep me", pinned: false, created: "2020-01-01T00:00:00.000Z", updated: "2020-01-01T00:00:00.000Z" };
+            handleWebMessage({ data: { type: "notes", data: JSON.stringify({ version: 2, activeId: "other", notes: [otherNote, { ...otherNote, id: "bad", title: "Bad link", game: "not a key" }] }), recovered: false } });
+            checks.push(["once they load, it can", nowBox()?.disabled === false && nowBox().value === "" ? [] : ["still disabled"]]);
+            checks.push(["a bad link in the file is dropped, keeping the note", notesData.notes.find(note => note.id === "bad")?.game === undefined && notesData.notes.length === 2 ? [] : ["kept"]]);
+            checks.push(["just looking makes no note", notesData.notes.length === 2 ? [] : ["note made"]]);
+            typeInto(nowBox(), "first thought");
+            const gameNote = ASCSNotes.findGameNote(notesData.notes, gameKey);
+            checks.push(["typing makes one linked note in the group", gameNote?.content === "first thought" && gameNote.group === "Game notes" && notesData.notes.length === 3 ? [] : ["wrong note"]]);
+            checks.push(["its title is the game's, as text", gameNote?.title === Games.displayTitle(gameTitle) && !$("gamesNowNotes").querySelector("img") ? [] : [gameNote?.title]]);
+            checks.push(["the note open in Quick Notes keeps its date and stays open", notesData.notes[0].updated === otherNote.updated && notesData.activeId === "other" ? [] : ["touched"]]);
+            checks.push(["and the game's note has its own", gameNote?.updated > otherNote.updated ? [] : [gameNote?.updated]]);
+            const nowArea = nowBox();
+            nowArea.focus();
+            nowArea.setSelectionRange(3, 3);
+            live(gameTitle, Date.now() / 1000 - 70);
+            checks.push(["a Now playing redraw leaves the box, its cursor and its focus alone", nowBox() === nowArea && document.activeElement === nowArea && nowArea.selectionStart === 3 ? [] : ["lost"]]);
+            live("Another Game");
+            checks.push(["a new game waits while you're typing", nowBox() === nowArea && nowArea.value === "first thought" ? [] : ["switched"]]);
+            typeInto(nowArea, "first thought, finished");
+            checks.push(["so your words stay with their game", ASCSNotes.findGameNote(notesData.notes, gameKey)?.content === "first thought, finished" && !ASCSNotes.findGameNote(notesData.notes, Games.gameNoteKey("Another Game")) ? [] : ["wrong game"]]);
+            nowArea.blur();
+            await new Promise(resolve => setTimeout(resolve, 20));
+            checks.push(["then the box moves to the new game", nowBox() !== nowArea && nowBox()?.value === "" ? [] : ["didn't move"]]);
+            live(null);
+            checks.push(["with nothing running and nothing played, there's no box", $("gamesNowNotes").hidden ? [] : ["shown"]]);
+            live("RetroArch");
+            handleWebMessage({ data: { type: "gamesLive", playing: [{ emulator: "retroarch", title: "RetroArch", since: 5 }], apps: {}, controllers: [] } });
+            checks.push(["nor at an emulator's menu", $("gamesNowNotes").hidden ? [] : ["shown"]]);
+
+            live(gameTitle);
+            checks.push(["the same game finds its note again", nowBox()?.value === "first thought, finished" ? [] : [nowBox()?.value]]);
+            const pendingBefore = gameNote.content;
+            handleWebMessage({ data: { type: "notes", data: JSON.stringify({ ...notesData, notes: notesData.notes.map(note => note.game === gameKey ? { ...note, content: "changed elsewhere" } : note) }), recovered: false } });
+            checks.push(["a reload shows in the box, so old text can't overwrite it", nowBox()?.value === "changed elsewhere" ? [] : [nowBox()?.value]]);
+            typeInto(nowBox(), pendingBefore);
+
+            messages.length = 0;
+            $("gamesNowNotes").querySelector(".game-notes-actions button").click();
+            checks.push(["Add timestamp asks once what's running", messages.some(message => message.startsWith("GetGamesLive")) ? [] : ["didn't ask"]]);
+            live(gameTitle, Date.now() / 1000 - 65);
+            checks.push(["and adds the time into the session", /\n\n### .+ · 1:0\d into this session\n$/.test(nowBox()?.value || "") ? [] : [nowBox()?.value]]);
+            checks.push(["leaving the cursor under it, ready to type", document.activeElement === nowBox() && nowBox().selectionStart === nowBox().value.length ? [] : ["elsewhere"]]);
+
+            const libraryGame = { id: "st:1", title: gameTitle, emulator: "steam", system: "", seconds: 0, last: "", plays: 0, launchable: false, installed: true, cover: false };
+            gamesState.items = [libraryGame];
+            gamesState.openId = "st:1";
+            renderGames();
+            const libraryArea = $("gamesLibrary").querySelector(".game-notes-text");
+            checks.push(["a library game's details show the same notes", libraryArea?.value === nowBox()?.value ? [] : [libraryArea?.value ?? "no box"]]);
+            libraryArea.focus();
+            libraryArea.setSelectionRange(2, 2);
+            renderGames();
+            await Promise.resolve();
+            const libraryAfter = $("gamesLibrary").querySelector(".game-notes-text");
+            checks.push(["a library redraw keeps the focus and cursor", libraryAfter === libraryArea && document.activeElement === libraryAfter && libraryAfter.selectionStart === 2 ? [] : ["lost"]]);
+            typeInto(libraryAfter, "from the library");
+            live(gameTitle);
+            checks.push(["and what's typed there shows in Now playing", nowBox()?.value === "from the library" ? [] : [nowBox()?.value]]);
+            libraryAfter.blur();
+
+            gamesState.ra.games.set(100, JSON.stringify({ ID: 100, Title: gameTitle, ConsoleName: "Game Boy", ImageIcon: "/Images/100.png", Achievements: {} }));
+            gamesState.ra.openGame = 100;
+            renderAchievements();
+            const browserArea = $("gamesAchievements").querySelector(".ra-browser .game-notes-text");
+            checks.push(["the achievement browser shows them too", browserArea?.value === "from the library" ? [] : [browserArea?.value ?? "no box"]]);
+            gamesState.ra.openGame = 0;
+            renderAchievements();
+
+            checks.push(["the palette offers the current game's notes", paletteSources("all").some(item => item.id === "game-notes") ? [] : ["missing"]]);
+            checks.push(["but not as a quick action", paletteSources("pick").some(item => item.id === "game-notes") ? ["offered"] : []]);
+            const paletteEntry = paletteSources("all").find(item => item.id === "game-notes");
+            live(null);
+            paletteEntry.run();
+            live(null);
+            checks.push(["with nothing running it says so", $("toast").textContent.includes("No game is running") && $("games").classList.contains("active") ? [] : [$("toast").textContent]]);
+            const noteCount = notesData.notes.length;
+            paletteEntry.run();
+            live("A New Game");
+            const paletteNote = ASCSNotes.findGameNote(notesData.notes, Games.gameNoteKey("A New Game"));
+            checks.push(["with a game running it opens its note in Quick Notes", $("notes").classList.contains("active") && notesData.activeId === paletteNote?.id && notesData.notes.length === noteCount + 1 ? [] : ["not opened"]]);
+            checks.push(["and shows which game it's for", !$("noteGameLink").hidden && $("noteGameName").textContent === "A New Game" ? [] : [$("noteGameName").textContent]]);
+            $("noteGameStamp").click();
+            live("A New Game", Date.now() / 1000 - 65);
+            checks.push(["Add timestamp works from Quick Notes too", $("noteText").value.includes("into this session") && document.activeElement === $("noteText") ? [] : [$("noteText").value]]);
+            $("noteGameUnlink").click();
+            checks.push(["Unlink keeps the note and drops the link", paletteNote.game === undefined && notesData.notes.includes(paletteNote) && $("noteGameLink").hidden ? [] : ["wrong"]]);
+            openNote("other");
+            checks.push(["an ordinary note shows no link", $("noteGameLink").hidden ? [] : ["shown"]]);
+            const saved = JSON.parse(serializeNotes());
+            checks.push(["the link is saved with the note", saved.notes.some(note => note.game === gameKey) ? [] : ["not saved"]]);
+            navigate("games");
+            gamesState.openId = "";
+            live(null);
+            gamesState.items = [];
+            checks.push(["no errors from game notes", errors.splice(0)]);
 
             const allowedNow = new Set(window.SMOKE_ALLOWLIST || []);
             checks.push(["the Workspaces page sends only allowlisted messages", [...new Set(messages.map(message => message.split("\n")[0]))].filter(type => !allowedNow.has(type))]);

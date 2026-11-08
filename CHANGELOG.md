@@ -2,6 +2,23 @@
 
 All notable changes to the Aeolionware Super Command System. The newest release is first. For current behavior, see [README.md](README.md).
 
+## Version 1.11.1 (in progress)
+
+Per-game notes with session timestamps.
+
+### Added
+- **Game notes.** Each game has one set of notes, shown under Now playing, in a library game's details and in the achievement browser. They're an ordinary note in Quick Notes, in the Game notes group, made when you first type. The same game on two emulators shares one note.
+- **Add timestamp.** Adds a heading with the date and time, plus how far into the session you are if that game is running. It's in the notes box, and above a linked note in Quick Notes.
+- **Notes for current game** in the palette opens the running game's note in Quick Notes, ready to type.
+- **Unlink** in Quick Notes keeps a note but stops linking it to its game.
+
+### Fixed
+- **Replies that reach the page during startup now wait until every script has run.** Before this, a reply that arrived too early could stop part of the page from drawing. The same timing also logged a `renderWorkspaceManager` error at startup.
+
+### Performance and security
+- No timers or polling. Typing uses the existing delayed save. Add timestamp and the palette entry each ask once what's running, through the existing `GetGamesLive`.
+- No network use, listener, hotkey or new message. ASCS checks the new `game` field when saving, and a game's title is tidied, capped and shown only as text.
+
 ## Version 1.11.0
 
 Toasts at the top of the screen in place of cursor tooltips, and site badges in Games with mastered games marked. Manual pass: all 17 items passed, and both retest items passed after the two visual notes from that pass were fixed. 1,306 automated checks and a 94-check smoke test. Routines, iPhone calendar sync and the console hub stay on the roadmap.

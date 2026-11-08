@@ -1,0 +1,88 @@
+/* ==========================================================================
+   1.11.1: per-game notes. One box, used in Now playing, a library game's
+   details and the achievement browser, plus the link line in Quick Notes.
+   ========================================================================== */
+
+#gamesNowNotes {
+  min-height: 0;
+  margin-bottom: 16px;
+}
+
+.game-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.game-details-body .game-notes,
+.ra-browser .game-notes {
+  width: 100%;
+  margin: 4px 0;
+}
+
+.game-notes-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.game-notes-name {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.game-notes-name small {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-notes-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.game-notes-text {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 96px;
+  padding: 10px 12px;
+  border: 1px solid rgba(167, 174, 202, .22);
+  border-radius: 8px;
+  background: rgba(8, 8, 18, .45);
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.game-notes-text:disabled {
+  opacity: .6;
+}
+
+.note-game-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding-top: 10px;
+  font-size: 13px;
+}
+
+.note-game-link > span {
+  flex: 1;
+  min-width: 160px;
+}
+
+.note-game-link[hidden],
+#gamesNowNotes[hidden] {
+  display: none;
+}
