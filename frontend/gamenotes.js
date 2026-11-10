@@ -77,8 +77,7 @@ function addGameNoteStamp(key, title, after) {
 function buildGameNotesBox(key, title) {
     const root = element("div", "game-notes");
     const head = element("div", "game-notes-head");
-    const name = element("span", "game-notes-name");
-    name.append(element("span", "games-panel-label", "NOTES"), element("small", "", Games.displayTitle(title)));
+    head.append(element("h2", "", "Notes"), element("span", "game-notes-name", Games.displayTitle(title)));
     const actions = element("div", "game-notes-actions");
     const stamp = element("button", "secondary", "Add timestamp");
     stamp.type = "button";
@@ -86,11 +85,10 @@ function buildGameNotesBox(key, title) {
     const open = element("button", "secondary", "Open in Quick Notes");
     open.type = "button";
     actions.append(stamp, open);
-    head.append(name, actions);
     const text = element("textarea", "game-notes-text");
     text.rows = 4;
     text.setAttribute("aria-label", `Notes for ${Games.displayTitle(title)}`);
-    root.append(head, text);
+    root.append(head, text, actions);
     const box = { key, title, root, text, stamp, open };
 
     text.addEventListener("input", () => {
@@ -112,7 +110,7 @@ function buildGameNotesBox(key, title) {
     open.addEventListener("click", () => {
         const note = gameNoteFor(key);
         if (!note) return;
-        openNote(note.id);
+        openNote(note.id, "edit");          // written during play, so it opens to write in
         moveCaretToEnd($("noteText"));
     });
     return box;
@@ -166,7 +164,8 @@ function keepGameNoteFocus() {
 
 // Now playing's box, kept outside the panel that redraws itself. The title is
 // the running game's, or the last played game's when nothing is running; at
-// an emulator's menu there's none, so there's no box.
+// an emulator's menu there's none, so the module says so. It's always there,
+// so a game starting or stopping doesn't rearrange the page.
 function syncNowPlayingNotes(title) {
     nowNotesTitle = title;
     const panel = $("gamesNowNotes");
@@ -175,9 +174,11 @@ function syncNowPlayingNotes(title) {
     if (area && document.activeElement === area && panel.dataset.key !== key) return;
     const root = key ? gameNotesBox("now", title) : null;
     panel.dataset.key = key;
-    panel.hidden = !root;
-    if (!root) panel.replaceChildren();
-    else if (panel.firstChild !== root) panel.replaceChildren(root);
+    if (!root) {
+        const head = element("div", "game-notes-head");
+        head.append(element("h2", "", "Notes"));
+        panel.replaceChildren(head, gamesState.loaded ? element("p", "module-empty", "No game to take notes on.") : loadingNote());
+    } else if (panel.firstChild !== root) panel.replaceChildren(root);
 }
 
 // ---- the palette: Notes for current game
@@ -190,7 +191,7 @@ function openCurrentGameNotes() {
             return;
         }
         if (!fresh) {
-            showNotice("ASCS couldn't check what's running.");
+            showNotice("Maestro couldn't check what's running.");
             return;
         }
         const title = gamesState.playing.map(item => Games.playingTitle(gamesState.items, item)).find(Boolean);
@@ -200,7 +201,7 @@ function openCurrentGameNotes() {
             return;
         }
         const note = gameNoteFor(key) ?? createGameNote(key, title);
-        openNote(note.id);
+        openNote(note.id, "edit");
         moveCaretToEnd($("noteText"));
     });
 }
@@ -219,6 +220,7 @@ $("noteGameStamp").addEventListener("click", () => {
     const note = activeNote();
     if (!ASCSNotes.isGameKey(note?.game)) return;
     addGameNoteStamp(note.game, note.title, () => {
+        noteMode = "edit";                  // the stamp goes into the plain text
         renderActiveNote();
         $("noteText").focus();
         moveCaretToEnd($("noteText"));

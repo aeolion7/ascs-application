@@ -326,6 +326,12 @@
         return ERA_LOGOS.find(([pattern]) => pattern.test(text))?.[1] || "";
     }
 
+    // What the page calls a folder: the leveled copies' folder keeps its name
+    // on disk, ASCS Leveled, so nothing that plays a copy loses it (2.0.0).
+    function folderLabel(folder, label) {
+        return /^ASCS Leveled$/i.test(String(folder)) ? "Maestro Leveled" : String(label ?? folder ?? "");
+    }
+
     // A leveled copy ASCS made: a WAV directly in the library's ASCS Leveled
     // folder (ids are relative to the library). Only these can be deleted;
     // ASCS checks the same again (IsLeveledCopyId).
@@ -345,7 +351,7 @@
     global.ASCSSounds = {
         parseWav, measureWav, measureChannels, planLevel, applyGain, toDb, fromDb,
         bytesToBase64, base64ToBytes, formatDb, formatSeconds, filterSounds, groupSounds, eraLogo,
-        measureLoudness, wavChannels, compareToTarget, isLeveledCopy, rangeIds,
+        measureLoudness, wavChannels, compareToTarget, isLeveledCopy, folderLabel, rangeIds,
         snapOwnLevel, ownLevelAt, ownLevelFromFraction, cleanOwnLevels, levelChanges, LEVEL_DEFAULTS
     };
 })(globalThis);

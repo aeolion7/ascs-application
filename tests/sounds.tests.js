@@ -150,6 +150,8 @@
     equal("logos: \"Me\" only as a word", S.eraLogo("Windows Memories"), "");
 
     // Select (1.8.0): which sounds can be deleted, and Shift + click ranges.
+    equal("folder label: the leveled copies' folder says Maestro", S.folderLabel("ASCS Leveled", "ASCS Leveled"), "Maestro Leveled");
+    equal("folder label: others keep theirs", S.folderLabel("(1998) Windows 98", "Windows 98"), "Windows 98");
     check("leveled copy: in ASCS Leveled", S.isLeveledCopy("ASCS Leveled\\CHIMES (-7.6 dB).wav") && S.isLeveledCopy("ascs leveled\\x.WAV"));
     check("leveled copy: refused elsewhere", ["(1998) Windows 98\\CHIMES.wav", "ASCS Leveled\\sub\\x.wav", "ASCS Leveled\\x.mid", "My ASCS Leveled\\x.wav", "ASCS Leveled\\"].every(id => !S.isLeveledCopy(id)));
     const order = ["a", "b", "c", "d", "e"];

@@ -24,11 +24,11 @@ function renderRaAwards(box) {
     const section = element("section", "ra-awards");
     section.setAttribute("aria-label", "Site badges");
     const head = element("div", "ra-awards-head");
-    head.append(element("h3", "", "Site badges"));
+    head.append(element("h2", "", "Site Badges"));
     section.append(head);
     box.append(section);
     if (!ra.awards) {
-        section.append(element("p", "settings-note", ra.awardsError || "Loading…"));
+        section.append(ra.awardsError ? element("p", "settings-note", ra.awardsError) : loadingNote());
         return;
     }
     const parsed = Games.parseRaAwards(ra.awards);

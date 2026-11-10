@@ -2,12 +2,15 @@
 ; SUPER KEY / F24
 ; ==========================================
 
+; Exempt from the start-up Suspend in ASCS.ahk, so Super says Maestro is starting.
+#SuspendExempt
 ~F24:: {
     KeyWait("F24")
 
     if (A_PriorKey = "F24")
         ToggleCommandCenter()
 }
+#SuspendExempt false
 
 F24 & Space::ShowCommandLauncher()
 
@@ -50,7 +53,9 @@ LaunchSnipping() {
 ; Ctrl+Alt+Shift+A: reload ASCS. ASCS.Launcher.ahk owns the same keys to start
 ; ASCS when it is not running; whichever hook sees the keys first handles them,
 ; and both paths end in the same notes-safe reload.
+#SuspendExempt
 $^!+a::ReloadASCS()
+#SuspendExempt false
 
 ; ASCS.Launcher.ahk posts this message to request the same notes-safe reload.
 OnMessage(
@@ -62,7 +67,7 @@ HandleReloadMessage(wParam, lParam, msg, hwnd) {
     return 1
 }
 
-; 1.11.2: the ASCS command's `try` closes ASCS with this, saving notes first.
+; 1.11.2: the Maestro command's `try` closes Maestro with this, saving notes first.
 OnMessage(
     DllCall("RegisterWindowMessage", "Str", "Aeolionware.ASCS.Exit", "UInt"),
     HandleExitMessage
@@ -359,7 +364,7 @@ LoadUserSettings() {
         WriteLog("Invalid power delay; using 5 s. " err.Message)
     try ASCS_AscsSoundMode := ValidateAscsSoundMode(IniRead(ASCS_SettingsFile, "Sounds", "AscsSounds", "show"))
     catch as err
-        WriteLog("Invalid ASCS sounds preference; using on show. " err.Message)
+        WriteLog("Invalid Maestro sounds preference; using on show. " err.Message)
 
     ; Quick actions are only stored once customized; until then the frontend
     ; shows its defaults.
@@ -413,7 +418,7 @@ SaveUserSettings(content) {
         if (keys.Length != names.Length)
             throw Error("Shortcut preferences are incomplete.")
 
-        labels := ["Quick Notes", "Everything", "System Dashboard",
+        labels := ["Quick Notes", "Everything", "System",
             "Windows Terminal", "File Explorer", "Claude", "Task Manager"]
         hotkeys := Map()
         used := Map()
@@ -446,7 +451,7 @@ SaveUserSettings(content) {
         RegisterConfiguredHotkeys()
 
         SendToFrontend(
-            '{"type":"settingsSaved","message":"Preferences saved and applied."}'
+            '{"type":"settingsSaved","message":"Saved and applied."}'
         )
     } catch as err {
         WriteLog("Settings save failed: " err.Message)
@@ -528,7 +533,7 @@ SaveWorkspace(name := "") {
                 windows.Push(record)
             } catch as err {
                 skipped++
-                WriteLog("Workspace skipped a window: " err.Message)
+                WriteLog("Arrangement skipped a window: " err.Message)
             }
             if (windows.Length >= 48)
                 break
@@ -561,14 +566,14 @@ SaveWorkspace(name := "") {
         }
         FileMove(tempPath, workspacePath, 1)
         counted := WorkspaceCountText(windows.Length, spread.Count)
-        summary := "Workspace “" displayName "” saved (" counted
+        summary := "Arrangement “" displayName "” saved (" counted
             . (skipped ? ", " skipped " skipped" : "") ")."
         ShowNotice(summary)
-        RecordActivity("workspace", "Saved workspace “" displayName "” (" counted ")")
+        RecordActivity("workspace", "Saved arrangement “" displayName "” (" counted ")")
         SendWorkspaces()
     } catch as err {
-        WriteLog("Workspace save failed: " err.Message)
-        ShowNotice("Unable to save workspace: " err.Message)
+        WriteLog("Arrangement save failed: " err.Message)
+        ShowNotice("Unable to save arrangement: " err.Message)
         try {
             if (IsSet(tempPath) && FileExist(tempPath))
                 FileDelete(tempPath)
@@ -699,8 +704,8 @@ RestoreWorkspace(name := "") {
     if !FileExist(workspacePath) {
         ShowWorkspaceMessage(
             displayName = "Default"
-                ? "No saved workspace was found.`n`nArrange your windows, then press Super+S to save one, or use “Save workspace as…” in the command palette (Super+Space) to save a named layout."
-                : "The workspace “" displayName "” was not found.",
+                ? "No saved arrangement was found.`n`nArrange your windows, then press Super+S to save one, or use “Save arrangement as…” in the command palette (Super+Space) to save a named layout."
+                : "The arrangement “" displayName "” was not found.",
             "Iconi"
         )
         return
@@ -714,7 +719,7 @@ RestoreWorkspace(name := "") {
             "0"
         ))
         if (count < 1 || count > 48)
-            throw Error("Saved workspace has an invalid window count.")
+            throw Error("Saved arrangement has an invalid window count.")
 
         pending := []
         for index in Range(1, count) {
@@ -731,7 +736,7 @@ RestoreWorkspace(name := "") {
             if (IniRead(workspacePath, section, "enabled", "1") = "0")
                 continue
             if !IsValidWorkspaceExecutable(path, process) {
-                WriteLog("Skipped an invalid or unavailable workspace executable: " path)
+                WriteLog("Skipped an invalid or unavailable arrangement executable: " path)
                 continue
             }
 
@@ -758,7 +763,7 @@ RestoreWorkspace(name := "") {
 
         if !pending.Length {
             ShowWorkspaceMessage(
-                "Nothing to restore: the saved workspace's apps aren't available, or its windows are switched off.",
+                "Nothing to restore: the saved arrangement's apps aren't available, or its windows are switched off.",
                 "Icon!"
             )
             return
@@ -782,8 +787,8 @@ RestoreWorkspace(name := "") {
         }
         StartWorkspaceRestore(displayName, pending)
     } catch as err {
-        WriteLog("Workspace restore failed: " err.Message)
-        ShowWorkspaceMessage("Unable to restore the workspace.`n`n" err.Message, "Iconx")
+        WriteLog("Arrangement restore failed: " err.Message)
+        ShowWorkspaceMessage("Unable to restore the arrangement.`n`n" err.Message, "Iconx")
     }
 }
 
@@ -797,8 +802,8 @@ StartWorkspaceRestore(displayName, pending) {
     global ASCS_WorkspaceClaimed
     ASCS_WorkspaceRestorePending := pending
     ASCS_WorkspaceClaimed := Map()
-    ShowNotice("Restoring workspace “" displayName "”.")
-    RecordActivity("workspace", "Restored workspace “" displayName "”")
+    ShowNotice("Restoring arrangement “" displayName "”.")
+    RecordActivity("workspace", "Restored arrangement “" displayName "”")
     RestoreWorkspaceWindows()
     if ASCS_WorkspaceRestorePending.Length
         SetTimer(RestoreWorkspaceWindows, 500)
@@ -811,7 +816,7 @@ AskWorkspaceDesktops(displayName, pending, saved, current, missing) {
     answer := MsgBox("“" displayName "” uses " (current.Length + missing) " desktops; you have " current.Length ".`n`n"
         . "Yes: add " missing " desktop" (missing = 1 ? "" : "s") ".`n"
         . "No: put those windows on your last desktop.`n"
-        . "Cancel: don't restore it.", "Aeolionware SCS: Workspace", "YesNoCancel Icon? T120")
+        . "Cancel: don't restore it.", "Aeolionware SCS: Arrangement", "YesNoCancel Icon? T120")
     if (answer = "Yes") {
         added := 0
         Loop missing {
@@ -819,7 +824,7 @@ AskWorkspaceDesktops(displayName, pending, saved, current, missing) {
                 break
             added++
         }
-        WriteLog("Workspace “" displayName "”: added " added " desktop" (added = 1 ? "" : "s") ".")
+        WriteLog("Arrangement “" displayName "”: added " added " desktop" (added = 1 ? "" : "s") ".")
         names := DesktopNames()
         ApplyWorkspaceDesktops(pending, WorkspaceDesktopTargets(saved, names), names.Length - 1)
     } else if (answer = "No") {
@@ -841,7 +846,7 @@ ApplyWorkspaceDesktops(pending, targets, last) {
 
 ShowWorkspaceMessage(message, icon) {
     ; Runs on a short timer so the hotkey thread returns immediately.
-    SetTimer(() => MsgBox(message, "Aeolionware SCS: Workspace", icon " T15"), -1)
+    SetTimer(() => MsgBox(message, "Aeolionware SCS: Arrangement", icon " T15"), -1)
 }
 
 
@@ -876,7 +881,7 @@ RestoreWorkspaceWindows(*) {
                     if IsWorkspaceWindow(hwnd, true, spread)
                         list.Push(hwnd)
             } catch as err {
-                WriteLog("Workspace window lookup failed: " err.Message)
+                WriteLog("Arrangement window lookup failed: " err.Message)
             }
             candidates[key] := list
         }
@@ -905,7 +910,7 @@ RestoreWorkspaceWindows(*) {
                 Run(GetWorkspaceLaunchCommand(record))
                 record["launched"] := true
             } catch as err {
-                WriteLog("Workspace application launch failed: " err.Message)
+                WriteLog("Arrangement application launch failed: " err.Message)
                 continue
             }
         }
@@ -913,7 +918,7 @@ RestoreWorkspaceWindows(*) {
         if (A_TickCount < record["deadline"])
             remaining.Push(record)
         else
-            WriteLog("Workspace restore timed out for " record["path"])
+            WriteLog("Arrangement restore timed out for " record["path"])
     }
 
     ASCS_WorkspaceRestorePending := remaining
@@ -945,7 +950,7 @@ PlaceWorkspaceWindow(hwnd, record) {
         else if (record.Has("target") && record["target"] >= 0 && WindowDesktop(hwnd) != record["target"])
             MoveWindowToDesktop(hwnd, record["target"])
     } catch as err {
-        WriteLog("Workspace window placement failed: " err.Message)
+        WriteLog("Arrangement window placement failed: " err.Message)
     }
 }
 

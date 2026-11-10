@@ -144,4 +144,4 @@ Set-Content -LiteralPath (Join-Path $Data 'users') "ascs:$hash" -Encoding ascii
 Step 'Account "ascs" written (only a SHA-512 crypt hash is stored)'
 
 Write-Host ''
-Write-Host 'Done. Reload ASCS (Ctrl+Alt+Shift+A); it starts the calendar server itself.'
+Write-Host 'Done. Reload Maestro (Ctrl+Alt+Shift+A); it starts the calendar server itself.'

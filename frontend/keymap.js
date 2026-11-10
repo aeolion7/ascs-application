@@ -36,7 +36,7 @@
             m2: ["Audio", "M2: switches audio output through SoundSwitch (Ctrl + Alt + F11)."],
             m3: ["Discord", "M3 (F22): toggles Discord (keyboard macro script)."],
             m4: ["PSO", "M4 (F13): toggles the Ephinea PSO launcher (keyboard macro script); Fn + M4 opens its folder."],
-            m5: ["RetroArch", "M5 (F14): toggles RetroArch (keyboard macro script); Fn + M5 opens its folder."],
+            m5: ["Retro", "M5 (F14): toggles RetroArch (keyboard macro script); Fn + M5 opens its folder."],
             m6: ["Dolphin", "M6 (F15): toggles Dolphin (keyboard macro script); Fn + M6 opens its folder."],
             m7: ["PCSX2", "M7 (F16): toggles PCSX2 (keyboard macro script); Fn + M7 opens its folder."]
         };
@@ -57,8 +57,8 @@
             ["ralt", "Alt", 1.25], ["super", "Super", 1.25], ["fn", "Fn", 1.25], ["rctrl", "Ctrl", 1.25]]);
         const special = {
             code: { special: "macro", caption: "VS Code", note: "Code (F23): opens the selected files, the Explorer folder or the desktop in VS Code (Code key script)." },
-            super: { special: "super", note: "Super (sends F24): the command key. Tap it to show or hide ASCS; hold it with another key to run a command." },
-            fn: { note: "Fn: the keyboard's function layer, handled by the keyboard itself. Not used by ASCS." }
+            super: { special: "super", note: "Super (sends F24): the command key. Tap it to show or hide Maestro; hold it with another key to run a command." },
+            fn: { note: "Fn: the keyboard's function layer, handled by the keyboard itself. Not used by Maestro." }
         };
         keys.forEach(key => Object.assign(key, special[key.id] || {}));
 
@@ -84,7 +84,7 @@
     const ACTIONS = {
         notes: { title: "Quick Notes", short: "Notes", cat: "apps", desc: "Opens the notes editor." },
         everything: { title: "Everything", short: "Find", cat: "apps", desc: "Opens Everything to search files." },
-        dashboard: { title: "System Dashboard", short: "Dash", cat: "apps", desc: "Live metrics and hardware inventory." },
+        dashboard: { title: "System", short: "Sys", cat: "apps", desc: "Live metrics and hardware inventory." },
         terminal: { title: "Windows Terminal", short: "Term", cat: "apps", desc: "Focuses an open Terminal (switching desktops if needed) or opens one." },
         explorer: { title: "File Explorer", short: "Files", cat: "apps", desc: "Focuses an open Explorer window or opens one." },
         claude: { title: "Claude", short: "Claude", cat: "apps", desc: "Opens Claude's quick-entry prompt (Ctrl+Alt+Space by default), or starts the Claude app." },
@@ -92,33 +92,33 @@
     };
 
     const FIXED_SUPER = {
-        space: { title: "Command palette", short: "Cmd", cat: "apps", desc: "Search commands, notes, workspaces, and windows. = calculates, ? searches the web, + adds an event." },
+        space: { title: "Command palette", short: "Cmd", cat: "apps", desc: "Search commands, notes, arrangements, and windows. = calculates, ? searches the web, + adds an event." },
         b: { title: "Vivaldi", short: "Web", cat: "apps", desc: "Focuses Vivaldi on this desktop, switches to its desktop, or opens it." },
         l: { title: "Lock workstation", short: "Lock", cat: "windows", desc: "Locks the Windows session." },
         m: { title: "Toggle mute", short: "Mute", cat: "windows", desc: "Mutes or unmutes system audio." },
         v: { title: "Clipboard History", short: "Clip", cat: "windows", desc: "Opens Windows clipboard history." },
         j: { title: "Insert timestamp", short: "Time", cat: "saved", desc: "Types yyyy-MM-dd HH:mm:ss at the cursor." },
         y: { title: "Insert date", short: "Date", cat: "saved", desc: "Types yyyy-MM-dd at the cursor." },
-        s: { title: "Save workspace", short: "Save", cat: "saved", desc: "Saves the visible window layout as the Default workspace." },
-        r: { title: "Restore workspace", short: "Load", cat: "saved", desc: "Restores the Default workspace, reusing open windows first." },
+        s: { title: "Save arrangement", short: "Save", cat: "saved", desc: "Saves the visible window layout as the Default arrangement." },
+        r: { title: "Restore arrangement", short: "Load", cat: "saved", desc: "Restores the Default arrangement, reusing open windows first." },
         left: { title: "Snap left", short: "Snap", cat: "windows", desc: "Left half of the monitor; then ↑ or ↓ for a quadrant." },
         right: { title: "Snap right", short: "Snap", cat: "windows", desc: "Right half of the monitor; then ↑ or ↓ for a quadrant." },
         up: { title: "Maximize", short: "Max", cat: "windows", desc: "Maximizes the active window." },
         down: { title: "Restore / minimize", short: "Min", cat: "windows", desc: "Restores a maximized window, otherwise minimizes it." },
         // Macro keys with Super (1.7.0); without Super they stay with the macro script.
-        m4: { title: "PSO session", short: "PSO", cat: "apps", desc: "Headphones on, Discord, then the Ephinea launcher; when the game closes, your audio comes back and ASCS offers to close Discord." },
+        m4: { title: "PSO session", short: "PSO", cat: "apps", desc: "Headphones on, Discord, then the Ephinea launcher; when the game closes, your audio comes back and Maestro offers to close Discord." },
         m5: { title: "Recent RetroArch games", short: "Retro", cat: "apps", desc: "Opens the palette on your recent RetroArch games; Enter plays one." },
         m6: { title: "Recent Dolphin games", short: "Dolphin", cat: "apps", desc: "Opens the palette on your recent Dolphin games; Enter plays one." },
         m7: { title: "Recent PCSX2 games", short: "PCSX2", cat: "apps", desc: "Opens the palette on your recent PCSX2 games; Enter plays one." }
     };
 
     const FIXED_SHIFT = {
-        c: { title: "Quick capture", short: "Grab", cat: "saved", desc: "Saves the selected text (or the clipboard) as a new note without opening ASCS." },
+        c: { title: "Quick capture", short: "Grab", cat: "saved", desc: "Saves the selected text (or the clipboard) as a new note without opening Maestro." },
         p: { title: "Paste a note", short: "Paste", cat: "saved", desc: "Opens the palette on your notes; Enter pastes into the window you were using, filling placeholders." },
         d: { title: "New folder", short: "+Dir", cat: "saved", desc: "Creates a folder in the active File Explorer location." },
         f: { title: "New file", short: "+File", cat: "saved", desc: "Creates an empty file in the active File Explorer location." },
-        s: { title: "Save workspace as…", short: "Save as", cat: "saved", desc: "Opens the palette on name entry; Enter saves the current window layout under that name." },
-        r: { title: "Choose a workspace", short: "Pick", cat: "saved", desc: "Opens the palette on your saved workspaces." },
+        s: { title: "Save arrangement as…", short: "Save as", cat: "saved", desc: "Opens the palette on name entry; Enter saves the current window layout under that name." },
+        r: { title: "Choose an arrangement", short: "Pick", cat: "saved", desc: "Opens the palette on your saved arrangements." },
         left: { title: "Move to monitor (left)", short: "Mon", cat: "windows", desc: "Moves the active window to the monitor on the left." },
         right: { title: "Move to monitor (right)", short: "Mon", cat: "windows", desc: "Moves the active window to the monitor on the right." }
     };
@@ -151,12 +151,12 @@
         }
         Object.entries(hotkeys || {}).forEach(([action, key]) => {
             if (typeof key !== "string" || !/^[a-z]$/i.test(key) || !ACTIONS[action]) return;
-            base[key.toLowerCase()] = { ...ACTIONS[action], configurable: true };
+            base[key.toLowerCase()] = { ...ACTIONS[action], configurable: true, action };
         });
-        (Array.isArray(commands) ? commands : []).forEach(command => {
+        (Array.isArray(commands) ? commands : []).forEach((command, commandIndex) => {
             if (!command || typeof command.key !== "string" || !/^[a-z]$/i.test(command.key)) return;
             base[command.key.toLowerCase()] = {
-                title: command.name, short: String(command.name).slice(0, 5), cat: "custom",
+                title: command.name, short: String(command.name).slice(0, 5), cat: "custom", commandIndex,
                 desc: `Custom command: ${command.target}`
             };
         });
@@ -173,11 +173,76 @@
             passthrough[key] = `${windows.keys} (${windows.title})`;
             base[key] = {
                 title: windows.title, short: windows.short, cat: "windows", passthrough: true,
-                desc: `Windows' own shortcut (${windows.keys}), passed through while ${key.toUpperCase()} has no ASCS action. Assigning ${key.toUpperCase()} in Preferences replaces it.`
+                desc: `Windows' own shortcut (${windows.keys}), passed through while ${key.toUpperCase()} has no Maestro action. Giving ${key.toUpperCase()} a command replaces it.`
             };
         });
         return { super: base, shift, passthrough };
     }
 
-    global.ASCSKeymap = { isoFullSizeLayout, buildBindings };
+    // ------------------------------------------------------- editing the map
+    // The built-ins always hold a letter; a custom command's is optional. The
+    // backend checks all of this again when saving (CheckShortcutKey).
+    const HOTKEY_ACTIONS = ["notes", "everything", "dashboard", "terminal", "explorer", "claude", "taskmanager"];
+    const DEFAULT_HOTKEYS = { notes: "q", everything: "f", dashboard: "i", terminal: "t", explorer: "e", claude: "c", taskmanager: "h" };
+    const RESERVED_LETTERS = "bsrlmvjy";
+
+    // What a key's panel offers: "action" and "command" move to another letter,
+    // "free" takes a command, and "fixed" only describes itself.
+    function keyEditKind(key, binding, layer = "super") {
+        if (layer !== "super" || !/^[a-z]$/.test(key.id)) return "fixed";
+        if (binding?.configurable) return "action";
+        if (binding?.cat === "custom") return "command";
+        if (RESERVED_LETTERS.includes(key.id)) return "fixed";
+        return !binding || binding.passthrough ? "free" : "fixed";
+    }
+
+    // Why a command can't take a letter; "" when it can. ref is "action:<name>"
+    // or "command:<index>".
+    function letterProblem(letter, ref, hotkeys = {}, commands = []) {
+        const key = String(letter).toLowerCase();
+        if (!/^[a-z]$/.test(key)) return "Use one letter, A to Z.";
+        const label = key.toUpperCase();
+        if (RESERVED_LETTERS.includes(key)) return `Super + ${label} is built in, so it can't be changed.`;
+        const action = HOTKEY_ACTIONS.find(name => hotkeys[name] === key && `action:${name}` !== ref);
+        if (action) return `Super + ${label} is already ${ACTIONS[action].title}.`;
+        const holder = (Array.isArray(commands) ? commands : []).findIndex((command, index) => command?.key?.toLowerCase() === key && `command:${index}` !== ref);
+        if (holder >= 0) return `Super + ${label} is already ${commands[holder].name}.`;
+        return "";
+    }
+
+    // Everything that can be given a key, for a free key's panel.
+    function assignableCommands(hotkeys = {}, commands = []) {
+        return [
+            ...HOTKEY_ACTIONS.map(name => ({ ref: `action:${name}`, title: ACTIONS[name].title, key: hotkeys[name] || "" })),
+            ...(Array.isArray(commands) ? commands : []).map((command, index) => ({ ref: `command:${index}`, title: command.name, key: command.key || "" }))
+        ];
+    }
+
+    // The lists beside the map, in three groups. Number rows and the numpad are
+    // one line each; tapping Super and reloading have no key to select on a layer.
+    function groupBindings(bindings, layout) {
+        const labels = Object.fromEntries(layout.keys.map(key => [key.id, key.label]));
+        const groups = {
+            apps: [{ title: "Show or hide Maestro", keys: ["Tap Super"], key: "super", layer: "super", desc: "Tap Super by itself." }],
+            windows: [],
+            saved: []
+        };
+        [["super", []], ["shift", ["Shift"]]].forEach(([layer, prefix]) => {
+            Object.entries(bindings[layer]).forEach(([id, binding]) => {
+                if (id.startsWith("num")) return;
+                const digit = /^[1-9]$/.test(id);
+                if (digit && id !== "1") return;
+                const group = binding.cat === "custom" ? "apps" : binding.cat;
+                groups[group]?.push({
+                    title: digit ? binding.title.replace(/1$/, "1–9") : binding.title,
+                    keys: [...prefix, digit ? "1–9" : labels[id] ?? id],
+                    key: id, layer, desc: digit ? binding.desc.replace(/\b1\b/g, "1–9") : binding.desc
+                });
+            });
+        });
+        groups.windows.push({ title: "Start or reload Maestro", keys: ["Ctrl", "Alt", "Shift", "A"], key: "", layer: "", desc: "Starts Maestro when it isn't running; otherwise saves notes and reloads it." });
+        return groups;
+    }
+
+    global.ASCSKeymap = { isoFullSizeLayout, buildBindings, HOTKEY_ACTIONS, DEFAULT_HOTKEYS, keyEditKind, letterProblem, assignableCommands, groupBindings };
 })(globalThis);

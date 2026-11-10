@@ -34,15 +34,15 @@
 .help-header h2 {
   margin: 8px 0 4px;
   color: #f0f1f8;
-  font-size: 24px;
+  font-size: calc(27px * var(--text-scale));
   font-weight: 600;
-  letter-spacing: -.3px;
+  letter-spacing: 0;
 }
 
 .help-meta {
   margin: 0;
   color: #8f94aa;
-  font-size: 12.5px;
+  font-size: var(--t-floor);
 }
 
 .help-close {
@@ -85,7 +85,7 @@
 .help-dialog h3 {
   margin: 0 0 12px;
   color: #a4a9bb;
-  font-size: 10.5px;
+  font-size: var(--t-floor);
   font-weight: 700;
   letter-spacing: 1.3px;
   text-transform: uppercase;
@@ -93,7 +93,7 @@
 
 .help-dialog h3 span {
   margin-left: 8px;
-  color: #6f7489;
+  color: var(--text-muted);
   font-weight: 600;
   letter-spacing: .4px;
   text-transform: none;
@@ -116,7 +116,7 @@
 .help-keys dd {
   margin: 0;
   color: #c9ccd8;
-  font-size: 13px;
+  font-size: var(--t-floor);
 }
 
 .help-dialog kbd {
@@ -128,15 +128,15 @@
   background: linear-gradient(180deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .02));
   color: #eef0f7;
   font-family: inherit;
-  font-size: 11.5px;
+  font-size: var(--t-floor);
   font-weight: 600;
   line-height: 1;
   text-align: center;
 }
 
 .help-plus {
-  color: #5f6479;
-  font-size: 11px;
+  color: var(--text-muted);
+  font-size: var(--t-floor);
 }
 
 .help-pages {
@@ -161,7 +161,7 @@
   color: #c9ccd8;
   cursor: pointer;
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--t-floor);
   transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
 }
 
@@ -174,7 +174,7 @@
 .help-page kbd {
   min-width: 18px;
   padding: 2px 5px 3px;
-  font-size: 10.5px;
+  font-size: var(--t-floor);
 }
 
 .help-page:hover,
@@ -202,7 +202,7 @@
 .help-footer p {
   margin: 0;
   color: #8f94aa;
-  font-size: 12.5px;
+  font-size: var(--t-floor);
 }
 
 @media (max-width: 760px) {

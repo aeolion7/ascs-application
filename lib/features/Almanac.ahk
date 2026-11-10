@@ -127,8 +127,9 @@ ClearAlmanacCache(keepDate := "") {
 
 AlmanacUserAgent() {
     global ASCS_Version
-    ; Wikimedia asks API clients to identify themselves with contact details.
-    return "ASCS/" ASCS_Version " (Aeolionware Super Command System; lionsamurai@gmail.com)"
+    ; Names the client, as Wikimedia's API policy asks, without the owner's
+    ; email address: the owner's choice in 2.0.0 (one request a day per feed).
+    return "Maestro/" ASCS_Version " (Aeolionware)"
 }
 
 FetchAlmanacFeeds() {

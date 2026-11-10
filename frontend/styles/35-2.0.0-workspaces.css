@@ -1,0 +1,714 @@
+/* ==========================================================================
+   2.0.0: Workspaces. Workspaces and Launch Rules are section tabs. The first
+   puts the workspace being edited on 8 columns, with Saved Workspaces and Selected
+   Window on the other 4; both sections fit the window, and long lists scroll
+   inside their module. The canvas and its windows keep their rules from
+   21-1.10.0; type, controls and spacing move to the 2.0.0 values here.
+   ========================================================================== */
+
+/* ---- The page ---- */
+
+#workspaces .ws-layout {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--space-between);
+}
+
+.ws-editor,
+.ws-rules {
+  grid-column: span 8;
+}
+
+.ws-side,
+.ws-rule-add {
+  grid-column: span 4;
+}
+
+.ws-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-between);
+  min-width: 0;
+}
+
+:root #workspaces .module {
+  gap: 16px;
+}
+
+@media (min-width: 1101px) {
+  :root #workspaces.view.active {
+    display: flex;
+    box-sizing: border-box;
+    flex-direction: column;
+    height: var(--page-fit);
+    min-height: calc(640px * var(--text-scale));
+    padding-bottom: 0;
+  }
+
+  #workspaces .ws-layout {
+    flex: 1 1 0;
+    grid-template-rows: minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  #workspaces .ws-layout[hidden] {
+    display: none;
+  }
+
+  #workspaces .module {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .ws-side {
+    min-height: 0;
+  }
+
+  /* The list takes what the panel leaves. */
+  .ws-saved {
+    flex: 1 1 0;
+  }
+
+  /* Held at its usual height while it loads, so the list above doesn't jump. */
+  #workspaces .ws-inspector {
+    flex: none;
+    min-height: min(calc(650px * var(--text-scale)), 58%);
+    max-height: 58%;
+  }
+
+  /* Room before the scrollbar, as in the other lists. */
+  .ws-inspector .ws-panel {
+    margin-right: calc(-1 * var(--space-module));
+    padding-right: 10px;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+
+  /* The canvas is held to part of the editor's height, at its monitor's shape,
+     so the window list below always has room. */
+  .ws-page {
+    flex: 1 1 0;
+    min-height: 0;
+    container-type: size;
+  }
+
+  .ws-screen {
+    justify-self: center;
+    width: min(100%, calc(64cqh * var(--aspect, 2)));
+  }
+
+  .ws-rows {
+    flex: 1 1 0;
+    min-height: calc(110px * var(--text-scale));
+    overflow-y: auto;
+  }
+
+  .ws-list,
+  .ws-rule-list,
+  .ws-rule-windows {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 1100px) {
+  .ws-editor,
+  .ws-rules,
+  .ws-side,
+  .ws-rule-add {
+    grid-column: span 12;
+  }
+}
+
+/* ---- The workspace's heading and actions ---- */
+
+:root .ws-head {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  margin: 0;
+}
+
+.ws-head-copy {
+  min-width: 0;
+}
+
+:root .ws-head h2 {
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: var(--t-name);
+  font-weight: 600;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:root .ws-head p {
+  margin: 4px 0 0;
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+:root .ws-name {
+  width: calc(420px * var(--text-scale));
+  min-height: var(--height-field);
+  padding: 0 14px;
+  border: 1px solid var(--brand-tint);
+  border-radius: var(--radius-control);
+  background: var(--surface-field);
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-module);
+  font-weight: 600;
+}
+
+:root .ws-actions {
+  gap: 8px;
+}
+
+.ws-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ws-page[hidden],
+.ws-waiting[hidden] {
+  display: none;
+}
+
+/* ---- Desktop tabs: the same look as the other small tab rows ---- */
+
+:root .ws-tabs {
+  display: inline-flex;
+  flex: none;
+  align-self: flex-start;
+  gap: 4px;
+  max-width: 100%;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-field);
+}
+
+:root .ws-tabs[hidden] {
+  display: none;
+}
+
+:root .ws-tab {
+  min-height: var(--height-control-small);
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--radius-key);
+  background: transparent;
+  color: var(--text-soft);
+  font-family: var(--font-display);
+  font-size: var(--t-tab);
+  font-weight: 500;
+}
+
+:root .ws-tab:hover {
+  border-color: transparent;
+  background: var(--surface-raised);
+  color: var(--text-strong);
+}
+
+:root .ws-tab em {
+  margin-left: 8px;
+  color: var(--text-muted);
+  font-size: var(--t-sub);
+}
+
+:root .ws-tab[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--brand-indigo-control);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+:root .ws-tab[aria-pressed="true"] em {
+  color: var(--brand-tint-text);
+}
+
+:root .ws-tab.is-pinned,
+:root .ws-tab.is-pinned[aria-pressed="true"] {
+  color: var(--brand-gold-text);
+}
+
+/* ---- The canvas ---- */
+
+:root .ws-screens {
+  flex: none;
+  gap: 16px;
+}
+
+:root .ws-monitor-label {
+  color: var(--text-soft);
+  font-family: var(--font-display);
+  font-size: var(--t-sub);
+}
+
+:root .ws-screen {
+  border-color: var(--line-control);
+  border-radius: var(--radius-key);
+  background: var(--surface-field);
+}
+
+:root .ws-window {
+  padding: 10px 12px;
+  border-radius: 6px;
+}
+
+:root .ws-window strong {
+  font-family: var(--font-display);
+  font-size: var(--t-sub);
+  font-weight: 600;
+}
+
+:root .ws-window > span {
+  margin-top: 3px;
+  font-size: var(--t-floor);
+}
+
+:root .ws-window.is-pinned {
+  border-color: var(--brand-gold);
+  color: var(--brand-gold-text);
+}
+
+:root .ws-window.is-pinned.is-selected {
+  border-color: var(--brand-gold-text);
+}
+
+/* ---- The window list ---- */
+
+:root .ws-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0 calc(-1 * var(--space-module)) 0 0;
+  padding-right: 10px;
+  scrollbar-gutter: stable;
+}
+
+:root .ws-row {
+  display: grid;
+  flex: none;
+  grid-template-columns: calc(220px * var(--text-scale)) minmax(0, 1fr) auto;
+  gap: 16px;
+  min-height: calc(48px * var(--text-scale));
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  color: var(--text-strong);
+  font-size: var(--t-body);
+}
+
+:root .ws-row:last-child {
+  border-bottom: 0;
+}
+
+:root .ws-row:hover {
+  background: var(--surface-raised);
+}
+
+:root .ws-row.is-selected {
+  border-radius: var(--radius-key);
+  background: color-mix(in srgb, var(--brand-indigo-control) 55%, transparent);
+}
+
+:root .ws-row strong {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+:root .ws-row span {
+  color: var(--text-soft);
+}
+
+:root .ws-row small {
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+  font-variant-numeric: tabular-nums;
+}
+
+:root .ws-row.is-off strong,
+:root .ws-row.is-off span {
+  color: var(--text-muted);
+}
+
+:root .ws-empty {
+  margin: 8px 0;
+  color: var(--text-soft);
+  font-size: var(--t-body);
+}
+
+:root .ws-add {
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+:root .ws-add select {
+  flex: 1;
+  min-height: var(--height-control);
+  padding: 0 34px 0 12px;
+  font-size: var(--t-body);
+}
+
+/* ---- Saved Layouts ---- */
+
+:root .ws-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0 calc(-1 * var(--space-module)) 0 0;
+  padding: 0 10px 0 0;
+  list-style: none;
+  scrollbar-gutter: stable;
+}
+
+.ws-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-height: calc(64px * var(--text-scale));
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--text-strong);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ws-item:hover {
+  background: var(--surface-raised);
+}
+
+.ws-item[aria-pressed="true"] {
+  border-color: var(--brand-tint);
+  background: color-mix(in srgb, var(--brand-indigo-control) 55%, transparent);
+}
+
+.ws-item:focus-visible {
+  outline-offset: -3px !important;
+}
+
+.ws-item-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.ws-item-copy strong {
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: var(--t-subhead);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-item-copy small {
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+  white-space: nowrap;
+}
+
+:root .ws-thumb {
+  width: calc(96px * var(--text-scale));
+  height: calc(40px * var(--text-scale));
+  border-color: var(--line-control);
+  border-radius: 4px;
+  background: var(--surface-field);
+}
+
+:root .ws-thumb i {
+  background: var(--brand-tint-text);
+  box-shadow: 0 0 0 1px var(--surface-field) inset;
+}
+
+:root .ws-thumb i.is-pinned {
+  background: var(--brand-gold-text);
+}
+
+.ws-save-row {
+  display: flex;
+  flex: none;
+}
+
+.ws-save {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  min-width: 0;
+}
+
+:root .ws-save input {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+
+/* ---- Selected Window ---- */
+
+:root .ws-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+#wsWindowTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-panel-title[hidden] {
+  display: none;
+}
+
+:root .ws-panel-title {
+  flex: none;
+  margin: -12px 0 0;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:root .ws-warning {
+  color: var(--brand-gold-text);
+  font-size: var(--t-sub);
+}
+
+:root .ws-field {
+  gap: 8px;
+}
+
+:root .ws-field > span,
+:root .ws-number span {
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+  font-weight: 400;
+}
+
+:root .ws-field select {
+  min-height: var(--height-control);
+  padding: 0 34px 0 12px;
+  font-size: var(--t-body);
+}
+
+:root .ws-places {
+  gap: 8px;
+}
+
+:root .ws-place {
+  min-height: var(--height-control-small);
+  padding: 0 6px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-key);
+  background: var(--surface-raised);
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-sub);
+  font-weight: 500;
+}
+
+:root .ws-place:hover {
+  border-color: var(--brand-tint-text);
+  background: var(--surface-hover);
+}
+
+:root .ws-place.is-on {
+  border-color: var(--brand-tint);
+  background: var(--brand-indigo-control);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+:root .ws-numbers {
+  gap: 8px;
+}
+
+:root .ws-number {
+  gap: 6px;
+}
+
+:root .ws-number span {
+  text-align: left;
+  white-space: nowrap;
+}
+
+:root .ws-numbers input {
+  min-height: var(--height-control);
+  padding: 0 4px;
+  font-size: var(--t-body);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A plain checkbox drawn as a switch, at the 2.0.0 size. */
+:root .ws-switch {
+  gap: 16px;
+  min-height: var(--height-control-small);
+  color: var(--text-strong);
+  font-size: var(--t-body);
+}
+
+:root .ws-switch input {
+  width: 48px;
+  height: 26px;
+  border: 1px solid var(--line-control);
+  border-radius: 13px;
+  background: var(--surface-field);
+}
+
+:root .ws-switch input::after {
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  background: var(--text-soft);
+  transition: left .12s ease;
+}
+
+:root .ws-switch input:checked {
+  border-color: var(--brand-tint);
+  background: var(--brand-indigo-control);
+}
+
+:root .ws-switch input:checked::after {
+  left: 25px;
+  background: #ffffff;
+}
+
+:root .ws-panel-links {
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+:root .ws-panel-links .secondary {
+  min-height: var(--height-control-small);
+  padding: 0 16px;
+  font-size: var(--t-button);
+}
+
+/* ---- Launch Rules ---- */
+
+.ws-count {
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+.ws-intro {
+  flex: none;
+  margin: 0;
+  color: var(--text-soft);
+  font-size: var(--t-body);
+  line-height: 1.45;
+}
+
+:root .ws-rule-list {
+  margin: 0 calc(-1 * var(--space-module)) 0 0;
+  padding: 0 10px 0 0;
+  align-content: start;
+  scrollbar-gutter: stable;
+}
+
+:root .ws-rule {
+  grid-template-columns: calc(120px * var(--text-scale)) minmax(0, 1fr) auto auto;
+  gap: 20px;
+  min-height: calc(76px * var(--text-scale));
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+}
+
+:root .ws-rule .ws-thumb {
+  width: calc(120px * var(--text-scale));
+  height: calc(50px * var(--text-scale));
+}
+
+:root .ws-rule-copy {
+  gap: 4px;
+}
+
+:root .ws-rule-copy strong {
+  font-family: var(--font-display);
+  font-size: var(--t-subhead);
+  font-weight: 600;
+}
+
+:root .ws-rule-copy small {
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+:root .ws-rule .secondary.danger {
+  min-height: var(--height-control-small);
+}
+
+:root .ws-rule-windows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: none;
+  margin: 0 calc(-1 * var(--space-module)) 0 0;
+  padding-right: 10px;
+  scrollbar-gutter: stable;
+}
+
+:root .ws-rule-window {
+  display: grid;
+  flex: none;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-strong);
+}
+
+:root .ws-rule-window:hover {
+  border-color: var(--brand-tint-text);
+  background: var(--surface-hover);
+}
+
+:root .ws-rule-window.is-on {
+  border-color: var(--brand-tint);
+  background: var(--brand-indigo-control);
+}
+
+:root .ws-rule-window strong {
+  font-family: var(--font-display);
+  font-size: var(--t-body);
+  font-weight: 600;
+}
+
+:root .ws-rule-window small {
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+:root .ws-rule-window.is-on small {
+  color: #ffffff;
+}
+
+.ws-rule-add .module-foot {
+  flex: none;
+}

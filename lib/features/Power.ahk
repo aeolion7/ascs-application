@@ -254,24 +254,37 @@ EmptyRecycleBin() {
 
 ; ---- audio output picker (through SoundSwitch)
 
+; Each active output: { name: what Windows calls it, label: what Maestro shows }.
 PlaybackDevices() {
-    names := []
+    devices := []
     try {
         audioEnum := ComObject("{BCDE0395-E52F-467C-8E3D-C4579291692E}", "{A95664D2-9614-4F35-A746-DE8DB63617E6}")
         ComCall(3, audioEnum, "Int", 0, "UInt", 1, "Ptr*", &collection := 0)    ; active render endpoints
         ComCall(3, collection, "UInt*", &count := 0)
-        key := Buffer(20)                                                        ; PKEY_Device_FriendlyName
-        DllCall("Ole32\CLSIDFromString", "Str", "{a45c254e-df1c-4efd-8020-67d146a850e0}", "Ptr", key)
-        NumPut("UInt", 14, key, 16)
+        nameKey := Buffer(20)                                                    ; PKEY_Device_FriendlyName
+        DllCall("Ole32\CLSIDFromString", "Str", "{a45c254e-df1c-4efd-8020-67d146a850e0}", "Ptr", nameKey)
+        NumPut("UInt", 14, nameKey, 16)
+        formKey := Buffer(20)                                                    ; PKEY_AudioEndpoint_FormFactor
+        DllCall("Ole32\CLSIDFromString", "Str", "{1da5d803-d492-4edd-8c23-e0c0ffee7f0e}", "Ptr", formKey)
+        NumPut("UInt", 0, formKey, 16)
         value := Buffer(24, 0)                                                   ; PROPVARIANT (x64)
         Loop Min(count, 16) {
             device := 0, store := 0
             try {
                 ComCall(4, collection, "UInt", A_Index - 1, "Ptr*", &device)
                 ComCall(4, device, "UInt", 0, "Ptr*", &store)
-                ComCall(5, store, "Ptr", key, "Ptr", value)
-                if (NumGet(value, 0, "UShort") = 31)                             ; VT_LPWSTR
-                    names.Push(SubStr(StrGet(NumGet(value, 8, "Ptr"), "UTF-16"), 1, 120))
+                ComCall(5, store, "Ptr", nameKey, "Ptr", value)
+                if (NumGet(value, 0, "UShort") = 31) {                           ; VT_LPWSTR
+                    name := SubStr(StrGet(NumGet(value, 8, "Ptr"), "UTF-16"), 1, 120)
+                    DllCall("Ole32\PropVariantClear", "Ptr", value)
+                    formFactor := -1
+                    try {
+                        ComCall(5, store, "Ptr", formKey, "Ptr", value)
+                        if (NumGet(value, 0, "UShort") = 19)                     ; VT_UI4
+                            formFactor := NumGet(value, 8, "UInt")
+                    }
+                    devices.Push({ name: name, label: AudioDeviceLabel(name, formFactor) })
+                }
                 DllCall("Ole32\PropVariantClear", "Ptr", value)
             }
             if store
@@ -283,31 +296,31 @@ PlaybackDevices() {
     } catch as err {
         WriteLog("Audio devices unavailable: " err.Message)
     }
-    return names
+    return devices
 }
 
 SendAudioDevices() {
     current := ""
     try current := SoundGetName()
     json := ""
-    for name in PlaybackDevices()
-        json .= (json = "" ? "" : ",") '{"name":' JsonQuote(name) ',"current":' (name = current ? "true" : "false") '}'
+    for device in PlaybackDevices()
+        json .= (json = "" ? "" : ",") '{"name":' JsonQuote(device.name) ',"label":' JsonQuote(device.label) ',"current":' (device.name = current ? "true" : "false") '}'
     SendToFrontend('{"type":"audioDevices","items":[' json '],"soundSwitch":' (ProcessExist("SoundSwitch.exe") ? "true" : "false") '}')
 }
 
 SelectAudioDevice(name) {
-    valid := false
+    label := ""
     for device in PlaybackDevices()
-        if (device = name)
-            valid := true
-    if !valid
+        if (device.name = name)
+            label := device.label
+    if (label = "")
         return
     if SwitchAudioTo(name) {
-        RecordActivity("system", "Audio output: " SubStr(name, 1, 60))
+        RecordActivity("system", "Audio output: " SubStr(label, 1, 60))
     } else {
         SendToFrontend('{"type":"notice","message":' JsonQuote(ProcessExist("SoundSwitch.exe")
             ? "SoundSwitch didn't reach that device. Add it to SoundSwitch's playback list."
-            : "SoundSwitch isn't running; ASCS switches devices through it.") '}')
+            : "SoundSwitch isn't running; Maestro switches devices through it.") '}')
     }
     SendAudioDevices()
 }

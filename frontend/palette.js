@@ -100,9 +100,12 @@
     };
     const CONSTANTS = { pi: Math.PI, e: Math.E };
 
+    // Tokens, or { error } saying what isn't understood. "x" between values
+    // multiplies, "$" is ignored, "mod" is the remainder, and "%" after a value
+    // is a percent (2.0.0; it used to be the remainder).
     function tokenize(source) {
         const tokens = [];
-        const text = source.replace(/×/g, "*").replace(/÷/g, "/").replace(/,/g, "");
+        const text = source.replace(/×/g, "*").replace(/÷/g, "/").replace(/[,$]/g, "");
         let index = 0;
         while (index < text.length) {
             const char = text[index];
@@ -113,12 +116,18 @@
                 index += number[0].length;
                 continue;
             }
+            if (/x/i.test(char) && !/[a-z]/i.test(text[index + 1] ?? "")) {
+                tokens.push({ type: "op", value: "*" });
+                index++;
+                continue;
+            }
             const word = /^[a-z]+/i.exec(text.slice(index));
             if (word) {
                 const name = word[0].toLowerCase();
                 if (name in FUNCTIONS) tokens.push({ type: "fn", value: name });
                 else if (name in CONSTANTS) tokens.push({ type: "num", value: CONSTANTS[name] });
-                else return null;
+                else if (name === "mod") tokens.push({ type: "op", value: "mod" });
+                else return { error: `“${word[0]}” isn't something it can calculate.` };
                 index += word[0].length;
                 continue;
             }
@@ -127,43 +136,54 @@
                 index++;
                 continue;
             }
-            return null;
+            return { error: `“${char}” isn't something it can calculate.` };
         }
         return tokens;
     }
 
-    // Recursive-descent evaluation (no eval): + - * / % ^, parentheses, unary
-    // minus, functions such as sqrt(2), and the constants pi and e.
-    function evaluateExpression(source) {
+    // Recursive-descent evaluation (no eval): + - * / ^, x for times, mod,
+    // percents, parentheses, unary minus, functions such as sqrt(2), and the
+    // constants pi and e. Returns { value } or { error } with a short reason.
+    function calculate(source) {
         const tokens = tokenize(String(source ?? ""));
-        if (!tokens || !tokens.length) return null;
+        if (tokens.error) return tokens;
+        if (!tokens.length) return { error: "Type an expression." };
         let position = 0;
         const peek = () => tokens[position];
         const take = () => tokens[position++];
+        const fail = reason => { throw new Error(reason); };
+        const UNFINISHED = "Keep typing: the expression isn't finished.";
+        const UNCLOSED = "A parenthesis isn't closed.";
 
         function primary() {
             const token = take();
-            if (!token) throw new Error("end");
+            if (!token) fail(UNFINISHED);
             if (token.type === "num") return token.value;
             if (token.type === "fn") {
-                const next = take();
-                if (!next || next.value !== "(") throw new Error("paren");
+                if (take()?.value !== "(") fail(`Put what ${token.value} works on in parentheses, as in ${token.value}(2).`);
                 const value = expression();
-                if (take()?.value !== ")") throw new Error("paren");
+                if (take()?.value !== ")") fail(UNCLOSED);
                 return FUNCTIONS[token.value](value);
             }
             if (token.value === "(") {
                 const value = expression();
-                if (take()?.value !== ")") throw new Error("paren");
+                if (take()?.value !== ")") fail(UNCLOSED);
                 return value;
             }
             if (token.value === "-") return -power();
             if (token.value === "+") return power();
-            throw new Error("token");
+            fail(UNFINISHED);
         }
-        function unary() { return primary(); }
+        function percent() {
+            let value = primary();
+            while (peek()?.value === "%") {
+                take();
+                value /= 100;
+            }
+            return value;
+        }
         function power() {
-            const base = unary();
+            const base = percent();
             if (peek()?.value === "^") {
                 take();
                 return Math.pow(base, power());
@@ -172,7 +192,7 @@
         }
         function term() {
             let value = power();
-            while (peek() && ["*", "/", "%"].includes(peek().value)) {
+            while (peek() && ["*", "/", "mod"].includes(peek().value)) {
                 const operator = take().value;
                 const right = power();
                 value = operator === "*" ? value * right : operator === "/" ? value / right : value % right;
@@ -191,11 +211,17 @@
 
         try {
             const value = expression();
-            if (position !== tokens.length || !Number.isFinite(value)) return null;
-            return value;
-        } catch {
-            return null;
+            if (position !== tokens.length) return { error: peek()?.value === ")" ? "A parenthesis closes that wasn't opened." : "Put an operator between the numbers, such as * or x." };
+            if (!Number.isFinite(value)) return { error: "That has no answer, such as a division by zero." };
+            return { value };
+        } catch (error) {
+            return { error: error.message };
         }
+    }
+
+    function evaluateExpression(source) {
+        const result = calculate(source);
+        return "value" in result ? result.value : null;
     }
 
     // True when the query reads as arithmetic rather than a search: it has a
@@ -204,8 +230,16 @@
         const text = String(query ?? "").trim();
         if (text.startsWith("=")) return true;
         if (!/\d/.test(text)) return false;
-        if (!/[+\-*/%^×÷()]|\b(sqrt|abs|round|floor|ceil|ln|log|sin|cos|tan)\b/i.test(text)) return false;
-        return /^[\d\s.,+\-*/%^×÷()a-z]*$/i.test(text) && evaluateExpression(text) !== null;
+        if (!/[+\-*/%^×÷()]|[\d.)]\s*x\s*[\d.(]|\b(sqrt|abs|round|floor|ceil|ln|log|sin|cos|tan|mod)\b/i.test(text)) return false;
+        return /^[\d\s.,$+\-*/%^×÷()a-z]*$/i.test(text) && evaluateExpression(text) !== null;
+    }
+
+    // Typed as arithmetic but not yet an answer, such as "2 +" or "(4 x 3":
+    // digits, an operator, and only the characters of math.
+    function looksLikeUnfinishedMath(query) {
+        const text = String(query ?? "").trim();
+        return /\d/.test(text) && /[+\-*/%^×÷(]|\dx|x\d|\dx$/i.test(text.replace(/\s+/g, ""))
+            && /^[\d\s.,$+\-*/%^×÷()x]*$/i.test(text) && evaluateExpression(text) === null;
     }
 
     function formatNumber(value) {
@@ -234,6 +268,6 @@
 
     global.ASCSPalette = {
         scoreMatch, usageBoost, rankItems, recentIds, recordUsage,
-        evaluateExpression, looksLikeExpression, formatNumber, parseQuery, isValidWorkspaceName
+        calculate, evaluateExpression, looksLikeExpression, looksLikeUnfinishedMath, formatNumber, parseQuery, isValidWorkspaceName
     };
 })(globalThis);

@@ -30,6 +30,50 @@
     check("numpad digits present", [1, 2, 3, 4, 5, 6, 7, 8, 9].every(n => ids.includes(`num${n}`)));
     check("keys fit the layout width", layout.keys.every(key => key.x + key.w <= layout.width + 1e-9));
 
+    // Editing the map
+    {
+        const hotkeys = { notes: "q", everything: "f", dashboard: "i", terminal: "t", explorer: "e", claude: "c", taskmanager: "h" };
+        const commands = [{ name: "Repo", kind: "folder", target: "C:\\x", key: "a" }, { name: "Site", kind: "url", target: "https://x", key: "" }];
+        const edit = K.buildBindings(hotkeys, commands);
+        const keyOf = id => layout.keys.find(key => key.id === id);
+        equal("a built-in moves", K.keyEditKind(keyOf("q"), edit.super.q), "action");
+        equal("a custom command moves", K.keyEditKind(keyOf("a"), edit.super.a), "command");
+        equal("a reserved letter is fixed", K.keyEditKind(keyOf("s"), edit.super.s), "fixed");
+        equal("a free letter takes a command", K.keyEditKind(keyOf("g"), edit.super.g), "free");
+        equal("a passed-through Windows letter counts as free", K.keyEditKind(keyOf("d"), edit.super.d), "free");
+        equal("a number is fixed", K.keyEditKind(keyOf("1"), edit.super["1"]), "fixed");
+        equal("a function key is fixed", K.keyEditKind(keyOf("f1"), edit.super.f1), "fixed");
+        equal("the Shift layer is fixed", K.keyEditKind(keyOf("g"), edit.shift.g, "shift"), "fixed");
+        equal("binding names its action", edit.super.q.action, "notes");
+        equal("binding names its custom command", edit.super.a.commandIndex, 0);
+
+        equal("a free letter is fine", K.letterProblem("g", "action:notes", hotkeys, commands), "");
+        equal("capitals count", K.letterProblem("G", "action:notes", hotkeys, commands), "");
+        equal("its own letter is fine", K.letterProblem("q", "action:notes", hotkeys, commands), "");
+        check("two letters refused", K.letterProblem("gg", "action:notes", hotkeys, commands).includes("one letter"));
+        check("a digit refused", K.letterProblem("1", "action:notes", hotkeys, commands).includes("one letter"));
+        check("a reserved letter refused", K.letterProblem("s", "action:notes", hotkeys, commands).includes("built in"));
+        check("another built-in's letter refused", K.letterProblem("f", "action:notes", hotkeys, commands).includes("Everything"));
+        check("a custom command's letter refused", K.letterProblem("a", "action:notes", hotkeys, commands).includes("Repo"));
+        check("a custom command can't take a built-in's", K.letterProblem("q", "command:1", hotkeys, commands).includes("Quick Notes"));
+        equal("nor does it clash with itself", K.letterProblem("a", "command:0", hotkeys, commands), "");
+
+        const offered = K.assignableCommands(hotkeys, commands);
+        equal("every built-in and custom command can be given a key", offered.length, 9);
+        equal("with its current letter", offered.find(item => item.ref === "action:notes").key, "q");
+        equal("or none", offered.find(item => item.ref === "command:1").key, "");
+
+        const groups = K.groupBindings(edit, layout);
+        const rowsOf = name => groups[name].map(row => row.title);
+        check("custom commands list with apps", rowsOf("apps").includes("Repo"));
+        check("tapping Super is listed", rowsOf("apps").includes("Show or hide Maestro"));
+        check("reloading is listed, with no key to select", groups.windows.some(row => row.title.includes("reload") && row.key === ""));
+        equal("desktops are one line", groups.windows.filter(row => /^Desktop /.test(row.title)).length, 1);
+        check("reading 1–9", groups.windows.some(row => row.title === "Desktop 1–9" && row.keys[0] === "1–9"));
+        check("Shift rows say so", groups.saved.some(row => row.title === "Quick capture" && row.keys.join() === "Shift,C" && row.layer === "shift"));
+        check("no numpad duplicates", [...groups.apps, ...groups.windows, ...groups.saved].every(row => !row.key.startsWith("num")));
+    }
+
     // Bindings with the default letters
     const defaults = { notes: "q", everything: "f", dashboard: "i", terminal: "t", explorer: "e", claude: "c", taskmanager: "h" };
     let b = K.buildBindings(defaults, [{ id: 1, name: "ASCS repo", kind: "folder", target: "C:\ASCS", key: "a" }]);
@@ -37,7 +81,7 @@
     equal("C asks Claude without Shift", b.super.c.title, "Claude");
     equal("Shift+C captures", b.shift.c.title, "Quick capture");
     equal("Shift+P pastes a note", b.shift.p.title, "Paste a note");
-    equal("Shift+S saves a named workspace", b.shift.s.title, "Save workspace as…");
+    equal("Shift+S saves a named arrangement", b.shift.s.title, "Save arrangement as…");
     check("Shift+Q no longer captures", !b.shift.q);
     equal("Super+M4 starts a PSO session", b.super.m4.title, "PSO session");
     equal("Super+M5 lists recent RetroArch games", b.super.m5.title, "Recent RetroArch games");

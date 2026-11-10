@@ -42,15 +42,15 @@ function notePageError(message) {
 const $ = id => document.getElementById(id);
 const validViews = new Set(["home", "notes", "calendar", "workspaces", "games", "sounds", "dashboard", "commands", "settings"]);
 const viewLabels = {
-    home: "COMMAND CENTER",
-    notes: "QUICK NOTES",
-    calendar: "CALENDAR",
-    workspaces: "WORKSPACES",
-    games: "GAMES",
-    sounds: "SOUNDS",
-    dashboard: "SYSTEM DASHBOARD",
-    commands: "SUPER COMMANDS",
-    settings: "PREFERENCES"
+    home: "Command Center",
+    notes: "Quick Notes",
+    calendar: "Calendar",
+    workspaces: "Workspaces",
+    games: "Games",
+    sounds: "Sounds",
+    dashboard: "System",
+    commands: "Commands",
+    settings: "Preferences"
 };
 
 let saveTimer = null;
@@ -176,8 +176,10 @@ function setSaveStatus(label, state) {
 }
 
 function focusPrimaryInput(view) {
-    const input = document.querySelector(`#${view} [data-primary-input]`);
+    let input = document.querySelector(`#${view} [data-primary-input]`);
     if (!input) return;
+    // Quick Notes in Read (2.0.0): the formatted note, which scrolls with the keys.
+    if (input === $("noteText") && input.hidden) input = $("notePreview");
 
     input.focus();
     if (input === $("noteText")) {
@@ -185,8 +187,13 @@ function focusPrimaryInput(view) {
     }
 }
 
-function navigate(view) {
+// Back and forward through the pages, for a mouse's side buttons.
+const viewHistory = MaestroViewHistory.create();
+
+function navigate(view, fromHistory = false) {
     if (!validViews.has(view)) return;
+    if (!fromHistory) viewHistory.visit(view);
+    if (!$("powerTray").hidden) togglePowerTray(false);
     const previousView = document.querySelector(".view.active")?.id ?? null;
 
     document.querySelectorAll(".view").forEach(element => {
@@ -210,11 +217,13 @@ function navigate(view) {
     if (view === "notes" && !notesLoaded) send("GetNotes");
     if (view === "dashboard" || view === "home") send("GetMetrics", view);
     if (view === "dashboard") send("GetSignInHistory");
+    globalThis.syncSystemView?.();
     if (view === "settings") send("GetSettings");
     if (view === "workspaces") {
         send("GetWorkspaces");
         send("GetLaunchRules");
         send("GetWindows");
+        renderWorkspaceManager();
     }
     if (view === "home" && previousView !== null && previousView !== "home") advanceAlmanac();
     if (view === "home") preloadGames();
@@ -222,9 +231,23 @@ function navigate(view) {
     if (view === "calendar") openCalendarView();
     if (view === "games") startGamesPolling();
     else stopGamesPolling();
-    if (view === "commands") startRunningPolling();
-    else stopRunningPolling();
-    if (view === "settings") send("GetGameSettings");
+    if (view === "home") {
+        startHomePolling();
+        renderHomeNotes();
+        renderHomeModules();
+    } else {
+        stopHomePolling();
+    }
+    $("arrangeButton").hidden = view !== "home";
+    updateSaveStatus();
+    if (view !== "home" && typeof setArranging === "function") setArranging(false);
+    if (view === "commands") {
+        renderKeymap();
+        send("GetSettings");
+        startRunningPolling();
+    } else {
+        stopRunningPolling();
+    }
 
     requestAnimationFrame(() => {
         if ($(view)?.classList.contains("active")) {
@@ -252,19 +275,19 @@ const Workspaces = globalThis.ASCSWorkspaces;
 const USAGE_KEY = "ascs.palette.usage";
 
 const builtInCommands = [
-    { id: "view:home", label: "Command Center", description: "Open the ASCS home view", keywords: "home overview activity", view: "home" },
+    { id: "view:home", label: "Command Center", description: "Open the home page", keywords: "home overview activity", view: "home" },
     { id: "view:notes", label: "Quick Notes", description: "Open your notes", keywords: "notes scratchpad snippets", view: "notes", hotkey: "notes" },
     { id: "view:calendar", label: "Calendar", description: "Your calendars: day, week, month and agenda", keywords: "calendar events schedule agenda appointments", view: "calendar" },
     { id: "calendar:new", label: "New calendar event", description: "Opens the event editor (Ctrl + E). Or type + and the event: +Dentist tue 3pm", keywords: "calendar event add appointment meeting new", shortcut: "Ctrl+E", run: () => newEventFromShortcut() },
-    { id: "view:sounds", label: "Sounds", description: "Every Windows sound; levels; set Windows and ASCS sounds", keywords: "sounds audio wav windows startup chimes level", view: "sounds" },
-    { id: "view:dashboard", label: "System Dashboard", description: "View live system metrics and hardware", keywords: "dashboard metrics hardware", view: "dashboard", hotkey: "dashboard" },
+    { id: "view:sounds", label: "Sounds", description: "Every Windows sound; levels; set Windows and Maestro sounds", keywords: "sounds audio wav windows startup chimes level", view: "sounds" },
+    { id: "view:dashboard", label: "System", description: "View live system metrics and hardware", keywords: "dashboard metrics hardware", view: "dashboard", hotkey: "dashboard" },
     { id: "view:commands", label: "Shortcut Reference", description: "Browse the complete Super shortcut list", keywords: "commands shortcuts help", view: "commands" },
     { id: "view:games", label: "Games", description: "Play time, recent games, and achievements", keywords: "play emulator retroarch dolphin pcsx2 pso achievements", view: "games" },
-    { id: "view:logs", label: "Logs", description: "ASCS, activity and Code key logs, newest first", keywords: "log diagnostics errors journal history", run: () => toggleLogs(true) },
-    { id: "view:settings", label: "Preferences", description: "Drives, snapping, shortcuts, and custom commands", keywords: "settings options configure", view: "settings" },
+    { id: "view:logs", label: "Logs", description: "Maestro, activity and Code key logs, newest first", keywords: "log diagnostics errors journal history", run: () => showLogs() },
+    { id: "view:settings", label: "Preferences", description: "Text size, the logo's swing, window snapping and the power delay", keywords: "settings options configure appearance", view: "settings" },
     { id: "mode:snippets", label: "Paste a note…", description: "Paste a note into the window you were using", keywords: "snippet paste insert text note", mode: "snippets", shortcut: "Super+Shift+P" },
-    { id: "mode:workspaces", label: "Restore a workspace…", description: "Choose a saved window layout", keywords: "workspace layout restore", mode: "workspaces", shortcut: "Super+Shift+R" },
-    { id: "mode:save-workspace", label: "Save workspace as…", description: "Save the current window layout under a name", keywords: "workspace layout save name", mode: "save-workspace" },
+    { id: "mode:workspaces", label: "Restore an arrangement…", description: "Choose a saved window layout", keywords: "arrangement workspace layout restore", mode: "workspaces", shortcut: "Super+Shift+R" },
+    { id: "mode:save-workspace", label: "Save arrangement as…", description: "Save the current window layout under a name", keywords: "arrangement workspace layout save name", mode: "save-workspace" },
     { id: "mode:windows", label: "Switch to window…", description: "Jump to an open window on this desktop", keywords: "window switch focus alt tab", mode: "windows" },
     { id: "launch:everything", label: "Everything", description: "Search files and folders as you type", keywords: "search files find", launch: "everything", hotkey: "everything" },
     { id: "launch:vivaldi", label: "Vivaldi", description: "Focus Vivaldi here, switch to its desktop, or open it", keywords: "browser web internet", launch: "vivaldi", shortcut: "Super+B" },
@@ -280,20 +303,20 @@ const builtInCommands = [
     { id: "launch:lock", label: "Lock workstation", description: "Lock your Windows session", keywords: "security", launch: "lock", shortcut: "Super+L" },
     { id: "launch:mute", label: "Toggle mute", description: "Mute or unmute system audio", keywords: "sound volume audio", launch: "mute", shortcut: "Super+M" },
     { id: "view:toggle-sidebar", label: "Toggle sidebar", description: "Collapse or expand the navigation sidebar", keywords: "sidebar navigation collapse expand rail", run: () => toggleSidebar() },
-    { id: "launch:reload", label: "Reload ASCS", description: "Save notes and restart ASCS to apply changes", keywords: "restart refresh script", launch: "reload", shortcut: "Ctrl+Alt+Shift+A" }
+    { id: "launch:reload", label: "Reload Maestro", description: "Save notes and restart Maestro to apply changes", keywords: "restart refresh script", launch: "reload", shortcut: "Ctrl+Alt+Shift+A" }
 ];
 
 const paletteModes = {
-    all: { chip: "", title: "Commands", placeholder: "Search commands, notes, windows… (= math, ? web, + event)" },
-    snippets: { chip: "Paste", title: "Paste a note", placeholder: "Filter notes…" },
-    ask: { chip: "Fill in", title: "Fill in the blanks", placeholder: "" },
-    workspaces: { chip: "Workspaces", title: "Restore a workspace", placeholder: "Filter saved workspaces…" },
-    windows: { chip: "Windows", title: "Switch to a window", placeholder: "Filter open windows…" },
-    "save-workspace": { chip: "Save workspace", title: "Save the current layout", placeholder: "Name this workspace (letters, numbers, spaces, - _)" },
-    pick: { chip: "Add quick action", title: "Pin a quick action", placeholder: "Search views, apps, commands, workspaces, notes…" },
-    "games:retroarch": { chip: "RetroArch", title: "Recent RetroArch games", placeholder: "Filter games…" },
-    "games:dolphin": { chip: "Dolphin", title: "Recent Dolphin games", placeholder: "Filter games…" },
-    "games:pcsx2": { chip: "PCSX2", title: "Recent PCSX2 games", placeholder: "Filter games…" }
+    all: { chip: "", title: "Command Palette", placeholder: "Search commands, notes, windows… (= math, ? web, + event)" },
+    snippets: { chip: "Paste", title: "Paste a Note", placeholder: "Filter notes…" },
+    ask: { chip: "Fill in", title: "Fill In the Blanks", placeholder: "" },
+    workspaces: { chip: "Arrangements", title: "Restore an Arrangement", placeholder: "Filter saved arrangements…" },
+    windows: { chip: "Windows", title: "Switch to a Window", placeholder: "Filter open windows…" },
+    "save-workspace": { chip: "Save arrangement", title: "Save the Current Layout", placeholder: "Name this arrangement (letters, numbers, spaces, - _)" },
+    pick: { chip: "Add quick action", title: "Pin a Quick Action", placeholder: "Search views, apps, commands, arrangements, notes…" },
+    "games:retroarch": { chip: "RetroArch", title: "Recent RetroArch Games", placeholder: "Filter games…" },
+    "games:dolphin": { chip: "Dolphin", title: "Recent Dolphin Games", placeholder: "Filter games…" },
+    "games:pcsx2": { chip: "PCSX2", title: "Recent PCSX2 Games", placeholder: "Filter games…" }
 };
 
 let launcherMode = "all";
@@ -355,9 +378,9 @@ function paletteSources(mode) {
     }
     if (mode === "all" || mode === "workspaces" || mode === "pick") {
         savedWorkspaces.forEach(workspace => items.push({
-            id: `ws:${workspace.name.toLowerCase()}`, label: `Restore workspace “${workspace.name}”`,
+            id: `ws:${workspace.name.toLowerCase()}`, label: `Restore arrangement “${workspace.name}”`,
             description: `${workspace.windows} window${workspace.windows === 1 ? "" : "s"} · saved ${formatSavedTime(workspace.saved)}`,
-            keywords: `workspace layout ${workspace.name}`, badge: "WORKSPACE",
+            keywords: `arrangement workspace layout ${workspace.name}`, badge: "ARRANGEMENT",
             hint: workspace.name === "Default" ? "Super+R" : "",
             run: () => send("RestoreWorkspace", workspace.name)
         }));
@@ -438,16 +461,20 @@ function buildLauncherResults() {
     const query = launcherMode === "all" ? Palette.parseQuery(raw) : { kind: "text", text: raw.trim() };
     const results = [];
 
-    if (query.kind === "calc") {
-        const value = Palette.evaluateExpression(query.text);
-        if (value !== null) {
-            const formatted = Palette.formatNumber(value);
-            results.push({
-                id: "calc", label: `= ${formatted}`, description: `${query.text} · Enter copies the result`, badge: "RESULT",
-                run: () => copyText(formatted, `Copied ${formatted}.`), copy: () => copyText(formatted, `Copied ${formatted}.`)
-            });
-        } else if (raw.trim().startsWith("=")) {
-            results.push({ id: "calc", label: "Keep typing an expression", description: "Supports + − × ÷ % ^, parentheses, sqrt(), round(), pi, e", badge: "RESULT", disabled: true });
+    // The answer shows as you type; Enter copies it through Maestro, which
+    // works whether or not this window has the focus.
+    const unfinished = launcherMode === "all" && query.kind === "text" && Palette.looksLikeUnfinishedMath(query.text);
+    if (query.kind === "calc" || unfinished) {
+        const result = Palette.calculate(query.text);
+        if ("value" in result) {
+            const formatted = Palette.formatNumber(result.value);
+            const copy = () => {
+                send("CopyNote", formatted);
+                showToast(`Copied ${formatted}.`);
+            };
+            results.push({ id: "calc", label: `= ${formatted}`, description: `${query.text} · Enter copies ${formatted}`, badge: "RESULT", run: copy, copy });
+        } else if (raw.trim().startsWith("=") || unfinished) {
+            results.push({ id: "calc", label: query.text ? result.error : "Type an expression", description: "+ − x ÷ ^, % for percent, mod, parentheses, sqrt(), round(), pi, e", badge: "RESULT", disabled: true });
         }
         if (raw.trim().startsWith("=")) return results;
     }
@@ -460,7 +487,7 @@ function buildLauncherResults() {
     if (query.kind === "web") {
         results.push({
             id: "web", label: query.text ? `Search the web for “${query.text}”` : "Type what to search for",
-            description: "Opens your browser with the search address from Preferences", badge: "SEARCH",
+            description: "Opens your browser with the search address set in Commands › Palette", badge: "SEARCH",
             disabled: !query.text, run: () => send("SearchWeb", query.text)
         });
         return results;
@@ -501,7 +528,7 @@ function renderLauncherResults() {
         empty.textContent = launcherMode === "snippets"
             ? "No notes yet. Start one in Quick Notes."
             : launcherMode === "workspaces"
-                ? "No saved workspaces. Use “Save workspace as…” or Super+S."
+                ? "No saved arrangements. Use “Save arrangement as…” or Super+S."
                 : "No matches.";
         results.append(empty);
         updateLauncherHint();
@@ -680,7 +707,7 @@ function useNote(note, action) {
 function showAsk() {
     const ask = askState.asks[askState.index];
     openLauncher("ask");
-    $("launcherTitle").textContent = `Fill in “${noteLabel(askState.note)}”`;
+    $("launcherTitle").textContent = `Fill In “${noteLabel(askState.note)}”`;
     $("launcherSearch").placeholder = ASCSNotes.askLabel(ask.name);
     $("launcherSearch").value = askState.answers[ask.name] ?? ask.fallback;
     $("launcherSearch").select();
@@ -710,11 +737,14 @@ function finishNote(text, action) {
     }
 }
 
-function openNote(id) {
+// `mode` is "read" or "edit"; without one, the note opens as openingMode says.
+function openNote(id, mode = "") {
     const note = notesData.notes.find(item => item.id === id);
     if (!note) return;
     if (noteGroupPrefs.collapsed.delete(ASCSNotes.groupKey(note.group))) saveNoteGroupPrefs();
     notesData.activeId = id;
+    noteModeFor = id;
+    noteMode = mode === "read" || mode === "edit" ? mode : ASCSNotes.openingMode(note);
     navigate("notes");
     renderActiveNote();
     scheduleNoteSave(false);
@@ -772,25 +802,64 @@ $("snapGap").addEventListener("input", () => {
     $("snapGapValue").value = `${$("snapGap").value} px`;
     $("snapGapValue").textContent = `${$("snapGap").value} px`;
 });
-$("settingsForm").addEventListener("submit", event => {
-    event.preventDefault();
-    const hotkeys = [...document.querySelectorAll("[data-hotkey]")]
-        .map(input => input.value.trim().toLowerCase());
-    const content = [
+// One message saves these, whichever page they're edited on: Preferences holds
+// the first ones and Commands the letters, Claude's shortcut and the search address.
+function settingsPayload(hotkeys = currentHotkeys) {
+    return [
         $("driveLetters").value.trim(),
         $("snapGap").value,
         $("preserveWindowSize").checked ? "1" : "0",
-        hotkeys.join(","),
+        ASCSKeymap.HOTKEY_ACTIONS.map(action => hotkeys[action] || "").join(","),
         $("claudeShortcut").value.trim(),
         $("powerDelay").value,
         $("ascsSounds").value,
         $("searchTemplate").value.trim()
     ].join("|");
-    $("settingsStatus").textContent = "Saving preferences…";
-    if (!send("SaveSettings", content)) {
-        $("settingsStatus").textContent = "Unable to contact ASCS.";
+}
+
+// Preferences save as they change (2.0.0), and so does Maestro sounds on the
+// Sounds page. One message carries every setting, Commands' and System's too, so
+// nothing is sent until they've all arrived: the controls stay disabled until then.
+const SETTINGS_CONTROLS = ["snapGap", "preserveWindowSize", "powerDelay", "ascsSounds"];
+let quietSettingsSave = "";     // "preferences" or "sounds": who's waiting for the answer
+
+// Pages that save as you change them say so in the title bar, beside the
+// page's name (2.0.0 manual pass): Preferences, and Games › Setup.
+function updateSaveStatus() {
+    const view = document.querySelector(".view.active")?.id;
+    $("settingsStatus").hidden = view !== "settings";
+    $("gamesStatus").hidden = view !== "games" || $("gamesSetupPanel").hidden;
+}
+
+function setPageSaveStatus(id, text) {
+    $(id).textContent = text;
+    $(id).title = text;
+}
+
+// "Saved at 2:32 PM"
+function savedAtNow() {
+    return `Saved at ${new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+}
+
+function saveSettingsAtOnce(source) {
+    if (!settingsLoaded) return;
+    quietSettingsSave = source;
+    if (source === "preferences") setPageSaveStatus("settingsStatus", "Saving…");
+    if (!send("SaveSettings", settingsPayload())) {
+        quietSettingsSave = "";
+        setPageSaveStatus("settingsStatus", "Unable to contact Maestro.");
     }
-});
+}
+SETTINGS_CONTROLS.forEach(id => $(id).addEventListener("change", () => saveSettingsAtOnce(id === "ascsSounds" ? "sounds" : "preferences")));
+
+// The other pages that keep a setting here.
+document.querySelectorAll("[data-pref-go]").forEach(button => button.addEventListener("click", () => {
+    const [view, part] = button.dataset.prefGo.split(":");
+    navigate(view);
+    if (view === "games" && part) gamesSections.show(part);
+    if (view === "dashboard" && part) systemSections.show(part);
+    if (part === "today") openTodaySettings();
+}));
 
 document.querySelectorAll("[data-window-action]").forEach(button => {
     button.addEventListener("click", () => {
@@ -800,7 +869,7 @@ document.querySelectorAll("[data-window-action]").forEach(button => {
 
 window.addEventListener("focus", () => {
     flushNotices();
-    if (!$("confirmDialog").hidden || !$("launcher").hidden || !$("helpDialog").hidden || !$("logsDialog").hidden) return;
+    if (!$("confirmDialog").hidden || !$("launcher").hidden || !$("helpDialog").hidden) return;
     const activeView = document.querySelector(".view.active")?.id;
     if (activeView) requestAnimationFrame(() => focusPrimaryInput(activeView));
 });
@@ -1028,7 +1097,7 @@ function startGroupRename(group) {
         const key = ASCSNotes.groupKey(name);
         const existing = ASCSNotes.groupNames(notesData.notes).find(other => ASCSNotes.groupKey(other) === key && key !== group.key);
         if (existing && !(await confirmDialog({
-            title: `Merge into ${existing}?`,
+            title: `Merge Into ${existing}?`,
             message: `${existing} already exists. The notes in ${group.name} join it.`,
             confirmLabel: "Merge"
         }))) {
@@ -1053,7 +1122,7 @@ function startGroupRename(group) {
 async function deleteNoteGroup(group) {
     const count = notesData.notes.filter(note => ASCSNotes.groupKey(note.group) === group.key).length;
     const confirmed = await confirmDialog({
-        title: `Delete the ${group.name} group?`,
+        title: `Delete the ${group.name} Group?`,
         message: `Its ${count} note${count === 1 ? "" : "s"} move${count === 1 ? "s" : ""} to Ungrouped. No notes are deleted.`,
         confirmLabel: "Delete group", danger: true
     });
@@ -1104,11 +1173,9 @@ function renderActiveNote() {
     }));
     $("noteText").value = note?.content ?? "";
     const isCode = note?.type === "code";
-    $("noteKindLabel").textContent = isCode ? "CODE" : "NOTE";
     $("noteText").classList.toggle("code-editor", isCode);
     $("noteText").spellcheck = notesSpellcheck() && !isCode;
     document.querySelector(".editor-card").dataset.kind = isCode ? "code" : "note";
-    $("previewNoteButton").hidden = isCode;
     const fills = ASCSNotes.fillsPlaceholders(note);
     $("noteFillButton").classList.toggle("is-on", Boolean(note) && fills);
     $("noteFillButton").disabled = !note;
@@ -1120,7 +1187,10 @@ function renderActiveNote() {
         ? "Off by default for code notes, so braces paste exactly"
         : "From the palette: Alt + Enter, or Super + Shift + P";
     if (!note) closePlaceholderMenu();
-    $("previewNoteButton").disabled = !note;
+    if ((note?.id ?? null) !== noteModeFor) {
+        noteModeFor = note?.id ?? null;
+        noteMode = ASCSNotes.openingMode(note);
+    }
     updateNotePreview();
     updateWordCount();
     $("pinNoteButton").setAttribute("aria-pressed", String(Boolean(note?.pinned)));
@@ -1143,7 +1213,7 @@ function scheduleNoteSave(touchNote = true) {
     if (note && touchNote) note.updated = new Date().toISOString();
     renderNotesList();
     $("noteUpdated").textContent = "Changes save automatically";
-    setSaveStatus("SAVING...", "saving");
+    setSaveStatus("Saving…", "saving");
     clearTimeout(saveTimer);
     saveTimer = setTimeout(saveNotesNow, 400);
 }
@@ -1156,7 +1226,7 @@ function saveNotesNow() {
     if (send("SaveNotes", data)) {
         pendingSaveData.push(data);
     } else {
-        setSaveStatus("SAVE FAILED", "error");
+        setSaveStatus("Save failed", "error");
     }
 }
 
@@ -1292,6 +1362,19 @@ $("deleteNoteButton").addEventListener("click", async () => {
 });
 
 $("notesFilter").addEventListener("input", renderNotesList);
+$("notesFilter").addEventListener("input", () => renderNoteFind());
+$("notesFilter").addEventListener("keydown", event => {
+    if (event.ctrlKey || event.altKey || event.metaKey) return;
+    if (event.key === "Enter") {
+        event.preventDefault();
+        stepNoteFind(event.shiftKey ? -1 : 1);
+    } else if (event.key === "Escape" && $("notesFilter").value) {
+        event.preventDefault();
+        event.stopPropagation();
+        $("notesFilter").value = "";
+        $("notesFilter").dispatchEvent(new Event("input"));
+    }
+});
 $("noteTitle").addEventListener("input", handleNoteInput);
 $("noteText").addEventListener("input", handleNoteInput);
 $("noteType").addEventListener("change", () => {
@@ -1357,8 +1440,8 @@ function insertPlaceholder(item) {
     const note = activeNote();
     if (!note) return;
     closePlaceholderMenu();
-    if (notePreviewOn) {
-        notePreviewOn = false;
+    if (noteMode !== "edit") {
+        noteMode = "edit";
         updateNotePreview();
     }
     const editor = $("noteText");
@@ -1403,8 +1486,8 @@ document.addEventListener("pointerdown", event => {
     if (!$("placeholderMenu").hidden && !event.target.closest(".note-fill-wrap")) closePlaceholderMenu();
 });
 
-// Spell-check in Quick Notes (Preferences › General): on by default, and
-// never in code notes. Kept on this PC with the page's other preferences.
+// Spell-check in Quick Notes (at the foot of a note, 2.0.0): on by default, and
+// never in code notes. Kept on this PC.
 const NOTES_SPELLCHECK = "ascs.notes.spellcheck";
 // US holidays as countdowns (1.8.0), on unless turned off; kept on this PC.
 const HOLIDAY_COUNTDOWNS = "ascs.holidayCountdowns";
@@ -1415,6 +1498,7 @@ $("holidayCountdowns").checked = holidayCountdowns();
 $("holidayCountdowns").addEventListener("change", () => {
     try { localStorage.setItem(HOLIDAY_COUNTDOWNS, $("holidayCountdowns").checked ? "1" : "0"); } catch { /* not kept */ }
     if (almanacState.settings) renderAlmanac();
+    if (typeof renderCalendar === "function") renderCalendar();
 });
 
 function notesSpellcheck() {
@@ -1428,6 +1512,7 @@ $("notesSpellcheck").addEventListener("change", () => {
 
 document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") flushPendingNotes();
+    globalThis.syncSystemView?.();
 });
 window.addEventListener("blur", flushPendingNotes);
 
@@ -1436,6 +1521,10 @@ function handleWebMessage(event) {
     if (typeof data === "string" && data.startsWith("ALMANAC\n")) {
         const [, kind, ...rest] = data.split("\n");
         handleAlmanacFeed(kind, rest.join("\n"));
+        return;
+    }
+    if (typeof data === "string" && data.startsWith("WEATHER\n")) {
+        handleWeather(data.slice(8));
         return;
     }
     if (typeof data === "string" && data.startsWith("COVER\n")) {
@@ -1468,6 +1557,7 @@ function handleWebMessage(event) {
         if (kind === "summary" || kind === "recent") {
             gamesState.ra[kind] = rest.join("\n");
             gamesState.ra.state = "ok";
+            setTimeout(renderHomeUnlocks);
             gamesState.ra.updatedAt = Date.now();
             renderAchievements();
         } else if (/^game:[1-9]\d{0,8}$/.test(kind)) {
@@ -1510,12 +1600,22 @@ function handleWebMessage(event) {
             if (typeof data.data !== "string") break;
             if (data.external === true && (saveTimer !== null || pendingSaveData.length)) {
                 // Unsaved edits win; the next save overwrites the outside change.
-                showNotice("notes.json changed outside ASCS, but you have unsaved edits; keeping your edits.");
+                showNotice("notes.json changed outside Maestro, but you have unsaved edits; keeping your edits.");
                 break;
             }
-            if (data.external === true) showNotice("Notes reloaded because notes.json changed outside ASCS.");
+            if (data.external === true) showNotice("Notes reloaded because notes.json changed outside Maestro.");
             loadNotes(data.data, data.recovered === true);
             refreshGameNotes();
+            break;
+        case "windowShown":
+            windowIsHidden = false;
+            swingMark();
+            globalThis.syncSystemView?.();
+            break;
+        case "windowHidden":
+            windowIsHidden = true;
+            prepareMark();
+            globalThis.syncSystemView?.();
             break;
         case "testBuild":
             isTestBuild = true;
@@ -1529,8 +1629,9 @@ function handleWebMessage(event) {
             if (view === "home") {
                 advanceAlmanac();
                 preloadGames();
+                startHomePolling();
             }
-            if (!$("logsDialog").hidden) startLogPolling();
+            globalThis.syncSystemView?.();
             if (!$("powerTray").hidden) refreshPowerTray();
             if (view === "sounds") openSoundsView();
             if (view === "calendar") openCalendarView();
@@ -1546,9 +1647,9 @@ function handleWebMessage(event) {
             const savedData = pendingSaveData.shift();
             if (pendingSaveData.length === 0 && savedData === serializeNotes()
                 && saveTimer === null) {
-                setSaveStatus("ALL CHANGES SAVED", "saved");
+                setSaveStatus("All changes saved", "saved");
             } else {
-                setSaveStatus("CHANGES PENDING", "saving");
+                setSaveStatus("Changes pending", "saving");
             }
             break;
         }
@@ -1583,11 +1684,16 @@ function handleWebMessage(event) {
             commandsDirty = false;
             renderCommandEditor(true);
             $("commandsStatus").textContent = data.message || "Custom commands saved.";
+            if (pendingKeySelection) keymapSelected = pendingKeySelection;
+            pendingKeySelection = null;
+            renderKeymap();
+            setCommandsNotice(data.message || "Saved.");
             showToast(data.message || "Custom commands saved.");
             break;
         case "workspaces":
             savedWorkspaces = Array.isArray(data.items) ? data.items : [];
             renderWorkspaceManager(data.monitors);
+            renderHomeWorkspaces();
             renderQuickActions();
             if (!$("launcher").hidden) renderLauncherResults();
             break;
@@ -1610,6 +1716,10 @@ function handleWebMessage(event) {
         case "notice":
             if (typeof data.message === "string") showNotice(data.message);
             break;
+        case "windowMinimized":
+            windowIsMinimized = data.minimized === true;
+            globalThis.syncSystemView?.();
+            break;
         case "windowState": {
             const maximized = data.maximized === true;
             $("maximizeControl").classList.toggle("is-maximized", maximized);
@@ -1619,6 +1729,20 @@ function handleWebMessage(event) {
         }
         case "settings":
             loadSettings(data);
+            break;
+        case "weatherSettings":
+            weatherState.enabled = data.enabled === true;
+            $("weatherEnabled").checked = weatherState.enabled;
+            $("weatherEnabled").disabled = false;
+            if (!weatherState.enabled) weatherState.data = null;
+            weatherState.error = typeof data.message === "string" ? data.message.slice(0, 200) : "";
+            renderHomeWeather();
+            break;
+        case "homeStats":
+            renderHomeStats(data);
+            break;
+        case "timerDone":
+            renderHomeTimer();
             break;
         case "almanac":
             loadAlmanacSettings(data);
@@ -1632,7 +1756,9 @@ function handleWebMessage(event) {
                 && Number.isFinite(game.seconds)) : [];
             gamesState.loaded = true;
             gamesState.coversEnabled = data.covers === true;
+            $("showCovers").checked = gamesState.coversEnabled;
             renderGames();
+            renderNowPlaying();
             if (!$("launcher").hidden && launcherMode.startsWith("games:")) renderLauncherResults();
             break;
         case "gamesLive":
@@ -1646,7 +1772,7 @@ function handleWebMessage(event) {
                     canShow: data.canShow === true,
                     showLabel: typeof data.showLabel === "string" ? data.showLabel : "Show file"
                 });
-                if (gamesState.openId === data.id) renderGames();
+                if (gamesState.openId === data.id) renderGameDetail();
             }
             break;
         case "controllerInput":
@@ -1699,8 +1825,11 @@ function handleWebMessage(event) {
         case "soundMatched":
             handleSoundMatched(data);
             break;
+        case "raPicture":
+            if (typeof data.message === "string") setPageSaveStatus("gamesStatus", data.message);
+            break;
         case "gameSettingsSaved":
-            $("gamesStatus").textContent = typeof data.message === "string" ? data.message : "Saved.";
+            setPageSaveStatus("gamesStatus", savedAtNow());
             gamesState.covers.clear();
             gamesState.requested.clear();
             break;
@@ -1724,33 +1853,46 @@ function handleWebMessage(event) {
             break;
         case "almanacSaved":
             setAlmanacStatus(typeof data.message === "string" ? data.message : "Saved.");
+            $("calCountdownDialog").hidden = true;
             break;
         case "settingsSaved":
-            updateShortcutReference(Object.fromEntries(
-                [...document.querySelectorAll("[data-hotkey]")].map(input =>
-                    [input.dataset.hotkey, input.value.trim().toUpperCase()])
-            ));
-            $("settingsStatus").textContent = data.message || "Preferences saved.";
-            setSettingsDirty(false);
-            showToast(data.message || "Preferences saved.");
+            if (pendingKeySelection) keymapSelected = pendingKeySelection;
+            pendingKeySelection = null;
+            if (pendingHotkeys) updateShortcutReference(pendingHotkeys);
+            pendingHotkeys = null;
+            savedDriveLetters = $("driveLetters").value;
+            globalThis.drivesSaved?.();
+            setCommandsNotice(data.message || "Saved.");
+            // Saved as it changed: a quiet word where it changed, not a toast each time.
+            if (quietSettingsSave === "preferences") setPageSaveStatus("settingsStatus", savedAtNow());
+            else if (quietSettingsSave === "sounds") showToast("Maestro sounds saved.");
+            else showToast(data.message || "Preferences saved.");
+            quietSettingsSave = "";
             break;
         case "error":
             if (data.scope === "notes") {
                 pendingSaveData.shift();
-                setSaveStatus("SAVE FAILED", "error");
+                setSaveStatus("Save failed", "error");
             }
             if (data.scope === "games") {
-                $("gamesStatus").textContent = typeof data.message === "string" ? data.message : "Games & apps could not be saved.";
+                setPageSaveStatus("gamesStatus", typeof data.message === "string" ? data.message : "Setup could not be saved.");
             }
             if (data.scope === "almanac") {
                 setAlmanacStatus(typeof data.message === "string" ? data.message : "The almanac could not be saved.");
             }
+            if (data.scope === "settings") {
+                globalThis.drivesSaveFailed?.(data.message);
+                quietSettingsSave = "";
+            }
+            if (data.scope === "commands" || data.scope === "settings") {
+                pendingHotkeys = null;
+                pendingKeySelection = null;
+                if ($("commands").classList.contains("active")) setCommandsNotice(typeof data.message === "string" ? data.message : "That couldn't be saved.");
+            }
             if (data.scope === "commands") {
                 $("commandsStatus").textContent = typeof data.message === "string" ? data.message : "Custom commands could not be saved.";
             } else if ($("settings")?.classList.contains("active")) {
-                $("settingsStatus").textContent = typeof data.message === "string"
-                    ? data.message
-                    : "Preferences could not be saved.";
+                setPageSaveStatus("settingsStatus", typeof data.message === "string" ? data.message : "Preferences could not be saved.");
             }
             showToast(typeof data.message === "string" ? data.message : "An error occurred.");
             break;
@@ -1771,118 +1913,21 @@ document.addEventListener("DOMContentLoaded", () => {
     waiting.forEach(handleWebMessage);
 }, { once: true });
 
-// System Dashboard: recent sign-ins as a graph with data points, oldest on the
-// left (1.9.2). The pointer anywhere over the graph picks the nearest point and
-// shows its card; on the keyboard, Tab reaches the latest and the arrows move.
-const signInState = { rows: [], points: [], middle: 0 };
-const signInSeconds = ms => `${(ms / 1000).toFixed(1)} s`;
-
-function signInWhen(item) {
-    const date = new Date(item.time);
-    return Number.isNaN(date.getTime()) ? item.time : date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-}
-
-function renderSignInHistory(items) {
-    const rows = (Array.isArray(items) ? items : []).filter(item => item && typeof item.time === "string" && Number.isFinite(item.retrobar) && item.retrobar >= 0).slice(0, 20).reverse();
-    if (!rows.length) return;
-    const graph = ASCSCharts.pointGraph(rows.map(item => item.retrobar), 300, 56);
-    const plot = $("signInPlot");
-    plot.querySelector(".sparkline-area").setAttribute("d", graph.area);
-    plot.querySelector(".sparkline-line").setAttribute("d", graph.line);
-    const sorted = rows.map(item => item.retrobar).sort((a, b) => a - b);
-    signInState.rows = rows;
-    signInState.points = graph.points;
-    signInState.middle = sorted[Math.floor(sorted.length / 2)];
-    $("signInLatest").textContent = signInSeconds(rows[rows.length - 1].retrobar);
-    $("signInSummary").textContent = `Latest time until the taskbar is ready, after SignIn.ahk starts. Middle of the last ${rows.length}: ${signInSeconds(signInState.middle)}.`;
-    $("signInFirst").textContent = signInWhen(rows[0]);
-    $("signInLast").textContent = rows.length > 1 ? signInWhen(rows[rows.length - 1]) : "";
-    hideSignInTip();
-    $("signInPoints").replaceChildren(...rows.map((item, index) => {
-        const last = index === rows.length - 1;
-        const point = element("span", `signin-point${last ? " is-latest" : ""}`);
-        point.style.left = `${graph.points[index].x}%`;
-        point.style.top = `${graph.points[index].y}%`;
-        point.tabIndex = last ? 0 : -1;
-        point.setAttribute("role", "img");
-        point.setAttribute("aria-label", `${signInWhen(item)}: ${signInSeconds(item.retrobar)}`);
-        point.addEventListener("focus", () => showSignInTip(index));
-        point.addEventListener("blur", hideSignInTip);
-        point.addEventListener("keydown", event => {
-            if (event.key === "Escape") return hideSignInTip();
-            const step = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
-            const next = point.parentElement.children[index + step];
-            if (!step || !next) return;
-            event.preventDefault();
-            point.tabIndex = -1;
-            next.tabIndex = 0;
-            next.focus();
-        });
-        return point;
-    }));
-}
-
-function showSignInTip(index) {
-    const item = signInState.rows[index];
-    if (!item) return;
-    const tip = $("signInTip");
-    const rule = $("signInRule");
-    const { x, y } = signInState.points[index];
-    const head = element("div", "signin-tip-head");
-    const difference = item.retrobar - signInState.middle;
-    head.append(element("strong", "", signInSeconds(item.retrobar)), element("small", "", Math.abs(difference) < 50
-        ? "About the usual" : `${signInSeconds(Math.abs(difference))} ${difference > 0 ? "over" : "under"} the middle`));
-    const stages = element("dl", "signin-tip-stages");
-    [["Windows taskbar", item.taskbar], ["RetroBar ready", item.retrobar], ["Other apps", item.apps], ["Keychron", item.keychron]]
-        .filter(([, ms]) => Number.isFinite(ms) && ms >= 0)
-        .forEach(([label, ms]) => stages.append(element("dt", "", label), element("dd", "", signInSeconds(ms))));
-    tip.replaceChildren(element("span", "signin-tip-when", signInWhen(item)), head, stages);
-    if (typeof item.sound === "string" && item.sound) tip.append(element("span", "signin-tip-sound", `Sound: ${item.sound}`));
-    tip.hidden = false;
-    rule.hidden = false;
-    rule.style.left = `${x}%`;
-    // Beside the point, kept inside the graph; above it, unless that would go
-    // under the title bar.
-    const plot = $("signInPlot").getBoundingClientRect();
-    const middle = plot.width * x / 100;
-    tip.style.left = `${Math.max(0, Math.min(plot.width - tip.offsetWidth, middle - tip.offsetWidth / 2))}px`;
-    const above = plot.top + plot.height * y / 100 - tip.offsetHeight - 14 > ($("signInPlot").closest(".main")?.querySelector(".topbar")?.getBoundingClientRect().bottom ?? 0);
-    tip.classList.toggle("is-below", !above);
-    tip.style.top = above ? `${plot.height * y / 100 - tip.offsetHeight - 14}px` : `${plot.height * y / 100 + 14}px`;
-    document.querySelectorAll("#signInPoints .signin-point").forEach((point, i) => point.classList.toggle("is-active", i === index));
-}
-
-function hideSignInTip() {
-    $("signInTip").hidden = true;
-    $("signInRule").hidden = true;
-    document.querySelectorAll("#signInPoints .is-active").forEach(point => point.classList.remove("is-active"));
-}
-
-$("signInPlot").addEventListener("pointermove", event => {
-    if (!signInState.points.length) return;
-    const box = event.currentTarget.getBoundingClientRect();
-    showSignInTip(ASCSCharts.nearestPoint(signInState.points, (event.clientX - box.left) / box.width * 100));
-});
-$("signInPlot").addEventListener("pointerleave", hideSignInTip);
-
 function loadSettings(data) {
     $("searchTemplate").value = typeof data.searchTemplate === "string" ? data.searchTemplate : "";
     $("claudeShortcut").value = typeof data.claudeShortcut === "string" ? data.claudeShortcut : "";
     $("powerDelay").value = [0, 5, 30].includes(data.powerDelay) ? String(data.powerDelay) : "5";
     $("ascsSounds").value = ["off", "start", "show"].includes(data.ascsSounds) ? data.ascsSounds : "show";
     $("driveLetters").value = Array.isArray(data.drives) ? data.drives.join(", ") : "";
+    savedDriveLetters = $("driveLetters").value;
     $("snapGap").value = String(data.snapGap ?? 0);
     $("snapGapValue").value = `${$("snapGap").value} px`;
     $("snapGapValue").textContent = `${$("snapGap").value} px`;
     $("preserveWindowSize").checked = data.preserveSize === true;
     const hotkeys = data.hotkeys && typeof data.hotkeys === "object" ? data.hotkeys : {};
-    document.querySelectorAll("[data-hotkey]").forEach(input => {
-        input.value = typeof hotkeys[input.dataset.hotkey] === "string"
-            ? hotkeys[input.dataset.hotkey].toUpperCase()
-            : "";
-    });
     updateShortcutReference(hotkeys);
-    setSettingsDirty(false);
+    settingsLoaded = true;
+    SETTINGS_CONTROLS.forEach(id => { $(id).disabled = false; });
 }
 
 function updateShortcutReference(hotkeys) {
@@ -1892,12 +1937,6 @@ function updateShortcutReference(hotkeys) {
         else currentHotkeys[key] = currentHotkeys[key].toLowerCase();
     });
     renderKeymap();
-    document.querySelectorAll("[data-hotkey-display]").forEach(keycap => {
-        const key = hotkeys[keycap.dataset.hotkeyDisplay];
-        if (typeof key === "string" && key.length === 1) {
-            keycap.textContent = key.toUpperCase();
-        }
-    });
 }
 
 function formatMetric(value) {
@@ -1926,262 +1965,19 @@ function formatCapacity(used, total) {
     return `${usedValue.toFixed(1)} / ${totalValue.toFixed(1)} GB`;
 }
 
-function createDriveCard(drive, dashboard) {
-    const card = document.createElement("article");
-    card.className = `metric-card${dashboard ? " dashboard-metric" : ""} drive-card`;
-    card.dataset.drive = drive.letter;
-    const topline = document.createElement("div");
-    topline.className = "metric-topline";
-    const icon = document.createElement("span");
-    icon.className = "metric-icon storage-icon";
-    icon.setAttribute("aria-hidden", "true");
-    icon.innerHTML = '<svg viewBox="0 0 24 24"><rect x="4" y="4.5" width="16" height="15" rx="3"/><path d="M4.5 11h15M8 15.5h.01M11 15.5h.01"/></svg>';
-    const label = document.createElement("span");
-    label.className = "metric-label";
-    label.textContent = "STORAGE";
-    const letter = document.createElement("span");
-    letter.className = "metric-state";
-    letter.textContent = drive.letter;
-    topline.append(icon, label, letter);
-
-    const value = document.createElement("strong");
-    value.className = "metric-value";
-    const track = document.createElement("div");
-    track.className = "metric-track";
-    if (!dashboard) track.setAttribute("aria-hidden", "true");
-    else {
-        track.setAttribute("role", "progressbar");
-        track.setAttribute("aria-label", `${drive.letter} drive storage utilization`);
-        track.setAttribute("aria-valuemin", "0");
-        track.setAttribute("aria-valuemax", "100");
-        track.setAttribute("aria-valuenow", "0");
-    }
-    const bar = document.createElement("span");
-    track.append(bar);
-    const detail = document.createElement("small");
-    detail.className = dashboard ? "metric-caption drive-detail" : "drive-detail";
-
-    if (dashboard) {
-        const measurement = document.createElement("div");
-        measurement.className = "dashboard-value";
-        const suffix = document.createElement("span");
-        suffix.textContent = "in use";
-        measurement.append(value, suffix);
-        card.append(topline, measurement, track, detail);
-    } else {
-        card.append(topline, value, track, detail);
-    }
-    return card;
-}
-
-function updateDriveCard(card, drive) {
-    const online = drive.online === true;
-    const value = card.querySelector(".metric-value");
-    const detail = card.querySelector(".drive-detail");
-    const bar = card.querySelector(".metric-track > span");
-    if (!online) {
-        value.textContent = "Offline";
-        detail.textContent = "Drive unavailable";
-        setProgressBar(bar, 0);
-        return;
-    }
-
-    value.textContent = formatMetric(drive.usage);
-    detail.textContent = formatCapacity(drive.used, drive.total);
-    setProgressBar(bar, drive.usage);
-}
-
-function renderDrives(drives) {
-    if (!Array.isArray(drives)) return;
-
-    function updateCards(container, dashboard) {
-        const existing = new Map(
-            [...container.children].map(card => [card.dataset.drive, card])
-        );
-
-        drives.forEach((drive, index) => {
-            let card = existing.get(drive.letter);
-            if (card) {
-                existing.delete(drive.letter);
-            } else {
-                card = createDriveCard(drive, dashboard);
-            }
-            updateDriveCard(card, drive);
-
-            const current = container.children[index];
-            if (current !== card) container.insertBefore(card, current || null);
-        });
-
-        existing.forEach(card => card.remove());
-    }
-
-    updateCards($("homeDrives"), false);
-    updateCards($("dashboardDrives"), true);
-}
-
 function updateMetrics(data) {
-    [["cpu", data.cpu], ["ram", data.ram]].forEach(([name, value]) => {
-        const display = $(name);
-        if (display) display.textContent = formatMetric(value);
-        const bar = $(`${name}Bar`);
-        if (bar) setProgressBar(bar, value);
-    });
-    $("homeCpu").textContent = formatMetric(data.cpu);
-    $("homeRam").textContent = formatMetric(data.ram);
+    setHomeValue($("cpu"), data.cpu);
+    setHomeValue($("ram"), data.ram);
+    setHomeValue($("homeCpu"), data.cpu);
+    setHomeValue($("homeRam"), data.ram);
     setProgressBar($("homeCpuBar"), data.cpu);
     setProgressBar($("homeRamBar"), data.ram);
-    $("ramDetail").textContent = formatCapacity(data.ramUsed, data.ramTotal);
-    $("homeRamDetail").textContent = formatCapacity(data.ramUsed, data.ramTotal);
+    $("ramDetail").textContent = homeCapacity(data.ramUsed, data.ramTotal);
+    $("homeRamDetail").textContent = homeCapacity(data.ramUsed, data.ramTotal);
     renderDrives(data.drives);
     updateHardware(data.hardware);
     updateSystemStatus(data);
-    renderHistory(data.history);
-    $("metricsUpdated").textContent =
-        `Last updated ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
-}
-
-function updateHardware(hardware) {
-    if (!hardware || typeof hardware !== "object") return;
-    const signature = JSON.stringify(hardware);
-    if (signature === lastHardwareSignature) return;
-
-    $("hardwareCpu").textContent = hardware.cpu || "Unavailable";
-    $("hardwareCores").textContent = hardware.cores || "";
-    $("hardwareGpu").textContent = hardware.gpu || "Unavailable";
-    $("hardwareGpuDetail").textContent = hardware.gpuDetail || "";
-    $("hardwareMemory").textContent = hardware.memory || "Unavailable";
-    const storage = Array.isArray(hardware.storage) ? hardware.storage : [];
-    $("hardwareDisks").textContent = storage.length
-        ? `${storage.length} physical ${storage.length === 1 ? "drive" : "drives"}`
-        : "Unavailable";
-    $("hardwareDevice").textContent = [hardware.manufacturer, hardware.model]
-        .filter(value => typeof value === "string" && value.length)
-        .join(" ") || "Unavailable";
-    $("hardwareBoard").textContent = hardware.board || "Unavailable";
-    $("hardwareBios").textContent = hardware.bios || "";
-    $("hardwareWindows").textContent = hardware.windows || "Unavailable";
-    renderPhysicalStorage(storage);
-    lastHardwareSignature = signature;
-}
-
-function formatHardwareCapacity(bytes) {
-    const capacity = Number(bytes);
-    if (!Number.isFinite(capacity) || capacity <= 0) return "Capacity unavailable";
-    const gigabytes = capacity / (1024 ** 3);
-    if (gigabytes >= 1024) return `${(gigabytes / 1024).toFixed(1)} TB`;
-    return `${gigabytes.toFixed(1)} GB`;
-}
-
-function appendHardwareText(parent, tagName, className, text) {
-    const element = document.createElement(tagName);
-    element.className = className;
-    element.textContent = text;
-    parent.append(element);
-    return element;
-}
-
-function renderPhysicalStorage(disks) {
-    const container = $("physicalStorage");
-    container.replaceChildren();
-
-    if (!disks.length) {
-        appendHardwareText(container, "p", "physical-storage-empty",
-            "No physical drive details are available.");
-        return;
-    }
-
-    disks.forEach((disk, index) => {
-        const card = document.createElement("article");
-        card.className = "physical-disk-card";
-        const heading = document.createElement("div");
-        heading.className = "physical-disk-heading";
-        appendHardwareText(heading, "strong", "",
-            disk.model || `Physical drive ${index + 1}`);
-        appendHardwareText(heading, "span", "",
-            formatHardwareCapacity(disk.sizeBytes));
-        card.append(heading);
-
-        const partitions = Array.isArray(disk.partitions) ? disk.partitions : [];
-        const details = [
-            disk.interfaceType,
-            disk.mediaType,
-            disk.status,
-            partitions.length
-                ? `${partitions.length} ${partitions.length === 1 ? "partition" : "partitions"}`
-                : "",
-            partitions.some(partition => partition.boot === true) ? "Boot partition" : ""
-        ].filter(value => typeof value === "string" && value.trim());
-        appendHardwareText(card, "p", "physical-disk-meta",
-            details.join(" · ") || "Drive details are limited.");
-
-        if (partitions.length) {
-            const partitionList = document.createElement("div");
-            partitionList.className = "physical-partition-list";
-            partitions.forEach((partition, partitionIndex) => {
-                const partitionLabel = [
-                    `Partition ${partitionIndex + 1}`,
-                    formatHardwareCapacity(partition.sizeBytes),
-                    partition.type,
-                    partition.boot === true ? "Boot" : ""
-                ].filter(value => typeof value === "string" && value.trim());
-                appendHardwareText(partitionList, "span", "",
-                    partitionLabel.join(" · "));
-            });
-            card.append(partitionList);
-        }
-
-        const volumes = Array.isArray(disk.volumes) ? disk.volumes : [];
-        if (volumes.length) {
-            const volumeList = document.createElement("div");
-            volumeList.className = "physical-volume-list";
-            volumes.forEach(volume => {
-                const row = document.createElement("div");
-                row.className = "physical-volume-row";
-                const copy = document.createElement("div");
-                copy.className = "physical-volume-copy";
-                const label = [volume.letter, volume.label]
-                    .filter(value => typeof value === "string" && value.trim())
-                    .join(" — ") || "Mounted volume";
-                appendHardwareText(copy, "strong", "", label);
-                const filesystemStatus = [volume.fileSystem, volume.status]
-                    .filter(value => typeof value === "string" && value.trim())
-                    .join(" · ");
-                if (filesystemStatus) {
-                    appendHardwareText(copy, "small", "", filesystemStatus);
-                }
-                row.append(copy);
-                const size = formatHardwareCapacity(volume.sizeBytes);
-                const free = Number(volume.freeBytes);
-                const total = Number(volume.sizeBytes);
-                const hasUsage = Number.isFinite(free) && free >= 0 && Number.isFinite(total) && total > 0;
-                const usedPercent = hasUsage ? Math.max(0, Math.min(100, (1 - free / total) * 100)) : null;
-                const sizeText = hasUsage
-                    ? `${Math.round(usedPercent)}% full · ${(free / (1024 ** 3)).toFixed(1)} GB free · ${size}`
-                    : size;
-                appendHardwareText(row, "span", "physical-volume-size", sizeText);
-                if (hasUsage) {
-                    // Fullness bar, using the same burgundy/gold scale as the metric cards.
-                    const meter = document.createElement("div");
-                    meter.className = "metric-track volume-meter";
-                    meter.setAttribute("role", "progressbar");
-                    meter.setAttribute("aria-label", `${label} fullness`);
-                    meter.setAttribute("aria-valuemin", "0");
-                    meter.setAttribute("aria-valuemax", "100");
-                    const fill = document.createElement("span");
-                    meter.append(fill);
-                    row.append(meter);
-                    setProgressBar(fill, usedPercent);
-                }
-                volumeList.append(row);
-            });
-            card.append(volumeList);
-        } else {
-            appendHardwareText(card, "p", "physical-disk-meta",
-                "No mounted drive letters were associated with this disk.");
-        }
-
-        container.append(card);
-    });
+    renderHistory(data.history, data);
 }
 
 send("Ready");
@@ -2215,8 +2011,8 @@ function applyPendingCaptures() {
 // ------------------------------------------------------------ activity feed
 
 const activityLabels = {
-    launch: "Opened", workspace: "Workspace", note: "Notes", snippet: "Pasted",
-    file: "Explorer", command: "Custom", search: "Search", error: "Problem", system: "ASCS"
+    launch: "Opened", workspace: "Arrangement", note: "Notes", snippet: "Pasted",
+    file: "Explorer", command: "Custom", search: "Search", error: "Problem", system: "Maestro"
 };
 
 function relativeTime(iso) {
@@ -2230,34 +2026,78 @@ function relativeTime(iso) {
     return date.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-function renderActivity() {
-    const list = $("activityList");
-    if (!list) return;
-    list.replaceChildren();
-    const items = activityItems.slice(-5).reverse();
-    $("activityEmpty").hidden = items.length > 0;
-    items.forEach(item => {
-        const entry = document.createElement("li");
-        entry.className = "activity-item";
-        entry.dataset.kind = item.kind;
-        const dot = document.createElement("span");
-        dot.className = "activity-dot";
-        dot.setAttribute("aria-hidden", "true");
-        const copy = document.createElement("span");
-        copy.className = "activity-copy";
-        const kind = document.createElement("small");
-        kind.textContent = activityLabels[item.kind] || item.kind;
-        const text = document.createElement("span");
-        text.textContent = item.text;
-        copy.append(kind, text);
-        const time = document.createElement("time");
-        time.dateTime = item.time;
-        time.textContent = relativeTime(item.time);
-        time.title = new Date(item.time).toLocaleString();
-        entry.append(dot, copy, time);
-        list.append(entry);
-    });
+// ------------------------------------------------------------ appearance
+
+const TEXT_SIZE_KEY = "maestro.textSize";
+const LOGO_SWING_KEY = "maestro.logoSwing";
+function readAppearance(key) {
+    try { return localStorage.getItem(key); } catch { return null; }
 }
+function keepAppearance(key, value) {
+    try { localStorage.setItem(key, value); } catch { /* not kept */ }
+}
+
+function applyTextSize(size) {
+    document.documentElement.style.setProperty("--text-scale", String(MaestroAppearance.textSize(size) / 100));
+}
+
+// The page loads while the window is hidden, so the arm swings when it opens,
+// from its rest.
+let markHasSwung = false;
+let windowIsHidden = true;
+let windowIsMinimized = false;
+const markArm = () => document.querySelector(".brand-mark .mark-arm");
+const markMotionOff = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+const markSwingDue = () => !markMotionOff()
+    && MaestroAppearance.shouldSwing(MaestroAppearance.swingMode(readAppearance(LOGO_SWING_KEY)), markHasSwung);
+
+// While hidden: a swing cut short goes back to rest, out of sight.
+function prepareMark() {
+    markArm()?.classList.remove("is-swinging", "is-previewing");
+}
+
+// Starts on the next frame, so it doesn't run before the opened window can draw.
+function swingMark() {
+    if (!markSwingDue()) return;
+    markHasSwung = true;
+    let started = false;
+    const start = () => {
+        if (started) return;
+        started = true;
+        const arm = markArm();
+        if (!arm || windowIsHidden) return;
+        arm.classList.remove("is-previewing");
+        arm.classList.add("is-swinging");
+    };
+    requestAnimationFrame(() => requestAnimationFrame(start));
+    setTimeout(start, 120);     // no frames come while nothing is drawing
+}
+
+function previewMarkSwing() {
+    const arm = markArm();
+    if (!arm || markMotionOff()) return;
+    arm.classList.remove("is-swinging", "is-previewing");
+    void arm.getBoundingClientRect();       // lets the animation start over
+    arm.classList.add("is-previewing");
+}
+
+markArm()?.addEventListener("animationend", event => {
+    event.currentTarget.classList.remove("is-swinging", "is-previewing");
+});
+prepareMark();
+
+$("textSize").value = String(MaestroAppearance.textSize(readAppearance(TEXT_SIZE_KEY)));
+applyTextSize($("textSize").value);
+$("textSize").addEventListener("change", () => {
+    keepAppearance(TEXT_SIZE_KEY, $("textSize").value);
+    applyTextSize($("textSize").value);
+});
+
+$("logoSwing").value = MaestroAppearance.swingMode(readAppearance(LOGO_SWING_KEY));
+$("logoSwing").addEventListener("change", () => {
+    keepAppearance(LOGO_SWING_KEY, $("logoSwing").value);
+    if ($("logoSwing").value !== "never") previewMarkSwing();      // so you can see what you chose
+});
 
 setInterval(() => {
     if (document.visibilityState === "visible") {
@@ -2356,7 +2196,7 @@ $("saveCommandsButton").addEventListener("click", () => {
     }).filter(fields => fields[0] || fields[2]);
     $("commandsStatus").textContent = "Saving…";
     if (!send("SaveCommands", lines.map(fields => fields.join("\t")).join("\n"))) {
-        $("commandsStatus").textContent = "Unable to contact ASCS.";
+        $("commandsStatus").textContent = "Unable to contact Maestro.";
     }
 });
 
@@ -2364,56 +2204,129 @@ $("saveCommandsButton").addEventListener("click", () => {
 
 $("titlebarCommand").addEventListener("click", () => openLauncher("all"));
 
-// Clock in the title bar and the date line on the Command Center.
+// Clock and date in the title bar.
 function updateClock() {
     const now = new Date();
-    $("topClock").textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    $("topClock").textContent = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    $("topDate").textContent = now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
     $("topClock").dateTime = now.toISOString();
-    $("homeDate").textContent = now.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" }).toUpperCase();
 }
 setInterval(updateClock, 15000);
 
-// Title bar status: nominal, or the first resource at 90% or more (gold).
-function updateSystemStatus(data) {
-    const alerts = [];
-    if (Number(data.cpu) >= 90) alerts.push(`CPU ${Math.round(data.cpu)}%`);
-    if (Number(data.ram) >= 90) alerts.push(`MEMORY ${Math.round(data.ram)}%`);
-    (Array.isArray(data.drives) ? data.drives : []).forEach(drive => {
-        if (drive?.online && Number(drive.usage) >= 90) alerts.push(`${drive.letter} ${Math.round(drive.usage)}% FULL`);
-    });
-    topStatusBase = {
-        state: alerts.length ? "attention" : "nominal",
-        text: alerts.length ? `ATTENTION · ${alerts[0]}${alerts.length > 1 ? ` +${alerts.length - 1}` : ""}` : "ALL SYSTEMS NOMINAL",
-        title: alerts.length ? alerts.join(", ") : "Every monitored resource is below 90%."
-    };
-    renderTopStatus();
-}
-
-// What the chip shows, most important first (1.11.2): a page error, a test
-// build, then the system's resources.
-let topStatusBase = { state: "nominal", text: "ALL SYSTEMS NOMINAL", title: "Every monitored resource is below 90%." };
+// What needs attention (2.0.0): nothing shows while all is well. Anything that
+// needs you becomes a button with a list, and each item offers the next step.
+// MaestroAttention decides what's listed; this draws it, as text.
+let attentionStreaks = {};
+let attentionSignature = "[]";
+let resourceAttention = [];
+const dismissedAttention = new Set();
 let unseenPageErrors = 0;
 let lastPageError = "";
 let isTestBuild = false;
 
-function renderTopStatus() {
-    const shown = unseenPageErrors
-        ? { state: "error", text: `ATTENTION · PAGE ERROR${unseenPageErrors > 1 ? ` +${unseenPageErrors - 1}` : ""}`, title: lastPageError }
-        : isTestBuild
-            ? { state: "test", text: "TEST BUILD · CHANGES ARE DISCARDED", title: "Running on a copy of your data. Go back with: ASCS try --end" }
-            : topStatusBase;
-    const status = $("topStatus");
-    status.dataset.state = shown.state;
-    status.title = shown.title;
-    $("topStatusText").textContent = shown.text;
-    $("topStatusLog").hidden = !unseenPageErrors;
+function updateSystemStatus(data) {
+    const reading = MaestroAttention.fromMetrics(data, attentionStreaks, formatCapacity);
+    attentionStreaks = reading.streaks;
+    // Readings can come every second: an open list is only redrawn if it changed.
+    const signature = JSON.stringify(reading.items);
+    if (signature === attentionSignature) return;
+    attentionSignature = signature;
+    resourceAttention = reading.items;
+    renderTopStatus();
 }
 
-$("topStatusLog").addEventListener("click", () => {
-    unseenPageErrors = 0;
+function attentionItems() {
+    const page = unseenPageErrors ? [MaestroAttention.pageError(unseenPageErrors, lastPageError)] : [];
+    return [...page, ...resourceAttention];
+}
+
+function renderTopStatus() {
+    const all = attentionItems();
+    MaestroAttention.forgetCleared(dismissedAttention, all);
+    const shown = MaestroAttention.visible(all, dismissedAttention);
+    const button = $("attentionButton");
+    button.hidden = !shown.length;
+    button.dataset.tone = MaestroAttention.tone(shown);
+    $("attentionLabel").textContent = MaestroAttention.label(shown.length);
+    $("testBuildChip").hidden = !isTestBuild;
+    if (!shown.length) toggleAttention(false);
+    $("attentionList").replaceChildren(...shown.map(attentionRow));
+}
+
+const ATTENTION_ACTIONS = {
+    system: {
+        label: "Open System",
+        run: () => {
+            navigate("dashboard");
+            systemSections.show("live");
+        }
+    },
+    log: {
+        label: "View log",
+        run: () => {
+            unseenPageErrors = 0;
+            renderTopStatus();
+            showLogs();
+        }
+    }
+};
+
+function attentionRow(item) {
+    const row = element("div", `attention-row is-${item.tone === "burgundy" ? "burgundy" : "gold"}`);
+    const icon = $("attentionButton").querySelector("svg").cloneNode(true);
+    const text = element("div", "attention-text");
+    text.append(element("strong", "", item.title));
+    if (item.detail) text.append(element("small", "", item.detail));
+    row.append(icon, text);
+    const action = ATTENTION_ACTIONS[item.action];
+    if (action) {
+        const go = element("button", "secondary", action.label);
+        go.type = "button";
+        go.addEventListener("click", () => {
+            toggleAttention(false);
+            action.run();
+        });
+        row.append(go);
+    }
+    return row;
+}
+
+function toggleAttention(show = $("attentionPanel").hidden) {
+    const panel = $("attentionPanel");
+    const button = $("attentionButton");
+    if (!show) {
+        panel.hidden = true;
+        button.setAttribute("aria-expanded", "false");
+        return;
+    }
+    const box = button.getBoundingClientRect();
+    panel.style.top = `${Math.round(box.bottom + 10)}px`;
+    panel.style.right = `${Math.max(16, Math.round(innerWidth - box.right))}px`;
+    panel.hidden = false;
+    button.setAttribute("aria-expanded", "true");
+    requestAnimationFrame(() => panel.focus());
+}
+
+$("attentionButton").addEventListener("click", () => toggleAttention());
+$("attentionDismissAll").addEventListener("click", () => {
+    attentionItems().forEach(item => dismissedAttention.add(item.key));
+    if (unseenPageErrors) {
+        unseenPageErrors = 0;
+    }
     renderTopStatus();
-    toggleLogs(true);
+    $("attentionButton").focus();
 });
+$("attentionPanel").addEventListener("keydown", event => {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    toggleAttention(false);
+    $("attentionButton").focus();
+});
+document.addEventListener("pointerdown", event => {
+    if (!$("attentionPanel").hidden && !event.target.closest("#attentionPanel, #attentionButton")) toggleAttention(false);
+});
+
 
 // ------------------------------------------------------------ keyboard map
 // An ISO 100% keyboard showing which keys are taken with Super, or with
@@ -2425,6 +2338,11 @@ const KEY_UNIT = 48;
 const KEY_GAP = 4;
 let keymapLayer = "super";
 let keymapShiftHeld = false;
+let keymapSelected = null;          // the key shown in the panel beside the map
+let settingsLoaded = false;
+let pendingHotkeys = null;          // applied once the backend has saved them
+let savedDriveLetters = "";
+let pendingKeySelection = null;
 
 function svgElement(name, attributes = {}) {
     const element = document.createElementNS(SVG_NS, name);
@@ -2438,6 +2356,23 @@ function keyShape(key) {
     const w = key.w * KEY_UNIT - KEY_GAP;
     const h = key.h * KEY_UNIT - KEY_GAP;
     return svgElement("rect", { x, y, width: w, height: h, rx: 6, class: "km-cap" });
+}
+
+// Room for a key's text: its width, less the 8 before the text, the gap between
+// keys and a little air on the right.
+const keyTextRoom = key => key.w * KEY_UNIT - 12;
+const keyTextMeasure = document.createElement("canvas").getContext("2d");
+
+// Text wider than its key is drawn smaller, so any name fits: custom commands
+// can be called anything. Measured from the styles, so it works on a hidden page.
+function fitKeyText(svg) {
+    svg.querySelectorAll(".km-label, .km-caption").forEach(text => {
+        const style = getComputedStyle(text);
+        keyTextMeasure.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+        const width = keyTextMeasure.measureText(text.textContent).width;
+        const room = Number(text.dataset.room);
+        if (width > room) text.style.fontSize = `${parseFloat(style.fontSize) * room / width}px`;
+    });
 }
 
 function activeKeymapLayer() {
@@ -2456,6 +2391,8 @@ function renderKeymap() {
     const layer = activeKeymapLayer();
     const layerBindings = bindings[layer];
     const chord = layer === "shift" ? "Super + Shift + " : "Super + ";
+    const selectedId = keymapSelected ?? (currentHotkeys.notes || "q");
+    const focusedKey = document.activeElement?.closest?.(".km-key")?.dataset.key;
 
     const svg = svgElement("svg", {
         viewBox: `0 0 ${layout.width * KEY_UNIT} ${layout.height * KEY_UNIT}`,
@@ -2484,10 +2421,17 @@ function renderKeymap() {
                 : key.special === "macro" ? "planned"
                     : layer === "shift" && isModifier ? "modifier" : "free";
         const group = svgElement("g", {
-            class: "km-key",
+            class: `km-key${key.id === selectedId ? " is-selected" : ""}`,
             "data-key": key.id,
             "data-cat": category,
-            tabindex: binding || key.special ? 0 : -1
+            tabindex: binding || key.special || /^[a-z]$/.test(key.id) ? 0 : -1
+        });
+        group.addEventListener("click", () => selectKey(key.id));
+        group.addEventListener("keydown", event => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            selectKey(key.id);
+            $("keyDetail").querySelector("input:not([hidden]), select")?.closest("label:not([hidden])")?.querySelector("input, select")?.focus();
         });
         if (keymapQuery) {
             const haystack = binding ? `${chord}${key.label} ${binding.title} ${binding.desc}`.toLocaleLowerCase() : "";
@@ -2506,6 +2450,7 @@ function renderKeymap() {
             class: "km-label"
         });
         label.textContent = key.label;
+        label.dataset.room = keyTextRoom(key);
         group.append(label);
         const specialCaption = key.special === "super" ? "Hold" : key.special === "macro" ? key.caption : "";
         if (!binding && specialCaption) {
@@ -2515,6 +2460,7 @@ function renderKeymap() {
                 class: "km-caption"
             });
             caption.textContent = specialCaption;
+            caption.dataset.room = keyTextRoom(key);
             group.append(caption);
             group.setAttribute("role", "img");
             group.setAttribute("aria-label", key.note);
@@ -2526,6 +2472,7 @@ function renderKeymap() {
                 class: "km-caption"
             });
             caption.textContent = binding.short;
+            caption.dataset.room = keyTextRoom(key);
             group.append(caption);
             const title = svgElement("title");
             title.textContent = `${chord}${key.label}: ${binding.title}`;
@@ -2548,6 +2495,8 @@ function renderKeymap() {
         svg.append(group);
     });
     container.replaceChildren(svg);
+    fitKeyText(svg);
+    if (focusedKey) svg.querySelector(`[data-key="${CSS.escape(focusedKey)}"]`)?.focus({ preventScroll: true });
     container.dataset.layer = layer;
     container.classList.toggle("is-searching", Boolean(keymapQuery));
     document.querySelectorAll(".keymap-layer").forEach(button => {
@@ -2555,8 +2504,11 @@ function renderKeymap() {
     });
     $("keymapDetail").dataset.summary = layer === "shift"
         ? `${used} keys have a Super + Shift action. Other letters keep their Super action; macro keys have none with Shift.`
-        : `${used} keys are assigned with Super. Hover or focus a key for its command; hold Shift to preview the second layer.`;
+        : `${used} keys are in use. Click a key to see or change it; hold Shift for the second layer.`;
     $("keymapDetail").textContent = $("keymapDetail").dataset.summary;
+    // commandsview.js loads after this script's first drawing.
+    globalThis.renderCommandLists?.();
+    globalThis.renderKeyDetail?.();
 }
 
 function showKeymapDetail(key, binding, chord, passthrough, layer) {
@@ -2567,12 +2519,12 @@ function showKeymapDetail(key, binding, chord, passthrough, layer) {
     const text = document.createElement("span");
     if (binding) {
         const running = KEYMAP_RUNNING_APPS[key.id] && runningApps[KEYMAP_RUNNING_APPS[key.id]] ? " Running now." : "";
-        text.textContent = ` · ${binding.title}. ${binding.desc}${binding.configurable ? " (Change the letter in Preferences.)" : ""}${running}`;
+        text.textContent = ` · ${binding.title}. ${binding.desc}${running}`;
     } else if (key.note) {
         keys.textContent = key.label;
         text.textContent = ` · ${key.note.replace(/^[^:]+:\s*/, "")}`;
     } else if (passthrough && layer === "super") {
-        text.textContent = ` · Free in ASCS; passes ${passthrough} through to Windows.`;
+        text.textContent = ` · Free in Maestro; passes ${passthrough} through to Windows.`;
     } else {
         text.textContent = layer === "shift" ? " · No Shift action; behaves like the Super layer." : " · Free.";
     }
@@ -2662,7 +2614,6 @@ const ITEM_ICONS = {
     "launch:reload": '<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4.2h-4.2"/>'
 };
 let quickActionIds = null;      // null: never customized, so the defaults show
-let quickActionsEditing = false;
 
 function currentQuickActionIds() {
     return Array.isArray(quickActionIds) ? quickActionIds : DEFAULT_QUICK_ACTIONS;
@@ -2683,60 +2634,36 @@ function renderQuickActions() {
     const catalog = quickActionCatalog();
     const ids = currentQuickActionIds();
     container.replaceChildren();
-    container.classList.toggle("is-editing", quickActionsEditing);
 
     ids.forEach(id => {
         const item = catalog.get(id);
-        if (!item && !quickActionsEditing) return;
+        if (!item) return;
         const wrap = document.createElement("div");
         wrap.className = "action-card-wrap";
         const card = document.createElement("button");
         card.type = "button";
         card.className = "action-card";
-        if (item?.badge) card.dataset.kind = item.badge.toLowerCase();
+        if (item.badge) card.dataset.kind = item.badge.toLowerCase();
         const icon = document.createElement("span");
         icon.className = "action-icon";
         icon.innerHTML = iconSvg(item);   // static, trusted markup only (never item text)
         const copy = document.createElement("span");
         copy.className = "action-copy";
         const title = document.createElement("strong");
-        title.textContent = item ? item.label : "Unavailable";
+        title.textContent = item.label;
         const detail = document.createElement("small");
-        detail.textContent = item ? (item.description || "").slice(0, 60) : `${id} no longer exists`;
+        detail.textContent = (item.description || "").slice(0, 60);
         copy.append(title, detail);
         const arrow = document.createElement("span");
         arrow.className = "action-arrow";
         arrow.setAttribute("aria-hidden", "true");
-        arrow.textContent = item?.view ? "→" : "↗";
+        arrow.textContent = item.view ? "→" : "↗";
         card.append(icon, copy, arrow);
-        card.disabled = !item || quickActionsEditing;
-        if (item) card.addEventListener("click", () => runQuickAction(item));
+        card.addEventListener("click", () => runQuickAction(item));
         wrap.append(card);
-        if (quickActionsEditing) {
-            const remove = document.createElement("button");
-            remove.type = "button";
-            remove.className = "action-remove";
-            remove.setAttribute("aria-label", `Remove ${item ? item.label : id}`);
-            remove.textContent = "×";
-            remove.addEventListener("click", () => saveQuickActions(currentQuickActionIds().filter(other => other !== id)));
-            wrap.append(remove);
-        }
         container.append(wrap);
     });
-
-    if (quickActionsEditing && ids.length < MAX_QUICK_ACTIONS) {
-        const add = document.createElement("button");
-        add.type = "button";
-        add.className = "action-card action-add";
-        add.innerHTML = '<span class="action-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>';
-        const label = document.createElement("span");
-        label.className = "action-copy";
-        label.innerHTML = "<strong>Add quick action</strong><small></small>";
-        label.querySelector("small").textContent = `${MAX_QUICK_ACTIONS - ids.length} of ${MAX_QUICK_ACTIONS} slots free`;
-        add.append(label);
-        add.addEventListener("click", () => openLauncher("pick"));
-        container.append(add);
-    }
+    globalThis.renderQuickActionEditor?.();
 }
 
 function runQuickAction(item) {
@@ -2771,36 +2698,19 @@ function addQuickAction(id) {
 }
 
 $("editQuickActions").addEventListener("click", () => {
-    quickActionsEditing = !quickActionsEditing;
-    $("editQuickActions").setAttribute("aria-pressed", String(quickActionsEditing));
-    $("editQuickActions").textContent = quickActionsEditing ? "Done" : "Edit";
-    renderQuickActions();
+    navigate("commands");
+    commandsSections.show("quick");
 });
 
-// ------------------------------------------------------------ dashboard history (1.7.0)
+// ------------------------------------------------------------ quick notes: tags, Read and Edit (1.7.0; 2.0.0)
 
-function renderHistory(history) {
-    if (!Array.isArray(history) || !globalThis.ASCSCharts) return;
-    [["cpu", 0], ["ram", 1]].forEach(([name, index]) => {
-        const values = history.map(sample => (Array.isArray(sample) ? sample[index] : null));
-        const graph = ASCSCharts.sparkline(values, 300, 56, 3);
-        const svg = $(`${name}Spark`);
-        if (!svg) return;
-        svg.querySelector(".sparkline-area").setAttribute("d", graph.area);
-        svg.querySelector(".sparkline-line").setAttribute("d", graph.line);
-        const minutes = Math.max(1, Math.round(graph.count * 10 / 60));
-        const summary = graph.count >= 2 ? `peak ${graph.peak}% · last ${minutes} min` : "";
-        if (name === "cpu") {
-            $("cpuHistory").textContent = summary ? `Average ${graph.average}% · ${summary}` : "History builds every 10 seconds";
-        } else {
-            $("ramHistory").textContent = summary ? `· ${summary}` : "";
-        }
-    });
-}
-
-// ------------------------------------------------------------ quick notes: tags, preview (1.7.0)
-
-let notePreviewOn = false;
+// The Markdown viewer ("read") shows the note formatted; the text editor
+// ("edit") shows its plain text, and Ctrl + M switches. Each note opens in the
+// mode ASCSNotes.openingMode gives it, and the viewer is drawn again every time
+// it's chosen, so it always shows the text as it is now.
+let noteMode = "read";
+let noteModeFor = null;     // the note the mode was chosen for
+const noteFind = { index: 0, count: 0, key: "" };     // the filter's matches in the open note (see "finding text")
 
 function renderNoteTags() {
     const container = $("notesTags");
@@ -2832,6 +2742,7 @@ function toggleTagFilter(tag) {
     else terms.push(term);
     $("notesFilter").value = terms.join(" ");
     renderNotesList();
+    renderNoteFind();
 }
 
 function updateWordCount() {
@@ -2840,162 +2751,371 @@ function updateWordCount() {
     $("noteWords").textContent = note ? `${words} ${words === 1 ? "word" : "words"}` : "";
 }
 
-// Builds the preview with elements and textContent only; note text is never
-// parsed as HTML. Links are displayed (with the address on hover), not opened.
+// Builds the viewer with elements and textContent only; note text is never
+// parsed as HTML. Links show their address on hover; Ctrl + click opens a web
+// address in the browser, through AHK, which checks it again. Images show their
+// alt text and are never loaded.
+const isWebAddress = url => /^https?:\/\/[^\s"<>`]+$/i.test(url) && url.length <= 2048;
+const INLINE_TAGS = { strong: "strong", em: "em", del: "del", mark: "mark" };
+
 function appendInline(parent, nodes) {
     nodes.forEach(node => {
-        let element;
-        switch (node.type) {
-            case "strong": element = document.createElement("strong"); break;
-            case "em": element = document.createElement("em"); break;
-            case "code": element = document.createElement("code"); break;
-            case "link":
-                element = document.createElement("span");
-                element.className = "md-link";
-                element.title = node.url;
-                break;
-            case "tag":
-                element = document.createElement("button");
-                element.type = "button";
-                element.className = "md-tag";
-                element.addEventListener("click", () => toggleTagFilter(node.text));
-                element.textContent = `#${node.text}`;
-                parent.append(element);
-                return;
-            default:
-                parent.append(document.createTextNode(node.text));
-                return;
+        if (node.type === "text") {
+            parent.append(document.createTextNode(node.text));
+        } else if (node.type === "br") {
+            parent.append(document.createElement("br"));
+        } else if (node.type === "code") {
+            parent.append(element("code", "", node.text));
+        } else if (node.type === "tag") {
+            const tag = element("button", "md-tag", `#${node.text}`);
+            tag.type = "button";
+            tag.addEventListener("click", () => toggleTagFilter(node.text));
+            parent.append(tag);
+        } else if (node.type === "image") {
+            const image = element("span", "md-image", node.alt || "Image");
+            image.title = `Image: ${node.url} (not loaded)`;
+            parent.append(image);
+        } else if (node.type === "link") {
+            const link = element("span", "md-link");
+            const web = isWebAddress(node.url);
+            link.title = web ? `${node.url}\nCtrl + click to open in your browser` : node.url;
+            if (web) {
+                link.classList.add("is-web");
+                link.dataset.url = node.url;
+            }
+            appendInline(link, node.children || []);
+            parent.append(link);
+        } else if (INLINE_TAGS[node.type]) {
+            const mark = document.createElement(INLINE_TAGS[node.type]);
+            appendInline(mark, node.children || []);
+            parent.append(mark);
         }
-        element.textContent = node.text;
-        parent.append(element);
+    });
+}
+
+function renderBlocks(container, blocks) {
+    blocks.forEach(block => {
+        let node;
+        if (block.type === "pre") {
+            node = element("div", "md-code");
+            if (block.lang) node.append(element("span", "md-code-lang", block.lang));
+            node.append(element("pre", "", block.text));
+        } else if (block.type === "hr") {
+            node = document.createElement("hr");
+        } else if (block.type === "blockquote") {
+            node = document.createElement("blockquote");
+            renderBlocks(node, block.blocks);
+        } else if (block.type === "ul" || block.type === "ol") {
+            node = document.createElement(block.type);
+            if (block.type === "ol" && block.start !== 1) node.start = block.start;
+            block.items.forEach(item => {
+                const li = document.createElement("li");
+                if (item.task !== null) {
+                    li.className = "md-task";
+                    const box = document.createElement("input");
+                    box.type = "checkbox";
+                    box.checked = item.task;
+                    box.dataset.line = String(item.line);
+                    box.setAttribute("aria-label", item.task ? "Done: clear it" : "To do: tick it");
+                    li.append(box);
+                    if (block.type === "ul") node.classList.add("has-tasks");
+                }
+                const text = element("span", "md-item-text");
+                appendInline(text, item.children);
+                li.append(text);
+                renderBlocks(li, item.blocks);
+                node.append(li);
+            });
+        } else if (block.type === "table") {
+            node = element("div", "md-table");
+            const table = document.createElement("table");
+            const head = document.createElement("thead");
+            const headRow = document.createElement("tr");
+            block.head.forEach((cell, column) => {
+                const th = document.createElement("th");
+                if (block.align[column]) th.style.textAlign = block.align[column];
+                appendInline(th, cell);
+                headRow.append(th);
+            });
+            head.append(headRow);
+            const body = document.createElement("tbody");
+            block.rows.forEach(row => {
+                const tr = document.createElement("tr");
+                row.forEach((cell, column) => {
+                    const td = document.createElement("td");
+                    if (block.align[column]) td.style.textAlign = block.align[column];
+                    appendInline(td, cell);
+                    tr.append(td);
+                });
+                body.append(tr);
+            });
+            table.append(head, body);
+            node.append(table);
+        } else if (/^h[1-6]$/.test(block.type) || block.type === "p") {
+            node = document.createElement(block.type);
+            appendInline(node, block.children);
+        } else {
+            return;
+        }
+        container.append(node);
     });
 }
 
 function renderMarkdown(container, blocks) {
     container.replaceChildren();
-    blocks.forEach(block => {
-        let element;
-        if (block.type === "pre") {
-            element = document.createElement("pre");
-            element.textContent = block.text;
-        } else if (block.type === "hr") {
-            element = document.createElement("hr");
-        } else if (block.type === "ul" || block.type === "ol") {
-            element = document.createElement(block.type);
-            block.items.forEach(children => {
-                const item = document.createElement("li");
-                appendInline(item, children);
-                element.append(item);
-            });
-        } else if (["h1", "h2", "h3", "p", "blockquote"].includes(block.type)) {
-            element = document.createElement(block.type);
-            appendInline(element, block.children);
-        } else {
-            return;
-        }
-        container.append(element);
-    });
-    if (!blocks.length) {
-        const empty = document.createElement("p");
-        empty.className = "note-preview-empty";
-        empty.textContent = "Nothing to preview yet.";
-        container.append(empty);
-    }
+    renderBlocks(container, blocks);
+    if (!blocks.length) container.append(element("p", "note-preview-empty", "Nothing to show yet."));
 }
+
+// A task box in the viewer ticks the line it came from, and saves.
+$("notePreview").addEventListener("change", event => {
+    const box = event.target.closest(".md-task > input[type='checkbox']");
+    const note = activeNote();
+    if (!box || !note) return;
+    const next = ASCSNotes.toggleTask(note.content, Number(box.dataset.line));
+    if (next === null) {
+        updateNotePreview();
+        return;
+    }
+    $("noteText").value = next;
+    handleNoteInput();
+    updateNotePreview();
+    $("notePreview").querySelector(`.md-task > input[data-line="${box.dataset.line}"]`)?.focus();
+});
+
+// Ctrl + click on a web address opens it; a plain click does nothing.
+$("notePreview").addEventListener("click", event => {
+    const link = event.target.closest(".md-link.is-web");
+    if (!link || !event.ctrlKey) return;
+    event.preventDefault();
+    if (send("OpenNoteLink", link.dataset.url)) showToast("Opening the link in your browser.");
+});
+
+// ---- The Markdown reference (2.0.0): each row drawn by the viewer itself.
+
+function openMarkdownReference() {
+    const rows = $("markdownRows");
+    if (!rows.childElementCount) {
+        rows.replaceChildren(...ASCSNotes.MARKDOWN_REFERENCE.map(([label, source]) => {
+            const row = element("tr");
+            const name = element("th", "", label);
+            name.scope = "row";
+            const typed = element("td");
+            typed.append(element("pre", "md-ref-source", source));
+            const shown = element("td");
+            const result = element("div", "note-preview md-ref-result");
+            renderMarkdown(result, ASCSNotes.parseMarkdown(source));
+            result.querySelectorAll("input, button").forEach(control => { control.disabled = true; control.tabIndex = -1; });
+            shown.append(result);
+            row.append(name, typed, shown);
+            return row;
+        }));
+    }
+    markdownReturnFocus = document.activeElement;
+    $("markdownDialog").hidden = false;
+    requestAnimationFrame(() => $("markdownClose").focus());
+}
+
+function closeMarkdownReference() {
+    if ($("markdownDialog").hidden) return;
+    $("markdownDialog").hidden = true;
+    if (markdownReturnFocus instanceof HTMLElement && markdownReturnFocus.isConnected) markdownReturnFocus.focus();
+}
+
+let markdownReturnFocus = null;
+$("noteMarkdownButton").addEventListener("click", openMarkdownReference);
+$("markdownClose").addEventListener("click", closeMarkdownReference);
+$("markdownDialog").addEventListener("click", event => { if (event.target === $("markdownDialog")) closeMarkdownReference(); });
+$("markdownDialog").addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        closeMarkdownReference();
+    } else if (event.key === "Tab") {
+        // The dialog has one control; focus stays on it.
+        event.preventDefault();
+        $("markdownClose").focus();
+    }
+});
 
 function updateNotePreview() {
     const note = activeNote();
-    const show = notePreviewOn && note && note.type !== "code";
-    $("previewNoteButton").setAttribute("aria-pressed", String(Boolean(show)));
-    $("previewNoteButton").textContent = show ? "Edit" : "Preview";
-    $("notePreview").hidden = !show;
-    $("noteText").hidden = Boolean(show);
-    if (show) renderMarkdown($("notePreview"), ASCSNotes.parseMarkdown(note.content));
+    const canRead = Boolean(note) && note.type !== "code";
+    const reading = canRead && noteMode === "read";
+    $("noteModes").hidden = !canRead;
+    $("noteReadButton").setAttribute("aria-pressed", String(reading));
+    $("noteEditButton").setAttribute("aria-pressed", String(!reading));
+    $("notePreview").hidden = !reading;
+    $("noteText").hidden = reading;
+    if (reading) renderMarkdown($("notePreview"), ASCSNotes.parseMarkdown(note.content));
+    renderNoteFind();
 }
 
-$("previewNoteButton").addEventListener("click", () => {
-    notePreviewOn = !notePreviewOn;
+// ------------------------------------------------------------ quick notes: finding text (2.0.0)
+// The filter (Ctrl + F) already narrows the list to notes holding its words;
+// it also marks them in the open note, with a count beside it, and Enter and
+// Shift + Enter step through them while the focus stays in the filter. The
+// viewer marks text with the CSS Custom Highlight API, which leaves the page
+// as it is (task boxes and links keep working). A text box can't color its own
+// text, so the editor gets a copy of its text behind it, transparent but for
+// the marks, laid out and scrolled to match.
+const NOTE_FIND_MIRRORED = ["box-sizing", "padding-top", "padding-left", "padding-bottom",
+    "border-top-width", "border-right-width", "border-bottom-width", "border-left-width", "border-radius",
+    "font-family", "font-size", "font-weight", "font-style", "font-stretch", "font-variant-ligatures", "font-feature-settings",
+    "line-height", "letter-spacing", "word-spacing", "tab-size", "text-indent", "text-transform",
+    "white-space", "overflow-wrap", "word-break", "direction"];
+
+function viewerFindRanges(query) {
+    const ranges = [];
+    const walker = document.createTreeWalker($("notePreview"), NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node && ranges.length < 1000; node = walker.nextNode()) {
+        ASCSNotes.findMatches(node.data, query, 1000 - ranges.length).forEach(({ start, end }) => {
+            const range = new Range();
+            range.setStart(node, start);
+            range.setEnd(node, end);
+            ranges.push(range);
+        });
+    }
+    return ranges;
+}
+
+function drawViewerFind(ranges) {
+    if (!globalThis.CSS?.highlights || typeof Highlight !== "function") return;
+    CSS.highlights.delete("note-find");
+    CSS.highlights.delete("note-find-current");
+    if (!ranges.length) return;
+    CSS.highlights.set("note-find", new Highlight(...ranges));
+    CSS.highlights.set("note-find-current", new Highlight(ranges[noteFind.index]));
+}
+
+// Returns the current match's mark, or null with nothing to mark.
+function drawEditorFind(matches) {
+    const text = $("noteText");
+    let mirror = $("noteFindMirror");
+    if (!matches.length || text.hidden) {
+        mirror?.remove();
+        text.classList.remove("is-finding");
+        return null;
+    }
+    if (!mirror) {
+        mirror = element("div", "note-find-mirror");
+        mirror.id = "noteFindMirror";
+        mirror.setAttribute("aria-hidden", "true");
+        text.before(mirror);
+    }
+    text.classList.remove("is-finding");
+    const style = getComputedStyle(text);
+    NOTE_FIND_MIRRORED.forEach(name => mirror.style.setProperty(name, style.getPropertyValue(name)));
+    // The text box's scrollbar narrows its lines; the copy has none, so it pads by as much.
+    const scrollbar = text.offsetWidth - text.clientWidth - parseFloat(style.borderLeftWidth) - parseFloat(style.borderRightWidth);
+    Object.assign(mirror.style, {
+        top: `${text.offsetTop}px`, left: `${text.offsetLeft}px`,
+        width: `${text.offsetWidth}px`, height: `${text.offsetHeight}px`,
+        paddingRight: `${parseFloat(style.paddingRight) + scrollbar}px`,
+        backgroundColor: style.backgroundColor
+    });
+    const value = text.value;
+    const parts = [];
+    let at = 0;
+    matches.forEach(({ start, end }, index) => {
+        parts.push(value.slice(at, start), element("mark", index === noteFind.index ? "is-current" : "", value.slice(start, end)));
+        at = end;
+    });
+    // A text box shows the empty line after a final line break; a div needs something on it.
+    const tail = value.slice(at);
+    parts.push(tail.endsWith("\n") ? `${tail} ` : tail);
+    mirror.replaceChildren(...parts);
+    text.classList.add("is-finding");
+    mirror.scrollTop = text.scrollTop;
+    return mirror.querySelector("mark.is-current");
+}
+
+// `scroll` brings the current match into view. A new note, mode or query
+// starts again at the first match, and scrolls to it.
+function renderNoteFind(scroll = false) {
+    const note = activeNote();
+    const query = $("notesFilter").value.trim();
+    const reading = Boolean(note) && !$("notePreview").hidden;
+    const key = `${note?.id ?? ""}|${reading}|${query}`;
+    if (key !== noteFind.key) {
+        noteFind.key = key;
+        noteFind.index = 0;
+        scroll = true;
+    }
+    if (reading) {
+        drawEditorFind([]);
+        const ranges = query ? viewerFindRanges(query) : [];
+        noteFind.count = ranges.length;
+        noteFind.index = Math.min(noteFind.index, Math.max(0, ranges.length - 1));
+        drawViewerFind(ranges);
+        const current = ranges[noteFind.index];
+        if (scroll && current) {
+            const preview = $("notePreview");
+            const box = current.getBoundingClientRect();
+            const frame = preview.getBoundingClientRect();
+            if (box.top < frame.top || box.bottom > frame.bottom) preview.scrollTop += box.top - frame.top - preview.clientHeight / 3;
+        }
+    } else {
+        drawViewerFind([]);
+        const matches = note && query ? ASCSNotes.findMatches($("noteText").value, query) : [];
+        noteFind.count = matches.length;
+        noteFind.index = Math.min(noteFind.index, Math.max(0, matches.length - 1));
+        const current = drawEditorFind(matches);
+        if (scroll && current) {
+            const text = $("noteText");
+            if (current.offsetTop < text.scrollTop || current.offsetTop + current.offsetHeight > text.scrollTop + text.clientHeight) {
+                text.scrollTop = Math.max(0, current.offsetTop - text.clientHeight / 3);
+                $("noteFindMirror").scrollTop = text.scrollTop;
+            }
+        }
+    }
+    const label = $("notesFindCount");
+    label.hidden = !note || !query;
+    label.textContent = noteFind.count ? `${noteFind.index + 1} of ${noteFind.count}` : "Not in this note";
+}
+
+function stepNoteFind(step) {
+    if (!noteFind.count) return;
+    noteFind.index = (noteFind.index + step + noteFind.count) % noteFind.count;
+    renderNoteFind(true);
+}
+
+// The editor's copy follows its scrolling, its typing (once a frame) and its size.
+let noteFindFrame = 0;
+$("noteText").addEventListener("scroll", () => {
+    const mirror = $("noteFindMirror");
+    if (mirror) mirror.scrollTop = $("noteText").scrollTop;
+});
+$("noteText").addEventListener("input", () => {
+    if (!$("notesFilter").value.trim() || noteFindFrame) return;
+    noteFindFrame = requestAnimationFrame(() => {
+        noteFindFrame = 0;
+        renderNoteFind();
+    });
+});
+new ResizeObserver(() => { if ($("notesFilter").value.trim()) renderNoteFind(); }).observe($("noteText"));
+
+function setNoteMode(mode) {
+    if (!activeNote()) return;
+    noteMode = mode;
     updateNotePreview();
-    if (!notePreviewOn) focusPrimaryInput("notes");
+    focusPrimaryInput("notes");
+}
+
+$("noteReadButton").addEventListener("click", () => setNoteMode("read"));
+$("noteEditButton").addEventListener("click", () => setNoteMode("edit"));
+// A tag in the note filters the list, and a task box ticks; anywhere else, a
+// double-click edits.
+$("notePreview").addEventListener("dblclick", event => {
+    if (!event.target.closest(".md-tag, .md-task > input")) setNoteMode("edit");
 });
-
-// ------------------------------------------------------------ preferences: navigation, save bar (1.7.0)
-
-function setSettingsDirty(dirty) {
-    const bar = $("settingsSavebar");
-    if (!bar) return;
-    bar.dataset.state = dirty ? "dirty" : "clean";
-    if (dirty) $("settingsStatus").textContent = "Unsaved changes";
-}
-
-$("settingsForm").addEventListener("input", () => setSettingsDirty(true));
-$("settingsForm").addEventListener("change", () => setSettingsDirty(true));
-
-// Preferences tabs: one section at a time, like the sub-pages of Windows
-// Settings. The save bar belongs to the settings form, so it shows only on
-// the tabs it saves; unsaved edits survive switching between those tabs.
-const SETTINGS_TAB_KEY = "ascs.preferences.tab";
-
-function settingsTabs() {
-    return [...document.querySelectorAll(".settings-nav [role='tab']")]
-        .map(tab => ({ tab, panel: $(tab.dataset.section) }))
-        .filter(item => item.panel);
-}
-
-function selectSettingsTab(id, focus = false) {
-    const items = settingsTabs();
-    if (!items.length) return;
-    const chosen = items.find(item => item.panel.id === id) || items[0];
-    items.forEach(item => {
-        const selected = item === chosen;
-        item.tab.setAttribute("aria-selected", String(selected));
-        item.tab.tabIndex = selected ? 0 : -1;
-        item.panel.hidden = !selected;
-    });
-    $("settingsSavebar").hidden = !$("settingsForm").contains(chosen.panel);
-    try { localStorage.setItem(SETTINGS_TAB_KEY, chosen.panel.id); } catch { /* storage unavailable */ }
-    if (focus) chosen.tab.focus();
-}
-
-settingsTabs().forEach(({ tab, panel }) => {
-    tab.addEventListener("click", () => selectSettingsTab(panel.id));
-    tab.addEventListener("keydown", event => {
-        const items = settingsTabs();
-        const index = items.findIndex(item => item.tab === tab);
-        const moves = { ArrowRight: 1, ArrowLeft: -1, Home: -index, End: items.length - 1 - index };
-        if (!(event.key in moves)) return;
-        event.preventDefault();
-        const next = items[(index + moves[event.key] + items.length) % items.length];
-        selectSettingsTab(next.panel.id, true);
-    });
-});
-
-let savedSettingsTab = "";
-try { savedSettingsTab = localStorage.getItem(SETTINGS_TAB_KEY) || ""; } catch { /* storage unavailable */ }
-selectSettingsTab(savedSettingsTab);
 
 // ------------------------------------------------------------ super commands search (1.7.0)
 
 let keymapQuery = "";
 
-function filterShortcutRows() {
-    let anyVisible = false;
-    document.querySelectorAll("#commands .command-group").forEach(group => {
-        let groupVisible = false;
-        group.querySelectorAll(".shortcut-row").forEach(row => {
-            const match = !keymapQuery || row.textContent.toLocaleLowerCase().includes(keymapQuery);
-            row.hidden = !match;
-            if (match) groupVisible = true;
-        });
-        group.hidden = !groupVisible;
-        if (groupVisible) anyVisible = true;
-    });
-    $("commandSearchEmpty").hidden = anyVisible;
-}
-
 $("commandSearch").addEventListener("input", () => {
     keymapQuery = $("commandSearch").value.trim().toLocaleLowerCase();
-    filterShortcutRows();
     renderKeymap();
 });
 $("commandSearch").addEventListener("keydown", event => {
@@ -3093,8 +3213,9 @@ function renderAlmanac() {
     moonIcon.append(svgNode("circle", { cx: 16, cy: 16, r: 12, class: "alm-moon-dark" }));
     const lit = Almanac.moonPath(moon.age);
     if (lit) moonIcon.append(svgNode("path", { d: lit, class: "alm-moon-lit" }));
-    strip.append(almanacCell(moonIcon, [moon.name],
-        `${Math.round(moon.illumination * 100)}% illuminated · ${moon.waxing ? "waxing" : "waning"}`));
+    const phases = Almanac.nextMoonPhases(now);
+    const comingPhase = phases.full < phases.new ? ["full", phases.full] : ["new", phases.new];
+    strip.append(almanacCell(moonIcon, [moon.name], `${Math.round(moon.illumination * 100)}% lit, ${comingPhase[0]} ${inDays(daysUntil(comingPhase[1], now))}`));
 
     // Sun
     const sun = Almanac.sunTimes(now, settings.latitude, settings.longitude);
@@ -3104,9 +3225,21 @@ function renderAlmanac() {
         const dash = document.createElement("i");
         dash.textContent = " — ";
         const hours = Math.floor(sun.daylightMinutes / 60);
+        const yesterday = Almanac.sunTimes(new Date(now.getTime() - 86400000), settings.latitude, settings.longitude);
+        const change = yesterday ? sun.daylightMinutes - yesterday.daylightMinutes : 0;
+        const versus = !yesterday ? "" : change === 0 ? ", as yesterday" : `, ${change > 0 ? "+" : "−"}${Math.abs(change)} min`;
         strip.append(almanacCell(sunIcon, [formatClockTime(sun.sunrise), dash, formatClockTime(sun.sunset)],
-            `${settings.place} · ${hours} h ${sun.daylightMinutes % 60} m of daylight`));
+            `${hours} h ${sun.daylightMinutes % 60} m of daylight${versus}`));
     }
+
+    // Where the year is: day and week, and the next solstice or equinox.
+    const season = Almanac.seasonNow(now);
+    const yearIcon = svgNode("svg", { class: "alm-sun", viewBox: "0 0 32 32", "aria-hidden": "true" });
+    yearIcon.append(svgNode("circle", { cx: 16, cy: 16, r: 10 }), svgNode("path", { d: "M16 6v10l6 4" }));
+    const yearCell = almanacCell(yearIcon, [`Day ${Almanac.dayOfYear(now)} · Week ${Almanac.isoWeek(now)}`],
+        `${season.season}, ${season.progress}% through; the ${season.next} ${inDays(season.days)}`);
+    yearCell.title = `The ${season.next}: ${shortDate(season.nextDate)}`;
+    strip.append(yearCell);
 
     // Countdown: the nearest one, with the rest in the tooltip.
     const countdowns = Almanac.countdownItems(holidayCountdowns() ? Almanac.withHolidays(settings.countdowns, now) : settings.countdowns, now);
@@ -3153,13 +3286,48 @@ function renderAlmanac() {
     renderAlmanacStory(0);
 }
 
+const shortDate = date => date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+const inDays = days => days === 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`;
+const daysUntil = (date, now) => Math.round((new Date(date.getFullYear(), date.getMonth(), date.getDate()) - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
+
+// 2.0.0: golden hour, the moon and meteor showers join the rotating line, all
+// worked out on this PC; composers born today come from composers.js.
 function almanacSources(now = new Date()) {
-    return {
+    const settings = almanacState.settings;
+    const sources = {
         history: almanacState.history,
         holidays: almanacState.holidays,
         featured: almanacState.featured,
-        quote: Almanac.quoteFor(globalThis.ASCSQuotes, now)
+        quote: Almanac.quoteFor(globalThis.ASCSQuotes, now),
+        composers: Almanac.bornOn(globalThis.ASCSComposers, now)
     };
+    if (!settings) return sources;
+    const range = pair => `${formatClockTime(pair[0])} to ${formatClockTime(pair[1])}`;
+    const hours = Almanac.goldenHours(now, settings.latitude, settings.longitude);
+    const evening = hours.eveningGolden && hours.eveningGolden[1] > now;
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const next = evening ? hours : Almanac.goldenHours(tomorrow, settings.latitude, settings.longitude);
+    if (evening) {
+        sources.golden = `This evening from ${range(hours.eveningGolden)}${hours.eveningBlue ? `, then blue hour until ${formatClockTime(hours.eveningBlue[1])}` : ""}.`;
+    } else if (next.morningGolden) {
+        const morningFirst = hours.morningGolden && hours.morningGolden[1] > now;
+        const morning = morningFirst ? hours : next;
+        sources.golden = `${morningFirst ? "This" : "Tomorrow"} morning from ${range(morning.morningGolden)}${morning.morningBlue ? `, after blue hour from ${formatClockTime(morning.morningBlue[0])}` : ""}.`;
+    }
+    const moon = Almanac.moonTimes(now, settings.latitude, settings.longitude);
+    const phases = Almanac.nextMoonPhases(now);
+    const nextPhase = phases.full < phases.new ? ["Full moon", phases.full] : ["New moon", phases.new];
+    const riseSet = [moon.rise && `rises at ${formatClockTime(moon.rise)}`, moon.set && `sets at ${formatClockTime(moon.set)}`].filter(Boolean);
+    sources.moon = `${riseSet.length ? `Today it ${riseSet.join(" and ")}. ` : ""}${nextPhase[0]} on ${shortDate(nextPhase[1])}, ${inDays(daysUntil(nextPhase[1], now))}.`;
+    const showers = Almanac.activeShowers(now);
+    if (showers.length) {
+        const shower = showers[0];
+        sources.showers = showers;
+        sources.showerText = shower.days > 0 ? `The ${shower.name} are active, and peak on ${shortDate(shower.peak)}, ${inDays(shower.days)}.`
+            : shower.days === 0 ? `The ${shower.name} peak tonight.`
+                : `The ${shower.name} are still active; they peaked on ${shortDate(shower.peak)}.`;
+    }
+    return sources;
 }
 
 // Draws the current item into the stage. direction 1 (next) slides the new
@@ -3183,7 +3351,7 @@ function renderAlmanacStory(direction) {
     }
     const label = document.createElement("span");
     label.className = "alm-label";
-    label.textContent = item.label.toUpperCase();
+    label.textContent = item.label;
     const text = document.createElement("p");
     text.textContent = item.attribution ? `${item.text} — ${item.attribution}` : item.text;
     if (copy.tagName !== "BUTTON") copy.title = text.textContent;
@@ -3326,6 +3494,7 @@ function loadAlmanacSettings(data) {
     }
     const s = almanacState.settings;
     $("almanacWikipedia").checked = s.wikipedia;
+    $("almanacWikipedia").disabled = false;
     const ns = s.latitude >= 0 ? "N" : "S";
     const ew = s.longitude >= 0 ? "E" : "W";
     $("almanacPlace").textContent = `${s.place} · ${Math.abs(s.latitude).toFixed(2)}° ${ns}, ${Math.abs(s.longitude).toFixed(2)}° ${ew}`;
@@ -3348,7 +3517,8 @@ function setAlmanacStatus(text) {
     $("countdownStatus").textContent = text;
 }
 
-// Almanac and Countdowns save together (one payload), from either tab.
+// Almanac and Countdowns save together (one payload), from Preferences or the
+// Countdowns dialog in the Calendar.
 function saveAlmanacPreferences() {
     const lines = [$("almanacWikipedia").checked ? "1" : "0"];
     let problem = "";
@@ -3364,177 +3534,11 @@ function saveAlmanacPreferences() {
         return;
     }
     setAlmanacStatus("Saving…");
-    if (!send("SaveAlmanac", lines.join("\n"))) setAlmanacStatus("Unable to contact ASCS.");
+    if (!send("SaveAlmanac", lines.join("\n"))) setAlmanacStatus("Unable to contact Maestro.");
 }
-$("saveAlmanacButton").addEventListener("click", saveAlmanacPreferences);
-$("saveCountdownsButton").addEventListener("click", saveAlmanacPreferences);
-
-// ------------------------------------------------------------ logs (1.7.0)
-// Read-only tails of three fixed log files. ASCS sends the text as a plain
-// string; ASCSLogs parses it, and lines are rendered as text. While the dialog
-// is visible it asks for a refresh every 3 seconds, which ASCS answers only
-// when the file has changed.
-
-const Logs = globalThis.ASCSLogs;
-const LOG_SOURCE_KEY = "ascs.logs.source";
-const LOG_RENDER_LIMIT = 600;
-const logState = { source: "ascs", level: "all", query: "", entries: [], missing: false, timer: null, loaded: false };
-
-function requestLog(refresh = false) {
-    send("GetLog", refresh ? `${logState.source}|refresh` : logState.source);
-}
-
-function renderLogs() {
-    const list = $("logList");
-    const all = logState.entries;
-    const total = Logs.counts(all);
-    document.querySelector('[data-count="all"]').textContent = all.length;
-    document.querySelector('[data-count="issues"]').textContent = total.warn + total.error;
-    document.querySelector('[data-count="errors"]').textContent = total.error;
-
-    const visible = Logs.filterEntries(all, logState.level, logState.query);
-    const shown = visible.slice(-LOG_RENDER_LIMIT);
-    list.dataset.kinds = String(all.some(entry => entry.kind));
-    list.replaceChildren();
-    Logs.groupByDay(shown).forEach(group => {
-        const day = document.createElement("section");
-        day.className = "log-day";
-        const heading = document.createElement("h2");
-        heading.textContent = Logs.dayLabel(group.day);
-        const lines = document.createElement("ol");
-        group.entries.forEach(entry => {
-            const line = document.createElement("li");
-            line.className = "log-line";
-            line.dataset.level = entry.level;
-            const time = document.createElement("time");
-            time.textContent = entry.clock;
-            const kind = document.createElement("span");
-            kind.className = "log-kind";
-            kind.textContent = entry.kind;
-            const text = document.createElement("span");
-            text.className = "log-text";
-            text.textContent = entry.text;
-            line.append(time, kind, text);
-            lines.append(line);
-        });
-        day.append(heading, lines);
-        list.append(day);
-    });
-
-    let meta;
-    if (logState.missing) meta = "This log doesn't exist yet; it appears after its first entry.";
-    else if (!logState.loaded) meta = "Loading…";
-    else if (!all.length) meta = "This log is empty.";
-    else if (!visible.length) meta = "No lines match.";
-    else meta = `Showing ${shown.length.toLocaleString()} of ${all.length.toLocaleString()} lines${visible.length > shown.length ? ` (the newest ${LOG_RENDER_LIMIT})` : ""} · refreshes while open`;
-    $("logMeta").textContent = meta;
-}
-
-function handleLogMessage(source, status, text) {
-    if (source !== logState.source || !Logs) return;
-    logState.loaded = true;
-    logState.missing = status === "missing";
-    logState.entries = Logs.parseLog(source, text);
-    renderLogs();
-}
-
-function selectLogSource(source) {
-    if (!["ascs", "activity", "codebutton"].includes(source)) source = "ascs";
-    logState.source = source;
-    logState.entries = [];
-    logState.loaded = false;
-    logState.missing = false;
-    document.querySelectorAll("[data-log-source]").forEach(button =>
-        button.setAttribute("aria-selected", String(button.dataset.logSource === source)));
-    try { localStorage.setItem(LOG_SOURCE_KEY, source); } catch { /* storage unavailable */ }
-    renderLogs();
-    requestLog();
-}
-
-function startLogPolling() {
-    stopLogPolling();
-    requestLog();
-    logState.timer = setInterval(() => {
-        if (!$("logsDialog").hidden && !document.hidden) requestLog(true);
-        else stopLogPolling();
-    }, 3000);
-}
-
-function stopLogPolling() {
-    if (logState.timer !== null) clearInterval(logState.timer);
-    logState.timer = null;
-}
-
-document.querySelectorAll("[data-log-source]").forEach(button =>
-    button.addEventListener("click", () => selectLogSource(button.dataset.logSource)));
-document.querySelectorAll("[data-log-level]").forEach(button =>
-    button.addEventListener("click", () => {
-        logState.level = button.dataset.logLevel;
-        document.querySelectorAll("[data-log-level]").forEach(other =>
-            other.setAttribute("aria-pressed", String(other === button)));
-        renderLogs();
-    }));
-// ASCS Logs, a dialog opened from System Dashboard or the palette (1.9.2).
-let logsPreviousFocus = null;
-function toggleLogs(show = $("logsDialog").hidden) {
-    const dialog = $("logsDialog");
-    if (!show) {
-        dialog.hidden = true;
-        stopLogPolling();
-        if (logsPreviousFocus instanceof HTMLElement && logsPreviousFocus.isConnected) logsPreviousFocus.focus();
-        return;
-    }
-    logsPreviousFocus = document.activeElement;
-    dialog.hidden = false;
-    startLogPolling();
-    requestAnimationFrame(() => $("logSearch").focus());
-}
-$("openLogsButton").addEventListener("click", () => toggleLogs(true));
-$("logsClose").addEventListener("click", () => toggleLogs(false));
-$("logsDialog").addEventListener("click", event => { if (event.target === $("logsDialog")) toggleLogs(false); });
-$("logsDialog").addEventListener("keydown", event => {
-    if (event.key === "Escape") {
-        event.preventDefault();
-        toggleLogs(false);
-    } else if (event.key.toLowerCase() === "f" && event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey) {
-        event.preventDefault();
-        $("logSearch").focus();
-        $("logSearch").select();
-    } else if (event.key === "Tab") {
-        // Keep focus inside the dialog.
-        const focusable = [...$("logsDialog").querySelectorAll("button:not(:disabled), input")];
-        const index = focusable.indexOf(document.activeElement);
-        event.preventDefault();
-        focusable[(index + (event.shiftKey ? -1 : 1) + focusable.length) % focusable.length].focus();
-    }
+$("almanacWikipedia").addEventListener("change", () => {
+    if (almanacState.settings) saveAlmanacPreferences();
 });
-$("logSearch").addEventListener("input", () => {
-    logState.query = $("logSearch").value;
-    renderLogs();
-});
-$("logSearch").addEventListener("keydown", event => {
-    if (event.key === "Escape" && $("logSearch").value) {
-        event.stopPropagation();
-        $("logSearch").value = "";
-        logState.query = "";
-        renderLogs();
-    }
-});
-$("copyLogButton").addEventListener("click", async () => {
-    const visible = Logs.filterEntries(logState.entries, logState.level, logState.query);
-    const text = visible.map(entry => [entry.day, entry.clock, entry.kind, entry.text].filter(Boolean).join(" ")).join("\n");
-    try {
-        await navigator.clipboard.writeText(text);
-        showNotice(`Copied ${visible.length.toLocaleString()} lines.`);
-    } catch {
-        showNotice("The lines could not be copied.");
-    }
-});
-$("openLogButton").addEventListener("click", () => send("OpenLogFile", logState.source));
-
-try { logState.source = localStorage.getItem(LOG_SOURCE_KEY) || "ascs"; } catch { /* storage unavailable */ }
-document.querySelectorAll("[data-log-source]").forEach(button =>
-    button.setAttribute("aria-selected", String(button.dataset.logSource === logState.source)));
 
 // ------------------------------------------------------------ games (1.7.0)
 // The Games tab. ASCS sends the library (ids, titles, play time; never file
@@ -3556,8 +3560,21 @@ const gamesState = {
         // 1.11.0, the site badges: the raw reply, and the tab showing.
         awards: "", awardsError: "", awardsAsked: false, awardsTab: "all" },
     raImages: new Map(), raRequested: new Set(),
-    liveTimer: null, runningTimer: null, playing: [], nowTimer: null
+    liveTimer: null, runningTimer: null, playing: [], nowTimer: null, detailsAsked: new Set()
 };
+
+// Games' four sections. Library and Achievements draw only while they show, so
+// nothing is rebuilt, or fetched for them, until you open them.
+const gamesSections = MaestroSections.create($("gamesTabs"), {
+    onChange(section) {
+        if (section !== "controllers") closeControllerTester();
+        if (section === "library") renderLibrary();
+        if (section === "achievements") renderAchievements();
+        if (section === "setup") send("GetGameSettings");
+        updateSaveStatus();
+        window.scrollTo(0, 0);
+    }
+});
 
 function gameMonogram(game) {
     const words = Games.displayTitle(game.title).split(/\s+/).filter(word => /^[\p{L}\p{N}]/u.test(word));
@@ -3569,6 +3586,7 @@ function gameCover(game, className) {
     holder.className = `game-cover ${className}`;
     holder.dataset.emulator = game.emulator;
     holder.dataset.gameId = game.id;
+    holder.classList.toggle("is-angled", game.coverAngled === true);
     const data = gamesState.covers.get(game.id);
     if (data) {
         const image = document.createElement("img");
@@ -3604,6 +3622,8 @@ function handleCoverMessage(id, data) {
         image.alt = "";
         holder.replaceChildren(image);
     });
+    // Now playing's backdrop comes from the same cover.
+    if ((gamesState.playing || []).some(item => Games.matchPlayingGame(gamesState.items, item)?.id === id)) renderNowPlaying();
 }
 
 function gameMeta(game, parts) {
@@ -3623,76 +3643,98 @@ function playGame(game) {
         : `Starting ${Games.displayTitle(game.title)}…`);
 }
 
+function recentGames() {
+    return Games.sortGames(gamesState.items.filter(game => game.launchable && game.installed !== false && game.last), "recent");
+}
+
+function gameTile(game) {
+    const tile = document.createElement("button");
+    tile.type = "button";
+    tile.className = "game-tile";
+    tile.title = `Play ${game.title}`;
+    const name = document.createElement("strong");
+    name.textContent = Games.displayTitle(game.title);
+    const meta = document.createElement("small");
+    meta.textContent = gameMeta(game, ["emulator", "last"]);
+    const time = document.createElement("small");
+    time.className = "game-tile-time";
+    time.textContent = game.seconds ? Games.formatDuration(game.seconds) : "Not timed";
+    tile.append(gameCover(game, "game-cover-tile"), name, meta, time);
+    tile.addEventListener("click", () => playGame(game));
+    return tile;
+}
+
+const GAMES_CONTINUE_ROWS = 5;     // what fits its module without scrolling
+
+function continueRow(game) {
+    const row = element("li", "game-line");
+    const copy = element("span", "game-line-copy");
+    const name = element("strong", "", Games.displayTitle(game.title));
+    name.title = game.title;
+    copy.append(name, element("small", "", gameMeta(game, ["emulator", "last"])));
+    row.append(gameCover(game, "game-cover-thumb"), copy, playButton(game, "secondary"));
+    return row;
+}
+
+function renderPlayTime() {
+    const totals = Games.totalsByEmulator(gamesState.items).filter(total => total.seconds > 0);
+    const all = totals.reduce((sum, total) => sum + total.seconds, 0);
+    const max = Math.max(1, ...totals.map(total => total.seconds));
+    const head = element("div", "module-head");
+    const heading = element("h2", "", "Play Time");
+    heading.id = "gamesTotalsTitle";
+    head.append(heading);
+    const panel = $("gamesTotals");
+    if (!totals.length) {
+        panel.replaceChildren(head, (gamesState.loaded ? element("p", "module-empty", "No play time recorded yet.") : loadingNote()));
+        return;
+    }
+    const rows = element("div", "sys-rows");
+    totals.forEach(total => {
+        const row = element("div", "sys-row");
+        const line = element("div", "sys-line");
+        line.append(element("span", "sys-name", Games.EMULATORS[total.emulator]),
+            element("span", "sys-note", `${total.games} game${total.games === 1 ? "" : "s"}`),
+            element("span", "sys-value", Games.formatDuration(total.seconds)));
+        const bar = element("span", "home-bar");
+        bar.style.display = "block";
+        const fill = element("b");
+        fill.style.width = `${Math.max(2, Math.round(total.seconds / max * 100))}%`;
+        bar.append(fill);
+        row.append(line, bar);
+        rows.append(row);
+    });
+    panel.replaceChildren(head, element("strong", "games-total", Games.formatDuration(all)), rows);
+}
+
 function renderGames() {
     if (!Games) return;
     keepGameNoteFocus();
-    const items = gamesState.items;
-
-    // Continue playing: the twelve most recent games ASCS can start, in a
-    // row that scrolls sideways (thumb wheel, trackpad, or Shift + wheel).
-    const recent = Games.sortGames(items.filter(game => game.launchable && game.installed !== false && game.last), "recent").slice(0, 12);
-    const shelf = $("gamesContinue");
-    shelf.replaceChildren(...recent.map(game => {
-        const tile = document.createElement("button");
-        tile.type = "button";
-        tile.className = "game-tile";
-        tile.title = `Play ${game.title}`;
-        const name = document.createElement("strong");
-        name.textContent = Games.displayTitle(game.title);
-        const meta = document.createElement("small");
-        meta.textContent = gameMeta(game, ["emulator", "last"]);
-        const time = document.createElement("small");
-        time.className = "game-tile-time";
-        time.textContent = game.seconds ? Games.formatDuration(game.seconds) : "Not timed";
-        tile.append(gameCover(game, "game-cover-tile"), name, meta, time);
-        tile.addEventListener("click", () => playGame(game));
-        return tile;
-    }));
+    const recent = recentGames().slice(0, GAMES_CONTINUE_ROWS);
+    $("gamesContinue").replaceChildren(...recent.map(continueRow));
     if (!recent.length) {
-        const empty = document.createElement("p");
-        empty.className = "settings-note";
-        empty.textContent = gamesState.loaded ? "No recent games yet. Games you play in RetroArch, Dolphin, or PCSX2 appear here." : "Loading…";
-        shelf.append(empty);
+        $("gamesContinue").append(element("li", "module-empty", gamesState.loaded ? "No recent games yet. Games you play in RetroArch, Dolphin, or PCSX2 appear here." : "Loading…"));
     }
-    $("coversHint").hidden = gamesState.coversEnabled || !gamesState.loaded;
-    requestAnimationFrame(updateShelfFade);
+    renderPlayTime();
+    if (gamesSections.current() === "library") renderLibrary();
+    if ($("games").classList.contains("active")) requestCovers(recent);
+    renderHomeContinue();
+}
 
-    // Play time by emulator.
-    const totals = Games.totalsByEmulator(items);
-    const max = Math.max(1, ...totals.map(total => total.seconds));
-    const all = totals.reduce((sum, total) => sum + total.seconds, 0);
-    const panel = $("gamesTotals");
-    panel.replaceChildren();
-    const heading = document.createElement("span");
-    heading.className = "games-panel-label";
-    heading.textContent = "PLAY TIME";
-    const sum = document.createElement("strong");
-    sum.className = "games-panel-value";
-    sum.textContent = Games.formatDuration(all);
-    const rows = document.createElement("div");
-    rows.className = "games-bars";
-    totals.filter(total => total.seconds > 0).forEach(total => {
-        const row = document.createElement("span");
-        const bar = document.createElement("b");
-        bar.style.width = `${Math.max(4, Math.round(total.seconds / max * 100))}%`;
-        const label = document.createElement("em");
-        label.textContent = Games.EMULATORS[total.emulator];
-        const value = document.createElement("small");
-        value.textContent = `${Games.formatDuration(total.seconds)} · ${total.games} game${total.games === 1 ? "" : "s"}`;
-        row.append(bar, label, value);
-        rows.append(row);
-    });
-    panel.append(heading, sum, rows);
-
-    // The library.
+function renderLibrary() {
+    if (!Games) return;
+    const items = gamesState.items;
     const visible = Games.sortGames(Games.filterGames(items, gamesState.query, gamesState.filter), gamesState.sort);
     const shown = visible.slice(0, 300);
+    if (!items.some(game => game.id === gamesState.openId) && shown[0]) gamesState.openId = shown[0].id;
+    if (gamesState.openId) askGameDetails(gamesState.openId);
     $("gamesLibrary").replaceChildren(...shown.map(libraryRow));
     $("gamesMeta").textContent = !gamesState.loaded ? "Loading…"
-        : !items.length ? "No play time found yet. Check the programs in Preferences › Games & apps."
+        : !items.length ? "No play time found yet. Check the programs in Games › Setup."
             : !visible.length ? "No games match."
                 : `${visible.length} game${visible.length === 1 ? "" : "s"}${visible.length > shown.length ? ` (showing ${shown.length})` : ""}`;
-    if ($("games").classList.contains("active")) requestCovers([...recent, ...shown.slice(0, 40)]);
+    renderGameDetail();
+    if ($("games").classList.contains("active")) requestCovers(shown.slice(0, 40));
 }
 
 function renderGamesLive(data) {
@@ -3708,145 +3750,39 @@ function renderGamesLive(data) {
     tickNowPlaying();
 
     renderControllers(Array.isArray(data.controllers) ? data.controllers : []);
+    renderHomeControllers();
     updateRaTimestamp();
 
     if (data.apps && typeof data.apps === "object") setRunningApps(data.apps);
     gameNotesLiveArrived();
 }
 
-// Now playing (1.7.0): the game in front, with its cover as a soft backdrop,
-// a live session timer, total play time, RetroAchievements progress, and
-// Show file; any other running games below it. With nothing running, the
-// last game played. Rebuilt only when something shown changes; the session
-// timer ticks on its own once a second while the Games tab is open.
+// Now playing, drawn by drawNowPlaying (homeview.js) here and on Home. The notes
+// box stays outside the panel that redraws itself.
 function renderNowPlaying() {
-    const panel = $("gamesNow");
-    const playing = gamesState.playing || [];
-    const matched = playing.map(item => Games.matchPlayingGame(gamesState.items, item));
-    const lead = playing[0];
-    const leadGame = matched[0];
-    const leadName = lead ? (lead.emulator === "steam" || lead.emulator === "pso" ? lead.title : Games.gameFromWindowTitle(lead.emulator, lead.title)) : "";
-    const last = !lead ? Games.sortGames(gamesState.items.filter(game => game.last && game.installed !== false), "recent")[0] : null;
-    const shownGame = leadGame || last;
-    const progress = leadGame ? raProgressFor(leadGame) : null;
-    syncNowPlayingNotes(lead ? leadGame?.title || leadName : last?.title || "");
-    const signature = JSON.stringify([playing, matched.map(game => game?.id || ""), leadGame?.seconds, last?.id,
-        shownGame ? gamesState.covers.has(shownGame.id) : false, gamesState.ra.updatedAt, progress?.achieved]);
-    if (panel.dataset.signature === signature) return;
-    panel.dataset.signature = signature;
-    if (shownGame) requestCovers([shownGame]);
-
-    panel.replaceChildren();
-    panel.classList.toggle("is-playing", Boolean(lead));
-    const cover = shownGame && gamesState.covers.get(shownGame.id);
-    if (cover && lead) {
-        const backdrop = element("div", "now-backdrop");
-        const image = element("img");
-        image.src = cover;
-        image.alt = "";
-        backdrop.append(image);
-        panel.append(backdrop);
+    renderHomeNow();
+    renderGamesNow();
+    const lead = (gamesState.playing || [])[0];
+    if (lead) {
+        const game = Games.matchPlayingGame(gamesState.items, lead);
+        const name = lead.emulator === "steam" || lead.emulator === "pso" ? lead.title : Games.gameFromWindowTitle(lead.emulator, lead.title);
+        syncNowPlayingNotes(game?.title || name);
+    } else {
+        const last = Games.sortGames(gamesState.items.filter(game => game.last && game.installed !== false), "recent")[0];
+        syncNowPlayingNotes(last?.title || "");
     }
-    panel.append(element("span", "games-panel-label", lead ? "NOW PLAYING" : "NOTHING RUNNING"));
-
-    if (!lead) {
-        if (!last) {
-            panel.append(element("strong", "games-panel-value games-panel-muted", "Nothing running"),
-                element("small", "games-panel-note", "Start a game from Continue playing or the library below."));
-            return;
-        }
-        const main = element("div", "now-main");
-        const copy = element("div", "now-copy");
-        copy.append(element("small", "now-kicker", "LAST PLAYED"),
-            element("strong", "now-title", Games.displayTitle(last.title)),
-            element("small", "", [gameMeta(last, ["emulator", "last"]), last.seconds ? `${Games.formatDuration(last.seconds)} in all` : ""].filter(Boolean).join(" · ")));
-        main.append(gameCover(last, "game-cover-now"), copy);
-        const actions = element("div", "now-actions");
-        if (last.launchable) actions.append(playButton(last, "secondary"));
-        panel.append(main, actions);
-        return;
-    }
-
-    const main = element("div", "now-main");
-    const copy = element("div", "now-copy");
-    const title = element("strong", "now-title", leadName ? Games.displayTitle(leadName) : "At the menu");
-    title.title = leadName;
-    copy.append(title, element("small", "", [Games.EMULATORS[lead.emulator] || lead.emulator,
-        leadGame ? Games.systemName(leadGame.system) : ""].filter(Boolean).join(" · ")));
-    main.append(leadGame ? gameCover(leadGame, "game-cover-now") : element("i", "now-dot"), copy);
-    panel.append(main);
-
-    const stats = element("div", "now-stats");
-    if (leadName) {
-        const session = element("span");
-        const clock = element("strong", "now-session");
-        clock.dataset.since = String(lead.since || "");
-        session.append(element("small", "", "THIS SESSION"), clock);
-        stats.append(session);
-        if (leadGame?.seconds) {
-            const total = element("span");
-            total.append(element("small", "", "IN ALL"), element("strong", "", Games.formatDuration(leadGame.seconds)));
-            total.title = "Play time recorded by the emulator or Steam (updated when it saves)";
-            stats.append(total);
-        }
-        panel.append(stats);
-    }
-
-    if (progress && progress.possible) {
-        const ra = element("div", "now-ra");
-        const head = element("div", "now-ra-head");
-        head.append(element("small", "", "ACHIEVEMENTS"),
-            element("strong", "", progress.mastered ? "Mastered" : progress.completed ? "Completed" : `${progress.achieved} of ${progress.possible} · ${progress.percent}%`));
-        const bar = element("span", Games.raBarClass(progress.mastered));
-        const fill = element("b");
-        fill.style.width = `${progress.percent}%`;
-        bar.append(fill);
-        ra.append(head, bar);
-        const data = Games.parseRetroAchievements(gamesState.ra.summary, gamesState.ra.recent);
-        const key = Games.titleKey(leadGame.title);
-        const latest = data.achievements.find(item => Games.titleKey(item.game) === key);
-        if (latest) {
-            const line = element("small", "now-ra-latest", `Latest: ${latest.title}`);
-            line.title = latest.description;
-            ra.append(line);
-        }
-        if (data.presence && Games.titleKey(data.lastGame) === key) {
-            const presence = element("p", "now-presence", data.presence);
-            presence.title = "From the game's rich presence, as of the last RetroAchievements refresh";
-            ra.append(presence);
-        }
-        panel.append(ra);
-    }
-
-    // Show file sits at the end of the timer row (or on its own at the menu).
-    if (leadGame && lead.emulator !== "pso") {
-        const actions = element("div", "now-actions");
-        const show = element("button", "secondary", lead.emulator === "steam" ? "Open folder" : "Show file");
-        show.type = "button";
-        show.addEventListener("click", () => send("ShowGameFile", leadGame.id));
-        actions.append(show);
-        if (stats.isConnected) stats.append(actions);
-        else panel.append(actions);
-    }
-
-    playing.slice(1).forEach(item => {
-        const name = item.emulator === "steam" || item.emulator === "pso" ? item.title : Games.gameFromWindowTitle(item.emulator, item.title);
-        const line = element("div", "games-now-line");
-        const label = element("strong", "", name ? Games.displayTitle(name) : "At the menu");
-        label.title = name;
-        line.append(element("i"), label, element("small", "", Games.EMULATORS[item.emulator] || item.emulator));
-        panel.append(line);
-    });
 }
 
 function tickNowPlaying() {
-    const clocks = document.querySelectorAll("#gamesNow .now-session");
+    const clocks = document.querySelectorAll("#gamesNow .now-session, #homeNow .now-session");
     clocks.forEach(clock => {
         const since = Number(clock.dataset.since);
         clock.textContent = since ? Games.formatClock(Date.now() / 1000 - since) : "Just started";
     });
-    if (clocks.length && gamesState.nowTimer === null) gamesState.nowTimer = setInterval(tickNowPlaying, 1000);
-    if (!clocks.length && gamesState.nowTimer !== null) {
+    // A clock on a page that's open, in a window that's showing.
+    const running = !windowIsHidden && ($("games").classList.contains("active") || $("home").classList.contains("active"));
+    if (running && clocks.length && gamesState.nowTimer === null) gamesState.nowTimer = setInterval(tickNowPlaying, 1000);
+    if ((!running || !clocks.length) && gamesState.nowTimer !== null) {
         clearInterval(gamesState.nowTimer);
         gamesState.nowTimer = null;
     }
@@ -3871,6 +3807,13 @@ function element(tag, className, text) {
     return node;
 }
 
+// What shows in a space being held for something still on its way (2.0.0).
+function loadingNote(text = "Loading") {
+    const note = element("p", "loading-note", text);
+    note.setAttribute("role", "status");
+    return note;
+}
+
 function formatExactPlayed(iso) {
     const date = Games.parseLocal(iso);
     return date
@@ -3885,29 +3828,41 @@ function raProgressFor(game) {
         .find(entry => Games.titleKey(entry.title) === key) || null;
 }
 
+function askGameDetails(id) {
+    if (gamesState.details.has(id) || gamesState.detailsAsked.has(id)) return;
+    gamesState.detailsAsked.add(id);
+    send("GetGameDetails", id);
+}
+
+// The list stays put, with the focus on its row; only the panel beside it redraws.
+function selectGame(id) {
+    gamesState.openId = id;
+    askGameDetails(id);
+    document.querySelectorAll(".game-row-item").forEach(row => {
+        const on = row.dataset.gameId === id;
+        row.classList.toggle("is-open", on);
+        row.querySelector(".game-row-toggle").setAttribute("aria-pressed", String(on));
+    });
+    renderGameDetail();
+}
+
 function libraryRow(game) {
     const open = gamesState.openId === game.id;
     const row = element("li", `game-row-item${open ? " is-open" : ""}`);
+    row.dataset.gameId = game.id;
     const main = element("div", "game-row");
     const toggle = element("button", "game-row-toggle");
     toggle.type = "button";
-    toggle.setAttribute("aria-expanded", String(open));
-    toggle.title = open ? "Hide details" : "Show details";
+    toggle.setAttribute("aria-pressed", String(open));
+    toggle.title = "Show details";
     const copy = element("span", "game-row-copy");
-    const name = element("strong", "", Games.displayTitle(game.title));
-    copy.append(name, element("small", "", gameMeta(game, ["emulator", "system"])));
-    toggle.append(gameCover(game, "game-cover-thumb"), copy, element("i", "game-row-chevron", "›"));
-    toggle.addEventListener("click", () => {
-        gamesState.openId = open ? "" : game.id;
-        if (!open && !gamesState.details.has(game.id)) send("GetGameDetails", game.id);
-        renderGames();
-        requestAnimationFrame(() => document.querySelector(`.game-row-item.is-open .game-row-toggle`)?.focus());
-    });
+    copy.append(element("strong", "", Games.displayTitle(game.title)), element("small", "", gameMeta(game, ["emulator", "system"])));
+    toggle.append(gameCover(game, "game-cover-thumb"), copy);
+    toggle.addEventListener("click", () => selectGame(game.id));
     const time = element("span", "game-row-time", game.seconds ? Games.formatDuration(game.seconds) : "—");
     const last = element("span", "game-row-last", Games.formatLastPlayed(game.last) || "—");
-    main.append(toggle, time, last, playButton(game, "secondary game-play"));
+    main.append(toggle, time, last, playButton(game, "secondary"));
     row.append(main);
-    if (open) row.append(gameDetailsPanel(game));
     return row;
 }
 
@@ -3916,17 +3871,30 @@ function playButton(game, className) {
     const play = element("button", className, installed ? "Play" : "Install");
     play.type = "button";
     play.disabled = !game.launchable;
-    play.title = !game.launchable ? "ASCS doesn't know where this game is stored"
+    play.title = !game.launchable ? "Maestro doesn't know where this game is stored"
         : installed ? `Play ${game.title}` : `Opens Steam's install prompt for ${game.title}`;
     play.addEventListener("click", () => playGame(game));
     return play;
 }
 
+function renderGameDetail() {
+    const panel = $("gameDetail");
+    const game = gamesState.items.find(item => item.id === gamesState.openId);
+    panel.hidden = !game;
+    keepGameNoteFocus();
+    if (!game) {
+        panel.replaceChildren();
+        return;
+    }
+    if ($("games").classList.contains("active")) requestCovers([game]);
+    panel.replaceChildren(gameDetailsPanel(game));
+}
+
 function gameDetailsPanel(game) {
     const panel = element("div", "game-details");
-    panel.append(gameCover(game, "game-cover-detail"));
+    const top = element("div", "game-details-top");
     const body = element("div", "game-details-body");
-    body.append(element("h3", "", game.title));
+    body.append(element("h2", "", game.title));
     const facts = element("dl", "game-facts");
     const fact = (label, value) => {
         if (!value) return;
@@ -3944,6 +3912,8 @@ function gameDetailsPanel(game) {
         fact("Achievements", `${progress.achieved} of ${progress.possible} (${progress.percent}%)${progress.mastered ? " · mastered" : ""}`);
     }
     body.append(facts);
+    top.append(gameCover(game, "game-cover-detail"), body);
+    panel.append(top);
     const actions = element("div", "game-details-actions");
     actions.append(playButton(game, "primary"));
     if (extra?.canShow) {
@@ -3952,10 +3922,9 @@ function gameDetailsPanel(game) {
         show.addEventListener("click", () => send("ShowGameFile", game.id));
         actions.append(show);
     }
-    body.append(actions);
+    panel.append(actions);
     const notes = gameNotesBox("library", game.title);
-    if (notes) body.append(notes);
-    panel.append(body);
+    if (notes) panel.append(notes);
     return panel;
 }
 
@@ -3977,15 +3946,21 @@ function powerText(power) {
 function renderControllers(pads) {
     gamesState.pads = pads;
     const card = $("gamesControllers");
-    if (card.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return; // renaming
-    card.replaceChildren(element("span", "games-panel-label", pads.length > 1 ? "CONTROLLERS" : "CONTROLLER"));
+    // Asked for every 3 seconds: unchanged, the page keeps its focus.
+    const signature = JSON.stringify([pads, gamesState.renaming]);
+    if (card.dataset.signature === signature) return;
+    if (gamesState.renaming && card.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return;
+    card.dataset.signature = signature;
+    card.replaceChildren();
     if (!pads.length) {
-        card.append(element("strong", "games-panel-value games-panel-muted", "None connected"),
-            element("small", "games-panel-note", "Wake the controller to see it here. X-input mode also reports its battery."));
+        const empty = element("div", "module");
+        empty.style.gridColumn = "1 / -1";
+        empty.append(element("p", "module-empty", "No controller is connected. Wake one to see it here."));
+        card.append(empty);
         return;
     }
     pads.slice(0, 3).forEach(pad => {
-        const item = element("div", "pad");
+        const item = element("article", "module pad");
         if (gamesState.renaming === pad.key) {
             const form = element("form", "pad-rename");
             const input = element("input");
@@ -4007,9 +3982,10 @@ function renderControllers(pads) {
                 }
                 gamesState.renaming = "";
                 send("RenameController", `${pad.key}|${value}`);
+                renderControllers(gamesState.pads);
             });
             form.append(input, save, cancel);
-            const hint = element("small", "pad-hint", "Renames it in ASCS and in Windows' game controller list. Leave empty to restore the default. ");
+            const hint = element("small", "pad-hint", "Renames it in Maestro and in Windows' game controller list. Leave empty to restore the default. ");
             const bluetooth = element("button", "link-button", "Bluetooth name…");
             bluetooth.type = "button";
             bluetooth.title = "Opens Devices and Printers: right-click the controller › Properties › Bluetooth, then type a name. Needed once per controller.";
@@ -4020,30 +3996,9 @@ function renderControllers(pads) {
             requestAnimationFrame(() => { input.focus(); input.select(); });
             return;
         }
-        const head = element("div", "pad-head");
-        head.append(element("strong", "", pad.name));
-        const actions = element("span", "pad-actions");
-        const rename = element("button", "link-button", "Rename");
-        rename.type = "button";
-        rename.addEventListener("click", () => { gamesState.renaming = pad.key; renderControllers(gamesState.pads); });
-        actions.append(rename);
-        if (pad.rumble || pad.testable) {
-            const test = element("button", "link-button", "Test");
-            test.type = "button";
-            test.addEventListener("click", () => openTester(pad));
-            actions.append(test);
-        }
-        if (pad.rumble) {
-            // With two identical controllers, this tells you which entry is which.
-            const identify = element("button", "link-button", "Identify");
-            identify.type = "button";
-            identify.title = "Rumbles this controller so you can tell which one it is";
-            identify.addEventListener("click", () => send("RumbleController", pad.id));
-            actions.prepend(identify);
-        }
-        head.append(actions);
+        item.append(element("h2", "", pad.name));
         const meta = [`${pad.mode} mode`, pad.connection, pad.slot ? `Player ${pad.slot}` : ""].filter(Boolean).join(" · ");
-        item.append(head, element("small", "", meta));
+        item.append(element("small", "", meta));
         if (!pad.rumble) item.append(element("small", "pad-hint", "Rumble and battery need X-input mode."));
         const power = pad.rumble ? powerText(pad.power) : "";
         if (power) {
@@ -4051,6 +4006,19 @@ function renderControllers(pads) {
             line.dataset.power = pad.power;
             item.append(line);
         }
+        const actions = element("div", "pad-actions");
+        const padButton = (label, title, onClick) => {
+            const button = element("button", "secondary", label);
+            button.type = "button";
+            if (title) button.title = title;
+            button.addEventListener("click", onClick);
+            actions.append(button);
+        };
+        // With two identical controllers, this tells you which entry is which.
+        if (pad.rumble) padButton("Identify", "Rumbles this controller so you can tell which one it is", () => send("RumbleController", pad.id));
+        padButton("Rename", "", () => { gamesState.renaming = pad.key; renderControllers(gamesState.pads); });
+        if (pad.rumble || pad.testable) padButton("Test", "", () => openTester(pad));
+        item.append(actions);
         card.append(item);
     });
 }
@@ -4186,11 +4154,13 @@ function renderHidTester(body, pad, data, number) {
     lightButtons(body, number(data.buttons) >>> 0);
 }
 
-$("closeTester").addEventListener("click", () => {
+function closeControllerTester() {
     $("controllerTester").hidden = true;
     gamesState.tester = null;
     stopTester();
-});
+}
+
+$("closeTester").addEventListener("click", closeControllerTester);
 $("rumbleController").addEventListener("click", () => {
     if (gamesState.tester?.rumble) send("RumbleController", gamesState.tester.id);
 });
@@ -4223,8 +4193,8 @@ function openRaGame(id) {
     gamesState.ra.openGame = id;
     gamesState.ra.filter = "all";
     requestRaGame(id);
+    gamesSections.show("achievements");
     renderAchievements();
-    $("gamesAchievements").scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
 
 const RA_TYPE_LABELS = { progression: "Progression", win_condition: "Win condition", missable: "Missable" };
@@ -4327,45 +4297,76 @@ function renderRaBrowser(box) {
     requestRaImages([game.icon, ...shown.map(item => item.badge)]);
 }
 
-// "Next up" for the last game played: its next locked progression step (or
-// the next locked achievement), and missable ones still open.
-function raNextUpCard(gameId) {
-    const raw = gamesState.ra.games.get(gameId);
-    requestRaGame(gameId);
+// Next up, on Playing, for the last game RetroAchievements saw: its next locked
+// progression step (or the next locked achievement), and where the game stands.
+function renderGamesNextUp() {
+    const panel = $("gamesNextUp");
+    const ra = gamesState.ra;
+    const data = ra.state === "ok" && (ra.summary || ra.recent) ? Games.parseRetroAchievements(ra.summary, ra.recent) : null;
+    const gameId = data?.lastGameId || 0;
+    if (gameId) requestRaGame(gameId);
+    const raw = gameId ? ra.games.get(gameId) : "";
     const game = raw ? Games.parseRaGame(raw) : null;
-    if (!game || !game.achievements.length) return null;
-    const next = Games.nextUp(game);
-    const card = element("div", "ra-next");
-    const label = element("small", "", `NEXT UP · ${Games.displayTitle(game.title)}`);
-    card.append(label);
-    if (!next) {
-        card.append(element("p", "", "Every achievement unlocked."));
-        return card;
+    // While RetroAchievements hasn't answered, the module holds its place, so
+    // Continue Playing doesn't change width when it does.
+    const waiting = !game && (!ra.state || ra.state === "loading" || (ra.state === "ok" && gameId && !raw && !ra.gameErrors.has(gameId)));
+    panel.hidden = !waiting && !game?.achievements.length;
+    if (panel.hidden) {
+        panel.replaceChildren();
+        return;
     }
-    const item = element("div", "ra-with-image");
-    const body = element("div", "ra-item-body");
-    const head = element("div", "ra-unlock-head");
-    head.append(element("strong", "", next.achievement.title));
-    const tag = raTypeTag(next.achievement.type);
-    if (tag) head.append(tag);
-    head.append(element("span", "ra-points", `${next.achievement.points}`));
-    body.append(head);
-    if (next.achievement.description) body.append(element("p", "", next.achievement.description));
-    const foot = element("div", "ra-next-foot");
-    foot.append(element("small", "", `${next.locked} still locked`));
-    if (next.missableLeft) foot.append(element("small", "ra-missable-note", `${next.missableLeft} missable still open`));
+    const head = element("div", "module-head");
+    const heading = element("h2", "", "Next Up");
+    heading.id = "gamesNextUpTitle";
+    if (waiting) {
+        head.append(heading);
+        panel.replaceChildren(head, loadingNote());
+        return;
+    }
     const all = element("button", "link-button", "All achievements");
     all.type = "button";
     all.addEventListener("click", () => openRaGame(gameId));
-    foot.append(all);
-    body.append(foot);
-    item.append(raImage(next.achievement.badge, "ra-badge is-locked"), body);
-    card.append(item);
-    requestRaImages([next.achievement.badge]);
-    return card;
+    head.append(heading, all);
+    panel.replaceChildren(head, element("p", "games-next-game", Games.displayTitle(game.title)));
+
+    const next = Games.nextUp(game);
+    if (next) {
+        const target = element("div", "games-next-target");
+        const body = element("div", "ra-item-body");
+        const line = element("div", "ra-unlock-head");
+        line.append(element("strong", "", next.achievement.title));
+        const tag = raTypeTag(next.achievement.type);
+        if (tag) line.append(tag);
+        line.append(element("span", "ra-points", `${next.achievement.points}`));
+        body.append(line);
+        if (next.achievement.description) body.append(element("p", "", next.achievement.description));
+        target.append(raImage(next.achievement.badge, "ra-badge is-locked"), body);
+        panel.append(target);
+        requestRaImages([next.achievement.badge]);
+    } else {
+        panel.append(element("p", "module-empty", "Every achievement unlocked."));
+    }
+
+    const facts = element("dl", "game-facts-list");
+    const fact = (label, value, className = "") => {
+        const row = element("div", "game-fact");
+        const detail = element("dd", className, value);
+        detail.title = value;
+        row.append(element("dt", "", label), detail);
+        facts.append(row);
+    };
+    const { latest, rarest } = Games.raHighlights(game);
+    fact("Points earned", `${game.pointsEarned.toLocaleString()} of ${game.points.toLocaleString()}`);
+    if (next) fact("Still locked", String(next.locked));
+    if (next?.missableLeft) fact("Missable still open", String(next.missableLeft), "is-missable");
+    if (latest) fact("Latest unlock", `${latest.title}, ${raDateText(latest.earnedHardcore || latest.earned)}`);
+    if (rarest) fact("Rarest unlock", `${rarest.title}, ${rarest.rarity < 1 ? "<1" : Math.round(rarest.rarity)}% of players`);
+    panel.append(facts);
 }
 
 function renderAchievements() {
+    renderGamesNextUp();
+    if (gamesSections.current() !== "achievements") return;
     keepGameNoteFocus();
     const box = $("gamesAchievements");
     const ra = gamesState.ra;
@@ -4389,7 +4390,7 @@ function renderAchievements() {
         return;
     }
     if (!ra.summary && !ra.recent) {
-        box.append(element("p", "settings-note", "Loading…"));
+        box.append(loadingNote());
         return;
     }
     const data = Games.parseRetroAchievements(ra.summary, ra.recent);
@@ -4402,35 +4403,36 @@ function renderAchievements() {
         if (note) item.append(element("em", "", note));
         stats.append(item);
     };
-    stat("PLAYER", data.user || "—");
-    stat("HARDCORE POINTS", data.points.toLocaleString(), data.truePoints ? `${data.truePoints.toLocaleString()} true points` : "");
-    if (data.softcore) stat("SOFTCORE", data.softcore.toLocaleString());
-    stat("RANK", data.rank ? `#${data.rank.toLocaleString()}` : "—", Games.rankPercentile(data.rank, data.ranked));
+    const player = element("span", "ra-player");
+    player.append(raImage(data.userPicture, "ra-avatar"), element("h3", "ra-player-name", data.user || "—"));
+    stats.append(player);
+    stat("Hardcore points", data.points.toLocaleString(), data.truePoints ? `${data.truePoints.toLocaleString()} true points` : "");
+    if (data.softcore) stat("Softcore points", data.softcore.toLocaleString());
+    stat("Rank", data.rank ? `#${data.rank.toLocaleString()}` : "—", Games.rankPercentile(data.rank, data.ranked));
     if (ra.awards) {
         const { counts } = Games.parseRaAwards(ra.awards);
-        stat("MASTERED", String(counts.mastered));
-        if (counts.completed) stat("COMPLETED", String(counts.completed));
+        stat("Mastered", String(counts.mastered));
+        if (counts.completed) stat("Completed", String(counts.completed));
     }
     box.append(stats);
 
     // What's being played (rich presence comes from the game itself).
     if (data.lastGame || data.presence) {
         const now = element("div", "ra-now");
-        now.append(element("small", "", "LAST SEEN IN"));
+        now.append(element("small", "", "Last seen in"));
         now.append(element("strong", "", [data.lastGame, data.lastConsole].filter(Boolean).join(" · ") || "—"));
         if (data.presence) now.append(element("p", "", data.presence));
         box.append(now);
     }
+    requestRaImages([data.userPicture]);
     if (ra.openGame) {
         renderRaBrowser(box);
         return;
     }
-    const nextCard = data.lastGameId ? raNextUpCard(data.lastGameId) : null;
-    if (nextCard) box.append(nextCard);
 
     const columns = element("div", "ra-columns");
     const progress = element("div", "ra-column");
-    progress.append(element("h3", "", "Progress"));
+    progress.append(element("h2", "", "Progress"));
     const progressList = element("ol", "ra-progress");
     data.games.slice(0, 6).forEach(game => {
         const item = element("li", `ra-with-image ${game.mastered ? "is-mastered" : game.completed ? "is-complete" : ""}`);
@@ -4461,7 +4463,7 @@ function renderAchievements() {
     progress.append(progressList);
 
     const unlocks = element("div", "ra-column");
-    unlocks.append(element("h3", "", "Recent unlocks"));
+    unlocks.append(element("h2", "", "Recent Unlocks"));
     const unlockList = element("ol", "ra-unlocks");
     // Beyond six (1.9.0): the last 30 days, six to a page.
     const PAGE = 6;
@@ -4523,11 +4525,14 @@ function renderAchievements() {
 // RetroAchievements badges and icons: requested by token once per session;
 // ASCS downloads each image once and keeps it in data\ra-images.
 const RA_IMAGE_PATTERN = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
+const RA_TOKEN_PATTERN = /^([bi]:\d{1,8}|u:[A-Za-z0-9_]{1,32})$/;
+// A user's name in any case is the same picture.
+const raImageKey = token => (token.startsWith("u:") ? token.toLowerCase() : token);
 
 function raImage(token, className) {
     const holder = element("span", `ra-image ${className}`);
-    holder.dataset.token = token || "";
-    const data = token ? gamesState.raImages.get(token) : "";
+    holder.dataset.token = token ? raImageKey(token) : "";
+    const data = token ? gamesState.raImages.get(raImageKey(token)) : "";
     if (data) {
         const image = element("img");
         image.src = data;
@@ -4538,18 +4543,25 @@ function raImage(token, className) {
 }
 
 function requestRaImages(tokens) {
-    const wanted = [...new Set(tokens.filter(token => /^[bi]:\d{1,8}$/.test(token || "")))]
-        .filter(token => !gamesState.raImages.has(token) && !gamesState.raRequested.has(token));
+    const wanted = [...new Set(tokens.filter(token => RA_TOKEN_PATTERN.test(token || "")))]
+        .filter(token => !gamesState.raImages.has(raImageKey(token)) && !gamesState.raRequested.has(token));
     if (!wanted.length) return;
     wanted.forEach(token => gamesState.raRequested.add(token));
     for (let i = 0; i < wanted.length; i += 30) send("GetRaImages", wanted.slice(i, i + 30).join(","));
 }
 
 function handleRaImage(token, data) {
-    if (!/^[bi]:\d{1,8}$/.test(token) || !RA_IMAGE_PATTERN.test(data) || data.length > 400000) return;
-    gamesState.raImages.set(token, data);
+    if (!RA_TOKEN_PATTERN.test(token) || !RA_IMAGE_PATTERN.test(data) || data.length > 400000) return;
+    const key = raImageKey(token);
+    gamesState.raImages.set(key, data);
     document.querySelectorAll(".ra-image").forEach(holder => {
-        if (holder.dataset.token !== token || holder.querySelector("img")) return;
+        if (holder.dataset.token !== key) return;
+        // A user's picture can arrive twice: the cached copy, then a newer one.
+        const shown = holder.querySelector("img");
+        if (shown) {
+            shown.src = data;
+            return;
+        }
         const image = element("img");
         image.src = data;
         image.alt = "";
@@ -4573,6 +4585,8 @@ function startGamesPolling() {
     stopGamesPolling();
     if (!notesLoaded) send("GetNotes");
     refreshGameNotes();
+    syncNowPlayingNotes(nowNotesTitle);
+    renderGamesNextUp();
     send("GetGames");
     send("GetGamesLive");
     send("GetRetroAchievements");
@@ -4609,16 +4623,23 @@ function stopRunningPolling() {
 document.querySelectorAll("[data-game-filter]").forEach(button => button.addEventListener("click", () => {
     gamesState.filter = button.dataset.gameFilter;
     document.querySelectorAll("[data-game-filter]").forEach(other => other.setAttribute("aria-pressed", String(other === button)));
-    renderGames();
+    renderLibrary();
 }));
 document.querySelectorAll("[data-game-sort]").forEach(button => button.addEventListener("click", () => {
     gamesState.sort = button.dataset.gameSort;
     document.querySelectorAll("[data-game-sort]").forEach(other => other.setAttribute("aria-pressed", String(other === button)));
-    renderGames();
+    renderLibrary();
 }));
 $("gameSearch").addEventListener("input", () => {
     gamesState.query = $("gameSearch").value;
-    renderGames();
+    renderLibrary();
+});
+$("gamesOpenLibrary").addEventListener("click", () => gamesSections.show("library"));
+// On its own message, so turning covers on or off can't touch the other settings.
+$("showCovers").addEventListener("change", () => {
+    gamesState.covers.clear();
+    gamesState.requested.clear();
+    send("SetShowCovers", $("showCovers").checked ? "1" : "0");
 });
 $("refreshAchievements").addEventListener("click", () => {
     send("GetRetroAchievements", "refresh");
@@ -4627,7 +4648,9 @@ $("refreshAchievements").addEventListener("click", () => {
     if (gamesState.ra.awardsAsked) send("GetRaAwards", "refresh");
 });
 
-// ---- Preferences: Games & apps
+// ---- Games › Setup (2.0.0; was Preferences › Games & Apps)
+
+let gameSettingsLoaded = false;
 
 function loadGameSettings(data) {
     const paths = data.paths && typeof data.paths === "object" ? data.paths : {};
@@ -4647,31 +4670,41 @@ function loadGameSettings(data) {
         return option;
     }));
     const state = typeof data.retroAchievements === "string" ? data.retroAchievements : "off";
+    $("raPictureRefresh").disabled = state !== "ready";
     $("raStatusText").textContent = state === "ready"
         ? "Set up: credentials found in data\\secrets.ini (kept on this PC, never committed). The key is never shown here."
         : state === "invalid"
             ? "data\\secrets.ini has a user name or key that isn't valid. Open it to fix them."
-            : "Not set up. Your user name and Web API key go in data\\secrets.ini, which stays on this PC and is never committed. The key is never shown in ASCS or sent anywhere except retroachievements.org.";
+            : "Not set up. Your user name and Web API key go in data\\secrets.ini, which stays on this PC and is never committed. The key is never shown in Maestro or sent anywhere except retroachievements.org.";
+    gameSettingsLoaded = true;
+    document.querySelectorAll("[data-game-setting]").forEach(input => { input.disabled = false; });
 }
 
-$("saveGamesButton").addEventListener("click", () => {
+function saveGameSettings() {
+    if (!gameSettingsLoaded) return;
     const fields = ["gamePathRetroarch", "gamePathDolphin", "gamePathPcsx2", "gamePathPso", "gamePathDiscord", "headphonesDevice", "soundSwitchKey"]
         .map(id => $(id).value.trim());
     if (fields.some(value => /[|\r\n]/.test(value))) {
-        $("gamesStatus").textContent = "Paths and names cannot contain | or line breaks.";
+        setPageSaveStatus("gamesStatus", "Paths and names cannot contain | or line breaks.");
         return;
     }
     fields.push($("showCovers").checked ? "1" : "0");
     const voice = $("psoVoiceChannel").value.trim();
     if (voice && !/^(https:\/\/((ptb|canary)\.)?discord(app)?\.com\/channels\/|discord:\/\/-\/channels\/)\d{15,21}\/\d{15,21}\/?$/i.test(voice)) {
-        $("gamesStatus").textContent = "The PSO voice channel must be a Discord channel link: https://discord.com/channels/<server>/<channel>.";
+        setPageSaveStatus("gamesStatus", "The PSO voice channel must be a Discord channel link: https://discord.com/channels/<server>/<channel>.");
         return;
     }
     fields.push(voice);
-    $("gamesStatus").textContent = "Saving…";
-    if (!send("SaveGameSettings", fields.join("|"))) $("gamesStatus").textContent = "Unable to contact ASCS.";
-});
+    setPageSaveStatus("gamesStatus", "Saving…");
+    if (!send("SaveGameSettings", fields.join("|"))) setPageSaveStatus("gamesStatus", "Unable to contact Maestro.");
+}
+// "change" comes when a field is left, or Enter pressed: not on every letter.
+document.querySelectorAll("[data-game-setting]").forEach(input => input.addEventListener("change", saveGameSettings));
 $("setupRetroAchievements").addEventListener("click", () => send("SetupRetroAchievements"));
+$("raPictureRefresh").addEventListener("click", () => {
+    setPageSaveStatus("gamesStatus", "Checking for a new profile picture…");
+    if (!send("RefreshRaPicture")) setPageSaveStatus("gamesStatus", "Unable to contact Maestro.");
+});
 
 // ------------------------------------------------------------ power and system (1.7.0)
 // Guarded buttons need a 1.5-second press-and-hold (pointer, Space or
@@ -4818,27 +4851,42 @@ function renderRecycleBin(data) {
     button.disabled = items === 0;
 }
 
+// The output is chosen from the power tray and from Sounds, with one list.
+const AUDIO_MENUS = [
+    { button: "audioButton", menu: "audioMenu", current: "audioCurrent", empty: "Audio" },
+    { button: "homeAudioButton", menu: "homeAudioMenu", current: "homeAudioCurrent", empty: "Audio output" },
+    { button: "soundOutputButton", menu: "soundOutputMenu", current: "soundOutputCurrent", empty: "Audio output" }
+];
+
+function closeAudioMenu({ button, menu }) {
+    $(menu).hidden = true;
+    $(button).setAttribute("aria-expanded", "false");
+}
+
 function renderAudioDevices(data) {
-    const items = Array.isArray(data.items) ? data.items.filter(item => item && typeof item.name === "string").slice(0, 16) : [];
+    const items = Array.isArray(data.items) ? data.items.filter(item => item && typeof item.name === "string") : [];
+    // "Monitor Speaker (LG ULTRAGEAR)"; the name is Windows' own, for switching.
+    const labelOf = item => typeof item.label === "string" && item.label ? item.label : item.name;
     const current = items.find(item => item.current === true);
-    $("audioCurrent").textContent = current ? Games.displayTitle(current.name) : "Audio";
-    $("audioButton").title = current ? `Audio output: ${current.name}` : "Choose the audio output";
-    const menu = $("audioMenu");
-    menu.replaceChildren(...items.map(item => {
-        const option = element("button", `audio-option${item.current ? " is-current" : ""}`, item.name);
-        option.type = "button";
-        option.setAttribute("role", "menuitemradio");
-        option.setAttribute("aria-checked", String(item.current === true));
-        option.addEventListener("click", () => {
-            menu.hidden = true;
-            $("audioButton").setAttribute("aria-expanded", "false");
-            if (!item.current) send("SelectAudioDevice", item.name);
-        });
-        return option;
-    }));
-    if (data.soundSwitch !== true) {
-        menu.append(element("p", "settings-note", "SoundSwitch isn't running; ASCS switches outputs through it."));
-    }
+    AUDIO_MENUS.forEach(place => {
+        $(place.current).textContent = current ? labelOf(current) : place.empty;
+        $(place.button).title = current ? `Audio output: ${labelOf(current)}` : "Choose the audio output";
+        const menu = $(place.menu);
+        menu.replaceChildren(...items.map(item => {
+            const option = element("button", `audio-option${item.current ? " is-current" : ""}`, labelOf(item));
+            option.type = "button";
+            option.setAttribute("role", "menuitemradio");
+            option.setAttribute("aria-checked", String(item.current === true));
+            option.addEventListener("click", () => {
+                closeAudioMenu(place);
+                if (!item.current) send("SelectAudioDevice", item.name);
+            });
+            return option;
+        }));
+        if (data.soundSwitch !== true) {
+            menu.append(element("p", "settings-note", "SoundSwitch isn't running; Maestro switches outputs through it."));
+        }
+    });
 }
 
 document.querySelectorAll("[data-power-now]").forEach(button => {
@@ -4884,6 +4932,7 @@ function refreshPowerTray() {
 function togglePowerTray(show = $("powerTray").hidden) {
     const tray = $("powerTray");
     const button = $("powerTrayButton");
+    clearPowerKeys();
     if (!show) {
         tray.hidden = true;
         button.setAttribute("aria-expanded", "false");
@@ -4899,6 +4948,50 @@ function togglePowerTray(show = $("powerTray").hidden) {
     // Focus goes to the tray, not a button, so a second Enter can't lock the PC.
     requestAnimationFrame(() => tray.focus());
 }
+// Letters in the tray (2.0.0): holding one is holding its button, and the rule
+// about a second key lives in powerkeys.js. They act only while the tray is open.
+const powerKeys = MaestroPowerKeys.create();
+
+function cancelPowerHolds() {
+    document.querySelectorAll("[data-power-hold]").forEach(endHold);
+}
+
+function clearPowerKeys() {
+    powerKeys.reset();
+    cancelPowerHolds();
+    showPowerKeysBlocked(false);
+}
+
+function showPowerKeysBlocked(blocked) {
+    $("powerHintText").textContent = blocked ? "More than one key: nothing happens" : "Hold to confirm";
+    $("powerHint").classList.toggle("is-blocked", blocked);
+}
+
+document.addEventListener("keydown", event => {
+    if ($("powerTray").hidden || !$("audioMenu").hidden) return;
+    const result = powerKeys.keydown(event);
+    if (result.handled) event.preventDefault();
+    if (result.blocked) {
+        cancelPowerHolds();
+        showPowerKeysBlocked(true);
+    }
+    if (result.start) {
+        const button = document.querySelector(`[data-power-hold="${result.start}"]`);
+        if (button && !button.disabled) startHold(button);
+    }
+}, true);
+document.addEventListener("keyup", event => {
+    if ($("powerTray").hidden) return;
+    const result = powerKeys.keyup(event);
+    if (result.handled) event.preventDefault();
+    if (result.end) {
+        const button = document.querySelector(`[data-power-hold="${result.end}"]`);
+        if (button) endHold(button);
+    }
+    if (result.unlocked) showPowerKeysBlocked(false);
+}, true);
+window.addEventListener("blur", clearPowerKeys);
+
 $("powerTrayButton").addEventListener("click", () => togglePowerTray());
 $("powerTray").addEventListener("keydown", event => {
     if (event.key !== "Escape") return;
@@ -4910,16 +5003,25 @@ $("powerTray").addEventListener("keydown", event => {
 document.addEventListener("pointerdown", event => {
     if (!$("powerTray").hidden && !event.target.closest("#powerTray, #powerTrayButton")) togglePowerTray(false);
 });
-$("audioButton").addEventListener("click", () => {
-    const menu = $("audioMenu");
-    menu.hidden = !menu.hidden;
-    $("audioButton").setAttribute("aria-expanded", String(!menu.hidden));
-    if (!menu.hidden) send("GetAudioDevices");
+AUDIO_MENUS.forEach(place => {
+    $(place.button).addEventListener("click", () => {
+        const menu = $(place.menu);
+        menu.hidden = !menu.hidden;
+        $(place.button).setAttribute("aria-expanded", String(!menu.hidden));
+        if (!menu.hidden) send("GetAudioDevices");
+    });
 });
 document.addEventListener("click", event => {
-    if (!$("audioMenu").hidden && !event.target.closest("#audioMenu, #audioButton")) {
-        $("audioMenu").hidden = true;
-        $("audioButton").setAttribute("aria-expanded", "false");
+    AUDIO_MENUS.forEach(place => {
+        if (!$(place.menu).hidden && !event.target.closest(`#${place.menu}, #${place.button}`)) closeAudioMenu(place);
+    });
+});
+document.addEventListener("keydown", event => {
+    const open = AUDIO_MENUS[1];
+    if (event.key === "Escape" && !$(open.menu).hidden) {
+        event.stopPropagation();
+        closeAudioMenu(open);
+        $(open.button).focus();
     }
 });
 
@@ -5011,9 +5113,9 @@ function enableDragScroll(strip) {
     strip.addEventListener("pointercancel", end);
 }
 
-enableTabWheel(document.querySelector("#settings .settings-nav"), "[role='tab']");
 enableTabWheel(document.querySelector("#logs .logs-sources"), "[data-log-source]");
 enableTabWheel(document.querySelector("#logs .logs-levels"), "[data-log-level]");
+enableTabWheel($("gamesTabs"), "[role='tab']");
 enableTabWheel(document.querySelector(".games-toolbar .logs-sources"), "[data-game-filter]");
 enableTabWheel(document.querySelector(".games-toolbar .logs-levels"), "[data-game-sort]");
 // Sideways over the almanac strip steps through its items (1.9.2).
@@ -5023,19 +5125,6 @@ enableWheelStep($("homeAlmanac"), direction => {
 });
 // Sideways over the Calendar steps through days, weeks or months (1.9.2).
 enableWheelStep($("calendar"), direction => $(direction > 0 ? "calNext" : "calPrev").click());
-
-// The shelf fades at its right edge only while more games are off to the side.
-function updateShelfFade() {
-    const shelf = $("gamesContinue");
-    const more = shelf.scrollWidth - shelf.clientWidth - shelf.scrollLeft > 2;
-    shelf.classList.toggle("has-more", more);
-}
-$("gamesContinue").addEventListener("scroll", updateShelfFade, { passive: true });
-window.addEventListener("resize", updateShelfFade);
-
-// Keep the selected Preferences tab in view after any selection.
-document.querySelectorAll("#settings .settings-nav [role='tab']").forEach(tab =>
-    tab.addEventListener("click", () => tab.scrollIntoView({ block: "nearest", inline: "nearest" })));
 
 // ------------------------------------------------------------ start-up rendering
 // Runs last, after every declaration above, so nothing is used before it is
@@ -5054,27 +5143,38 @@ send("GetRecycleBin");
 send("GetAudioDevices");
 
 // ---- help and shortcuts inside ASCS (1.8.0)
-// The shortcuts work only while ASCS has focus. Ctrl + 1-9 follow the
-// sidebar's order, so new views take the next number. F1 (or the ? button in
-// the title bar) toggles the help.
+// The shortcuts work only while Maestro has focus. Ctrl + 1, 2... follow the
+// sidebar's order, so new pages take the next number; 9 and 0 are free for them.
+// Ctrl + - is Preferences and Ctrl + = is Power, the last keys on the number row
+// for the last items in the sidebar. F1 (or the ? button in the title bar)
+// toggles the help.
 const HELP_INSIDE = [
-    [["Ctrl", "1–9, 0"], "Go to a page"],
+    [["Ctrl", "1–8"], "Go to a page"],
+    [["Ctrl", "-"], "Preferences"],
+    [["Ctrl", "="], "Power"],
+    [["/"], "Search or run a command"],
+    [["Arrow keys"], "Move between controls"],
+    [["F6"], "Next area: sidebar, title bar, page"],
+    [["Alt", "←"], "Previous page (or mouse back)"],
+    [["Alt", "→"], "Next page (or mouse forward)"],
     [["Ctrl", "N"], "New note"],
+    [["Ctrl", "M"], "Quick Notes: Markdown viewer or text editor"],
     [["Ctrl", "E"], "New calendar event"],
     [["Ctrl", "F"], "Search this page"],
+    [["Enter"], "In Quick Notes' filter: the next match in the open note (Shift + Enter, the one before)"],
     [["F1"], "Open or close this help"],
     [["Esc"], "Close a dialog or the palette"]
 ];
-const VIEW_SEARCH = { notes: "notesFilter", games: "gameSearch", sounds: "soundSearch", commands: "commandSearch" };
+const VIEW_SEARCH = { notes: "notesFilter", games: "gameSearch", sounds: "soundSearch", commands: "commandSearch", dashboard: "logSearch" };
 
 function sidebarViews() {
-    return [...document.querySelectorAll(".nav[data-view]")].map(button => button.dataset.view).filter(view => validViews.has(view));
+    return [...document.querySelectorAll(".primary-nav .nav[data-view]")].map(button => button.dataset.view).filter(view => validViews.has(view));
 }
 
 function helpAnywhere() {
     const letter = (action, fallback) => (currentHotkeys[action] || fallback).toUpperCase();
     return [
-        [["Super"], "Show or hide ASCS"],
+        [["Super"], "Show or hide Maestro"],
         [["Super", "Space"], "Command palette"],
         [["Super", letter("notes", "q")], "Quick Notes"],
         [["Super", "Shift", "C"], "Capture the selection as a note"],
@@ -5100,14 +5200,14 @@ function toggleHelp(show = $("helpDialog").hidden) {
         return;
     }
     helpPreviousFocus = document.activeElement;
-    $("helpMeta").textContent = `${$("sidebarVersion")?.textContent || "ASCS"} · F1 opens and closes this`;
+    $("helpMeta").textContent = `${$("sidebarVersion")?.textContent || "Maestro"} · F1 opens and closes this`;
     $("helpInside").replaceChildren(...HELP_INSIDE.flatMap(keyRow));
     $("helpAnywhere").replaceChildren(...helpAnywhere().flatMap(keyRow));
     const current = document.querySelector(".view.active")?.id;
-    $("helpPages").replaceChildren(...sidebarViews().slice(0, 10).map((view, index) => {
+    $("helpPages").replaceChildren(...[...sidebarViews().slice(0, 10), "settings"].map((view, index) => {
         const page = element("button", `help-page${view === current ? " is-current" : ""}`);
         page.type = "button";
-        page.append(element("kbd", "", String((index + 1) % 10)),
+        page.append(element("kbd", "", view === "settings" ? "-" : String((index + 1) % 10)),
             element("span", "", document.querySelector(`.nav[data-view="${view}"]`)?.title || view));
         if (view === current) page.setAttribute("aria-current", "page");
         page.addEventListener("click", () => { toggleHelp(false); navigate(view); });
@@ -5147,11 +5247,23 @@ document.addEventListener("keydown", event => {
     const ctrlOnly = event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey;
 
     if (ctrlOnly && /^[0-9]$/.test(event.key)) {
-        // Ctrl + 1-9, then 0 for the tenth page (1.9.0).
+        // In the sidebar's order; a number with no page does nothing.
         const view = sidebarViews()[event.key === "0" ? 9 : Number(event.key) - 1];
         if (!view) return;
         event.preventDefault();
         navigate(view);
+        return;
+    }
+    if (ctrlOnly && event.key === "-") {
+        event.preventDefault();
+        navigate("settings");
+        return;
+    }
+    if (ctrlOnly && event.key === "=") {
+        // Only opens the tray: its actions still need the hold.
+        event.preventDefault();
+        togglePowerTray();
+        if ($("powerTray").hidden) $("powerTrayButton").focus();
         return;
     }
     if (ctrlOnly && event.key.toLowerCase() === "n") {
@@ -5166,29 +5278,129 @@ document.addEventListener("keydown", event => {
         newEventFromShortcut();
         return;
     }
+    // Quick Notes only, and from inside the text too: the viewer or the editor.
+    if (ctrlOnly && event.key.toLowerCase() === "m" && $("notes").classList.contains("active") && !$("noteModes").hidden) {
+        event.preventDefault();
+        setNoteMode(noteMode === "read" ? "edit" : "read");
+        return;
+    }
     if (ctrlOnly && event.key.toLowerCase() === "f") {
         event.preventDefault();
         const view = document.querySelector(".view.active")?.id;
         const search = VIEW_SEARCH[view] ? $(VIEW_SEARCH[view]) : null;
         if (search) {           // only ever "search this page"; Super + Space is the palette
+            // The box may be on a section that isn't showing.
+            if (view === "games") gamesSections.show("library");
+            if (view === "commands") commandsSections.show("keymap");
+            if (view === "dashboard") systemSections.show("activity");
             search.focus();
             search.select();
         }
     }
 });
 
+// ------------------------------------------------------------ pointer and keyboard travel
+
+// A dialog or the palette has its own keys, and the page behind it stays put.
+function coveringDialog() {
+    if (!$("launcher").hidden) return $("launcher");
+    return [...document.querySelectorAll(".confirm-backdrop")].find(dialog => !dialog.hidden) ?? null;
+}
+
+function moveThroughPages(direction) {
+    if (coveringDialog()) return;
+    const view = direction === "back" ? viewHistory.back() : viewHistory.forward();
+    if (view) navigate(view, true);
+}
+
+// Mouse side buttons report as buttons 3 and 4. Only while the pointer is over
+// the page: nothing here hooks the mouse system-wide.
+const SIDE_BUTTONS = { 3: "back", 4: "forward" };
+document.addEventListener("mousedown", event => {
+    if (SIDE_BUTTONS[event.button]) event.preventDefault();
+}, true);
+document.addEventListener("mouseup", event => {
+    const direction = SIDE_BUTTONS[event.button];
+    if (!direction) return;
+    event.preventDefault();
+    moveThroughPages(direction);
+}, true);
+
+// F6 and Shift + F6 move between the page's areas.
+function moveToArea(step) {
+    const areas = [".sidebar", ".topbar", ".view.active"].map(selector => document.querySelector(selector)).filter(Boolean);
+    const at = areas.findIndex(area => area.contains(document.activeElement));
+    const area = areas[(at + step + areas.length) % areas.length];
+    const target = area.querySelector(".nav.active") ?? arrowCandidates([area], null)[0]?.node;
+    target?.focus();
+    target?.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+document.addEventListener("keydown", event => {
+    if (event.defaultPrevented) return;
+    const plain = !event.ctrlKey && !event.altKey && !event.metaKey;
+    // Some mouse software sends the browser keys instead of the buttons.
+    if (event.key === "BrowserBack" || event.key === "BrowserForward") {
+        event.preventDefault();
+        moveThroughPages(event.key === "BrowserBack" ? "back" : "forward");
+    } else if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+        event.preventDefault();
+        moveThroughPages(event.key === "ArrowLeft" ? "back" : "forward");
+    } else if (event.key === "F6" && plain && !coveringDialog() && $("powerTray").hidden) {
+        event.preventDefault();
+        moveToArea(event.shiftKey ? -1 : 1);
+    } else if (event.key === "/" && plain && !event.shiftKey && !coveringDialog() && $("powerTray").hidden && !document.activeElement?.matches(KEEPS_ARROWS)) {
+        event.preventDefault();
+        $("titlebarCommand").click();
+    }
+});
+
+const ARROW_TARGETS = "a[href], button, input, select, textarea, [role='button'], [tabindex='0']";
+const KEEPS_ARROWS = "textarea, select, [contenteditable='true'], [role='slider'], [role='listbox'], input:not([type='button'], [type='checkbox'], [type='submit'])";
+
+function arrowCandidates(scopes, from) {
+    return scopes.flatMap(scope => [...scope.querySelectorAll(ARROW_TARGETS)]).filter(node => {
+        if (node === from || node.disabled || node.closest("[hidden], [aria-hidden='true']")) return false;
+        if (node.matches("[role='tab'][tabindex='-1']")) return false;      // a tab row is one stop; its own keys move along it
+        if (node.id === "sidebarToggle") return false;      // on the sidebar's edge, and in the way: Tab reaches it
+        if (node.matches("[data-pointer-only]")) return false;      // a grip's keys do its job
+        const box = node.getBoundingClientRect();
+        return box.width > 0 && box.height > 0 && getComputedStyle(node).visibility !== "hidden";
+    }).map(node => ({ node, rect: node.getBoundingClientRect() }));
+}
+
+// Runs after each control's own keys: one that uses the arrows has already
+// claimed them. With nowhere to go, the arrow scrolls the page as usual.
+document.addEventListener("keydown", event => {
+    if (!event.key.startsWith("Arrow") || event.defaultPrevented) return;
+    if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+    const from = document.activeElement;
+    if (!from || from === document.body || from.matches(KEEPS_ARROWS)) return;
+    if (!$("launcher").hidden) return;
+    const panel = !$("powerTray").hidden ? $("powerTray") : !$("attentionPanel").hidden ? $("attentionPanel") : coveringDialog();
+    const scopes = panel ? [panel] : [document.querySelector(".sidebar"), document.querySelector(".topbar"), document.querySelector(".view.active")].filter(Boolean);
+    const next = MaestroKeyNav.pick(from.getBoundingClientRect(), arrowCandidates(scopes, from), event.key);
+    if (!next) return;
+    event.preventDefault();
+    next.focus();
+    next.scrollIntoView({ block: "nearest", inline: "nearest" });
+});
+
 // Each sidebar item shows its Ctrl number, worked out from the sidebar's
 // order so it stays right when views are added.
 function numberSidebar() {
-    document.querySelectorAll(".nav[data-view]").forEach((button, index) => {
+    const addKey = (button, digit) => {
         button.querySelector(".nav-key")?.remove();
-        if (index >= 10) return;
-        const digit = String((index + 1) % 10);       // the tenth is Ctrl + 0
         const key = element("kbd", "nav-key", digit);
         key.setAttribute("aria-hidden", "true");
         key.title = `Ctrl + ${digit}`;
         button.append(key);
         button.setAttribute("aria-keyshortcuts", `Control+${digit}`);
+    };
+    document.querySelectorAll(".primary-nav .nav[data-view]").forEach((button, index) => {
+        if (index < 10) addKey(button, String((index + 1) % 10));       // the tenth is Ctrl + 0
     });
+    addKey(document.querySelector('.nav[data-view="settings"]'), "-");
+    addKey($("powerTrayButton"), "=");
 }
 numberSidebar();

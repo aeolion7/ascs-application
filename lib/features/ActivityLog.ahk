@@ -2,7 +2,7 @@
 ; ACTIVITY LOG
 ; ==========================================
 
-WriteLog(message := "ASCS activity") {
+WriteLog(message := "Maestro activity") {
     global ASCS_LogFile
 
     message := RegExReplace(String(message), "[\r\n]+", " ")

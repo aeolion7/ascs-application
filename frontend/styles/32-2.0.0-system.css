@@ -1,0 +1,953 @@
+/* ==========================================================================
+   2.0.0: System. Live, Hardware, Startup, and Activity and Logs, each with the
+   whole page. Replaces the 1.5.0 to 1.9.2 rules for this page and the Logs dialog.
+   ========================================================================== */
+
+/* The section showing fills what's left of the window: the same height as the
+   Command Center's grid. */
+:root #dashboard.view.active {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 100px - var(--space-page));
+  padding-bottom: 0;
+}
+
+:root #dashboard.view.active:has(#systemActivity:not([hidden])) {
+  height: calc(100vh - 100px - var(--space-page));
+}
+
+#dashboard > [role="tabpanel"] {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.system-live,
+.system-hardware,
+.system-signin,
+.system-activity {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--space-between);
+}
+
+/* ---- Live ---- */
+
+.system-live {
+  grid-template-rows: minmax(380px, 1fr) auto;
+}
+
+.system-gauge {
+  display: flex;
+  flex-direction: column;
+  grid-column: span 6;
+  min-height: 0;
+}
+
+.system-reading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  margin-top: 4px;
+}
+
+.system-value {
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-number);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.system-value.is-high {
+  color: var(--brand-gold-text);
+}
+
+.system-reading small {
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Charts: one line, a quiet scale, and a card at the pointer ---- */
+
+.system-chart {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 20px;
+}
+
+.chart-plot {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 180px;
+  margin: 10px 8px 0 calc(64px * var(--text-scale));
+}
+
+.chart-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.chart-grid span {
+  position: absolute;
+  right: 0;
+  left: 0;
+  border-top: 1px solid var(--line);
+}
+
+.chart-grid span:nth-child(1) {
+  top: 0;
+}
+
+.chart-grid span:nth-child(2) {
+  top: 50%;
+}
+
+.chart-grid span:nth-child(3) {
+  bottom: 0;
+}
+
+.chart-grid span::before {
+  position: absolute;
+  right: 100%;
+  margin-right: 12px;
+  color: var(--text-muted);
+  content: attr(data-label);
+  font-size: var(--t-floor);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  transform: translateY(-50%);
+  white-space: nowrap;
+}
+
+.chart-lines {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.chart-area {
+  fill: rgba(123, 92, 240, .18);
+  stroke: none;
+}
+
+.chart-line {
+  fill: none;
+  stroke: var(--brand-tint-text);
+  stroke-linejoin: round;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-axis {
+  display: flex;
+  justify-content: space-between;
+  min-height: calc(var(--t-floor) * 1.4);
+  margin: 10px 8px 0 calc(64px * var(--text-scale));
+  color: var(--text-muted);
+  font-size: var(--t-floor);
+}
+
+.chart-rule {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line-control);
+  pointer-events: none;
+}
+
+.chart-rule[hidden],
+.chart-tip[hidden] {
+  display: none;
+}
+
+.chart-tip {
+  position: absolute;
+  top: 8px;
+  z-index: 5;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-key);
+  background: var(--surface-raised);
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.chart-tip strong {
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-subhead);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* ---- Drives ---- */
+
+/* A row's height before the first reading, so the graphs don't change size. */
+#dashboardDrives {
+  min-height: calc(52px * var(--text-scale));
+}
+
+.system-drives {
+  grid-column: 1 / -1;
+}
+
+.system-drive-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 20px 40px;
+  margin-top: 8px;
+}
+
+.system-drive-grid .sys-row {
+  gap: 10px;
+}
+
+/* A line without a large number still sits on the same baseline as one with. */
+.sys-line::before {
+  width: 0;
+  margin-right: -12px;
+  content: "\200b";
+  font-family: var(--font-display);
+  font-size: var(--t-name);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.drive-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+  margin: 8px 0 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.drive-form[hidden] {
+  display: none;
+}
+
+.drive-form .settings-field {
+  flex: 0 1 520px;
+  min-width: 0;
+  margin: 0;
+}
+
+:root .drive-form .settings-field input {
+  width: 100%;
+}
+
+.drive-form-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: calc(var(--t-sub) * 1.4 + 6px);
+}
+
+.drive-form-status {
+  flex: 1 1 240px;
+  margin: 0 0 calc(var(--t-sub) * 1.4 + 16px);
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+/* ---- Hardware ---- */
+
+.system-hardware {
+  align-content: start;
+}
+
+.hardware-waiting,
+.hardware-drives {
+  grid-column: 1 / -1;
+}
+
+.hardware-tile,
+.hardware-detail {
+  grid-column: span 3;
+}
+
+.hardware-device {
+  grid-column: span 4;
+}
+
+.hardware-lead {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-name);
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.hardware-name {
+  margin: 6px 0 0;
+  color: var(--text-soft);
+  font-size: var(--t-body);
+  overflow-wrap: anywhere;
+}
+
+.hardware-device .hardware-group:first-of-type {
+  margin-top: 8px;
+}
+
+.hardware-group {
+  margin: 20px 0 0;
+  color: var(--text-strong);
+  font-size: var(--t-subhead);
+  font-weight: 600;
+}
+
+.hardware-facts {
+  margin: 14px 0 0;
+}
+
+.hardware-fact {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 16px;
+  padding: 9px 0;
+  border-top: 1px solid var(--line);
+}
+
+.hardware-fact dt {
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+  overflow-wrap: anywhere;
+}
+
+.hardware-fact dd {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--t-sub);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.hardware-drive-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 640px), 1fr));
+  gap: var(--space-between);
+  margin-top: 8px;
+}
+
+.hardware-drive {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+}
+
+.hardware-drive .hardware-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  column-gap: 32px;
+}
+
+.hardware-drive-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.hardware-drive-head h3 {
+  min-width: 0;
+  margin: 0;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-subhead);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.hardware-drive-head span {
+  flex: none;
+  color: var(--text-soft);
+  font-size: var(--t-body);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Sized by share, with a minimum so a 16 MB partition can still be seen. */
+.hardware-bar {
+  display: flex;
+  gap: 3px;
+  height: calc(34px * var(--text-scale));
+  margin-top: 18px;
+  overflow: hidden;
+  border-radius: var(--radius-key);
+}
+
+.hardware-bar span {
+  flex: 1 1 0;
+  min-width: 8px;
+  overflow: hidden;
+  padding: 0 10px;
+  color: var(--text-strong);
+  font-size: var(--t-floor);
+  font-weight: 600;
+  line-height: calc(34px * var(--text-scale));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hardware-bar .is-system,
+.hardware-swatch.is-system {
+  background: var(--line-control);
+}
+
+.hardware-bar .is-system {
+  padding: 0;
+}
+
+.hardware-bar .is-mounted,
+.hardware-swatch.is-mounted {
+  background: var(--brand-burgundy);
+}
+
+.hardware-legend {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hardware-legend li {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 2fr) minmax(0, 3fr);
+  gap: 12px;
+  align-items: baseline;
+}
+
+.hardware-swatch {
+  width: 14px;
+  height: 14px;
+  align-self: center;
+  border-radius: 4px;
+}
+
+.hardware-legend strong {
+  color: var(--text-strong);
+  font-size: var(--t-sub);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.hardware-legend small {
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* ---- Sign-in ---- */
+
+.system-signin-graph {
+  display: flex;
+  flex-direction: column;
+  grid-column: span 9;
+}
+
+.system-signin-summary {
+  display: flex;
+  flex-direction: column;
+  grid-column: span 3;
+}
+
+.system-signin-times {
+  grid-column: 1 / -1;
+}
+
+.system-note {
+  margin: 4px 0 0;
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+#signInPlot {
+  flex: none;
+  height: 320px;
+}
+
+.signin-points {
+  position: absolute;
+  inset: 0;
+}
+
+/* The whole graph answers the pointer, so the dots are only marks. */
+.signin-point {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  pointer-events: none;
+}
+
+.signin-point::after {
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--surface-module);
+  border-radius: 50%;
+  background: var(--brand-tint-text);
+  content: "";
+  transition: transform 120ms ease;
+}
+
+.signin-point.is-active::after,
+.signin-point:focus-visible::after {
+  background: var(--text-strong);
+  box-shadow: 0 0 0 3px var(--brand-tint);
+  transform: scale(1.25);
+}
+
+.signin-point:focus {
+  outline: none;
+}
+
+.signin-tip {
+  position: absolute;
+  z-index: 5;
+  display: grid;
+  gap: 8px;
+  width: calc(290px * var(--text-scale));
+  padding: 12px 14px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  font-size: var(--t-floor);
+  pointer-events: none;
+}
+
+.signin-tip[hidden] {
+  display: none;
+}
+
+.signin-tip-when {
+  color: var(--text-soft);
+}
+
+.signin-tip-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.signin-tip-head strong {
+  flex: none;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-subhead);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.signin-tip-head small {
+  color: var(--text-soft);
+  font-size: var(--t-floor);
+  text-align: right;
+}
+
+.signin-tip-stages {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-control);
+}
+
+.signin-tip-stages dt {
+  color: var(--text-soft);
+}
+
+.signin-tip-stages dd {
+  margin: 0;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.signin-tip-sound {
+  padding-top: 8px;
+  border-top: 1px solid var(--line-control);
+  color: var(--text-soft);
+  overflow-wrap: anywhere;
+}
+
+.signin-stats {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  margin: 8px 0 0;
+}
+
+.signin-stats > div {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+
+.signin-stats > div:first-child {
+  border-top: 0;
+}
+
+.signin-stats dt {
+  color: var(--text-soft);
+  font-size: var(--t-body);
+}
+
+.signin-stats dd {
+  margin: 0;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-name);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.signin-table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+  font-size: var(--t-body);
+}
+
+.signin-table th {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line-control);
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+  font-weight: 500;
+  text-align: left;
+}
+
+.signin-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.signin-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.signin-table th:first-child,
+.signin-table td:first-child {
+  padding-left: 0;
+}
+
+.signin-table td:first-child {
+  color: var(--text-strong);
+}
+
+.signin-table .is-number {
+  width: 11%;
+  text-align: right;
+}
+
+.signin-table .is-finished {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.signin-table .is-sound {
+  padding-left: 40px;
+  overflow-wrap: anywhere;
+}
+
+/* ---- Activity and logs: each list scrolls inside its module ---- */
+
+.system-activity > .module {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.system-recent {
+  grid-column: span 4;
+}
+
+:root #logs {
+  grid-column: span 8;
+}
+
+.activity-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 8px 0 0;
+  padding: 0 8px 0 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.activity-list:empty {
+  display: none;
+}
+
+.activity-item {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: baseline;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.activity-item:first-child {
+  border-top: 0;
+}
+
+.activity-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--brand-tint-text);
+}
+
+.activity-item[data-kind="workspace"] .activity-dot,
+.activity-item[data-kind="snippet"] .activity-dot,
+.activity-item[data-kind="note"] .activity-dot,
+.activity-item[data-kind="error"] .activity-dot {
+  background: var(--burgundy-bright);
+}
+
+.activity-item[data-kind="system"] .activity-dot {
+  background: var(--text-muted);
+}
+
+.activity-item[data-kind="command"] .activity-dot {
+  background: var(--brand-gold-text);
+}
+
+.activity-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.activity-copy small {
+  color: var(--text-soft);
+  font-size: var(--t-floor);
+}
+
+.activity-copy span {
+  color: var(--text-strong);
+  font-size: var(--t-body);
+  overflow-wrap: anywhere;
+}
+
+.activity-item[data-kind="error"] .activity-copy span {
+  color: var(--burgundy-text);
+}
+
+.activity-item time {
+  color: var(--text-muted);
+  font-size: var(--t-floor);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.activity-empty {
+  margin: 8px 0 0;
+  color: var(--text-soft);
+  font-size: var(--t-body);
+}
+
+.logs-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-top: 8px;
+}
+
+:root #logs .logs-search {
+  flex: 1 1 220px;
+  min-width: 180px;
+  min-height: var(--height-control-small);
+  border-radius: var(--radius-control);
+  font-size: var(--t-sub);
+}
+
+.logs-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.logs-meta {
+  margin: 12px 0;
+  color: var(--text-soft);
+  font-size: var(--t-floor);
+}
+
+.log-list {
+  display: grid;
+  flex: 1 1 auto;
+  align-content: start;
+  gap: 16px;
+  min-height: 0;
+  padding-right: 8px;
+  overflow-y: auto;
+}
+
+.log-day h3 {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0;
+  padding: 0 0 8px;
+  background: var(--surface-module);
+  color: var(--brand-tint-text);
+  font-family: var(--font-display);
+  font-size: var(--t-tab);
+  font-weight: 600;
+}
+
+.log-day ol {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-key);
+  list-style: none;
+}
+
+.log-line {
+  display: grid;
+  grid-template-columns: calc(84px * var(--text-scale)) minmax(0, calc(120px * var(--text-scale))) minmax(0, 1fr);
+  gap: 12px;
+  padding: 7px 12px 7px 10px;
+  border-top: 1px solid var(--line);
+  border-left: 3px solid transparent;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: var(--t-floor);
+  line-height: 1.45;
+}
+
+.log-line:first-child {
+  border-top: 0;
+}
+
+.log-line time {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.log-kind {
+  overflow: hidden;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.log-text {
+  color: var(--text-soft);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.log-line[data-level="warn"] {
+  border-left-color: var(--brand-gold-text);
+  background: rgba(201, 162, 74, .06);
+}
+
+.log-line[data-level="warn"] .log-text {
+  color: #ecd9a8;
+}
+
+.log-line[data-level="error"] {
+  border-left-color: var(--burgundy-bright);
+  background: rgba(138, 40, 70, .16);
+}
+
+.log-line[data-level="error"] .log-text {
+  color: #f2c4d2;
+}
+
+/* Sources without a kind column give the text the room. */
+.log-list[data-kinds="false"] .log-line {
+  grid-template-columns: calc(84px * var(--text-scale)) minmax(0, 1fr);
+}
+
+.log-list[data-kinds="false"] .log-kind {
+  display: none;
+}
+
+@media (max-width: 1700px) {
+  .hardware-tile,
+  .hardware-detail {
+    grid-column: span 6;
+  }
+
+  .hardware-device {
+    grid-column: 1 / -1;
+  }
+
+  .system-signin-graph,
+  .system-signin-summary,
+  .system-recent,
+  :root #logs {
+    grid-column: 1 / -1;
+  }
+
+  :root #dashboard.view.active:has(#systemActivity:not([hidden])) {
+    height: auto;
+  }
+
+  .system-activity > .module {
+    height: 640px;
+  }
+}
+
+@media (max-width: 1150px) {
+  .system-gauge,
+  .hardware-tile,
+  .hardware-device,
+  .hardware-detail {
+    grid-column: 1 / -1;
+  }
+
+  .system-live {
+    grid-template-rows: none;
+  }
+
+  .system-gauge .chart-plot {
+    height: 240px;
+    flex: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signin-point::after {
+    transition: none;
+  }
+}
+
+#signInEmpty[hidden],
+#signInContent[hidden] {
+  display: none;
+}

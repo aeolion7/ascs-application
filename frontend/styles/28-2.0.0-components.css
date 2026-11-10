@@ -1,0 +1,404 @@
+/* ==========================================================================
+   2.0.0: shared components. One look for buttons, tabs, fields, modules,
+   headings, dialogs and focus, whichever page they're on. Older rules for these
+   go as each page moves over; :root raises these above them until then.
+   ========================================================================== */
+
+/* ---- Focus: one ring, everywhere ---- */
+
+/* !important on purpose: older sheets turn outlines off in many places, and a
+   control you can't see is focused is one you can't use from the keyboard. */
+:focus-visible {
+  outline: 3px solid var(--text-strong) !important;
+  outline-offset: 2px !important;
+}
+
+/* A white ring with an indigo halo between it and the control (2.0.0 manual
+   pass), so it stands out on any surface. Rings set inside a control below
+   have no halo: the control's own edge does that job. It reaches 5 px out, so
+   anything that clips its children leaves 5 px of room (the smoke test checks). */
+:focus-visible:not(.nav, .window-control, .launcher-option, .note-list-item, .game-row-toggle, .ws-row, .ws-tab, .ws-window, .ws-item, .module-row, .cal-day, .cal-chip, [role="tab"], input, select, textarea, .km-key, .notify-own, .signin-point) {
+  box-shadow: 0 0 0 2px var(--brand-tint) !important;
+}
+
+/* Inside a clipped list or a tight grid, the ring sits inside the control. */
+.nav:focus-visible,
+.window-control:focus-visible,
+.launcher-option:focus-visible,
+.note-list-item:focus-visible,
+.game-row-toggle:focus-visible,
+.ws-row:focus-visible,
+.ws-tab:focus-visible,
+.ws-window:focus-visible,
+.cal-day:focus-visible,
+.cal-chip:focus-visible,
+[role="tab"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline-offset: -3px !important;
+}
+
+/* The keyboard map's keys are drawn, so the key's own edge shows focus. */
+.km-key:focus-visible {
+  outline: none !important;
+}
+
+.km-key:focus-visible .km-cap {
+  stroke: var(--text-strong);
+  stroke-width: 2.5;
+}
+
+/* ---- Buttons: filled means it does the main thing, outlined means it's a
+   quieter action, and every button has an edge ---- */
+
+:root .primary,
+:root .secondary {
+  min-height: var(--height-control);
+  padding-inline: 18px;
+  border-radius: var(--radius-control);
+  box-shadow: none;
+  font-family: var(--font-display);
+  font-size: var(--t-button);
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+:root .primary {
+  border: 1px solid var(--brand-tint);
+  background: var(--brand-indigo-control);
+  color: #ffffff;
+}
+
+:root .primary:hover:not(:disabled) {
+  background: var(--brand-indigo-hover);
+  box-shadow: none;
+  transform: none;
+}
+
+:root .secondary {
+  border: 1px solid var(--line-control);
+  background: var(--surface-raised);
+  color: var(--text-strong);
+}
+
+:root .secondary:hover:not(:disabled) {
+  border-color: var(--brand-tint-text);
+  background: var(--surface-hover);
+  box-shadow: none;
+  transform: none;
+}
+
+:root .secondary.danger {
+  border-color: var(--brand-burgundy);
+  color: var(--brand-burgundy-text);
+}
+
+:root .primary.danger {
+  border-color: var(--brand-burgundy-text);
+  background: var(--brand-burgundy);
+  color: #ffffff;
+}
+
+:root .primary:disabled,
+:root .secondary:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+:root .link-button {
+  min-height: var(--height-control-small);
+  padding: 0 12px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--brand-tint-text);
+  font-family: var(--font-display);
+  font-size: var(--t-floor);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-decoration: none;
+}
+
+:root .link-button:hover:not(:disabled) {
+  border-color: var(--brand-tint-text);
+  background: var(--surface-raised);
+  color: var(--text-strong);
+}
+
+/* ---- Tabs ---- */
+
+:root [role="tablist"],
+:root .cal-modes,
+:root .keymap-layers {
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-field);
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+:root [role="tab"],
+:root .cal-modes button,
+:root .keymap-layer {
+  min-height: var(--height-control-small);
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--radius-key);
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-soft);
+  font-family: var(--font-display);
+  font-size: var(--t-tab);
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+:root [role="tab"]:hover,
+:root .cal-modes button:hover,
+:root .keymap-layer:hover {
+  background: var(--surface-raised);
+  color: var(--text-strong);
+}
+
+:root [role="tab"][aria-selected="true"],
+:root .cal-modes button[aria-pressed="true"],
+:root .keymap-layer[aria-pressed="true"] {
+  background: var(--brand-indigo-control);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* ---- Scrollbars: a slim burgundy pill on no track, brighter under the pointer. Edge
+   ignores these for anything with scrollbar-width or scrollbar-color set, so
+   those are only used here to hide a scrollbar (scrollbar-width: none). ---- */
+
+::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 4px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-burgundy) 70%, transparent) padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--brand-burgundy);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: var(--brand-burgundy-text);
+}
+
+/* ---- Fields ---- */
+
+:root input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]),
+:root select,
+:root textarea {
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+  background-color: var(--surface-field);
+  box-shadow: none;
+  color: var(--text-strong);
+}
+
+:root input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]),
+:root select {
+  min-height: var(--height-control);
+  font-family: var(--font-body);
+  font-size: var(--t-body);
+}
+
+:root input:hover:not(:disabled, [type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]),
+:root select:hover:not(:disabled),
+:root textarea:hover:not(:disabled) {
+  border-color: var(--brand-tint);
+}
+
+::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+/* The note editor is the page, not a field on it. It still has room around its
+   text and below the controls above it, writing or previewing. */
+:root #noteText {
+  margin-top: 16px;
+  padding: 20px 24px;
+  border-color: transparent;
+  background-color: transparent;
+}
+
+:root #notePreview {
+  margin-top: 16px;
+  padding: 20px 24px;
+}
+
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"] {
+  accent-color: var(--brand-tint);
+}
+
+#calAllDay {
+  width: 20px;
+  height: 20px;
+}
+
+:root .settings-field select,
+:root .settings-field input:not([type="range"]) {
+  width: 380px;
+  max-width: 100%;
+}
+
+/* ---- Headings: a section's name, then its parts ---- */
+
+:root .view h2,
+:root .help-dialog h2,
+:root .confirm-dialog h2,
+:root .launcher-dialog h2 {
+  font-family: var(--font-display);
+  font-size: var(--t-module);
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.25;
+}
+
+:root .view h2,
+:root .help-dialog h2,
+:root .confirm-dialog h2 {
+  color: var(--text-strong);
+}
+
+:root .view h3,
+:root .help-dialog h3 {
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-subhead);
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.25;
+}
+
+/* ---- Key caps ---- */
+
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-key);
+  background: var(--surface-raised);
+  box-shadow: none;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-floor);
+  font-weight: 600;
+  line-height: 1;
+}
+
+kbd + i,
+i:has(+ kbd),
+.help-plus {
+  color: var(--text-muted);
+}
+
+/* ---- Dialogs. A plain dark layer behind them, in place of a costly blur ---- */
+
+:root .confirm-backdrop,
+:root .launcher-backdrop {
+  background: rgba(6, 7, 12, .78);
+  backdrop-filter: none;
+}
+
+:root .topbar::before {
+  backdrop-filter: none;
+}
+
+:root .confirm-dialog,
+:root .help-dialog,
+:root .launcher-dialog {
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-module);
+  background: var(--surface-module);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .5);
+}
+
+:root .launcher-dialog {
+  width: min(900px, calc(100vw - 64px));
+}
+
+:root .launcher-heading {
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+:root .launcher-heading h2 {
+  margin: 0;
+}
+
+/* ---- Fixes these components need in older pages ---- */
+
+/* Without its old blur, the sticky save bar has to hide what scrolls under it. */
+
+/* An older rule on this ID kept Preferences' section headings at body size. */
+
+:root .help-dialog h3 {
+  color: var(--text-strong);
+  text-transform: none;
+}
+
+:root .help-dialog h3 span {
+  color: var(--text-soft);
+  font-family: var(--font-body);
+  font-size: var(--t-floor);
+  font-weight: 400;
+}
+
+/* Something still on its way, in the space held for it. */
+.loading-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 0;
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+.loading-note::before {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border: 2px solid var(--line-control);
+  border-top-color: var(--brand-tint-text);
+  border-radius: 50%;
+  content: "";
+  animation: loading-spin 900ms linear infinite;
+}
+
+@keyframes loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-note::before {
+    animation: none;
+  }
+}

@@ -44,6 +44,43 @@ if ($warnings) { Write-Host "AutoHotkey output:`n$warnings" -ForegroundColor Yel
 $text = if (Test-Path $coreResults) { Get-Content $coreResults -Raw -Encoding utf8 } else { "" }
 if (-not (Show-Result "core" $text)) { $failed = $true }
 
+# --- A timer is either repeating or one-shot. SetTimer with a negative period
+# replaces a repeating timer of the same function, which silently stopped System's
+# readings for every release up to 2.0.0.
+$uses = @{}
+$sources = @(Join-Path $root "ASCS.ahk") + @(Get-ChildItem (Join-Path $root "lib\features") -Filter *.ahk | ForEach-Object FullName)
+foreach ($source in $sources) {
+    foreach ($match in [regex]::Matches((Get-Content $source -Raw -Encoding utf8), 'SetTimer\((\w+),\s*(-?)(\w+)\)')) {
+        if ($match.Groups[3].Value -eq "0") { continue }
+        $name = $match.Groups[1].Value
+        if (-not $uses.ContainsKey($name)) { $uses[$name] = [Collections.Generic.HashSet[string]]::new() }
+        [void]$uses[$name].Add($(if ($match.Groups[2].Value) { "once" } else { "repeat" }))
+    }
+}
+$mixed = @($uses.Keys | Where-Object { $uses[$_].Count -gt 1 } | Sort-Object)
+$report = @("PASS $($uses.Count - $mixed.Count) FAIL $($mixed.Count)") + @($mixed | ForEach-Object { "FAIL: $_ is set both repeating and one-shot" })
+if (-not (Show-Result "timers" ($report -join "`n"))) { $failed = $true }
+
+# --- Hotkeys wait for the window. A hotkey can run while the start-up code is
+# still waiting on WebView2, and Super reached for a window that wasn't there yet.
+$main = Get-Content (Join-Path $root "ASCS.ahk") -Raw -Encoding utf8
+$keys = Get-Content (Join-Path $root "lib\features\SuperKey.ahk") -Raw -Encoding utf8
+$checks = [ordered]@{
+    "hotkeys are suspended before the window is made" = ($main.IndexOf("Suspend(true)") -ge 0 -and $main.IndexOf("Suspend(true)") -lt $main.IndexOf("ASCS_App := WebViewGui("))
+    "and come back once it exists" = ($main.IndexOf("Suspend(false)") -gt $main.IndexOf("ASCS_App := WebViewGui("))
+    "Super still answers while starting" = ($keys -match '(?s)#SuspendExempt\s*~F24::')
+    "and doesn't reach for a missing window" = ($main -match '(?s)ToggleCommandCenter\(\) \{.*?IsObject\(ASCS_App\).*?ASCS_App\.Hwnd')
+    "nor does System's visibility check, which runs while starting" = ($main -match '(?s)IsDashboardWindowVisible\(\) \{.*?IsObject\(ASCS_App\).*?ASCS_App\.Hwnd')
+    "only Super and reload are exempt" = ([regex]::Matches($keys, '(?m)^#SuspendExempt\s*$').Count -eq 2 -and [regex]::Matches($main, '(?m)^#SuspendExempt').Count -eq 0)
+    "or open blank while the page loads" = ($main -match '(?s)ToggleCommandCenter\(\) \{.*?!ASCS_PageReady.*?ASCS_App\.Hwnd')
+    "every start says it's tuning up, before WebView2" = ($main.IndexOf('ShowNotice("Maestro is tuning up') -ge 0 -and $main.IndexOf('ShowNotice("Maestro is tuning up') -lt $main.IndexOf("ASCS_App := WebViewGui(") -and $main -notmatch 'A_Args\[1\] = "--starting"')
+    "Maestro says when it's ready" = ($main -match 'ShowNotice\("Maestro is ready\."\)')
+    "the launcher uses the toast, not a tooltip" = ((Get-Content (Join-Path $root "ASCS.Launcher.ahk") -Raw -Encoding utf8) -notmatch 'ToolTip\(')
+}
+$bad = @($checks.Keys | Where-Object { -not $checks[$_] })
+$report = @("PASS $($checks.Count - $bad.Count) FAIL $($bad.Count)") + @($bad | ForEach-Object { "FAIL: $_" })
+if (-not (Show-Result "startup" ($report -join "`n"))) { $failed = $true }
+
 # --- Frontend tests in headless Edge
 $edge = @(
     "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
@@ -96,7 +133,7 @@ $match = [regex]::Match($html, '<pre id="results">([\s\S]*?)</pre>')
 $text = if ($match.Success) { [Net.WebUtility]::HtmlDecode($match.Groups[1].Value) } else { "" }
 if (-not (Show-Result "smoke" $text)) { $failed = $true }
 
-# --- The ASCS command line, against throwaway repositories
+# --- The Maestro command line, against throwaway repositories
 $text = (& pwsh -NoProfile -File (Join-Path $PSScriptRoot "cli.tests.ps1") 2>&1 | ForEach-Object { "$_" }) -join "`n"
 if (-not (Show-Result "cli" $text)) { $failed = $true }
 

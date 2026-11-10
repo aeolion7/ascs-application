@@ -88,8 +88,7 @@ body {
 }
 
 /* Flat gold icons on content (navigation icons stay indigo). */
-.metric-icon,
-.action-icon {
+.action-icon  {
   border-color: rgba(227, 192, 114, .22);
   background: rgba(227, 192, 114, .06);
   color: var(--icon-gold);
@@ -108,8 +107,7 @@ body {
 }
 
 /* 2. The Super keycap, where Super itself is the subject. */
-.key-hint,
-.command-intro-key kbd {
+.key-hint {
   border-color: #f3d68c;
   background: var(--metal-gold);
   color: #2b1d06;
@@ -170,13 +168,13 @@ body {
 }
 
 .brand-copy strong {
-  font-size: 16px;
+  font-size: var(--t-sub);
   font-weight: 750;
   letter-spacing: 1.7px;
 }
 
 .brand-copy > span {
-  font-size: 9.5px;
+  font-size: var(--t-floor);
   letter-spacing: 1.5px;
 }
 
@@ -280,8 +278,7 @@ body.sidebar-collapsed .brand {
 body.sidebar-collapsed .brand-copy,
 body.sidebar-collapsed .nav span,
 body.sidebar-collapsed .nav-label,
-body.sidebar-collapsed .sidebar-status,
-body.sidebar-collapsed .sidebar-bottom .status-indicator {
+body.sidebar-collapsed .sidebar-status {
   display: none;
 }
 
@@ -321,8 +318,8 @@ body.sidebar-collapsed .sidebar-bottom {
 
 .home-header h1 {
   margin: 12px 0 8px;
-  font-size: clamp(30px, 2.6vw, 38px);
-  letter-spacing: -1px;
+  font-size: calc(clamp(34px, 2.92vw, 43px) * var(--text-scale));
+  letter-spacing: 0;
   line-height: 1.1;
 }
 
@@ -353,154 +350,10 @@ body.sidebar-collapsed .sidebar-bottom {
   display: grid;
 }
 
-.actions.is-editing .action-card {
-  border-style: dashed;
-  cursor: default;
-}
-
-.actions.is-editing .action-card:hover {
-  transform: none;
-}
-
-.action-remove {
-  position: absolute;
-  z-index: 2;
-  top: -8px;
-  right: -8px;
-  display: grid;
-  width: 22px;
-  height: 22px;
-  place-items: center;
-  padding: 0;
-  border: 1px solid var(--burgundy-border);
-  border-radius: 50%;
-  background: #2a1520;
-  color: var(--burgundy-text);
-  cursor: pointer;
-  font-size: 14px;
-  line-height: 1;
-}
-
-.action-remove:hover {
-  background: var(--burgundy);
-  color: #fff;
-}
-
-.action-card.action-add {
-  border: 1px dashed rgba(139, 111, 245, .45);
-  background: rgba(43, 0, 113, .18);
-}
-
-.action-card.action-add .action-icon {
-  border-color: rgba(139, 111, 245, .45);
-  background: rgba(43, 0, 113, .35);
-  color: var(--indigo-300);
-}
-
-/* ---- Dashboard: history sparklines and the spec sheet ---- */
-
-.sparkline {
-  display: block;
-  width: 100%;
-  height: 56px;
-  margin: 2px 0 10px;
-  overflow: visible;
-}
-
-.sparkline-area {
-  fill: rgba(196, 88, 123, .13);
-  stroke: none;
-}
-
-.sparkline-line {
-  fill: none;
-  stroke: var(--burgundy-bright);
-  stroke-width: 1.6;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
-}
-
-.spec-sheet {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 32px;
-  margin: 0;
-  padding: 6px 22px;
-  border: 1px solid var(--border-soft);
-  border-radius: 14px;
-  background: linear-gradient(145deg, rgba(29, 33, 48, .92), rgba(22, 25, 37, .96));
-  box-shadow: var(--panel-shadow), inset 0 1px rgba(255, 255, 255, .025);
-}
-
-.spec-row {
-  display: grid;
-  grid-template-columns: 116px minmax(0, 1fr);
-  align-items: baseline;
-  gap: 16px;
-  padding: 14px 0;
-  border-bottom: 1px solid rgba(167, 174, 202, .08);
-}
-
-.spec-row:nth-last-child(-n + 2):nth-child(odd),
-.spec-row:last-child {
-  border-bottom: 0;
-}
-
-.spec-row dt {
-  color: #8f94aa;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-}
-
-.spec-row dd {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-  margin: 0;
-}
-
-.spec-row dd strong {
-  overflow-wrap: anywhere;
-  color: #eef0f7;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.spec-row dd small {
-  color: #a5aabd;
-  font-size: 12px;
-}
-
-.spec-row dd small:empty {
-  display: none;
-}
-
-@media (max-width: 900px) {
-  .spec-sheet {
-    grid-template-columns: 1fr;
-  }
-
-  .spec-row:nth-last-child(-n + 2):nth-child(odd) {
-    border-bottom: 1px solid rgba(167, 174, 202, .08);
-  }
-}
-
 /* ---- Quick Notes: cleaner editor, tags, Markdown preview ---- */
 
 .snippet-editor {
   caret-color: var(--burgundy-bright);
-}
-
-.editor-card[data-kind="snippet"] #noteKindLabel {
-  color: var(--burgundy-text);
-}
-
-.editor-card[data-kind="snippet"] .editor-icon {
-  border-color: var(--burgundy-border);
-  background: var(--burgundy-soft);
-  color: var(--burgundy-text);
 }
 
 .editor-footer-meta {
@@ -527,12 +380,12 @@ body.sidebar-collapsed .sidebar-bottom {
   color: #c9ccd8;
   cursor: pointer;
   font: inherit;
-  font-size: 11.5px;
+  font-size: var(--t-floor);
 }
 
 .note-tag small {
-  color: #7d8196;
-  font-size: 10px;
+  color: var(--text-muted);
+  font-size: var(--t-floor);
 }
 
 .note-tag:hover {
@@ -549,7 +402,7 @@ body.sidebar-collapsed .sidebar-bottom {
   min-height: min(49vh, 440px);
   padding: 18px 2px;
   color: #e7e5ef;
-  font-size: 15px;
+  font-size: var(--t-floor);
   line-height: 1.75;
   overflow-wrap: anywhere;
 }
@@ -559,13 +412,13 @@ body.sidebar-collapsed .sidebar-bottom {
 .note-preview h3 {
   margin: 18px 0 8px;
   color: #f4f3fa;
-  letter-spacing: -.3px;
+  letter-spacing: 0;
   line-height: 1.3;
 }
 
-.note-preview h1 { font-size: 24px; }
-.note-preview h2 { font-size: 19px; }
-.note-preview h3 { font-size: 16px; }
+.note-preview h1 { font-size: calc(27px * var(--text-scale)); }
+.note-preview h2 { font-size: calc(21px * var(--text-scale)); }
+.note-preview h3 { font-size: var(--t-sub); }
 
 .note-preview > :first-child {
   margin-top: 0;
@@ -590,7 +443,7 @@ body.sidebar-collapsed .sidebar-bottom {
   border-radius: 6px;
   background: rgba(10, 12, 19, .6);
   font-family: Consolas, "Cascadia Mono", monospace;
-  font-size: 13px;
+  font-size: var(--t-floor);
 }
 
 .note-preview code {
@@ -629,88 +482,14 @@ body.sidebar-collapsed .sidebar-bottom {
   color: var(--indigo-200);
   cursor: pointer;
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--t-floor);
 }
 
 .note-preview-empty {
-  color: #68697d;
-}
-
-#previewNoteButton[aria-pressed="true"] {
-  border-color: rgba(139, 111, 245, .55);
-  background: var(--indigo-900);
-  color: #f1ecff;
+  color: var(--text-muted);
 }
 
 /* ---- Preferences: section navigation and a save bar that stays in view ---- */
-
-.settings-nav {
-  position: sticky;
-  z-index: 12;
-  top: var(--titlebar-height);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0 0 18px;
-  padding: 8px;
-  border: 1px solid rgba(167, 174, 202, .12);
-  border-radius: 12px;
-  background: rgba(16, 18, 27, .82);
-  backdrop-filter: blur(14px) saturate(140%);
-}
-
-.settings-nav button {
-  padding: 7px 12px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  color: #a5aabd;
-  cursor: pointer;
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-}
-
-.settings-nav button:hover {
-  color: #eef0f7;
-}
-
-.settings-nav button[aria-current="true"] {
-  border-color: rgba(139, 111, 245, .5);
-  background: var(--indigo-900);
-  color: #f1ecff;
-}
-
-#settings .settings-card {
-  scroll-margin-top: calc(var(--titlebar-height) + 76px);
-}
-
-.settings-savebar {
-  position: sticky;
-  z-index: 12;
-  bottom: 16px;
-  padding: 10px 10px 10px 18px;
-  border: 1px solid rgba(167, 174, 202, .14);
-  border-radius: 12px;
-  background: rgba(16, 18, 27, .88);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, .35);
-  backdrop-filter: blur(14px) saturate(140%);
-  transition: border-color 160ms ease;
-}
-
-.settings-savebar[data-state="dirty"] {
-  border-color: var(--gold-border);
-}
-
-.settings-savebar[data-state="dirty"] #settingsStatus {
-  color: var(--gold-text);
-}
-
-/* ---- Super Commands: search ---- */
-
-.keymap-heading {
-  flex-wrap: wrap;
-}
 
 .command-search {
   flex: 1 1 260px;
@@ -723,7 +502,7 @@ body.sidebar-collapsed .sidebar-bottom {
   background: var(--panel-input);
   color: var(--text);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--t-floor);
 }
 
 .command-search:focus-visible {
@@ -738,15 +517,6 @@ body.sidebar-collapsed .sidebar-bottom {
 .keymap.is-searching .km-key[data-match="true"] .km-cap {
   stroke: #fff;
   stroke-width: 1.6;
-}
-
-.command-search-empty {
-  margin: 0 0 18px;
-  padding: 14px 16px;
-  border: 1px dashed var(--border-soft);
-  border-radius: 12px;
-  color: #a5aabd;
-  font-size: 13px;
 }
 
 /* ==========================================================================
@@ -799,7 +569,7 @@ body:not(.sidebar-collapsed) .brand-copy {
 body:not(.sidebar-collapsed) .brand-copy strong {
   padding-left: 3.6px;
   color: #f4f1ff;
-  font-size: 17px;
+  font-size: var(--t-body);
   font-weight: 750;
   letter-spacing: 3.6px;
 }
@@ -807,7 +577,7 @@ body:not(.sidebar-collapsed) .brand-copy strong {
 body:not(.sidebar-collapsed) .brand-copy > span {
   padding-left: 2.6px;
   color: #9a9fb3;
-  font-size: 9.5px;
+  font-size: var(--t-floor);
   font-weight: 650;
   letter-spacing: 2.6px;
 }
@@ -888,7 +658,7 @@ body.sidebar-collapsed .brand-short {
   margin-top: 31px;
   padding-left: 2.4px;
   color: #e9e4ff;
-  font-size: 11px;
+  font-size: var(--t-floor);
   font-weight: 750;
   letter-spacing: 2.4px;
   line-height: 14px;
@@ -957,7 +727,7 @@ body.sidebar-collapsed .nav-label::after {
   margin: 12px 0 8px;
   font-size: var(--page-title-size);
   font-weight: 600;
-  letter-spacing: -1px;
+  letter-spacing: 0;
   line-height: 1.1;
 }
 
@@ -1000,160 +770,9 @@ body.sidebar-collapsed .nav-label::after {
    section per band, the section locator always has one clear answer.
    ========================================================================== */
 
-#settings .settings-grid,
-#settings .settings-grid-secondary {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 20px;
-}
-
-#settings .settings-grid-secondary {
-  margin-top: 20px;
-}
-
-#settings .settings-card {
-  padding: 22px 24px 8px;
-}
-
-#settings .settings-card-wide {
-  padding-bottom: 22px;
-}
-
-#settings .settings-heading {
-  margin-bottom: 8px;
-}
-
-#settings .settings-heading h2 {
-  font-size: 17px;
-}
-
 /* Text fields and sliders: name and explanation left, control right. */
-#settings .settings-field {
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
-  grid-template-areas: "name control" "desc control";
-  align-items: center;
-  gap: 4px 32px;
-  margin: 0;
-  padding: 16px 0;
-  border-top: 1px solid rgba(167, 174, 202, .09);
-}
-
-#settings .settings-field > span {
-  grid-area: name;
-  justify-content: flex-start;
-}
-
-#settings .settings-field > small {
-  grid-area: desc;
-}
-
-#settings .settings-field > input {
-  grid-area: control;
-  width: 100%;
-  min-width: 0;
-}
-
-#settings .settings-field output {
-  font-weight: 500;
-}
-
-#settings .settings-field output::before {
-  content: "·";
-  margin-right: 8px;
-  color: #5d6178;
-}
-
-#settings #searchTemplate {
-  font-family: var(--mono, ui-monospace, monospace);
-  font-size: 12.5px;
-}
 
 /* Checkboxes become switches at the right edge of their row. */
-#settings .settings-toggle {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 32px;
-  margin: 0;
-  padding: 16px 0;
-  border-top: 1px solid rgba(167, 174, 202, .09);
-  cursor: pointer;
-}
-
-#settings .settings-toggle > span {
-  grid-column: 1;
-  grid-row: 1;
-  gap: 4px;
-}
-
-#settings .settings-toggle input {
-  grid-column: 2;
-  grid-row: 1;
-  position: relative;
-  width: 40px;
-  height: 22px;
-  margin: 0;
-  border: 1px solid rgba(167, 174, 202, .35);
-  border-radius: 11px;
-  background: rgba(10, 11, 18, .6);
-  appearance: none;
-  cursor: pointer;
-  transition: background-color 160ms ease, border-color 160ms ease;
-}
-
-#settings .settings-toggle input::after {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #a5aabd;
-  content: "";
-  transition: transform 160ms ease, background-color 160ms ease;
-}
-
-#settings .settings-toggle input:checked {
-  border-color: var(--indigo-400);
-  background: var(--indigo-700);
-}
-
-#settings .settings-toggle input:checked::after {
-  background: #fff;
-  transform: translateX(18px);
-}
-
-#settings .settings-toggle input:focus-visible {
-  outline: 2px solid var(--indigo-300);
-  outline-offset: 2px;
-}
-
-/* Super-key letters: one row per command. */
-#settings .shortcut-settings {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0;
-}
-
-#settings .shortcut-settings label {
-  padding: 12px 0;
-  border: 0;
-  border-top: 1px solid rgba(167, 174, 202, .09);
-  border-radius: 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-#settings .settings-card > .settings-note {
-  padding: 14px 0 14px;
-  border-top: 1px solid rgba(167, 174, 202, .09);
-  font-size: 12px;
-}
-
-@media (max-width: 720px) {
-  #settings .settings-field {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "name" "desc" "control";
-  }
-}
 
 /* 1.7.0: quieter app keys, darker hover
    App keys used a near-opaque indigo that out-shouted the other categories;
@@ -1177,30 +796,4 @@ body.sidebar-collapsed .nav-label::after {
 /* 1.7.0: Preferences tabs
    One section at a time. The tab strip no longer sticks (nothing scrolls far
    enough to need it), and the save bar only appears on the tabs it saves. */
-#settings .settings-nav {
-  position: static;
-  backdrop-filter: none;
-}
-
-#settings .settings-nav button[aria-selected="true"] {
-  border-color: rgba(139, 111, 245, .5);
-  background: var(--indigo-900);
-  color: #f1ecff;
-}
-
-#settings .settings-nav button:focus-visible {
-  outline: 2px solid var(--indigo-300);
-  outline-offset: 2px;
-}
-
-#settings [role="tabpanel"][hidden],
-#settingsSavebar[hidden],
-#settingsForm:not(:has(> [role="tabpanel"]:not([hidden]))),
-#settings .settings-grid-secondary:not(:has(> [role="tabpanel"]:not([hidden]))) {
-  display: none !important;
-}
-
-#settings .settings-grid-secondary {
-  margin-top: 0;
-}
 

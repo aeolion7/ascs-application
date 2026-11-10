@@ -5,7 +5,7 @@
 ActionLabels() {
     return Map(
         "notes", "Quick Notes", "everything", "Everything",
-        "dashboard", "System Dashboard", "terminal", "Windows Terminal",
+        "dashboard", "System", "terminal", "Windows Terminal",
         "explorer", "File Explorer", "claude", "Claude",
         "taskmanager", "Task Manager"
     )

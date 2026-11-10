@@ -30,17 +30,82 @@
     equal("list items", md[2].items.length, 2);
     equal("code fence kept verbatim", md[6].text, "let x = 1;\n**not bold**");
     const link = N.parseInline("see [docs](https://example.com/a) now")[1];
-    check("link parsed as text + url", link.type === "link" && link.text === "docs" && link.url === "https://example.com/a");
+    check("link parsed as text + url", link.type === "link" && link.children[0].text === "docs" && link.url === "https://example.com/a");
     equal("tag inside markdown", N.parseInline("todo #work")[1].type, "tag");
 
     // Hostile input stays text: the tree has only known node types, and the
     // markup survives verbatim as text for app.js to set via textContent.
     const evil = "<img src=x onerror=alert(1)> <script>alert(2)</script> [x](javascript:alert(3))";
     const tree = N.parseMarkdown(evil);
-    const known = new Set(["text", "code", "strong", "em", "link", "tag"]);
+    const known = new Set(["text", "code", "strong", "em", "link", "tag", "br", "del", "mark", "image"]);
     check("hostile input: only known node types", tree.every(b => b.type === "p" && b.children.every(c => known.has(c.type))));
     check("hostile input: markup preserved as text", tree[0].children.map(c => c.text).join("").includes("<img src=x onerror=alert(1)>"));
     equal("word count", N.wordCount("  one two\nthree "), 3);
+
+    // Markdown, the rest of GitHub's (2.0.0)
+    const types = source => json(N.parseMarkdown(source).map(b => b.type));
+    const inline = source => N.parseInline(source);
+    const kinds = nodes => json(nodes.map(n => n.type));
+    equal("headings to six", types("#### a\n##### b\n###### c"), json(["h4", "h5", "h6"]));
+    equal("seven #s is text", types("####### seven"), json(["p"]));
+    equal("underlined headings", types("Title\n===\nSub\n---"), json(["h1", "h2"]));
+    equal("a rule after a blank line stays a rule", types("Text\n\n---"), json(["p", "hr"]));
+    equal("#tag at a line's start is not a heading", types("#work today"), json(["p"]));
+    equal("underscores", kinds(inline("__b__ and _i_")), json(["strong", "text", "em"]));
+    equal("snake_case stays text", kinds(inline("a snake_case_name here")), json(["text"]));
+    const both = inline("***both***")[0];
+    check("bold italic nests", both.type === "strong" && both.children[0].type === "em" && both.children[0].children[0].text === "both");
+    equal("strikethrough and highlight", kinds(inline("~~gone~~ ==see==")), json(["del", "text", "mark"]));
+    const nested = inline("**bold *and italic***")[0];
+    check("marks nest", nested.type === "strong" && nested.children.some(n => n.type === "em"));
+    equal("an unmatched ** stays text", json(inline("2 ** 3")), json([{ type: "text", text: "2 ** 3" }]));
+    equal("escapes", json(inline("\\*not\\*")), json([{ type: "text", text: "*not*" }]));
+    equal("double backtick code holds a backtick", inline("``a ` b``")[0].text, "a ` b");
+    equal("a line break is kept", kinds(N.parseMarkdown("one\ntwo")[0].children), json(["text", "br", "text"]));
+    equal("a blank line makes paragraphs", types("one\n\ntwo"), json(["p", "p"]));
+    const bare = inline("see https://example.com/a_b. Then")[1];
+    check("bare address, without the full stop", bare.type === "link" && bare.url === "https://example.com/a_b");
+    check("an address in <>", inline("<https://example.com>")[0].url === "https://example.com");
+    check("an address in parentheses keeps its own )", inline("(https://en.wikipedia.org/wiki/X_(y))")[1].url === "https://en.wikipedia.org/wiki/X_(y)");
+    const image = inline("![A cat](cat.png)")[0];
+    check("an image is its alt text and address only", image.type === "image" && image.alt === "A cat" && image.url === "cat.png" && !("children" in image));
+    check("a link's text can have marks", inline("[**bold** link](https://x.org)")[0].children[0].type === "strong");
+    equal("a link title is allowed", inline('[a](https://x.org "Title")')[0].url, "https://x.org");
+    const fence = N.parseMarkdown("~~~python\nprint(1)\n~~~")[0];
+    check("tilde fence with a language", fence.type === "pre" && fence.lang === "python" && fence.text === "print(1)");
+    equal("a language label can't carry markup", N.parseMarkdown("```<img>\nx\n```")[0].lang, "");
+    const list = N.parseMarkdown("- one\n  - inner\n    - deeper\n- two")[0];
+    check("nested lists", list.items.length === 2 && list.items[0].blocks[0].type === "ul" && list.items[0].blocks[0].items[0].blocks[0].type === "ul");
+    equal("a numbered list keeps its start", N.parseMarkdown("4. four\n5. five")[0].start, 4);
+    equal("a list switching kind is two lists", types("- a\n1. b"), json(["ul", "ol"]));
+    equal("items apart by a blank line stay one list", types("- a\n\n- b"), json(["ul"]));
+    equal("\"2026. A year\" mid-paragraph stays text", types("Looking back\n2026. A year"), json(["p"]));
+    const tasks = N.parseMarkdown("- [x] done\n- [ ] todo\n- plain");
+    equal("task boxes", json(tasks[0].items.map(item => item.task)), json([true, false, null]));
+    equal("task lines are counted", json(tasks[0].items.map(item => item.line)), json([0, 1, 2]));
+    equal("a task box ticks", N.toggleTask("a\n- [ ] todo", 1), "a\n- [x] todo");
+    equal("and clears", N.toggleTask("- [X] done", 0), "- [ ] done");
+    equal("a line that isn't a task changes nothing", N.toggleTask("- plain", 0), null);
+    equal("a line that's gone changes nothing", N.toggleTask("- [ ] a", 5), null);
+    const quote = N.parseMarkdown("> one\n> - item\n> > deeper")[0];
+    check("quotes hold blocks and quotes", quote.type === "blockquote" && json(quote.blocks.map(b => b.type)) === json(["p", "ul", "blockquote"]));
+    const table = N.parseMarkdown("| A | B | C |\n| :- | :-: | -: |\n| 1 | `x|y` | 3 |\n| 4 | 5 |")[0];
+    check("table", table.type === "table" && table.head.length === 3 && table.rows.length === 2);
+    equal("table alignment", json(table.align), json(["left", "center", "right"]));
+    equal("a pipe in code stays in its cell", table.rows[0][1][0].text, "x|y");
+    equal("a short row is padded", table.rows[1].length, 3);
+    equal("a divider that doesn't match isn't a table", types("| a | b |\n| - |"), json(["p"]));
+    check("a very deep quote is capped", (() => { let depth = 0, block = N.parseMarkdown(">".repeat(40) + " x")[0]; while (block?.type === "blockquote") { depth++; block = block.blocks[0]; } return depth <= 10; })());
+    check("hostile input in every new place stays text", (() => {
+        const all = N.parseMarkdown("| <b>x</b> |\n| - |\n| <i>y</i> |\n\n- [ ] <script>a()</script>\n\n> ~~<img src=x>~~\n\n```<svg onload=x>\n<b>\n```");
+        const text = JSON.stringify(all);
+        return text.includes("<b>x</b>") && text.includes("<script>a()</script>") && text.includes("<img src=x>") && !text.includes('"html"');
+    })());
+    check("every reference row parses", N.MARKDOWN_REFERENCE.every(([label, source]) => label && N.parseMarkdown(source).length > 0));
+    equal("a note with text opens in Read", N.openingMode({ type: "note", content: "# Plan" }), "read");
+    equal("an empty note opens in Edit", N.openingMode({ type: "note", content: " \n " }), "edit");
+    equal("a code note opens in Edit", N.openingMode({ type: "code", content: "x = 1" }), "edit");
+    equal("no note: Edit", N.openingMode(null), "edit");
 
     // Sparkline geometry
     const s = C.sparkline([0, 50, 100], 100, 50, 0);
@@ -49,6 +114,8 @@
     equal("sparkline peak", s.peak, 100);
     equal("sparkline average", s.average, 50);
     equal("sparkline clamps", C.sparkline([-20, 150], 10, 10, 0).line, "M0 10 L10 0");
+    equal("sparkline keeps its clean values", C.sparkline([-20, "x", 150], 10, 10, 0).values.join(), "0,100");
+    equal("point graph: says what its top stands for", C.pointGraph([1000, 2000], 300, 56).top, 2300);
     equal("sparkline needs two points", C.sparkline([42], 10, 10).line, "");
     const points = C.pointGraph([1000, 2000], 300, 56);
     equal("point graph: left and right", `${points.points[0].x},${points.points[1].x}`, "0,100");
@@ -152,4 +219,18 @@
     ], "cl bug");
     equal("groups: palette \"cl bug\" finds Claude › Bug first", ranked[0]?.id, "1");
     check("groups: palette \"cl bug\" leaves out other Claude notes", !ranked.some(item => item.id === "2"));
+
+    // findMatches (2.0.0): where the filter's words are, for highlighting.
+    const spans = (text, query, limit) => N.findMatches(text, query, limit).map(({ start, end }) => text.slice(start, end)).join("|");
+    equal("find: every match, ignoring case", spans("Milk, milk and MILK", "milk"), "Milk|milk|MILK");
+    equal("find: in order across terms", JSON.stringify(N.findMatches("eggs then milk", "milk eggs")), JSON.stringify([{ start: 0, end: 4 }, { start: 10, end: 14 }]));
+    equal("find: the longer of two terms that start together", spans("milkshake", "milk milkshake"), "milkshake");
+    equal("find: a #tag term finds the tag with its #", spans("a #work note about work", "#work"), "#work");
+    equal("find: a lone # finds nothing", spans("# heading", "#"), "");
+    equal("find: regex characters are plain", spans("a.b a+b (x) [y] \\z", "a.b a+b (x) [y] \\z"), "a.b|a+b|(x)|[y]|\\z");
+    equal("find: no query, no matches", N.findMatches("text", "  ").length, 0);
+    equal("find: no text, no matches", N.findMatches("", "a").length, 0);
+    equal("find: capped", N.findMatches("a".repeat(50), "a", 10).length, 10);
+    equal("find: beyond the basic plane", spans("note 🎵 here 🎵", "🎵"), "🎵|🎵");
+    equal("find: markup stays text", spans("<b>x</b>", "<b>"), "<b>");
 })();

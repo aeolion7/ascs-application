@@ -45,13 +45,13 @@ IsDefaultWorkspaceName(name) {
 ValidateWorkspaceName(name) {
     name := Trim(name)
     if (name = "")
-        throw Error("Enter a workspace name.")
+        throw Error("Enter an arrangement name.")
     if !RegExMatch(name, "^[A-Za-z0-9][A-Za-z0-9 _-]{0,39}\z")
-        throw Error("Workspace names use letters, numbers, spaces, - and _ (up to 40 characters).")
+        throw Error("Arrangement names use letters, numbers, spaces, - and _ (up to 40 characters).")
     if RegExMatch(name, "i)^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$")
         throw Error("That name is reserved by Windows.")
     if RegExMatch(name, " $")
-        throw Error("Workspace names cannot end with a space.")
+        throw Error("Arrangement names cannot end with a space.")
     return name
 }
 
@@ -162,6 +162,17 @@ ParseCustomCommandsPayload(content, maxCommands := 30) {
 
 IsWebUrl(url) {
     return (StrLen(url) <= 2048 && RegExMatch(url, "i)^https?://[^\s`"<>]+$"))
+}
+
+; A link Ctrl + clicked in a note's Markdown viewer (2.0.0). Only http and https
+; open, and not with a user name or password in them, which can disguise where
+; a link really goes. Returns the address unchanged.
+ValidateNoteLink(url) {
+    if RegExMatch(url, "[\x00-\x1F\x7F]") || !IsWebUrl(url)
+        throw Error("Only web links (http or https) open from a note.")
+    if RegExMatch(url, "i)^https?://[^/?#]*@")
+        throw Error("A link with a user name or password in it doesn't open.")
+    return url
 }
 
 ; ------------------------------------------
@@ -964,10 +975,14 @@ ParseSignInTimeline(line) {
     if !RegExMatch(line, "^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\s+Sign-in: Timeline \(ms\): (.*)$", &m)
         return ""
     times := Map("time", StrReplace(m[1], " ", "T"))
-    for key, label in Map("retrobar", "RetroBar bar shown", "taskbar", "taskbar shown", "apps", "apps started", "keychron", "Keychron started")
+    for key, label in Map("retrobar", "RetroBar bar shown", "taskbar", "taskbar shown", "apps", "apps started", "keychron", "Keychron started", "finished", "finished")
         times[key] := RegExMatch(m[2], label " (-?\d{1,6})\b", &value) ? Integer(value[1]) : -1
     if (times["retrobar"] < 0 || times["taskbar"] < 100)
         return ""
+    ; Lines from before 2.0.0 have no "finished": the last thing they recorded is
+    ; the nearest there is, which leaves out sending Keychron to the tray.
+    if (times["finished"] < 0)
+        times["finished"] := Max(times["retrobar"], times["apps"], times["keychron"])
     times["sound"] := RegExMatch(m[2], "; startup sound (.+?)\s*$", &sound) ? sound[1] : ""
     return times
 }
@@ -1012,7 +1027,7 @@ SignInHistoryJson(text, limit := 20, soundLabel := "") {
         if !IsObject(times)
             continue
         json .= (count ? "," : "") '{"time":' JsonQuote(times["time"]) ',"retrobar":' times["retrobar"]
-            . ',"taskbar":' times["taskbar"] ',"apps":' times["apps"] ',"keychron":' times["keychron"]
+            . ',"taskbar":' times["taskbar"] ',"apps":' times["apps"] ',"keychron":' times["keychron"] ',"finished":' times["finished"]
             . ',"sound":' JsonQuote(SubStr(times["sound"] = "" ? "" : soundLabel(times["sound"]), 1, 120)) '}'
         count++
     }
@@ -1163,6 +1178,40 @@ NormalizeDeviceName(name) {
 DeviceNameMatches(actual, wanted) {
     wanted := NormalizeDeviceName(wanted)
     return wanted != "" && NormalizeDeviceName(actual) = wanted
+}
+
+; A playback device as Maestro names it: what it is, then which one. Windows
+; calls them "<endpoint> (<adapter>)", so the useful name is on a different side
+; for each kind: "Headphones (2- SteelSeries Arctis Nova 5)" and "LG ULTRAGEAR
+; (NVIDIA High Definition Audio)". The form factor Windows reports says which
+; kind it is: 9 a display over HDMI or DisplayPort, 3 headphones, 5 a headset,
+; 1 speakers. Anything else keeps Windows' own name.
+AudioDeviceLabel(name, formFactor) {
+    if !RegExMatch(name, "^(.+?)\s*\((?:\d+-\s*)?(.+)\)$", &parts)
+        return name
+    switch formFactor {
+        case 9: return "Monitor Speaker (" RegExReplace(parts[1], "^\d+-\s*") ")"
+        case 3, 5: return "Headphones (" parts[2] ")"
+        case 1: return "Speakers (" parts[2] ")"
+    }
+    return name
+}
+
+; What the Headphones field shows for a saved device, and what's saved for what
+; the field shows. The saved name stays Windows' own, since that's what a switch
+; is checked against. Each passes through a name that isn't a current device.
+AudioLabelFromName(devices, saved) {
+    for device in devices
+        if DeviceNameMatches(device.name, saved) || DeviceNameMatches(device.label, saved)
+            return device.label
+    return saved
+}
+
+AudioNameFromLabel(devices, text) {
+    for device in devices
+        if (device.label = text)
+            return device.name
+    return text
 }
 
 ValidateDeviceName(name) {
@@ -1442,13 +1491,16 @@ SteamCommonName(buffer, position, limit, v29, nameKey, commonKey) {
 }
 
 ; RetroAchievements images by token: "b:<digits>" is a badge, "i:<digits>" a
-; game icon. Returns Map(url, file); the address is always built here, on
-; media.retroachievements.org, and the cache file name from the digits.
+; game icon, "u:<name>" a user's picture. Returns Map(url, file); the address is
+; always built here, on media.retroachievements.org, and the cache file name
+; from the digits or the checked name.
 RetroAchievementsImage(token) {
     if RegExMatch(token, "^b:(\d{1,8})$", &m)
         return Map("url", "https://media.retroachievements.org/Badge/" m[1] ".png", "file", "b-" m[1] ".png")
     if RegExMatch(token, "^i:(\d{1,8})$", &m)
         return Map("url", "https://media.retroachievements.org/Images/" m[1] ".png", "file", "i-" m[1] ".png")
+    if RegExMatch(token, "^u:([A-Za-z0-9_]{1,32})$", &m)
+        return Map("url", "https://media.retroachievements.org/UserPic/" m[1] ".png", "file", "u-" m[1] ".png")
     throw Error("Invalid RetroAchievements image.")
 }
 
@@ -1552,12 +1604,16 @@ WindowsSoundEvent(key) {
 ; "windows:<app/event>" (one of WindowsSoundEvents) or "ascs:show|hide|
 ; reminder". Returns [kind, name]; anything else is refused, so the page can
 ; only ever ask for the file a known event or ASCS sound already plays.
+; Maestro's own sounds, by kind, with what the page and notices call them
+; (the timer's since 2.0.0).
+AscsSoundLabels() => Map("show", "Maestro show", "hide", "Maestro hide", "reminder", "Calendar reminder", "timer", "Timer")
+
 ParseInUseKey(key) {
     if RegExMatch(key, "^windows:(.{1,80})$", &match) {
         WindowsSoundEvent(match[1])
         return ["windows", match[1]]
     }
-    if RegExMatch(key, "^ascs:(show|hide|reminder)$", &match)
+    if RegExMatch(key, "^ascs:(show|hide|reminder|timer)$", &match)
         return ["ascs", match[1]]
     if RegExMatch(key, "^startup:([1-8]|shutdown|add)$", &match)      ; 1.8.1
         return ["startup", match[1]]
@@ -1764,7 +1820,7 @@ ValidateAscsSoundMode(value) {
     value := StrLower(Trim(value))
     if (value = "off" || value = "start" || value = "show")
         return value
-    throw Error("ASCS sounds must be off, on start, or on show.")
+    throw Error("Maestro sounds must be off, on start, or on show.")
 }
 
 ; The PSO session's Discord voice channel. Accepts a channel link as Discord's
@@ -1841,7 +1897,7 @@ PlaySessionSince(previous, owner, title, now, started := 0) {
 ; Whether a file name in data\ra-images is one ASCS wrote (an image or a
 ; leftover partial write). Only these are ever deleted by the cache cap.
 IsRaImageCacheFile(name) {
-    return RegExMatch(name, "i)^[bi]-\d{1,8}\.png(\.tmp)?$") > 0
+    return RegExMatch(name, "i)^([bi]-\d{1,8}|u-[A-Za-z0-9_]{1,32})\.png(\.tmp)?$") > 0
 }
 
 ; The cache cap: given the folder's files (Maps with name, size, time as
@@ -2150,7 +2206,7 @@ ParseDeleteList(content, limit) {
         if (id = "" || seen.Has(id))
             continue
         if !IsLeveledCopyId(id)
-            throw Error("Only leveled copies in ASCS Leveled can be deleted here.")
+            throw Error("Only leveled copies in Maestro Leveled can be deleted here.")
         seen[id] := true
         ids.Push(id)
         if (ids.Length > limit)
@@ -2265,4 +2321,335 @@ LeveledStem(name) {
     while RegExMatch(stem, "^(.*?)\s*\([+-]\d+(?:\.\d+)? dB\)(?:\s+\d+)?$", &match)
         stem := match[1]
     return Trim(stem)
+}
+
+; ---- Hardware details (2.0.0): turning what Windows reports into plain names.
+
+; Boards and small builders ship these in place of real values.
+CleanHardwareText(value) {
+    text := Trim(String(value))
+    static placeholders := "|default string|to be filled by o.e.m.|to be filled by oem|not specified"
+        . "|not available|not applicable|n/a|none|unknown|system manufacturer|system product name"
+        . "|system version|o.e.m.|oem|"
+    return InStr(placeholders, "|" StrLower(text) "|") ? "" : text
+}
+
+HardwareName(names, value, fallback := "") {
+    return names.Has(String(value)) ? names[String(value)] : fallback
+}
+
+; MSFT_PhysicalDisk.BusType. Win32_DiskDrive calls NVMe "SCSI" and SATA "IDE".
+DiskBusName(value) {
+    static names := Map("1", "SCSI", "2", "ATAPI", "3", "ATA", "4", "FireWire", "5", "SSA", "6", "Fibre Channel"
+        , "7", "USB", "8", "RAID", "9", "iSCSI", "10", "SAS", "11", "SATA", "12", "SD card", "13", "MMC"
+        , "14", "Virtual", "15", "Virtual", "16", "Storage Spaces", "17", "NVMe")
+    return HardwareName(names, value)
+}
+
+; MSFT_PhysicalDisk.MediaType
+DiskMediaName(value) {
+    static names := Map("3", "Hard disk", "4", "Solid state", "5", "Storage-class memory")
+    return HardwareName(names, value)
+}
+
+; MSFT_PhysicalDisk.HealthStatus
+DiskHealthName(value) {
+    static names := Map("0", "Healthy", "1", "Warning", "2", "Unhealthy")
+    return HardwareName(names, value)
+}
+
+; SMBIOS memory type, from Win32_PhysicalMemory.SMBIOSMemoryType
+MemoryTypeName(value) {
+    static names := Map("20", "DDR", "21", "DDR2", "22", "DDR2", "24", "DDR3", "26", "DDR4", "27", "LPDDR"
+        , "28", "LPDDR2", "29", "LPDDR3", "30", "LPDDR4", "34", "DDR5", "35", "LPDDR5")
+    return HardwareName(names, value)
+}
+
+; Win32_PhysicalMemory.FormFactor
+MemoryFormName(value) {
+    static names := Map("8", "DIMM", "12", "SODIMM")
+    return HardwareName(names, value)
+}
+
+; Win32_Processor.Manufacturer is the chip's own ID string.
+ProcessorMakerName(value) {
+    static names := Map("AuthenticAMD", "AMD", "GenuineIntel", "Intel")
+    text := CleanHardwareText(value)
+    return HardwareName(names, text, text)
+}
+
+; Win32_Processor.Architecture
+ProcessorArchitectureName(value) {
+    static names := Map("0", "x86", "5", "ARM", "6", "Itanium", "9", "x64", "12", "ARM64")
+    return HardwareName(names, value)
+}
+
+; Win32_ComputerSystem.PCSystemType
+ComputerKindName(value) {
+    static names := Map("1", "Desktop", "2", "Laptop", "3", "Workstation", "4", "Server", "5", "Server"
+        , "6", "Appliance", "7", "Server", "8", "Tablet")
+    return HardwareName(names, value)
+}
+
+; A partition's purpose. MSFT_Partition.GptType is empty on an MBR disk.
+PartitionKindName(gptType, isSystem := false) {
+    static names := Map("{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}", "EFI system"
+        , "{e3c9e316-0b5c-4db8-817d-f92df00215ae}", "Microsoft reserved"
+        , "{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}", "Basic data"
+        , "{de94bba4-06d1-4d40-a16a-bfd50179d6ac}", "Recovery")
+    if isSystem
+        return "EFI system"
+    text := StrLower(Trim(String(gptType)))
+    return text = "" ? "Data" : HardwareName(names, text, "Other")
+}
+
+; Windows' dates as local date and time text. Most are CIM dates
+; ("20250612000000.000000+000"); MSFT_NetAdapter's are plain ("2023-11-27").
+CimDateIso(value) {
+    if RegExMatch(String(value), "^(\d{4}-\d\d-\d\d)$", &plain)
+        return plain[1] "T00:00:00"
+    if !RegExMatch(String(value), "^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)", &part)
+        return ""
+    return part[1] "-" part[2] "-" part[3] "T" part[4] ":" part[5] ":" part[6]
+}
+
+; A monitor's three-letter maker ID, from its own EDID; an unlisted one stays as it is.
+MonitorMakerName(value) {
+    static names := Map("GSM", "LG", "SAM", "Samsung", "SEC", "Samsung", "DEL", "Dell", "AUS", "ASUS", "ACI", "ASUS"
+        , "ACR", "Acer", "BNQ", "BenQ", "GBT", "Gigabyte", "MSI", "MSI", "AOC", "AOC", "HWP", "HP", "HPN", "HP"
+        , "LEN", "Lenovo", "VSC", "ViewSonic", "PHL", "Philips", "SNY", "Sony", "APP", "Apple")
+    text := CleanHardwareText(value)
+    return HardwareName(names, StrUpper(text), text)
+}
+
+; WmiMonitorConnectionParams.VideoOutputTechnology
+DisplayConnectionName(value) {
+    static names := Map("0", "VGA", "4", "DVI", "5", "HDMI", "10", "DisplayPort", "11", "DisplayPort"
+        , "2147483648", "Built in", "-2147483648", "Built in")
+    return HardwareName(names, value)
+}
+
+; A device Windows made up rather than found on a bus.
+IsSoftwareDeviceId(value) {
+    return RegExMatch(String(value), "i)^(ROOT|SWD)\\") != 0
+}
+
+SoundBusName(deviceId) {
+    if RegExMatch(String(deviceId), "i)^USB\\")
+        return "USB"
+    return RegExMatch(String(deviceId), "i)^HDAUDIO\\") ? "HD Audio" : ""
+}
+
+; MSFT_NetAdapter.NdisPhysicalMedium
+NetworkKindName(value) {
+    static names := Map("1", "Wi-Fi", "9", "Wi-Fi", "10", "Bluetooth", "14", "Ethernet")
+    return HardwareName(names, value)
+}
+
+; '{"a":1,"b":"x"}' from a name and an already encoded value, in turn.
+JsonObjectOf(pairs*) {
+    json := "{"
+    Loop pairs.Length // 2 {
+        index := A_Index * 2 - 1
+        json .= (A_Index > 1 ? "," : "") JsonQuote(pairs[index]) ":" pairs[index + 1]
+    }
+    return json "}"
+}
+
+; ---- Processor and memory history (2.0.0) ----
+; Kept in memory only: each second for 5 minutes, each 10 seconds for an hour,
+; and each minute for a day. A 10-second or minute point is
+; [average cpu, average ram, peak cpu, peak ram]; a second's is [cpu, ram].
+; "seq" counts the points each scale has had, so a push can tell what's new.
+; "times" holds each point's time (Unix seconds, UTC) beside it: a 10-second or
+; minute point takes the time of its last second. Times, not places, date a
+; point, so they stay right after sleep or a late timer (2.0.0 manual pass).
+NewMetricHistory() {
+    return Map("seconds", [], "tens", [], "minutes", [], "tick", 0
+        , "seq", Map("seconds", 0, "tens", 0, "minutes", 0)
+        , "times", Map("seconds", [], "tens", [], "minutes", []))
+}
+
+UnixNow() {
+    return DateDiff(A_NowUTC, "19700101000000", "Seconds")
+}
+
+MetricHistoryLimits() {
+    return Map("seconds", 300, "tens", 360, "minutes", 1440)
+}
+
+IsMetricHistoryScale(scale) {
+    return scale == "seconds" || scale == "tens" || scale == "minutes"
+}
+
+AddMetricSample(history, cpu, ram, time := "") {
+    if (time = "")
+        time := UnixNow()
+    limits := MetricHistoryLimits()
+    PushMetricPoint(history, "seconds", [Round(cpu), Round(ram)], limits, time)
+    history["tick"] += 1
+    if (Mod(history["tick"], 10) = 0)
+        PushMetricPoint(history, "tens", SummarizeMetricPoints(history["seconds"], 10), limits, time)
+    if (Mod(history["tick"], 60) = 0)
+        PushMetricPoint(history, "minutes", SummarizeMetricPoints(history["tens"], 6), limits, time)
+}
+
+PushMetricPoint(history, scale, point, limits, time) {
+    list := history[scale]
+    times := history["times"][scale]
+    list.Push(point)
+    times.Push(time)
+    if (list.Length > limits[scale]) {
+        list.RemoveAt(1, list.Length - limits[scale])
+        times.RemoveAt(1, times.Length - limits[scale])
+    }
+    history["seq"][scale] += 1
+}
+
+; The newest `count` points as one: their average and their highest peak.
+SummarizeMetricPoints(list, count) {
+    first := Max(1, list.Length - count + 1)
+    cpuSum := ramSum := cpuPeak := ramPeak := 0
+    taken := 0
+    loop list.Length - first + 1 {
+        point := list[first + A_Index - 1]
+        cpuSum += point[1]
+        ramSum += point[2]
+        cpuPeak := Max(cpuPeak, point.Length >= 4 ? point[3] : point[1])
+        ramPeak := Max(ramPeak, point.Length >= 4 ? point[4] : point[2])
+        taken += 1
+    }
+    if !taken
+        return [0, 0, 0, 0]
+    return [Round(cpuSum / taken), Round(ramSum / taken), cpuPeak, ramPeak]
+}
+
+MetricHistoryJson(history, scale) {
+    json := "["
+    for index, point in history[scale] {
+        json .= (index > 1 ? "," : "") "["
+        for part, value in point
+            json .= (part > 1 ? "," : "") value
+        json .= "]"
+    }
+    return json "]"
+}
+
+MetricHistoryTimesJson(history, scale) {
+    return "[" JoinArray(history["times"][scale], ",") "]"
+}
+
+; PCSX2's covers show the case at an angle, with a banner across the top (2.0.0).
+; The page centers one on its art.
+IsAngledCover(emulator, cover) {
+    return emulator = "pcsx2" && cover != ""
+}
+
+; ---- Command Center extras (2.0.0) ----
+
+; Open-Meteo's forecast for a place: one fixed address, the place rounded to two
+; decimals (about a kilometer), US units, today and the next two days.
+WeatherUrl(latitude, longitude) {
+    if !(IsNumber(latitude) && IsNumber(longitude) && Abs(latitude) <= 90 && Abs(longitude) <= 180)
+        throw Error("The location isn't valid.")
+    return "https://api.open-meteo.com/v1/forecast?latitude=" Format("{:.2f}", latitude) "&longitude=" Format("{:.2f}", longitude)
+        . "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m"
+        . "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
+        . "&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto&forecast_days=3"
+}
+
+; The adapters that carry traffic: hardware interfaces that are up, not their
+; filter layers, the loopback, or a VPN riding on one of them. Bytes in and out
+; since Windows started, and the name of the busiest.
+; MIB_IF_TABLE2 (iphlpapi): a count, then 1352-byte MIB_IF_ROW2 rows from offset 8.
+ReadNetworkTotals() {
+    table := 0
+    if (DllCall("iphlpapi\GetIfTable2", "Ptr*", &table, "UInt") != 0)
+        throw Error("GetIfTable2 failed.")
+    totals := Map("in", 0, "out", 0, "name", "")
+    busiest := -1
+    try {
+        count := NumGet(table, 0, "UInt")
+        Loop Min(count, 512) {
+            row := table + 8 + (A_Index - 1) * 1352
+            flags := NumGet(row, 1152, "UChar")      ; bit 1: hardware; bit 2: a filter
+            if (!(flags & 1) || (flags & 2) || NumGet(row, 1156, "UInt") != 1 || NumGet(row, 1128, "UInt") = 24)
+                continue
+            received := NumGet(row, 1208, "UInt64")
+            totals["in"] += received
+            totals["out"] += NumGet(row, 1280, "UInt64")
+            if (received > busiest) {
+                busiest := received
+                totals["name"] := StrGet(row + 28, 256, "UTF-16")
+            }
+        }
+    } finally {
+        DllCall("iphlpapi\FreeMibTable", "Ptr", table)
+    }
+    return totals
+}
+
+; Every process this user can read: its processor time (100 ns units, kernel and
+; user) and working set (bytes), keyed by id and start time so a reused id isn't
+; mistaken for the old process. Names are looked up once per process.
+ReadProcessUsage() {
+    static names := Map()
+    ids := Buffer(4096 * 4, 0)
+    if !DllCall("kernel32\K32EnumProcesses", "Ptr", ids, "UInt", ids.Size, "UInt*", &bytes := 0)
+        throw Error("EnumProcesses failed.")
+    processes := Map()
+    seen := Map()
+    counters := Buffer(72, 0)
+    path := Buffer(1040, 0)
+    Loop bytes // 4 {
+        id := NumGet(ids, (A_Index - 1) * 4, "UInt")
+        if !id
+            continue
+        handle := DllCall("OpenProcess", "UInt", 0x1000, "Int", 0, "UInt", id, "Ptr")      ; PROCESS_QUERY_LIMITED_INFORMATION
+        if !handle
+            continue
+        try {
+            if !DllCall("GetProcessTimes", "Ptr", handle, "Int64*", &created := 0, "Int64*", &exited := 0, "Int64*", &kernel := 0, "Int64*", &user := 0)
+                continue
+            key := id "|" created
+            seen[key] := true
+            if !names.Has(key) {
+                size := 520
+                names[key] := DllCall("QueryFullProcessImageNameW", "Ptr", handle, "UInt", 0, "Ptr", path, "UInt*", &size)
+                    ? ProcessFileName(StrGet(path, size, "UTF-16")) : ""
+            }
+            NumPut("UInt", 72, counters, 0)
+            memory := DllCall("kernel32\K32GetProcessMemoryInfo", "Ptr", handle, "Ptr", counters, "UInt", 72) ? NumGet(counters, 16, "UPtr") : 0
+            processes[key] := Map("name", names[key], "cpu", kernel + user, "memory", memory)
+        } finally {
+            DllCall("CloseHandle", "Ptr", handle)
+        }
+    }
+    for key in [names*]
+        if !seen.Has(key)
+            names.Delete(key)
+    return Map("time", A_TickCount, "processes", processes)
+}
+
+; "C:\Program Files\Vivaldi\vivaldi.exe" -> "vivaldi".
+ProcessFileName(path) {
+    SplitPath(path, , , , &base)
+    return RegExReplace(base, "[\x00-\x1F]")
+}
+
+; The n largest of [name, value] pairs, largest first.
+TopEntries(list, n) {
+    sorted := []
+    for entry in list {
+        at := sorted.Length + 1
+        for index, other in sorted
+            if (entry[2] > other[2]) {
+                at := index
+                break
+            }
+        sorted.InsertAt(at, entry)
+        if (sorted.Length > n)
+            sorted.Pop()
+    }
+    return sorted
 }

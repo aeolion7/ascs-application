@@ -1,0 +1,631 @@
+/* ==========================================================================
+   2.0.0: Quick Notes. The list on 4 columns and the open note on 8; the page
+   fits the window, and the list and the note scroll inside their modules. A
+   note opens in Read, formatted, or in Edit, its plain text (app.js).
+   ========================================================================== */
+
+/* ---- The page ---- */
+
+:root .notes-layout {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-items: stretch;
+  gap: var(--space-between);
+}
+
+:root .notes-list-card {
+  grid-column: span 4;
+}
+
+:root .notes-layout .editor-card {
+  grid-column: span 8;
+}
+
+:root #notes .module {
+  position: relative;
+  gap: 16px;
+  min-width: 0;
+  padding: var(--space-module);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-module);
+  background: var(--surface-module);
+  box-shadow: none;
+}
+
+@media (min-width: 1101px) {
+  :root #notes.view.active {
+    display: flex;
+    box-sizing: border-box;
+    flex-direction: column;
+    height: var(--page-fit);
+    min-height: calc(640px * var(--text-scale));
+    padding-bottom: 0;
+  }
+
+  :root .notes-layout {
+    flex: 1 1 0;
+    grid-template-rows: minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  :root #notes .module {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  :root .notes-list {
+    flex: 1 1 0;
+    max-height: none;
+    min-height: 0;
+  }
+
+  :root #noteText,
+  :root #notePreview {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 1100px) {
+  :root .notes-list-card,
+  :root .notes-layout .editor-card {
+    grid-column: span 12;
+  }
+}
+
+/* ---- The list ---- */
+
+:root .notes-list-toolbar {
+  display: flex;
+  flex: none;
+  margin: 0;
+}
+
+:root .notes-list-toolbar input {
+  flex: 1;
+  min-height: var(--height-control);
+  padding: 0 14px;
+  font-size: var(--t-body);
+}
+
+:root .notes-tags {
+  flex: none;
+  gap: 8px;
+  margin: 0;
+}
+
+:root .note-tag {
+  min-height: calc(36px * var(--text-scale));
+  padding: 0 12px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-key);
+  background: var(--surface-raised);
+  color: var(--text-soft);
+  font-family: var(--font-display);
+  font-size: var(--t-sub);
+}
+
+:root .note-tag small {
+  color: var(--text-muted);
+  font-size: var(--t-floor);
+}
+
+:root .note-tag[aria-pressed="true"] {
+  border-color: var(--brand-tint);
+  background: var(--brand-indigo-control);
+  color: #ffffff;
+}
+
+:root .notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 calc(-1 * var(--space-module)) 0 0;
+  padding-right: 10px;
+  scrollbar-gutter: stable;
+}
+
+:root .note-items {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 2px;
+}
+
+:root .note-list-item {
+  flex: none;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  color: var(--text-strong);
+}
+
+:root .note-list-item:hover {
+  background: var(--surface-raised);
+}
+
+:root .note-list-item[aria-current="true"] {
+  border-color: var(--brand-tint);
+  background: color-mix(in srgb, var(--brand-indigo-control) 55%, transparent);
+}
+
+:root .note-list-item strong {
+  font-family: var(--font-display);
+  font-size: var(--t-subhead);
+  font-weight: 600;
+}
+
+:root .note-list-item small {
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+:root .note-list-item .pin-mark,
+:root .note-group-name .pin-mark {
+  color: var(--brand-gold-text);
+}
+
+/* Group headings: one heading per group, in title case like the rest. */
+:root .note-group-head {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+:root .note-group:first-child .note-group-head {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+:root .note-group-toggle {
+  min-height: var(--height-control-small);
+  color: var(--text-strong);
+}
+
+:root .note-group-name {
+  font-family: var(--font-display);
+  font-size: var(--t-subhead);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+:root .note-group-count {
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+:root .note-group-more {
+  min-width: var(--height-control-small);
+  min-height: var(--height-control-small);
+  color: var(--text-soft);
+  font-size: var(--t-module);
+}
+
+:root .notes-empty {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: var(--t-body);
+}
+
+/* ---- The open note ---- */
+
+:root .note-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 16px;
+}
+
+/* The title is the note's heading: a field that reads as one until it's used. */
+:root #noteTitle {
+  flex: 1;
+  min-width: 0;
+  min-height: calc(56px * var(--text-scale));
+  padding: 0 12px;
+  margin-left: -12px;
+  border-color: transparent;
+  background-color: transparent;
+  font-family: var(--font-display);
+  font-size: var(--t-name);
+  font-weight: 600;
+}
+
+:root #noteTitle:hover:not(:disabled) {
+  border-color: var(--line-control);
+}
+
+:root #noteTitle:focus {
+  border-color: var(--brand-tint);
+  background-color: var(--surface-field);
+}
+
+:root .note-modes {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-field);
+}
+
+:root .note-modes[hidden] {
+  display: none;
+}
+
+:root .note-modes button {
+  min-width: calc(84px * var(--text-scale));
+  min-height: var(--height-control-small);
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--radius-key);
+  background: transparent;
+  color: var(--text-soft);
+  font-family: var(--font-display);
+  font-size: var(--t-tab);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+:root .note-modes button:hover {
+  background: var(--surface-raised);
+  color: var(--text-strong);
+}
+
+:root .note-modes button[aria-pressed="true"] {
+  background: var(--brand-indigo-control);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+:root .note-controls {
+  flex: none;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+}
+
+:root .note-controls select {
+  flex: none;
+  min-width: calc(120px * var(--text-scale));
+  min-height: var(--height-control);
+  padding: 0 34px 0 14px;
+  font-size: var(--t-body);
+}
+
+:root .note-controls .note-group-field {
+  flex: 0 1 calc(260px * var(--text-scale));
+  min-height: var(--height-control);
+  padding: 0 14px;
+  font-size: var(--t-body);
+}
+
+.note-controls-gap {
+  flex: 1 1 0;
+}
+
+:root .note-game-link {
+  flex: none;
+  margin: 0;
+  font-size: var(--t-body);
+}
+
+/* The text, in either mode, fills the module; it starts flush with the controls
+   above it. */
+:root #noteText,
+:root #notePreview {
+  margin-top: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background-color: var(--surface-field);
+  font-size: var(--t-body);
+  line-height: 1.6;
+}
+
+/* The modes differ at a glance: the viewer reads on a lighter page, and the
+   editor is a darker field edged in indigo. */
+:root #notePreview {
+  background-color: #202335;
+}
+
+:root #noteText {
+  border-color: color-mix(in srgb, var(--brand-tint) 50%, var(--line));
+  background-color: #0e0c1d;
+  resize: none;
+}
+
+:root #noteText:focus,
+:root #notePreview:focus-visible {
+  border-color: var(--brand-tint);
+}
+
+:root #notePreview {
+  cursor: text;
+}
+
+:root #notePreview[hidden],
+:root #noteText[hidden] {
+  display: none;
+}
+
+/* Readable lines on a wide screen. */
+:root .note-preview > * {
+  max-width: 82ch;
+}
+
+:root .note-preview h1 {
+  font-family: var(--font-display);
+  font-size: var(--t-name);
+}
+
+:root .note-preview h2 {
+  font-family: var(--font-display);
+  font-size: var(--t-module);
+}
+
+:root .note-preview h3 {
+  font-family: var(--font-display);
+  font-size: var(--t-subhead);
+}
+
+:root .note-preview-empty {
+  color: var(--text-soft);
+  font-size: var(--t-body);
+}
+
+/* ---- The foot: when, whether it's saved, and how long ---- */
+
+:root .editor-footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 20px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+:root .save-status {
+  color: var(--text-soft);
+  font-family: var(--font-body);
+  font-size: var(--t-sub);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+:root .save-status[data-state="error"] {
+  color: var(--brand-burgundy-text);
+}
+
+:root .editor-footer-meta {
+  gap: 16px;
+  margin-left: auto;
+}
+
+:root .editor-footer .copy-snippet {
+  min-height: var(--height-control-small);
+}
+
+/* ---- The Markdown viewer: everything it draws (2.0.0) ---- */
+
+:root .note-preview h4,
+:root .note-preview h5,
+:root .note-preview h6 {
+  margin: 1em 0 .4em;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+:root .note-preview h4 { font-size: var(--t-body); }
+:root .note-preview h5 { font-size: var(--t-sub); }
+:root .note-preview h6 { font-size: var(--t-floor); color: var(--text-soft); }
+
+:root .note-preview del {
+  color: var(--text-soft);
+}
+
+:root .note-preview mark {
+  padding: 0 .2em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--brand-gold) 30%, transparent);
+  color: var(--text-strong);
+}
+
+:root .note-preview ul ul,
+:root .note-preview ol ol,
+:root .note-preview ul ol,
+:root .note-preview ol ul {
+  margin: .25em 0 .25em;
+}
+
+:root .note-preview li > blockquote,
+:root .note-preview li > p,
+:root .note-preview li > .md-code,
+:root .note-preview li > .md-table {
+  margin: .4em 0;
+}
+
+:root .note-preview blockquote > :first-child { margin-top: 0; }
+:root .note-preview blockquote > :last-child { margin-bottom: 0; }
+
+/* Task lists: the box sits where the bullet would. */
+:root .note-preview ul.has-tasks {
+  padding-left: 0;
+  list-style: none;
+}
+
+:root .note-preview li.md-task {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: baseline;
+}
+
+:root .note-preview li.md-task > :not(input, .md-item-text) {
+  grid-column: 2;
+}
+
+:root .note-preview li.md-task > input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  transform: translateY(3px);
+  accent-color: var(--brand-tint);
+  cursor: pointer;
+}
+
+:root .note-preview li.md-task > input:checked + .md-item-text {
+  color: var(--text-soft);
+  text-decoration: line-through;
+}
+
+/* Code blocks carry their language as a small label. */
+:root .note-preview .md-code {
+  position: relative;
+  margin: .8em 0;
+}
+
+:root .note-preview .md-code pre {
+  margin: 0;
+}
+
+:root .note-preview .md-code-lang {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-size: var(--t-floor);
+}
+
+/* Tables scroll sideways inside the note when they're wider than it. */
+:root .note-preview .md-table {
+  max-width: 100%;
+  margin: .8em 0;
+  overflow-x: auto;
+}
+
+:root .note-preview table {
+  border-collapse: collapse;
+  font-size: var(--t-body);
+}
+
+:root .note-preview th,
+:root .note-preview td {
+  padding: 8px 14px;
+  border: 1px solid var(--line-control);
+  text-align: left;
+  vertical-align: top;
+}
+
+:root .note-preview th {
+  background: var(--surface-raised);
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+/* An image is never loaded: a labeled box with its alt text. */
+:root .md-image {
+  display: inline-block;
+  padding: 1px 8px;
+  border: 1px dashed var(--line-control);
+  border-radius: var(--radius-key);
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+:root .md-image::before {
+  content: "Image: ";
+  color: var(--text-muted);
+}
+
+:root .md-link {
+  color: var(--brand-tint-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---- The Markdown reference ---- */
+
+:root .markdown-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(1240px, calc(100vw - 2 * var(--space-page)));
+  max-height: calc(100vh - 2 * var(--space-page));
+}
+
+:root .markdown-ref-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-right: calc(-1 * var(--space-module));
+  padding-right: 10px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+:root .markdown-ref {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+:root .markdown-ref thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px 14px;
+  background: var(--surface-module);
+  color: var(--text-soft);
+  font-family: var(--font-display);
+  font-size: var(--t-sub);
+  font-weight: 600;
+  text-align: left;
+}
+
+:root .markdown-ref tbody th,
+:root .markdown-ref td {
+  padding: 12px 14px;
+  border-top: 1px solid var(--line);
+  vertical-align: top;
+}
+
+:root .markdown-ref tbody th {
+  width: 18%;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-body);
+  font-weight: 600;
+  text-align: left;
+}
+
+:root .markdown-ref td {
+  width: 41%;
+}
+
+:root .md-ref-source {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-key);
+  background: var(--surface-field);
+  color: var(--text-strong);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: var(--t-sub);
+  white-space: pre-wrap;
+}
+
+:root .md-ref-result {
+  min-height: 0;
+  padding: 0;
+  font-size: var(--t-body);
+}
+
+:root .md-ref-result > :first-child { margin-top: 0; }
+:root .md-ref-result > :last-child { margin-bottom: 0; }

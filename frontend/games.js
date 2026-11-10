@@ -138,18 +138,21 @@
         if (kind === "b" && /^\d{1,8}$/.test(text)) return `b:${text}`;
         const match = /^\/Images\/(\d{1,8})\.png$/.exec(text);
         if (kind === "i" && match) return `i:${match[1]}`;
+        const picture = /^\/UserPic\/([A-Za-z0-9_]{1,32})\.png$/.exec(text);
+        if (kind === "u" && picture) return `u:${picture[1]}`;
         return "";
     }
 
     // RetroAchievements: API_GetUserSummary and API_GetUserRecentlyPlayedGames.
     function parseRetroAchievements(summaryRaw, recentRaw) {
         const result = {
-            user: "", points: 0, softcore: 0, truePoints: 0, rank: 0, ranked: 0, presence: "",
+            user: "", userPicture: "", points: 0, softcore: 0, truePoints: 0, rank: 0, ranked: 0, presence: "",
             lastGame: "", lastConsole: "", lastGameId: 0, games: [], achievements: []
         };
         const summary = parseJson(summaryRaw);
         if (summary && typeof summary === "object" && !Array.isArray(summary)) {
             result.user = clean(summary.User, 40);
+            result.userPicture = imageToken("u", summary.UserPic) || imageToken("u", `/UserPic/${result.user}.png`);
             result.points = count(summary.TotalPoints);
             result.softcore = count(summary.TotalSoftcorePoints);
             result.truePoints = count(summary.TotalTruePoints);
@@ -274,6 +277,17 @@
         if (!locked.length) return null;
         const next = locked.find(item => item.type === "progression" || item.type === "win_condition") || locked[0];
         return { achievement: next, locked: locked.length, missableLeft: locked.filter(item => item.type === "missable").length };
+    }
+
+    // A game's latest and rarest unlocks, for Next up; null when there are none.
+    function raHighlights(game) {
+        const earned = (game?.achievements || []).filter(isEarned);
+        const when = item => item.earnedHardcore || item.earned;
+        const rated = earned.filter(item => item.rarity !== null && item.rarity !== undefined);
+        return {
+            latest: earned.reduce((best, item) => (!best || when(item) > when(best) ? item : best), null),
+            rarest: rated.reduce((best, item) => (!best || item.rarity < best.rarity ? item : best), null)
+        };
     }
 
     // The last days' unlocks (API_GetUserRecentAchievements), newest first.
@@ -430,7 +444,7 @@
     global.ASCSGames = {
         raBarClass, EMULATORS, systemName, formatDuration, formatLastPlayed, parseLocal, displayTitle, sortGames,
         filterGames, totalsByEmulator, gameFromWindowTitle, parseRetroAchievements, rankPercentile, titleKey, imageToken,
-        matchPlayingGame, formatClock, parseRaGame, filterRaAchievements, raCounts, nextUp, parseRaUnlocks,
+        matchPlayingGame, formatClock, parseRaGame, filterRaAchievements, raCounts, nextUp, raHighlights, parseRaUnlocks,
         AWARD_TABS, parseRaAwards, awardsInTab, awardText,
         gameNoteKey, playingTitle, sessionSince, sessionStamp
     };

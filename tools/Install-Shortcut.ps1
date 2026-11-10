@@ -76,9 +76,9 @@ function New-AscsShortcut([string]$Path, [string]$Target, [string]$Description) 
 }
 
 New-Item -ItemType Directory -Force $ShortcutDirectory, $StartupDirectory | Out-Null
-New-AscsShortcut $menuLink $script "Aeolionware Super Command System"
-New-AscsShortcut $launcherLink $launcher "ASCS Launcher: Ctrl+Alt+Shift+A starts or reloads ASCS"
-if ($Startup) { New-AscsShortcut $startupLink $script "Start ASCS at sign-in" }
+New-AscsShortcut $menuLink $script "Aeolionware Maestro"
+New-AscsShortcut $launcherLink $launcher "Maestro Launcher: Ctrl+Alt+Shift+A starts or reloads Maestro"
+if ($Startup) { New-AscsShortcut $startupLink $script "Start Maestro at sign-in" }
 
 if (-not $NoLaunch) {
     # The launcher replaces any older running copy of itself.

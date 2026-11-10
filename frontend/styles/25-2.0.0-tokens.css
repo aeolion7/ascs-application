@@ -1,0 +1,134 @@
+/* ==========================================================================
+   2.0.0: the design values. Every new rule uses these; old sheets go as each
+   page moves over. Spacing: page 28, between modules 20, inside modules 24.
+   ========================================================================== */
+
+/* Text centered in its line. Both fonts keep more room above their capitals
+   than below the baseline, so a line centered in a button, row or menu sat 2 to
+   4 px high. Each face keeps its total height, so nothing grows or shrinks, but
+   the split is changed so the capitals sit in the middle.
+
+   Bahnschrift, which ships with Windows: 79 above and 21 below per 100 px,
+   capitals 71 tall. It's one variable font; this face is its SemiCondensed
+   width at every weight, as "Bahnschrift SemiCondensed" was. */
+@font-face {
+  font-family: "Maestro Display";
+  font-weight: 300 700;
+  font-stretch: 87.5%;
+  src: local("Bahnschrift");
+  ascent-override: 85%;
+  descent-override: 15%;
+}
+
+@font-face {
+  font-family: "Lato";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  ascent-override: 86%;
+  descent-override: 15%;
+  src: url("../assets/fonts/Lato-Regular.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Lato";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  ascent-override: 86%;
+  descent-override: 15%;
+  src: url("../assets/fonts/Lato-Italic.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Lato";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  ascent-override: 86%;
+  descent-override: 15%;
+  src: url("../assets/fonts/Lato-Bold.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Lato";
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  ascent-override: 86%;
+  descent-override: 15%;
+  src: url("../assets/fonts/Lato-BoldItalic.ttf") format("truetype");
+}
+
+:root {
+  /* Type. Bahnschrift SemiCondensed ships with Windows: titles, numbers,
+     controls. Lato ships with Maestro: reading. Nothing is under 17 px. */
+  --font-display: "Maestro Display", "Bahnschrift SemiCondensed", "Bahnschrift", "Segoe UI", sans-serif;
+  --font-body: "Lato", "Segoe UI", sans-serif;
+  --text-scale: 1;     /* Preferences > Text size sets this. */
+  --t-floor: calc(17px * var(--text-scale));
+  --t-sub: calc(18px * var(--text-scale));
+  --t-body: calc(19px * var(--text-scale));
+  --t-button: calc(19px * var(--text-scale));
+  --t-tab: calc(21px * var(--text-scale));
+  --t-subhead: calc(22px * var(--text-scale));
+  --t-nav: calc(24px * var(--text-scale));
+  --t-module: calc(25px * var(--text-scale));
+  --t-name: calc(34px * var(--text-scale));
+  --t-time: calc(36px * var(--text-scale));
+  --t-number: calc(40px * var(--text-scale));
+  --t-title: calc(43px * var(--text-scale));
+  --t-number-large: calc(58px * var(--text-scale));
+
+  /* Surfaces and lines. */
+  --surface-page: #0d0e17;
+  --surface-side: #11121c;
+  --surface-module: #1a1c2a;
+  --surface-raised: #282b3e;
+  --surface-hover: #32364c;
+  --surface-field: #10111a;
+  --line: #30334a;
+  --line-control: #5a5e7c;
+
+  /* Text, at 7:1 or better on a module. */
+  --text-strong: #f6f5fb;
+  --text-soft: #d3d2e1;
+  --text-muted: #b5b4c8;
+
+  /* The brand. */
+  --brand-indigo: #2b0071;
+  --brand-indigo-control: #3a12a6;
+  --brand-indigo-hover: #4a22c0;
+  --brand-tint: #7b5cf0;
+  --brand-tint-text: #b6a5fb;
+  --brand-burgundy: #b4476f;
+  --brand-burgundy-text: #f0a5bf;
+  --brand-gold: #d9b95f;
+  --brand-gold-text: #ecd48c;
+
+  /* Space and shape. */
+  --space-page: 28px;
+  --space-between: 20px;
+  --space-module: 24px;
+  --radius-module: 20px;
+  --radius-control: 12px;
+  --radius-key: 8px;
+  --height-control: 46px;
+  --height-control-small: 42px;
+  --height-field: 50px;
+  --height-nav: 60px;
+  --width-sidebar: 320px;
+
+  /* 16 above the bar and 64 for it: the sidebar's first item lines up with the
+     first thing on the page below. */
+  --titlebar-height: 80px;
+  /* A page's height when it fits the window: below the title bar and its gap,
+     above .main's bottom margin. */
+  --page-fit: calc(100vh - var(--titlebar-height) - var(--space-between) - var(--space-page));
+}
+
+/* Timers and percentages don't shift as their digits change. */
+.top-clock,
+.top-date {
+  font-variant-numeric: tabular-nums;
+}

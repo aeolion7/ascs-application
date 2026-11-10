@@ -21,181 +21,6 @@ select:not([multiple]):not([size]):disabled {
   opacity: .6;
 }
 
-/* Sounds: every version as a card, three to a row. */
-.sound-versions {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.sound-version {
-  display: flex;
-  min-width: 0;
-  min-height: 104px;
-  align-items: center;
-  gap: 18px;
-  padding: 16px 20px;
-  border: 1px solid rgba(167, 174, 202, .14);
-  border-radius: 14px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .015));
-  color: #dfe1ea;
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-  transition: border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
-}
-
-.sound-version:hover,
-.sound-version:focus-visible {
-  border-color: rgba(139, 111, 245, .5);
-  background: linear-gradient(145deg, rgba(74, 32, 170, .28), rgba(28, 24, 52, .6));
-  transform: translateY(-1px);
-}
-
-.sound-version-art {
-  display: grid;
-  flex: 0 0 68px;
-  height: 68px;
-  place-items: center;
-}
-
-.sound-version-art img {
-  width: 64px;
-  height: 64px;
-  object-fit: contain;
-}
-
-.sound-version-copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.sound-version-copy small {
-  color: var(--gold-text);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1px;
-}
-
-.sound-version-copy strong {
-  overflow: hidden;
-  color: #f0f1f8;
-  font-size: 16px;
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sound-version-copy em {
-  color: #8a8fa5;
-  font-size: 12px;
-  font-style: normal;
-}
-
-@media (max-width: 1100px) {
-  .sound-versions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-/* The version strip, inside a version: larger, each with its logo. */
-.sound-era {
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 16px 9px 11px;
-}
-
-.sound-era-logo {
-  flex: 0 0 auto;
-  width: 30px;
-  height: 30px;
-  object-fit: contain;
-}
-
-.sound-era-copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.sound-era-copy span {
-  overflow: hidden;
-  max-width: 180px;
-  font-size: 14px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Back to every version, at the start of the line above the sounds. */
-.sounds-meta-left {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 12px;
-}
-
-.sound-back {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px 6px 9px;
-  border: 1px solid rgba(139, 111, 245, .35);
-  border-radius: 8px;
-  background: rgba(74, 32, 170, .18);
-  color: #e4e0fb;
-  cursor: pointer;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.sound-back svg {
-  width: 12px;
-  height: 12px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.sound-back:hover,
-.sound-back:focus-visible {
-  border-color: rgba(139, 111, 245, .6);
-  background: rgba(74, 32, 170, .34);
-}
-
-.sound-back[hidden] {
-  display: none;
-}
-
-/* Favorites are saved things: burgundy, with a heart. */
-.sound-star.is-on {
-  color: var(--burgundy-bright);
-}
-
-.sound-star.is-on:hover {
-  color: var(--burgundy-text);
-}
-
-.sound-actions button.is-favorite {
-  border-color: var(--burgundy-border);
-  background: var(--burgundy-soft);
-  color: var(--burgundy-text);
-}
-
-#soundFavoritesOnly[aria-pressed="true"] {
-  border-color: var(--burgundy-border);
-  background: var(--burgundy-soft);
-  color: var(--burgundy-text);
-}
-
 /* Countdowns in the Calendar are read-only: a pill with an hourglass, where
    events (yearly ones too) are square-cornered with a color stripe. */
 .cal-chip.is-countdown,
@@ -249,7 +74,7 @@ select:not([multiple]):not([size]):disabled {
 /* Quick Notes: whether a note fills placeholders when pasted from the palette. */
 .note-fill {
   font-family: "Cascadia Mono", Consolas, monospace;
-  font-size: 12.5px;
+  font-size: var(--t-floor);
   white-space: nowrap;
 }
 
@@ -286,13 +111,12 @@ select:not([multiple]):not([size]):disabled {
 
 .placeholder-items {
   overflow-y: auto;
-  scrollbar-width: thin;
 }
 
 .placeholder-group {
   margin: 8px 8px 4px;
-  color: #7d8298;
-  font-size: 10.5px;
+  color: var(--text-muted);
+  font-size: var(--t-floor);
   font-weight: 700;
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -315,21 +139,21 @@ select:not([multiple]):not([size]):disabled {
   color: #dfe1ea;
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--t-floor);
   text-align: left;
 }
 
 .placeholder-item code {
   color: var(--burgundy-text);
   font-family: "Cascadia Mono", Consolas, monospace;
-  font-size: 12px;
+  font-size: var(--t-floor);
 }
 
 .placeholder-item small {
   grid-column: 1 / -1;
   overflow: hidden;
   color: #8a8fa5;
-  font-size: 11.5px;
+  font-size: var(--t-floor);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -368,13 +192,13 @@ select:not([multiple]):not([size]):disabled {
 
 .placeholder-fill strong {
   color: #dfe1ea;
-  font-size: 13px;
+  font-size: var(--t-floor);
   font-weight: 600;
 }
 
 .placeholder-fill small {
   color: #8a8fa5;
-  font-size: 11.5px;
+  font-size: var(--t-floor);
 }
 
 /* The palette asking for a placeholder's value. */
@@ -385,4 +209,3 @@ select:not([multiple]):not([size]):disabled {
   background: rgba(74, 32, 170, .3);
   color: #e4e0fb;
 }
-

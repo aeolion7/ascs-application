@@ -2,6 +2,19 @@
 ; QUICK NOTES
 ; ==========================================
 
+; Ctrl + click on a link in the Markdown viewer (2.0.0). The address is checked
+; again here (ValidateNoteLink); Run hands an http or https address to the
+; default browser.
+OpenNoteLink(url) {
+    try {
+        Run(ValidateNoteLink(url))
+        RecordActivity("note", "Opened a link from a note: " SubStr(url, 1, 120))
+    } catch as err {
+        WriteLog("Note link not opened: " err.Message)
+        NotifyFrontend(err.Message)
+    }
+}
+
 GetNotes(external := false) {
     global ASCS_NotesFile
     global ASCS_NotesRecovered
@@ -70,7 +83,7 @@ ReloadNotesIfChangedExternally() {
     stamp := GetNotesFileStamp()
     if (stamp = ASCS_NotesFileTime)
         return
-    WriteLog("notes.json changed outside ASCS; reloading notes.")
+    WriteLog("notes.json changed outside Maestro; reloading notes.")
     GetNotes(true)
 }
 

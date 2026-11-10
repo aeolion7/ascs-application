@@ -105,6 +105,13 @@
     equal("icon traversal rejected", G.imageToken("i", "/Images/../../x.png"), "");
     equal("icon with query rejected", G.imageToken("i", "/Images/1.png?x=1"), "");
     equal("badge with suffix rejected", G.imageToken("b", "123_lock"), "");
+    equal("user picture token", G.imageToken("u", "/UserPic/Some_Player1.png"), "u:Some_Player1");
+    equal("user picture traversal rejected", G.imageToken("u", "/UserPic/../../x.png"), "");
+    equal("user picture from elsewhere rejected", G.imageToken("u", "https://evil.example/UserPic/x.png"), "");
+    equal("a badge isn't a picture", G.imageToken("u", "/Images/1.png"), "");
+    equal("the summary's picture", G.parseRetroAchievements(JSON.stringify({ User: "Any", UserPic: "/UserPic/Any.png" }), "[]").userPicture, "u:Any");
+    equal("no picture field: built from the name", G.parseRetroAchievements(JSON.stringify({ User: "Any" }), "[]").userPicture, "u:Any");
+    equal("a name that can't be a path gets none", G.parseRetroAchievements(JSON.stringify({ User: "a/../b" }), "[]").userPicture, "");
     const withImages = G.parseRetroAchievements(JSON.stringify({ RecentAchievements: { "1": { "5": { Title: "A", BadgeName: "250336", DateAwarded: "2026-11-01 10:00:00" } } } }),
         JSON.stringify([{ Title: "Zelda", ImageIcon: "/Images/066043.png", NumAchieved: 1, NumPossibleAchievements: 2 }]));
     equal("RA achievement badge token", withImages.achievements[0].badge, "b:250336");
@@ -188,6 +195,15 @@
     equal("next up: the next progression or win", next.achievement.title, "Boss");
     equal("next up: missable still locked", next.missableLeft, 1);
     equal("next up: none when all are unlocked", G.nextUp({ achievements: [{ earned: "2026-01-01 10:00" }] }), null);
+    const highlights = G.raHighlights({ achievements: [
+        { title: "Old", earned: "2026-01-01 10:00:00", earnedHardcore: "", rarity: 4 },
+        { title: "New", earned: "2026-01-01 10:00:00", earnedHardcore: "2026-03-01 10:00:00", rarity: 40 },
+        { title: "Unrated", earned: "2026-02-01 10:00:00", earnedHardcore: "", rarity: null },
+        { title: "Locked", earned: "", earnedHardcore: "", rarity: 1 }
+    ] });
+    equal("highlights: the latest unlock", highlights.latest.title, "New");
+    equal("highlights: the rarest unlock, skipping locked and unrated", highlights.rarest.title, "Old");
+    equal("highlights: none earned", G.raHighlights({ achievements: [{ title: "Locked", earned: "", earnedHardcore: "", rarity: 1 }] }).latest, null);
     const unlocks = G.parseRaUnlocks(JSON.stringify([
         { Date: "2026-11-01 10:00:00", HardcoreMode: 1, Title: "Older", BadgeName: "1", Points: 5, GameTitle: "A", GameID: 7, Type: "missable" },
         { Date: "2026-11-03 09:00:00", HardcoreMode: 0, Title: "Newer", BadgeName: "2", Points: 10, GameTitle: "B", GameID: 8 },

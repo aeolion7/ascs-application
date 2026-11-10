@@ -9,7 +9,7 @@ QuickCapture() {
     global ASCS_PageReady
 
     if !ASCS_PageReady {
-        ShowNotice("ASCS is still starting; try again in a moment.")
+        ShowNotice("Maestro is still tuning up; try again in a moment.")
         return
     }
 

@@ -11,10 +11,15 @@
 const Cal = globalThis.ASCSCalendar;
 const CAL_PREFS = "ascs.calendar";
 const CAL_COLORS = ["#8B6FF5", "#E3C072", "#C2577A", "#4FD18B", "#5AA9E6", "#F08A4B", "#D16BD8", "#A4A9BB"];
+// Any color as #RRGGBB (2.0.0), as AHK accepts for a calendar (ValidateCalendarColor).
+const isCalColor = color => typeof color === "string" && /^#[0-9A-Fa-f]{6}$/.test(color);
 const COUNTDOWN_COLOR = "#E3C072";
 const HOLIDAY_COLOR = "#5AA9E6";
 const CAL_DEFAULTS = [["personal", "Personal", "#8B6FF5"], ["gaming", "Gaming", "#E3C072"], ["work", "Work", "#C2577A"]];
-const HOUR_HEIGHT = 48;
+// Day and Week fit all 24 hours in the page, down to this much for an hour;
+// renderHours sets the height from the room there is.
+const MIN_HOUR_HEIGHT = 36;
+let hourHeight = 60;
 
 const calState = {
     server: { state: "starting", message: "" },
@@ -31,8 +36,8 @@ function loadCalPrefs() {
             hidden: new Set(Array.isArray(saved.hidden) ? saved.hidden.filter(id => typeof id === "string") : []),
             mode: ["day", "month", "week", "agenda"].includes(saved.mode) ? saved.mode : "month",
             seeded: saved.seeded === true,
-            countdownColor: CAL_COLORS.includes(saved.countdownColor) ? saved.countdownColor : COUNTDOWN_COLOR,
-            holidayColor: CAL_COLORS.includes(saved.holidayColor) ? saved.holidayColor : HOLIDAY_COLOR
+            countdownColor: isCalColor(saved.countdownColor) ? saved.countdownColor.toUpperCase() : COUNTDOWN_COLOR,
+            holidayColor: isCalColor(saved.holidayColor) ? saved.holidayColor.toUpperCase() : HOLIDAY_COLOR
         };
     } catch {
         return { hidden: new Set(), mode: "month", seeded: false, countdownColor: COUNTDOWN_COLOR, holidayColor: HOLIDAY_COLOR };
@@ -66,12 +71,12 @@ function fromInputs(date, time) {
 function calRequest(op, calendar = "", uid = "", etag = "", body = "") {
     return new Promise((resolve, reject) => {
         const id = calState.nextRequest++;
-        const timer = setTimeout(() => { calState.requests.delete(id); reject(new Error("ASCS didn't answer.")); }, 25000);
+        const timer = setTimeout(() => { calState.requests.delete(id); reject(new Error("Maestro didn't answer.")); }, 25000);
         calState.requests.set(id, { resolve, reject, timer });
         if (!send("CalDav", `${id}|${op}|${calendar}|${uid}|${etag}${body ? `\n${body}` : ""}`)) {
             clearTimeout(timer);
             calState.requests.delete(id);
-            reject(new Error("ASCS isn't connected."));
+            reject(new Error("Maestro isn't connected."));
         }
     });
 }
@@ -162,8 +167,8 @@ async function listCalendars() {
 
 function calendarOf(id) { return calState.calendars.find(c => c.id === id); }
 
-// The almanac's countdowns, shown read-only as all-day days. They stay in
-// Preferences › Countdowns (nothing is written to the calendar server), so
+// The almanac's countdowns, shown read-only as all-day days. They're edited in
+// their own dialog (nothing is written to the calendar server), so
 // editing one there changes the Calendar at once. The id can't clash with a
 // real calendar's (those start with a letter or digit).
 // Their color is chosen like a calendar's, and kept with the view prefs.
@@ -221,8 +226,8 @@ function visibleOccurrences(from, to, includeHidden = false) {
 function openOccurrence(occ) {
     if (occ.holiday) return;                 // read-only; nothing to edit
     if (occ.countdown) {
-        navigate("settings");
-        selectSettingsTab("prefCountdowns");
+        navigate("calendar");
+        openCountdownEditor();
         return;
     }
     openEventEditor({ occurrence: occ });
@@ -254,13 +259,19 @@ function renderCalendar() {
     const message = !running
         ? (calState.server.state === "starting" ? "Starting the calendar server…" : calState.server.message || "The calendar server isn't running.")
         : calState.error;
-    status.hidden = !message;
-    status.textContent = message;
-    status.dataset.state = running && !calState.error ? "" : calState.server.state === "starting" ? "starting" : "problem";
+    // In the toolbar, so it doesn't move the page when it comes and goes.
+    const starting = calState.server.state === "starting";
+    const loading = starting || (running && !calState.loaded && !calState.error);
+    status.hidden = !message && !loading;
+    status.textContent = message || (loading ? "Loading" : "");
+    status.title = message || "";
+    status.classList.toggle("loading-note", loading);
+    status.dataset.state = running && !calState.error ? "" : starting ? "starting" : "problem";
     $("calNewEvent").disabled = !running || !calState.calendars.length;
     $("calNewCalendar").disabled = !running;
     document.querySelectorAll("[data-cal-mode]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.calMode === calState.mode)));
     renderCalendarList();
+    renderCountdownList();
     renderHomeToday();
     const main = $("calMain");
     main.dataset.mode = calState.mode;
@@ -272,6 +283,12 @@ function renderCalendar() {
 
 function renderCalendarList() {
     const list = $("calCalendars");
+    if (!calState.loaded && ["starting", "running"].includes(calState.server.state)) {
+        const waiting = element("li");
+        waiting.append(loadingNote());
+        list.replaceChildren(waiting);
+        return;
+    }
     list.replaceChildren(...calState.calendars.map(calendar => {
         const item = element("li", "cal-calendar");
         const label = element("label");
@@ -293,8 +310,44 @@ function renderCalendarList() {
         return item;
     }));
     if (!calState.calendars.length && calState.loaded) list.append(element("li", "settings-note", "No calendars yet."));
-    list.append(overlayListItem(COUNTDOWN_CALENDAR, "Your countdowns from Preferences, read-only here", "Recolor countdowns, or manage them in Preferences"),
+    list.append(overlayListItem(COUNTDOWN_CALENDAR, "Your countdowns, shown on their days", "Recolor countdowns, or edit them"),
         overlayListItem(HOLIDAY_CALENDAR, "US federal holidays and common observances, worked out on this PC", "Recolor US Holidays"));
+}
+
+// What's coming, nearest first, the holidays included unless they're turned off.
+function renderCountdownList() {
+    const list = $("calCountdowns");
+    const settings = almanacState.settings;
+    $("calEditCountdowns").disabled = !settings;
+    if (!settings) {
+        const waiting = element("li");
+        waiting.append(loadingNote());
+        list.replaceChildren(waiting);
+        return;
+    }
+    const now = new Date();
+    const items = Almanac.countdownItems(holidayCountdowns() ? Almanac.withHolidays(settings.countdowns, now) : settings.countdowns, now);
+    list.replaceChildren(...items.map(item => {
+        const row = element("li", "cal-countdown");
+        row.append(element("span", "", item.name),
+            element("strong", "", item.days === 0 ? "Today" : item.days === 1 ? "Tomorrow" : `${item.days} days`));
+        return row;
+    }));
+    if (!items.length) list.append(element("li", "settings-note", "No countdowns yet."));
+}
+
+// Whatever wasn't saved goes back, so it can't be saved later with the almanac.
+function restoreCountdownRows() {
+    $("countdownRows").replaceChildren(...(almanacState.settings?.countdowns || []).map(countdownRow));
+    updateCountdownsEmpty();
+}
+
+function openCountdownEditor() {
+    if (!almanacState.settings) return;
+    restoreCountdownRows();
+    $("countdownStatus").textContent = "";
+    $("calCountdownDialog").hidden = false;
+    requestAnimationFrame(() => ($("countdownRows").querySelector("input") || $("addCountdownButton")).focus());
 }
 
 // Countdowns and US Holidays: read-only calendars that can be hidden and
@@ -330,7 +383,7 @@ function chip(occ, { showTime = true } = {}) {
     if (showTime && !occ.allDay) node.append(element("small", "", timeText(occ.start)));
     node.append(element("span", "", title));
     node.title = `${title}${occ.allDay ? " (all day)" : ` · ${timeText(occ.start)}–${timeText(occ.end)}`}${occ.event.location ? ` · ${occ.event.location}` : ""} · ${occ.calendar.name}`;
-    if (occ.countdown) node.title = `${title} · countdown${occ.countdown.length === 5 ? ", every year" : ""} · click to edit in Preferences`;
+    if (occ.countdown) node.title = `${title} · countdown${occ.countdown.length === 5 ? ", every year" : ""} · click to edit`;
     node.addEventListener("click", event => { event.stopPropagation(); openOccurrence(occ); });
     return node;
 }
@@ -346,6 +399,15 @@ function countdownMark() {
     svg.append(path);
     mark.append(svg);
     return mark;
+}
+
+// The six weeks share the page's height: a day holds its number, then lines.
+function monthLines() {
+    const height = $("calMain").clientHeight;
+    if (!height) return 3;
+    const scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--text-scale")) || 1;
+    const week = (height - 44 * scale) / 6;
+    return Math.max(3, Math.min(8, Math.floor((week - 46 * scale) / (30 * scale))));
 }
 
 function renderMonth(main) {
@@ -367,17 +429,20 @@ function renderMonth(main) {
     // Where each week row and day is, for dragging between days (1.9.0).
     calState.monthRows = [];
     calState.monthDays = new Map();
-    // At most two lanes of bars and three lines per day in all (bars, events,
-    // then "+N more"), so every week row keeps the same height and the month
-    // fits the window whatever the data.
-    const MAX_LANES = 2, ROWS = 3;
+    // At most two lanes of bars, and as many lines per day in all (bars, events,
+    // then "+N more") as the window has room for, so every week row keeps the
+    // same height and the month fits the window whatever the data.
+    const MAX_LANES = 2, ROWS = monthLines();
+    calState.monthLines = ROWS;
     for (let w = 0; w < 6; w++) {
         const rowStart = addDays(gridStart, 7 * w);
         const row = element("div", "cal-week-row");
         calState.monthRows.push({ row, start: rowStart });
         const bars = Cal.layoutSpans(spanning, rowStart, 7);
         const lanes = Math.min(MAX_LANES, bars.reduce((n, b) => Math.max(n, b.lane + 1), 0));
-        row.style.setProperty("--lanes", String(lanes));
+        // Set here because repeat(0, ...) isn't valid CSS, and a week without bars
+        // would lose its whole template. 34-2.0.0-calendar.css explains the sizes.
+        row.style.gridTemplateRows = `calc(38px * var(--text-scale)) ${lanes ? `repeat(${lanes}, calc(30px * var(--text-scale))) ` : ""}minmax(0, 1fr)`;
         for (let d = 0; d < 7; d++) {
             const day = addDays(rowStart, d), next = addDays(day, 1);
             const cell = element("div", `cal-day${new Date(day).getMonth() !== cursor.getMonth() ? " is-other" : ""}${day === today ? " is-today" : ""}`);
@@ -469,7 +534,7 @@ function enableEventDrag(block, occ, columns) {
         const rect = home.column.getBoundingClientRect();
         calDrag = {
             kind: "move", block, occ, columns, pointerId: event.pointerId, x: event.clientX, y: event.clientY, started: false,
-            grab: (event.clientY - rect.top) / HOUR_HEIGHT * 60 - (occ.start - home.day) / 60000,
+            grab: (event.clientY - rect.top) / hourHeight * 60 - (occ.start - home.day) / 60000,
             duration: (occ.end - occ.start) / 60000, target: null, ghost: null
         };
     });
@@ -558,16 +623,16 @@ function moveDrag(event) {
     }
     const hit = dragColumnAt(drag, event.clientX);
     const rect = hit.column.getBoundingClientRect();
-    const minutes = Cal.snapStart((event.clientY - rect.top) / HOUR_HEIGHT * 60, drag.grab, drag.duration, DRAG_STEP);
+    const minutes = Cal.snapStart((event.clientY - rect.top) / hourHeight * 60, drag.grab, drag.duration, DRAG_STEP);
     const at = new Date(hit.day);
     const start = new Date(at.getFullYear(), at.getMonth(), at.getDate(), 0, minutes).getTime();
     const end = start + (drag.occ.end - drag.occ.start);
     drag.target = { start, end };
     const ghost = drag.ghost;
     if (ghost.parentElement !== hit.column) hit.column.append(ghost);
-    ghost.style.top = `${minutes / 60 * HOUR_HEIGHT}px`;
-    ghost.style.height = `${Math.max(20, drag.duration / 60 * HOUR_HEIGHT - 2)}px`;
-    ghost.classList.toggle("is-short", drag.duration / 60 * HOUR_HEIGHT < 38);
+    ghost.style.top = `${minutes / 60 * hourHeight}px`;
+    ghost.style.height = `${Math.max(26, drag.duration / 60 * hourHeight - 2)}px`;
+    ghost.classList.toggle("is-short", drag.duration / 60 * hourHeight < 50);
     const sameDayAsBefore = startOfDay(start) === startOfDay(drag.occ.start);
     ghost.firstChild.textContent = `${sameDayAsBefore ? "" : `${fmt(start, { weekday: "short" })} `}${timeText(start)} – ${timeText(end)}`;
 }
@@ -577,7 +642,7 @@ function moveDrag(event) {
 function moveResizeDrag(event, drag) {
     const { column, day } = drag.home;
     const rect = column.getBoundingClientRect();
-    const pointer = (event.clientY - rect.top) / HOUR_HEIGHT * 60;
+    const pointer = (event.clientY - rect.top) / hourHeight * 60;
     const startMinutes = minutesInto(drag.occ.start, day), endMinutes = minutesInto(drag.occ.end, day);
     const from = drag.edge === "start" ? Cal.resizeEdge(pointer, endMinutes, "start", DRAG_STEP) : startMinutes;
     const to = drag.edge === "end" ? Cal.resizeEdge(pointer, startMinutes, "end", DRAG_STEP) : endMinutes;
@@ -586,10 +651,10 @@ function moveResizeDrag(event, drag) {
     drag.target = { start, end };
     const ghost = drag.ghost;
     if (ghost.parentElement !== column) column.append(ghost);
-    const height = (to - from) / 60 * HOUR_HEIGHT;
-    ghost.style.top = `${from / 60 * HOUR_HEIGHT}px`;
-    ghost.style.height = `${Math.max(20, height - 2)}px`;
-    ghost.classList.toggle("is-short", height < 38);
+    const height = (to - from) / 60 * hourHeight;
+    ghost.style.top = `${from / 60 * hourHeight}px`;
+    ghost.style.height = `${Math.max(26, height - 2)}px`;
+    ghost.classList.toggle("is-short", height < 50);
     ghost.firstChild.textContent = `${timeText(start)} – ${timeText(end)}`;
 }
 
@@ -681,7 +746,7 @@ document.addEventListener("keydown", event => {
 function askScope(occ, verb, action) {
     return new Promise(resolve => {
         const dialog = $("calMoveDialog");
-        $("calMoveHeading").textContent = `${verb} a repeating event`;
+        $("calMoveHeading").textContent = `${verb} a Repeating Event`;
         $("calMoveText").textContent = `“${occ.event.summary || "(No title)"}” repeats. ${action}:`;
         const finish = scope => {
             dialog.hidden = true;
@@ -736,7 +801,7 @@ function renderHours(main, start, count) {
     const head = element("div", "cal-week-head");
     head.append(element("span", "cal-gutter"));
     const allDay = element("div", "cal-week-allday");
-    allDay.append(element("span", "cal-gutter", "all day"));
+    allDay.append(element("span", "cal-gutter", "All day"));
     const body = element("div", "cal-week-body");
     const columns = [];                          // {column, day}, for dragging between days
     const hours = element("div", "cal-hours");
@@ -758,18 +823,18 @@ function renderHours(main, start, count) {
         allCell.addEventListener("click", () => openEventEditor({ date: day, allDay: true }));
         allDay.append(allCell);
         const column = element("div", `cal-column${day === today ? " is-today" : ""}`);
-        column.style.height = `${24 * HOUR_HEIGHT}px`;
+        column.style.height = `${24 * hourHeight}px`;
         columns.push({ column, day });
         const timed = occs.filter(o => !Cal.spansDays(o) && o.start < next && o.end > day)
             .map(o => ({ ...o, start: Math.max(o.start, day), end: Math.min(Math.max(o.end, o.start + 15 * 60000), next), originalStart: o.start, source: o }));
         Cal.layoutDay(timed).forEach(o => {
             const block = chip({ ...o, start: o.originalStart });
             block.classList.add("cal-block");
-            const top = (o.start - day) / 3600000 * HOUR_HEIGHT;
-            const height = Math.max(20, (o.end - o.start) / 3600000 * HOUR_HEIGHT - 2);
+            const top = (o.start - day) / 3600000 * hourHeight;
+            const height = Math.max(26, (o.end - o.start) / 3600000 * hourHeight - 2);
             block.style.top = `${top}px`;
             block.style.height = `${height}px`;
-            if (height < 38) block.classList.add("is-short");   // time and title on one line
+            if (height < 50) block.classList.add("is-short");   // time and title on one line
             block.style.left = `calc(${(o.lane / o.lanes) * 100}% + 2px)`;
             block.style.width = `calc(${100 / o.lanes}% - 4px)`;
             if (o.source.resource?.editable) {
@@ -787,12 +852,12 @@ function renderHours(main, start, count) {
         });
         if (day === today) {
             const now = element("i", "cal-now");
-            now.style.top = `${(Date.now() - day) / 3600000 * HOUR_HEIGHT}px`;
+            now.style.top = `${(Date.now() - day) / 3600000 * hourHeight}px`;
             column.append(now);
         }
         column.addEventListener("click", event => {
             if (event.target !== column) return;
-            const minutes = Math.floor((event.offsetY / HOUR_HEIGHT) * 2) * 30;
+            const minutes = Math.floor((event.offsetY / hourHeight) * 2) * 30;
             openEventEditor({ date: day, minutes });
         });
         body.append(column);
@@ -809,9 +874,16 @@ function renderHours(main, start, count) {
     const scroller = element("div", "cal-week-scroll");
     scroller.append(body);
     wrap.append(head, allDay, scroller);
+    wrap.style.setProperty("--hour-height", `${hourHeight}px`);
     const previous = main.querySelector(".cal-week-scroll")?.scrollTop;
     main.replaceChildren(wrap);
-    fitCalendarWeek();
+    // The room is only known once it's on the page. Drawn again at most once:
+    // the hours' height doesn't change the room they have.
+    if (scroller.clientHeight && Math.abs(hoursFit(scroller) - hourHeight) >= .25) {
+        hourHeight = hoursFit(scroller);
+        renderHours(main, start, count);
+        return;
+    }
     // Open at 7:00 (or an hour before now when today is shown) when the hours
     // first appear; after that the hours stay where they were scrolled to,
     // whether the same days are redrawn or ‹ › steps to other days (1.9.0:
@@ -819,24 +891,28 @@ function renderHours(main, start, count) {
     if (previous === undefined || calState.scrollToNow) {
         calState.scrollToNow = false;              // Today: back to the current time
         const hour = start <= Date.now() && Date.now() < end ? Math.max(0, new Date().getHours() - 1) : 7;
-        scroller.scrollTop = hour * HOUR_HEIGHT;
+        scroller.scrollTop = hour * hourHeight;
     } else {
         scroller.scrollTop = previous;
     }
 }
 
-// The week's hours scroll inside the page's remaining height, so the page itself doesn't.
-function fitCalendarWeek() {
+// A taller or shorter window changes how many lines fit in a day, and how tall
+// an hour is.
+window.addEventListener("resize", () => {
+    if (!$("calendar").classList.contains("active") || calDrag) return;
     const scroller = document.querySelector(".cal-week-scroll");
-    if (!scroller || !$("calendar").classList.contains("active")) return;
-    scroller.style.height = `${Math.max(320, Math.floor(innerHeight - scroller.getBoundingClientRect().top - 24))}px`;
+    if (calState.mode === "month" ? monthLines() !== calState.monthLines : scroller && Math.abs(hoursFit(scroller) - hourHeight) >= .25) renderCalendar();
+});
+
+function hoursFit(scroller) {
+    return Math.max(MIN_HOUR_HEIGHT, Math.floor(scroller.clientHeight / 24 * 4) / 4);
 }
-window.addEventListener("resize", () => { if (calState.mode === "week" || calState.mode === "day") fitCalendarWeek(); });
 
 function renderAgenda(main) {
     const start = startOfDay(calState.cursor);
     const end = addDays(start, 60);
-    $("calTitle").textContent = `${fmt(start, { month: "long", day: "numeric", year: "numeric" })} onward`;
+    $("calTitle").textContent = `${fmt(start, { month: "long", day: "numeric", year: "numeric" })} Onward`;
     const occs = visibleOccurrences(start, end);
     const list = element("div", "cal-agenda");
     for (let day = start; day < end; day = addDays(day, 1)) {
@@ -858,7 +934,7 @@ function renderAgenda(main) {
         });
         list.append(group);
     }
-    if (!list.children.length) list.append(element("p", "settings-note", calState.loaded ? "Nothing in the next 60 days." : "Loading…"));
+    if (!list.children.length) list.append(calState.loaded ? element("p", "settings-note", "Nothing in the next 60 days.") : loadingNote());
     main.replaceChildren(list);
 }
 
@@ -1086,7 +1162,7 @@ function buildWeekdayChips(selected) {
 function openEventEditor({ occurrence = null, date = null, minutes = null, allDay = false } = {}) {
     if (calState.server.state !== "running" || !calState.calendars.length) return;
     if (occurrence && !occurrence.resource.editable) {
-        showNotice("This event was made elsewhere with a file name ASCS can't safely change, so it's read-only here.");
+        showNotice("This event was made elsewhere with a file name Maestro can't safely change, so it's read-only here.");
         return;
     }
     const master = occurrence?.resource.parsed.master;
@@ -1103,7 +1179,7 @@ function openEventEditor({ occurrence = null, date = null, minutes = null, allDa
     }
     const isAllDay = fields ? fields.allDay : allDay;
     calState.editing = { occurrence, master };
-    $("calEventHeading").textContent = occurrence ? "Edit event" : "New event";
+    $("calEventHeading").textContent = occurrence ? "Edit Event" : "New Event";
     $("calSummary").value = fields?.summary || "";
     const select = $("calCalendar");
     select.replaceChildren(...calState.calendars.map(c => { const o = element("option", "", c.name); o.value = c.id; return o; }));
@@ -1141,6 +1217,8 @@ function openEventEditor({ occurrence = null, date = null, minutes = null, allDa
 }
 
 function closeCalDialogs() {
+    if (!$("calCountdownDialog").hidden) restoreCountdownRows();
+    $("calCountdownDialog").hidden = true;
     $("calEventDialog").hidden = true;
     $("calCalendarDialog").hidden = true;
     $("calImportDialog").hidden = true;
@@ -1531,30 +1609,51 @@ function openCalendarEditor(calendar = null) {
     if (calState.server.state !== "running") return;
     calState.editingCalendar = calendar;
     // Countdowns and US Holidays are read-only: here only their color is
-    // chosen (countdowns themselves live in Preferences).
+    // chosen (countdowns themselves have their own dialog).
     const overlay = calendar === COUNTDOWN_CALENDAR || calendar === HOLIDAY_CALENDAR;
-    $("calCalendarHeading").textContent = overlay ? calendar.name : calendar ? "Edit calendar" : "New calendar";
+    $("calCalendarHeading").textContent = overlay ? calendar.name : calendar ? "Edit Calendar" : "New Calendar";
     $("calCalendarName").value = calendar?.name || "";
     $("calCalendarName").hidden = overlay;
     $("calCalendarNameLabel").hidden = overlay;
     $("calManageCountdowns").hidden = calendar !== COUNTDOWN_CALENDAR;
-    const chosen = calendar?.color || CAL_COLORS.find(c => !calState.calendars.some(k => k.color === c)) || CAL_COLORS[0];
+    const chosen = (calendar?.color || CAL_COLORS.find(c => !calState.calendars.some(k => k.color === c)) || CAL_COLORS[0]).toUpperCase();
     $("calSwatches").replaceChildren(...CAL_COLORS.map(color => {
         const swatch = element("button", "cal-swatch");
         swatch.type = "button";
+        swatch.dataset.color = color;
         swatch.style.setProperty("--cal-color", color);
         swatch.setAttribute("role", "radio");
-        swatch.setAttribute("aria-checked", String(color === chosen));
         swatch.setAttribute("aria-label", color);
-        swatch.addEventListener("click", () => document.querySelectorAll(".cal-swatch").forEach(s => s.setAttribute("aria-checked", String(s === swatch))));
+        swatch.addEventListener("click", () => chooseCalColor(color));
         return swatch;
     }));
+    chooseCalColor(isCalColor(chosen) ? chosen : CAL_COLORS[0]);
     $("calDeleteCalendar").hidden = !calendar || overlay;
     $("calExportCalendar").hidden = !calendar || overlay;
     $("calCalendarError").hidden = true;
     $("calCalendarDialog").hidden = false;
     requestAnimationFrame(() => (overlay ? document.querySelector(".cal-swatch[aria-checked='true']") : $("calCalendarName"))?.focus());
 }
+
+// One of the swatches, or any other color, from the picker or typed as hex.
+let calChosenColor = CAL_COLORS[0];
+function chooseCalColor(color, from = "") {
+    calChosenColor = color.toUpperCase();
+    document.querySelectorAll(".cal-swatch").forEach(swatch => swatch.setAttribute("aria-checked", String(swatch.dataset.color === calChosenColor)));
+    const custom = !CAL_COLORS.includes(calChosenColor);
+    $("calCustomColor").classList.toggle("is-chosen", custom);
+    if (from !== "picker") $("calCustomColor").value = calChosenColor.toLowerCase();
+    if (from !== "hex") $("calCustomHex").value = custom ? calChosenColor : "";
+    $("calCustomHex").removeAttribute("aria-invalid");
+}
+
+$("calCustomColor").addEventListener("input", () => chooseCalColor($("calCustomColor").value, "picker"));
+$("calCustomHex").addEventListener("input", () => {
+    const typed = $("calCustomHex").value.trim();
+    const hex = typed.startsWith("#") ? typed : `#${typed}`;
+    if (isCalColor(hex)) chooseCalColor(hex, "hex");
+    else $("calCustomHex").setAttribute("aria-invalid", String(typed.length > 0));
+});
 
 function calendarIdFor(name) {
     const base = name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "calendar";
@@ -1566,9 +1665,9 @@ function calendarIdFor(name) {
 async function saveCalendar(event) {
     event.preventDefault();
     const name = $("calCalendarName").value.trim();
-    const color = document.querySelector(".cal-swatch[aria-checked='true']")?.style.getPropertyValue("--cal-color") || CAL_COLORS[0];
+    const color = isCalColor(calChosenColor) ? calChosenColor : CAL_COLORS[0];
     if (calState.editingCalendar === COUNTDOWN_CALENDAR || calState.editingCalendar === HOLIDAY_CALENDAR) {
-        if (CAL_COLORS.includes(color)) calPrefs[calState.editingCalendar === HOLIDAY_CALENDAR ? "holidayColor" : "countdownColor"] = color;
+        if (isCalColor(color)) calPrefs[calState.editingCalendar === HOLIDAY_CALENDAR ? "holidayColor" : "countdownColor"] = color;
         saveCalPrefs();
         closeCalDialogs();
         renderCalendar();
@@ -1628,7 +1727,9 @@ $("calCalendarForm").addEventListener("submit", saveCalendar);
 $("calDeleteEvent").addEventListener("click", deleteEvent);
 $("calRejoinSeries").addEventListener("click", rejoinSeries);
 $("calDeleteCalendar").addEventListener("click", deleteCalendar);
-$("calManageCountdowns").addEventListener("click", () => { closeCalDialogs(); openOccurrence({ countdown: true }); });
+$("calManageCountdowns").addEventListener("click", () => { closeCalDialogs(); openCountdownEditor(); });
+$("calEditCountdowns").addEventListener("click", openCountdownEditor);
+$("calCountdownForm").addEventListener("submit", event => { event.preventDefault(); saveAlmanacPreferences(); });
 ["calRepeat", "calRepeatEnd", "calAllDay", "calStartDate"].forEach(id => $(id).addEventListener("change", updateRepeatControls));
 // Moving the start (date or time) moves the end with it, keeping the
 // duration, so a start set past the old end can't leave the event inverted.
@@ -1637,38 +1738,49 @@ $("calManageCountdowns").addEventListener("click", () => { closeCalDialogs(); op
 ["calEndDate", "calEndTime", "calAllDay"].forEach(id => $(id).addEventListener("change", () => { rememberEventDuration(); renderSlotPreview(); }));
 ["calStartDate", "calStartTime", "calEndDate", "calEndTime"].forEach(id => $(id).addEventListener("input", renderSlotPreview));
 document.querySelectorAll("[data-cal-close]").forEach(b => b.addEventListener("click", closeCalDialogs));
-["calEventDialog", "calCalendarDialog", "calImportDialog"].forEach(id => {
+["calEventDialog", "calCalendarDialog", "calCountdownDialog", "calImportDialog"].forEach(id => {
     $(id).addEventListener("click", event => { if (event.target === $(id)) closeCalDialogs(); });
     $(id).addEventListener("keydown", event => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeCalDialogs(); } });
 });
 // The page's own clock: keep "today" and the now line current while open.
 setInterval(() => { if ($("calendar").classList.contains("active") && $("calEventDialog").hidden) renderCalendar(); }, 5 * 60000);
-// ---- the Command Center's Today card (1.8.0)
-// Today's remaining events (up to three, then "+N more"), or the next one
-// coming up. Hidden until the calendar has loaded.
+// ---- the Command Center's Next up (2.0.0)
+// What's left today and coming in the next two weeks, up to five.
+function nextUpWhen(occ, now, today) {
+    const tomorrow = addDays(today, 1);
+    // From a week out, a weekday alone could mean either week.
+    const day = sameDay(occ.start, today) ? "Today"
+        : sameDay(occ.start, tomorrow) ? "Tomorrow"
+        : occ.start >= addDays(today, 7) ? fmt(occ.start, { month: "short", day: "numeric" })
+        : fmt(occ.start, { weekday: "short" });
+    if (occ.allDay) return day;
+    if (occ.start <= now) return `Now, until ${timeText(occ.end)}`;
+    return `${day}, ${timeText(occ.start)}`;
+}
+
 function renderHomeToday() {
-    const card = $("homeToday");
-    if (!card) return;
+    const list = $("todayList");
+    if (!list) return;
     if (calState.server.state !== "running" || !calState.loaded || !calState.calendars.length) {
-        card.hidden = true;
+        list.replaceChildren(element("li", "module-empty", "Waiting for the calendar."));
         return;
     }
-    card.hidden = false;
     const now = Date.now();
-    const today = startOfDay(now), tomorrow = addDays(today, 1);
-    $("todayDate").textContent = fmt(now, { weekday: "long", month: "long", day: "numeric" });
-    const left = visibleOccurrences(today, tomorrow).filter(o => o.end > now);
-    const list = $("todayList");
-    const row = (occ, prefix = "") => {
+    const today = startOfDay(now);
+    const coming = visibleOccurrences(today, addDays(today, 15)).filter(o => o.end > now).slice(0, 5);
+    if (!coming.length) {
+        list.replaceChildren(element("li", "module-empty", "Nothing in the next two weeks."));
+        return;
+    }
+    list.replaceChildren(...coming.map(occ => {
         const item = element("li");
-        const button = element("button", "today-row");
+        const button = element("button", "module-row");
         button.type = "button";
         button.style.setProperty("--cal-color", occ.calendar.color);
-        const when = occ.allDay ? "All day" : occ.start <= now ? `Now – ${timeText(occ.end)}` : timeText(occ.start);
-        button.append(element("span", "today-time", prefix ? `${prefix} ${when === "All day" ? "" : when}`.trim() : when), element("i"),
-            element("strong", "", occ.event.summary || "(No title)"),
-            element("small", "", [occ.event.location, occ.calendar.name].filter(Boolean).join(" · ")));
         button.title = "Open in Calendar";
+        button.append(element("i", "module-row-dot"),
+            element("span", "module-row-name", occ.event.summary || "(No title)"),
+            element("small", "module-row-when", nextUpWhen(occ, now, today)));
         button.addEventListener("click", () => {
             if (occ.countdown) return openOccurrence(occ);
             calState.cursor = startOfDay(occ.start);
@@ -1678,26 +1790,7 @@ function renderHomeToday() {
         });
         item.append(button);
         return item;
-    };
-    if (left.length) {
-        list.replaceChildren(...left.slice(0, 3).map(o => row(o)));
-        if (left.length > 3) {
-            const more = element("li", "today-more");
-            const button = element("button", "link-button", `+${left.length - 3} more today`);
-            button.type = "button";
-            button.addEventListener("click", () => { openDay(today); navigate("calendar"); });
-            more.append(button);
-            list.append(more);
-        }
-        return;
-    }
-    const next = visibleOccurrences(tomorrow, addDays(today, 15))[0];
-    const empty = element("li", "today-empty", "Nothing else today.");
-    list.replaceChildren(empty);
-    if (next) {
-        const day = sameDay(next.start, tomorrow) ? "Tomorrow" : fmt(next.start, { weekday: "short", month: "short", day: "numeric" });
-        list.append(row(next, `Next: ${day}`));
-    }
+    }));
 }
 $("todayOpen").addEventListener("click", () => { calState.cursor = startOfDay(Date.now()); navigate("calendar"); });
 setInterval(renderHomeToday, 60000);
@@ -1762,7 +1855,7 @@ function pinAsCountdown() {
         return;
     }
     if (existing.length >= 12) {
-        showNotice("There are already 12 countdowns; remove one in Preferences › Countdowns first.");
+        showNotice("There are already 12 countdowns; remove one under Countdowns first.");
         return;
     }
     const lines = [settings.wikipedia ? "1" : "0", ...existing.map(c => `${c.date}|${c.name}`), `${date}|${name}`];

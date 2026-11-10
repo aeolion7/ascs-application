@@ -1,0 +1,1076 @@
+/* ==========================================================================
+   2.0.0: polish after the pages were built: the command palette's foot,
+   text centered in its controls, and Command Center module widths.
+   ========================================================================== */
+
+/* ---- The command palette's foot: its keys, and how to open it from anywhere ---- */
+
+.launcher-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 24px;
+  margin-top: 14px;
+}
+
+:root .launcher-foot .launcher-hint {
+  margin: 0;
+}
+
+.launcher-anywhere {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--text-soft);
+  font-size: var(--t-floor);
+}
+
+.launcher-anywhere kbd {
+  min-width: auto;
+  padding: 3px 6px;
+  font-size: var(--t-floor);
+}
+
+/* The calculator's answer, large enough to read before it's copied. */
+.launcher-option[data-kind="result"]:not([aria-disabled="true"]) .launcher-option-copy strong {
+  font-family: var(--font-display);
+  font-size: var(--t-name);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+/* ---- Command Center: a grid three squares wide and three high ----
+   Every module is one square high, and one to three wide (Arrange sets it). The
+   three rows share the window evenly, so a module's room doesn't depend on what
+   it holds or when that arrives. Modules keep the order you set: one too wide
+   for what's left of a row starts the next. */
+:root .face {
+  grid-auto-flow: row;
+}
+
+:root .face > [data-module] {
+  container-type: inline-size;
+}
+
+:root .face > [data-module][data-width="1"] { grid-column: span 4; }
+:root .face > [data-module][data-width="2"] { grid-column: span 8; }
+:root .face > [data-module][data-width="3"] { grid-column: span 12; }
+
+@media (min-width: 1701px) {
+  :root .face {
+    grid-auto-rows: calc((var(--page-fit) - 2 * var(--space-between)) / 3);
+    min-height: 0;
+  }
+
+  :root .face > [data-module] {
+    min-height: 0;
+    overflow: hidden;
+  }
+}
+
+@media (max-width: 1700px) {
+  :root .face > [data-module][data-width="1"] { grid-column: span 6; }
+  :root .face > [data-module]:is([data-width="2"], [data-width="3"]) { grid-column: span 12; }
+}
+
+@media (max-width: 1100px) {
+  :root .face > [data-module][data-width] { grid-column: span 12; }
+}
+
+/* Quick Actions and Arrangements: one module with two parts, stacked in one
+   square and side by side in two or three. */
+:root .face-stack {
+  gap: 0;
+  padding: var(--space-module);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-module);
+  background: var(--surface-module);
+}
+
+:root .face-stack > .module {
+  flex: 1 1 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+:root .face-stack > .module + .module {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+:root .face-stack:is([data-width="2"], [data-width="3"]) {
+  flex-direction: row;
+}
+
+:root .face-stack:is([data-width="2"], [data-width="3"]) > .module + .module {
+  margin: 0 0 0 var(--space-module);
+  padding: 0 0 0 var(--space-module);
+  border-top: 0;
+  border-left: 1px solid var(--line);
+}
+
+:root .face-stack #quickActions .action-card,
+:root .face-stack .home-buttons .secondary {
+  min-height: var(--height-control-small);
+}
+
+/* Narrow: three buttons to a row. Wider: as many as fit. */
+@container (min-width: 900px) {
+  :root .face-stack #quickActions,
+  :root .face-stack .home-buttons {
+    grid-template-columns: repeat(auto-fill, minmax(calc(190px * var(--text-scale)), 1fr));
+  }
+}
+
+/* Now Playing in one square: a smaller cover, so the words have room. */
+@container (max-width: 800px) {
+  :root .home-now .game-cover-home {
+    flex-basis: 120px;
+    width: 120px;
+    height: 180px;
+  }
+
+  :root .home-now .home-now-actions :is(.primary, .secondary) {
+    min-height: var(--height-control-small);
+    padding-inline: 14px;
+  }
+
+  :root .home-now .home-now-name {
+    font-size: var(--t-name);
+  }
+
+  :root .home-now .home-now-stats {
+    gap: 32px;
+  }
+}
+
+/* Continue Playing: three games to a square's width, up to nine. */
+:root .home-continue {
+  grid-template-columns: repeat(var(--tiles, 6), minmax(0, 1fr));
+}
+
+:root [data-module="continue"][data-width="1"] .home-continue { --tiles: 3; }
+:root [data-module="continue"][data-width="3"] .home-continue { --tiles: 9; }
+:root [data-module="continue"][data-width="1"] .home-continue > :nth-child(n + 4),
+:root [data-module="continue"][data-width="2"] .home-continue > :nth-child(n + 7) {
+  display: none;
+}
+
+@media (max-width: 1700px) {
+  :root [data-module="continue"][data-width="1"] .home-continue { --tiles: 3; }
+  :root [data-module="continue"]:is([data-width="2"], [data-width="3"]) .home-continue { --tiles: 6; }
+  :root [data-module="continue"] .home-continue > :nth-child(n + 7) { display: none; }
+}
+
+/* System in two or three squares: the readings in two columns. */
+@container (min-width: 1000px) {
+  :root .sys-rows {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: space-evenly;
+    gap: 16px 48px;
+  }
+
+  /* The drives join the same columns, so every reading lines up and the space
+     between them is even. */
+  :root .face > [data-module] .sys-drives {
+    display: contents;
+  }
+}
+
+/* Long lists scroll inside their square rather than spill out of it: drives
+   past the third, say. */
+:root .face > [data-module] .sys-rows {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+/* The scrollbar's room (8 px, then the 14 px bar) comes out of the module's
+   padding, so the drive bars are as long as Processor's and Memory's. */
+:root .face > [data-module] .sys-drives {
+  flex: 1 1 0;
+  min-height: 0;
+  margin-right: -22px;
+  padding-right: 8px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+:root .face > [data-module="next"] .module-list,
+:root .face > [data-module="note"] .module-list {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Now Playing's lines keep their size in a square; the space between them
+   gives way first. */
+:root .face .home-now-copy {
+  gap: 6px;
+}
+
+:root .face .home-now-copy > * {
+  flex-shrink: 0;
+}
+
+:root .face .home-now .home-now-stats {
+  margin-top: 2px;
+}
+
+:root .face .home-now .home-now-actions {
+  padding-top: 4px;
+}
+
+/* ---- Arrange, on the page (2.0.0) ----
+   Each module becomes a tile: a bar with its grip, name and Hide; its width; and
+   a handle on its right edge. The one being dragged lifts and follows the
+   pointer, and the others slide aside. The dock floats over the page's foot. */
+:root .face {
+  position: relative;
+}
+
+:root .face > [data-module] {
+  position: relative;
+}
+
+:root .face > [data-module] > .arrange-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border: 2px dashed var(--brand-tint);
+  border-radius: var(--radius-module);
+  background: color-mix(in srgb, var(--surface-page) 66%, transparent);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+:root .face > [data-module] > .arrange-overlay[hidden] {
+  display: none;
+}
+
+.arrange-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+
+:root .arrange-grip {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--height-control-small);
+  height: var(--height-control-small);
+  padding: 0;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-key);
+  background: var(--surface-field);
+  color: var(--text-soft);
+  cursor: grab;
+}
+
+:root .arrange-grip svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+:root .arrange-grip:hover {
+  color: var(--text-strong);
+}
+
+.arrange-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-module);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:root .arrange-hide {
+  flex: none;
+  min-height: var(--height-control-small);
+  padding: 0 14px;
+  border: 1px solid var(--brand-burgundy);
+  border-radius: var(--radius-key);
+  background: transparent;
+  color: var(--brand-burgundy-text);
+  font-family: var(--font-display);
+  font-size: var(--t-button);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+:root .arrange-hide:hover {
+  background: color-mix(in srgb, var(--brand-burgundy) 22%, transparent);
+}
+
+.arrange-resize {
+  position: absolute;
+  top: 50%;
+  right: -7px;
+  width: 14px;
+  height: 72px;
+  border: 2px solid var(--surface-page);
+  border-radius: 7px;
+  background: var(--brand-tint);
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+:root .face > [data-module].is-dragging {
+  z-index: 30;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, .6);
+  transition: none;
+}
+
+:root .is-dragging .arrange-overlay {
+  border-style: solid;
+  cursor: grabbing;
+}
+
+:root .is-resizing .arrange-overlay {
+  border-style: solid;
+}
+
+body.is-arrange-dragging,
+body.is-arrange-dragging * {
+  cursor: grabbing !important;
+}
+
+body.is-arrange-resizing,
+body.is-arrange-resizing * {
+  cursor: ew-resize !important;
+}
+
+/* The dock takes the sidebar's place while arranging (2.0.0 manual pass): one
+   fixed shape, whatever is hidden, and it covers no module. The hidden list
+   scrolls inside it. */
+/* A raised card laid on the sidebar, inset so the dimmed sidebar shows round
+   it, with rounded corners top and bottom: it reads as sitting on top. It
+   slides in from the right, from the page it arranges. */
+.arrange-dock {
+  position: fixed;
+  top: 14px;
+  bottom: 14px;
+  left: 12px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: calc(var(--width-sidebar) - 24px);
+  padding: 22px 22px 24px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-module);
+  background: var(--surface-module);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .6), 0 0 0 1px rgba(0, 0, 0, .35);
+  animation: arrange-dock-in .22s cubic-bezier(.2, .7, .2, 1);
+}
+
+/* What the dock lies on: still there, dimmed and out of reach (inert). */
+body.is-arranging-home .sidebar > * {
+  opacity: .28;
+  transition: opacity .2s ease;
+}
+
+@keyframes arrange-dock-in {
+  from { opacity: 0; transform: translateX(56px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arrange-dock {
+    animation: none;
+  }
+}
+
+.arrange-dock[hidden] {
+  display: none;
+}
+
+.arrange-dock h2 {
+  margin: 0;
+}
+
+.arrange-fit {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+.arrange-tray-label {
+  margin: 12px 0 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+/* Room on every side for a focused button's ring. */
+.arrange-tray {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  margin: 0 -8px;
+  padding: 6px 8px;
+  overflow-y: auto;
+}
+
+.arrange-tray[hidden] {
+  display: none;
+}
+
+.arrange-tray-empty {
+  flex: 1 1 0;
+  margin: 0;
+  color: var(--text-soft);
+  font-size: var(--t-body);
+}
+
+.arrange-tray-empty[hidden] {
+  display: none;
+}
+
+.arrange-dock-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+:root .arrange-tray .arrange-add {
+  flex: none;
+  justify-content: flex-start;
+  width: 100%;
+  text-align: left;
+}
+
+:root .arrange-add {
+  min-height: var(--height-control-small);
+  padding: 0 14px;
+  border: 1px dashed var(--brand-tint);
+  border-radius: var(--radius-key);
+  background: transparent;
+  color: var(--brand-tint-text);
+  font-family: var(--font-display);
+  font-size: var(--t-button);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+:root .arrange-add:hover {
+  border-style: solid;
+  background: color-mix(in srgb, var(--brand-indigo-control) 30%, transparent);
+}
+
+.arrange-width {
+  display: inline-flex;
+  flex: none;
+  align-self: flex-start;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+
+:root .arrange-width button {
+  min-width: 44px;
+  min-height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-key);
+  background: transparent;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+:root .arrange-width button:hover {
+  background: var(--surface-hover);
+}
+
+:root .arrange-width button[aria-pressed="true"] {
+  background: var(--brand-indigo-control);
+  color: #ffffff;
+}
+
+:root #arrangeButton[aria-pressed="true"] {
+  border-color: var(--brand-tint);
+  background: var(--brand-indigo-control);
+  color: #ffffff;
+}
+
+/* ---- The almanac: each reading and its note read as one phrase ----
+   "2 days until Veterans Day", "New moon · 0% lit". */
+:root .home-almanac .alm-cell:not(.alm-countdown-cell, .alm-story) small::before {
+  content: "·";
+  margin-right: 8px;
+  color: var(--text-soft);
+}
+
+/* ---- The calendar editor: room for its buttons, and any color ---- */
+:root .cal-dialog-small {
+  width: min(600px, calc(100vw - 48px));
+}
+
+:root .cal-dialog-actions {
+  flex-wrap: wrap;
+  row-gap: 10px;
+}
+
+:root .cal-swatches {
+  gap: 12px;
+}
+
+:root .cal-swatch {
+  width: 36px;
+  height: 36px;
+}
+
+.cal-custom-color {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cal-custom-color label {
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+:root #calCustomColor {
+  width: 52px;
+  height: 36px;
+  padding: 2px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-key);
+  background: var(--surface-field);
+  cursor: pointer;
+}
+
+:root #calCustomColor.is-chosen {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+:root #calCustomHex {
+  width: calc(130px * var(--text-scale));
+  min-height: 36px;
+  padding: 0 10px;
+  font-family: var(--font-display);
+  font-size: var(--t-body);
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+}
+
+:root #calCustomHex[aria-invalid="true"] {
+  border-color: var(--brand-burgundy-text);
+}
+
+/* ---- System › Live: how much history the graphs show ---- */
+.history-scale {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: auto;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-field);
+}
+
+.history-scale[hidden] {
+  display: none;
+}
+
+:root .history-scale button {
+  min-height: var(--height-control-small);
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--radius-key);
+  background: transparent;
+  color: var(--text-soft);
+  font-family: var(--font-display);
+  font-size: var(--t-tab);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+:root .history-scale button:hover {
+  background: var(--surface-raised);
+  color: var(--text-strong);
+}
+
+:root .history-scale button[aria-pressed="true"] {
+  background: var(--brand-indigo-control);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.chart-tip-peak {
+  color: var(--brand-gold-text);
+}
+
+/* ---- A PS2 case shown at an angle ----
+   PCSX2's covers are the case in 3D: a "PlayStation 2" banner across the top and
+   the spine down the left. Where a tile is shorter than the case, it's centered
+   on the front art rather than on the whole picture. */
+/* A tile's cover fills it exactly, so a picture taller than the tile is cropped
+   around its center rather than cut off at the bottom. */
+:root .home-continue .game-cover-tile {
+  position: relative;
+}
+
+:root .home-continue .game-cover-tile img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+:root .game-cover.is-angled img {
+  object-position: 50% 40%;
+}
+
+/* Today's settings sit under the dialog's own heading rule, with no second one. */
+:root .today-settings .arrange-today {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* ---- The added Command Center modules (2.0.0) ---- */
+.home-weather {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.weather-now {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.weather-temp {
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-number-large);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.weather-condition {
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-module);
+}
+
+.weather-details {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+.weather-days {
+  display: grid;
+  gap: 0;
+  margin: auto 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.weather-day {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr) auto 80px;
+  align-items: baseline;
+  gap: 12px;
+  min-height: 40px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+  font-size: var(--t-body);
+}
+
+.weather-day strong {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+.weather-day span {
+  overflow: hidden;
+  color: var(--text-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weather-range {
+  font-variant-numeric: tabular-nums;
+}
+
+.weather-day small {
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+  text-align: right;
+}
+
+.home-stats,
+.home-network {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+:root .stat-heading {
+  margin: 4px 0 0;
+  color: var(--text-soft);
+  font-family: var(--font-display);
+  font-size: var(--t-sub);
+  font-weight: 500;
+}
+
+.stat-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--t-body);
+}
+
+.stat-list > :last-child {
+  border-bottom: 0;
+}
+
+.stat-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stat-name small {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+  text-overflow: ellipsis;
+}
+
+.stat-value {
+  flex: none;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+small.stat-value {
+  color: var(--text-soft);
+  font-family: var(--font-body);
+  font-size: var(--t-sub);
+  font-weight: 400;
+}
+
+.net-readings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: auto;
+}
+
+.net-reading {
+  display: grid;
+  gap: 4px;
+}
+
+.net-reading small {
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+.net-reading strong {
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-number);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.net-name {
+  margin-bottom: auto;
+}
+
+.home-audio {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.home-audio .sound-output {
+  position: relative;
+}
+
+:root #homeAudioButton {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+:root #homeMute {
+  align-self: flex-start;
+}
+
+.timer-modes {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-field);
+}
+
+:root .timer-modes button,
+:root .timer-presets button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-key);
+  background: transparent;
+  color: var(--text-soft);
+  font-family: var(--font-display);
+  font-size: var(--t-sub);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+:root .timer-modes button[aria-pressed="true"],
+:root .timer-presets button[aria-pressed="true"] {
+  background: var(--brand-indigo-control);
+  color: #ffffff;
+}
+
+.timer-display {
+  display: block;
+  margin: auto 0 0;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: calc(72px * var(--text-scale));
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.timer-display.is-done {
+  color: var(--brand-gold-text);
+}
+
+.timer-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.timer-presets[hidden] {
+  display: none;
+}
+
+:root .timer-presets button {
+  border: 1px solid var(--line-control);
+}
+
+/* ---- Room for the focus ring (2.0.0 manual pass) ----
+   A ring reaches 5 px past its control, and nothing may cut it off. Lists and
+   strips that scroll (and so clip) get 6 px of room inside, given back by a
+   negative margin so nothing moves. Segmented buttons and the canvas's windows
+   draw their ring inside instead (28-2.0.0-components.css). The smoke test
+   focuses every control on every page to keep it so. */
+:root .notes-list {
+  margin: -6px calc(-1 * var(--space-module)) -6px -6px;
+  padding: 6px 10px 6px 6px;
+}
+
+:root .cal-calendars,
+:root .cal-countdowns {
+  margin: -6px calc(-1 * var(--space-module)) -6px -6px;
+  padding: 6px 10px 6px 6px;
+}
+
+@media (min-width: 1101px) {
+  :root .ws-inspector .ws-panel {
+    margin: -6px calc(-1 * var(--space-module)) -6px -6px;
+    padding: 6px 10px 6px 6px;
+  }
+
+  :root .ws-rule-windows {
+    margin: -6px;
+    padding: 6px;
+  }
+}
+
+:root .logs-sources {
+  margin-block: -6px;
+  margin-left: -6px;
+  padding-block: 6px;
+  padding-left: 6px;
+}
+
+:root .logs-sources,
+:root .logs-levels {
+  margin-right: -6px;
+  padding-right: 6px;
+}
+
+:root .logs-levels {
+  margin-block: -6px;
+  padding-block: 6px;
+}
+
+/* The keys at the drawing's edge: their ring may reach past it. */
+:root .keymap svg {
+  overflow: visible;
+}
+
+/* ---- Saving as you go, said in the title bar (2.0.0 manual pass) ----
+   Beside the page's name on Preferences and Games › Setup: "Changes save as
+   you make them", then "Saved at 2:32 PM". The dot is burgundy, the color of
+   saved things. Not .save-status: that's Quick Notes' footer, with its own dot. */
+/* A long message ends in an ellipsis; the whole of it is in the tooltip. */
+:root .title-status {
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 50vw;
+  margin: 0;
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-module);
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+  white-space: nowrap;
+}
+
+:root .title-status::before {
+  content: "";
+  display: inline-block;
+  margin: 0 10px 2px 0;
+  vertical-align: middle;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brand-burgundy);
+}
+
+:root .title-status[hidden] {
+  display: none;
+}
+
+/* ---- Finding text in a note (2.0.0) ----
+   The filter's words, marked in the open note: gold, the current one solid. */
+:root .notes-list-toolbar {
+  align-items: center;
+  gap: 12px;
+}
+
+.notes-find-count {
+  flex: none;
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.notes-find-count[hidden] {
+  display: none;
+}
+
+::highlight(note-find) {
+  background-color: color-mix(in srgb, var(--brand-gold) 38%, transparent);
+  color: var(--text-strong);
+}
+
+::highlight(note-find-current) {
+  background-color: var(--brand-gold);
+  color: #16120a;
+}
+
+/* The editor's copy sits behind the text box, which goes clear while it's
+   there; only the marks in the copy show. */
+:root #noteText {
+  position: relative;
+}
+
+:root #noteText.is-finding {
+  background-color: transparent;
+}
+
+.note-find-mirror {
+  position: absolute;
+  overflow: hidden;
+  margin: 0;
+  border-style: solid;
+  border-color: transparent;
+  color: transparent;
+  pointer-events: none;
+}
+
+.note-find-mirror mark {
+  border-radius: 3px;
+  background-color: color-mix(in srgb, var(--brand-gold) 38%, transparent);
+  color: transparent;
+}
+
+/* The editor's text stays white, which reads poorly on solid gold, so its
+   current match is ringed instead. */
+.note-find-mirror mark.is-current {
+  box-shadow: 0 0 0 2px var(--brand-gold);
+}
+
+/* ---- Title bar buttons are not part of the window's drag area (2.0.0) ----
+   The title bar drags the window, and Windows takes a double-click there as
+   maximize or restore before the page sees it: a quick Arrange then Done
+   maximized the window. Every button in it opts out, not each one by name. */
+:root .topbar button {
+  -webkit-app-region: no-drag;
+}

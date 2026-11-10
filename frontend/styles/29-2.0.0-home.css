@@ -1,0 +1,730 @@
+/* ==========================================================================
+   2.0.0: the Command Center. Modules on a 12-column grid: each is one glance or
+   one action, with its title and "open this page" on one line at the top.
+   ========================================================================== */
+
+/* Every page uses the window's full width: older caps left empty margins. */
+:root .view,
+:root #dashboard,
+:root #commands {
+  max-width: none;
+  margin-inline: 0;
+}
+
+/* The old page was a grid of its own. */
+:root #home.view.active {
+  display: block;
+  padding-bottom: 0;
+}
+
+.face {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-auto-flow: dense;
+  grid-auto-rows: minmax(max-content, auto);
+  gap: var(--space-between);
+  /* Spare height goes to the modules, not to an empty band below them. */
+  min-height: calc(100vh - 100px - var(--space-page));
+}
+
+.module {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: var(--space-module);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-module);
+  background: var(--surface-module);
+}
+
+.module[hidden],
+.face-stack[hidden] {
+  display: none;
+}
+
+.face > [data-module] {
+  grid-column: span 4;
+}
+
+.face > [data-module="now"],
+.face > [data-module="continue"] {
+  grid-column: span 8;
+}
+
+/* Each row holds the height it reaches with every module full, so what a module
+   holds, or when it arrives, doesn't move the row below. At the default text
+   size the three add up to the page, so it still fits without scrolling. */
+@media (min-width: 1701px) {
+  .face > [data-module="now"],
+  .face > [data-module="today"] {
+    min-height: calc(418px * var(--text-scale));
+  }
+
+  .face > [data-module="next"],
+  .face > [data-module="system"],
+  .face > [data-module="stack"] {
+    min-height: calc(458px * var(--text-scale));
+  }
+
+  .face > [data-module="continue"],
+  .face > [data-module="note"] {
+    min-height: calc(316px * var(--text-scale));
+  }
+}
+
+@media (max-width: 1700px) {
+  .home-now {
+    min-height: calc(360px * var(--text-scale));
+  }
+
+  .face > [data-module] {
+    grid-column: span 6;
+  }
+
+  .face > [data-module="now"],
+  .face > [data-module="continue"] {
+    grid-column: span 12;
+  }
+}
+
+@media (max-width: 1100px) {
+  .face > [data-module] {
+    grid-column: span 12;
+  }
+}
+
+.face-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-between);
+  min-width: 0;
+}
+
+/* An even split, whatever each one holds. */
+.face-stack .module {
+  flex: 1 1 0;
+}
+
+.module-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+}
+
+:root .module-head h2 {
+  margin: 0;
+}
+
+.module-empty {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: var(--t-body);
+}
+
+.module-list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.module-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 42px;
+  padding: 4px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--text-strong);
+  font: inherit;
+  font-size: var(--t-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.module-list li:last-child .module-row {
+  border-bottom: 0;
+}
+
+.module-row:hover {
+  background: var(--surface-raised);
+}
+
+.module-row:focus-visible {
+  outline-offset: -3px !important;
+}
+
+.module-row-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--cal-color, var(--brand-tint));
+}
+
+.module-row-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.module-row-when {
+  flex: none;
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+.module-foot {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+
+/* ---- Now playing ---- */
+
+.home-now {
+  flex-direction: row;
+  gap: var(--space-module);
+}
+
+:root .home-now .game-cover-home {
+  display: grid;
+  flex: 0 0 193px;
+  place-items: center;
+  width: 193px;
+  height: 290px;
+  overflow: hidden;
+  border-radius: var(--radius-control);
+  box-shadow: none;
+}
+
+.home-now .game-cover-home img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+:root .home-now .game-cover-home b {
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-number-large);
+  font-weight: 600;
+}
+
+.home-now-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.home-now-name {
+  overflow: hidden;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-number);
+  font-weight: 600;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-now-meta {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: var(--t-body);
+}
+
+.home-now-stats {
+  display: flex;
+  gap: 56px;
+  margin-top: 6px;
+}
+
+.home-now-stats span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.home-now-stats small {
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+.home-now-stats strong {
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-number);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.home-now-stats strong.is-live {
+  color: #8ff0c2;
+}
+
+.home-now-progress {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.home-now-progress small {
+  flex: none;
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+.home-bar {
+  flex: 1 1 auto;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--surface-raised);
+}
+
+.home-bar b {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--brand-tint);
+}
+
+.home-bar.is-mastered b {
+  background: var(--brand-gold);
+}
+
+.home-now-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.home-now-end {
+  margin-left: auto;
+}
+
+/* ---- Today ---- */
+
+:root #homeAlmanac:not([hidden]) {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+:root .home-almanac[hidden] {
+  display: none;
+}
+
+:root .home-almanac .alm-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 46px;
+  padding: 2px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: none;
+}
+
+:root .home-almanac .alm-cell:not(.alm-story) > div {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+:root .home-almanac .alm-cell strong {
+  color: var(--text-strong);
+  font-family: var(--font-body);
+  font-size: var(--t-body);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+:root .home-almanac .alm-cell small {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:root .home-almanac .alm-moon,
+:root .home-almanac .alm-sun {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+}
+
+:root .home-almanac .alm-countdown-cell strong,
+:root .home-almanac .alm-countdown-cell small {
+  color: var(--brand-gold-text);
+}
+
+:root .home-almanac .alm-story {
+  flex: 1 1 auto;
+  flex-direction: row;
+  align-items: center;
+  border-bottom: 0;
+  padding-top: 8px;
+}
+
+:root .home-almanac .alm-stage {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  height: auto;
+  min-height: calc(var(--t-body) * 4.2);
+  overflow: hidden;
+}
+
+:root .home-almanac .alm-story-copy {
+  /* However long the entry, three lines and "…"; the whole of it is in the tooltip. */
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-strong);
+  font: inherit;
+  text-align: left;
+}
+
+:root .home-almanac .alm-label {
+  display: inline;
+  margin-right: 6px;
+  color: var(--text-soft);
+  font-size: var(--t-body);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+:root .home-almanac .alm-label::after {
+  content: ":";
+}
+
+:root .home-almanac .alm-story-copy p {
+  display: inline;
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--t-body);
+  line-height: 1.35;
+}
+
+:root .home-almanac .alm-controls {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+:root .home-almanac .alm-dots {
+  display: none;
+}
+
+:root .home-almanac .alm-step {
+  flex: none;
+  width: var(--height-control-small);
+  min-width: var(--height-control-small);
+  height: var(--height-control-small);
+  padding: 0;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-strong);
+  font-size: var(--t-tab);
+}
+
+:root .home-almanac .alm-step:hover {
+  border-color: var(--brand-tint-text);
+  background: var(--surface-hover);
+}
+
+/* ---- System ---- */
+
+.sys-rows,
+.sys-drives {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sys-rows {
+  flex: 1 1 auto;
+  justify-content: space-around;
+}
+
+.sys-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sys-line {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.sys-name {
+  flex: none;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-tab);
+  font-weight: 500;
+}
+
+.sys-note {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sys-value {
+  flex: none;
+  margin-left: auto;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-name);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.sys-value.is-high {
+  color: var(--brand-gold-text);
+}
+
+.sys-value.is-offline {
+  color: var(--text-soft);
+  font-size: var(--t-body);
+  font-weight: 500;
+}
+
+.sys-row .metric-track {
+  margin: 0;
+}
+
+/* ---- Button grids: quick actions and workspaces ---- */
+
+.home-buttons,
+:root #quickActions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.home-buttons .secondary {
+  width: 100%;
+  min-width: 0;
+  padding-inline: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:root #quickActions .action-card-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+:root #quickActions .action-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: var(--height-control);
+  height: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  box-shadow: none;
+  color: var(--text-strong);
+  text-align: center;
+}
+
+:root #quickActions .action-card:hover:not(:disabled) {
+  border-color: var(--brand-tint-text);
+  background: var(--surface-hover);
+  transform: none;
+}
+
+:root #quickActions .action-icon,
+:root #quickActions .action-arrow,
+:root #quickActions .action-copy small {
+  display: none;
+}
+
+:root #quickActions .action-copy {
+  display: block;
+  min-width: 0;
+}
+
+:root #quickActions .action-copy strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-button);
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Continue playing ---- */
+
+.home-continue {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 16px;
+  min-height: 0;
+}
+
+:root .home-continue .game-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  width: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  text-align: left;
+}
+
+:root .home-continue .game-cover-tile {
+  display: grid;
+  flex: 1 1 140px;
+  place-items: center;
+  width: 100%;
+  height: auto;
+  min-height: 140px;
+  aspect-ratio: auto;
+  overflow: hidden;
+  border-radius: var(--radius-control);
+}
+
+:root .home-continue .game-cover-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+:root .home-continue .game-tile strong {
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: var(--t-floor);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:root .home-continue .game-tile small {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: var(--t-floor);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:root .home-continue .game-tile-time {
+  display: none;
+}
+
+/* ---- Quick note ---- */
+
+:root #homeNoteInput {
+  flex: none;
+  width: 100%;
+  min-height: 0;
+  height: 92px;
+  padding: 12px;
+  font-family: var(--font-body);
+  font-size: var(--t-body);
+  resize: none;
+}
+
+/* ---- Arrange ---- */
+
+#todaySettingsDialog .help-dialog:focus {
+  outline: none;
+}
+
+.arrange-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+:root #arrangeButton {
+  flex: none;
+  min-height: var(--height-control-small);
+}
+
+:root #arrangeButton[hidden] {
+  display: none;
+}
+
+/* ---- The name in the sidebar: gold like the mark's edge ---- */
+
+:root body:not(.sidebar-collapsed) .brand-copy > span {
+  color: var(--text-soft);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+:root body:not(.sidebar-collapsed) .brand-copy strong {
+  background: linear-gradient(135deg, #f8e8ac 0%, #c9a24a 42%, #f3dd92 68%, #b08b36 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}

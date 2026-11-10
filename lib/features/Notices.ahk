@@ -46,7 +46,7 @@ BuildNoticeWindow() {
     ; E0x08000020: WS_EX_NOACTIVATE, and WS_EX_TRANSPARENT so clicks go through
     ; (with the layered style WinSetTransparent adds). A tool window: no taskbar
     ; button, and workspaces and the window list ignore it.
-    win := Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale +E0x08000020", "ASCS notice")
+    win := Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale +E0x08000020", "Maestro notice")
     scale := A_ScreenDPI / 96
     win.BackColor := "181B27"
     win.MarginX := Round(18 * scale), win.MarginY := Round(10 * scale)

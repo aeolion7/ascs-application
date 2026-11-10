@@ -26,6 +26,25 @@
             : text.includes(term));
     }
 
+    // Where the filter's words are in a note's text (2.0.0), for highlighting:
+    // [{ start, end }], in order, never overlapping, at most `limit`. Case is
+    // ignored. A #tag term is found with its #; group names aren't searched,
+    // as they aren't in the text.
+    function findMatches(text, query, limit = 1000) {
+        const source = String(text ?? "");
+        const terms = [...new Set(String(query ?? "").split(/\s+/).filter(term => term && term !== "#"))]
+            .sort((a, b) => b.length - a.length);       // the longest first, where two start together
+        if (!terms.length || !source) return [];
+        const escape = term => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const pattern = new RegExp(terms.map(escape).join("|"), "giu");
+        const found = [];
+        for (const match of source.matchAll(pattern)) {
+            if (found.length >= limit) break;
+            found.push({ start: match.index, end: match.index + match[0].length });
+        }
+        return found;
+    }
+
     // ------------------------------------------------------------- groups
     // One level (1.8.0): an optional `group` string on a note; none means
     // Ungrouped. Names are tidied (spaces collapsed, control characters
@@ -143,88 +162,446 @@
     }
 
     // ------------------------------------------------------------- Markdown
-    // Blocks: headings (# to ###), fenced code (```), block quotes (>),
-    // bulleted and numbered lists, horizontal rules, and paragraphs.
-    // Inline: **bold**, *italic*, `code`, [text](url) links, and #tags.
-    // Links are shown as text and never navigated (see app.js).
+    // GitHub-style Markdown (2.0.0; 1.7.0 had a few blocks and inline marks).
+    // Blocks: headings (# to ######, and text underlined with === or ---),
+    // fenced code (``` or ~~~, with a language label), block quotes (nested,
+    // holding anything), lists (bulleted, numbered from any number, nested, and
+    // task lists), tables (with alignment), horizontal rules and paragraphs. A
+    // line break in a paragraph is kept, as in most note apps.
+    // Inline: **bold** and __bold__, *italic* and _italic_, ***both***,
+    // ~~strikethrough~~, ==highlight==, `code`, [links](url), <https://…> and bare
+    // web addresses, ![images](url) (shown as their alt text, never loaded),
+    // backslash escapes, and #tags.
+    // The result is plain data; app.js builds it with elements and textContent
+    // only, so nothing in a note is ever read as HTML. Depth and size are capped.
 
-    function parseInline(text) {
-        const nodes = [];
-        const pattern = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*\s][^*]*\*)|(\[[^\]]+\]\([^)\s]+\))|((?:^|(?<=[\s(]))#[\p{L}\p{N}][\p{L}\p{N}_-]{0,31})/gu;
-        let last = 0;
-        for (const match of text.matchAll(pattern)) {
-            if (match.index > last) nodes.push({ type: "text", text: text.slice(last, match.index) });
-            const token = match[0];
-            if (match[1]) nodes.push({ type: "code", text: token.slice(1, -1) });
-            else if (match[2]) nodes.push({ type: "strong", text: token.slice(2, -2) });
-            else if (match[3]) nodes.push({ type: "em", text: token.slice(1, -1) });
-            else if (match[4]) {
-                const split = token.indexOf("](");
-                nodes.push({ type: "link", text: token.slice(1, split), url: token.slice(split + 2, -1) });
-            } else nodes.push({ type: "tag", text: token.slice(1).toLocaleLowerCase() });
-            last = match.index + token.length;
+    const MAX_DEPTH = 8;            // quotes and lists inside each other
+    const MAX_INLINE_DEPTH = 6;     // marks inside marks
+    const MAX_TABLE_COLUMNS = 20;
+    const MAX_TABLE_ROWS = 500;
+    const ESCAPABLE = "\\`*_{}[]()#+-.!|~=<>\"'";
+
+    // Inline ------------------------------------------------------------
+
+    const isSpace = ch => ch === undefined || /\s/.test(ch);
+    const isWordChar = ch => ch !== undefined && /[\p{L}\p{N}_]/u.test(ch);
+
+    // The closing delimiter for a mark opened at `from`, or -1. It must follow a
+    // non-space; `_` must also not be inside a word.
+    function findClose(text, from, delim) {
+        let at = from;
+        while ((at = text.indexOf(delim, at)) !== -1) {
+            if (at > from && !isSpace(text[at - 1]) && text[at - 1] !== "\\") {
+                const after = text[at + delim.length];
+                const single = delim.length === 1;
+                if (delim[0] === "_" && isWordChar(after)) { at++; continue; }
+                if (single && after === delim) { at += 2; continue; }   // part of a ** or __
+                // In a longer run (*** closing **), the mark takes the run's end,
+                // so the * before it can close an inner italic.
+                if (!single) while (text[at + delim.length] === delim[0]) at++;
+                return at;
+            }
+            at++;
         }
-        if (last < text.length) nodes.push({ type: "text", text: text.slice(last) });
+        return -1;
+    }
+
+    // The end of a link's (url) starting at `open` (the "("), allowing balanced
+    // parentheses inside, or -1.
+    function closeParen(text, open) {
+        let depth = 0;
+        for (let i = open; i < text.length; i++) {
+            const ch = text[i];
+            if (ch === "\\") { i++; continue; }
+            if (ch === "\n") return -1;
+            if (ch === "(") depth++;
+            else if (ch === ")" && --depth === 0) return i;
+        }
+        return -1;
+    }
+
+    // The matching "]" for a "[" at `open`, or -1.
+    function closeBracket(text, open) {
+        let depth = 0;
+        for (let i = open; i < text.length; i++) {
+            const ch = text[i];
+            if (ch === "\\") { i++; continue; }
+            if (ch === "`") {
+                const run = /^`+/.exec(text.slice(i))[0];
+                const end = text.indexOf(run, i + run.length);
+                if (end !== -1) { i = end + run.length - 1; continue; }
+            }
+            if (ch === "[") depth++;
+            else if (ch === "]" && --depth === 0) return i;
+        }
+        return -1;
+    }
+
+    // "url" or "url "title"" from inside a link's parentheses.
+    function linkTarget(inside) {
+        const match = /^\s*<?([^\s<>]*)>?(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*$/.exec(inside);
+        return match ? match[1] : null;
+    }
+
+    const EMPHASIS = [
+        ["***", "strongEm"], ["___", "strongEm"], ["**", "strong"], ["__", "strong"],
+        ["~~", "del"], ["==", "mark"], ["*", "em"], ["_", "em"]
+    ];
+
+    function parseInline(text, depth = 0, inLink = false) {
+        const nodes = [];
+        let plain = "";
+        const flush = () => {
+            if (plain) nodes.push({ type: "text", text: plain });
+            plain = "";
+        };
+        const push = node => { flush(); nodes.push(node); };
+        text = String(text ?? "");
+
+        for (let i = 0; i < text.length;) {
+            const ch = text[i];
+            const rest = text.slice(i);
+
+            if (ch === "\\" && i + 1 < text.length && ESCAPABLE.includes(text[i + 1])) {
+                plain += text[i + 1];
+                i += 2;
+                continue;
+            }
+            if (ch === "\n") {
+                push({ type: "br" });
+                i++;
+                continue;
+            }
+            if (ch === "`") {
+                const run = /^`+/.exec(rest)[0];
+                const end = text.indexOf(run, i + run.length);
+                if (end !== -1 && text[end + run.length] !== "`") {
+                    let code = text.slice(i + run.length, end).replace(/\n/g, " ");
+                    if (/^ .*[^ ].* $/.test(code)) code = code.slice(1, -1);
+                    push({ type: "code", text: code });
+                    i = end + run.length;
+                    continue;
+                }
+                plain += run;
+                i += run.length;
+                continue;
+            }
+            if (ch === "<") {
+                const match = /^<(https?:\/\/[^\s<>]+)>/i.exec(rest);
+                if (match && !inLink) {
+                    push({ type: "link", url: match[1], children: [{ type: "text", text: match[1] }] });
+                    i += match[0].length;
+                    continue;
+                }
+            }
+            if ((ch === "!" && text[i + 1] === "[") || ch === "[") {
+                const image = ch === "!";
+                const open = i + (image ? 1 : 0);
+                const close = closeBracket(text, open);
+                if (close !== -1 && text[close + 1] === "(") {
+                    const end = closeParen(text, close + 1);
+                    const url = end !== -1 ? linkTarget(text.slice(close + 2, end)) : null;
+                    if (url !== null && (image || !inLink)) {
+                        const label = text.slice(open + 1, close);
+                        if (image) push({ type: "image", alt: label.replace(/\\(.)/g, "$1"), url });
+                        else push({ type: "link", url, children: depth < MAX_INLINE_DEPTH ? parseInline(label, depth + 1, true) : [{ type: "text", text: label }] });
+                        i = end + 1;
+                        continue;
+                    }
+                }
+            }
+            if ((ch === "h" || ch === "H") && !inLink && (i === 0 || /[\s(]/.test(text[i - 1]))) {
+                const match = /^https?:\/\/[^\s<]+/i.exec(rest);
+                if (match) {
+                    let url = match[0];
+                    // Trailing punctuation belongs to the sentence, and a ")" only if unmatched.
+                    while (/[.,;:!?'"*_~]$/.test(url) || (url.endsWith(")") && (url.match(/\(/g) || []).length < (url.match(/\)/g) || []).length)) url = url.slice(0, -1);
+                    push({ type: "link", url, children: [{ type: "text", text: url }] });
+                    i += url.length;
+                    continue;
+                }
+            }
+            if (ch === "#" && (i === 0 || /[\s(]/.test(text[i - 1]))) {
+                const match = /^#([\p{L}\p{N}][\p{L}\p{N}_-]{0,31})/u.exec(rest);
+                if (match) {
+                    push({ type: "tag", text: match[1].toLocaleLowerCase() });
+                    i += match[0].length;
+                    continue;
+                }
+            }
+            if ("*_~=".includes(ch) && depth < MAX_INLINE_DEPTH) {
+                const mark = EMPHASIS.find(([delim]) => rest.startsWith(delim));
+                if (mark) {
+                    const [delim, type] = mark;
+                    const opens = !isSpace(text[i + delim.length]) && !(delim[0] === "_" && isWordChar(text[i - 1]));
+                    const close = opens ? findClose(text, i + delim.length, delim) : -1;
+                    if (close !== -1) {
+                        const inner = parseInline(text.slice(i + delim.length, close), depth + 1, inLink);
+                        push(type === "strongEm"
+                            ? { type: "strong", children: [{ type: "em", children: inner }] }
+                            : { type, children: inner });
+                        i = close + delim.length;
+                        continue;
+                    }
+                    // An unmatched run is text: all of it, so ** doesn't become a lone *.
+                    const run = /^([*_~=])\1*/.exec(rest)[0];
+                    plain += run;
+                    i += run.length;
+                    continue;
+                }
+            }
+            plain += ch;
+            i++;
+        }
+        flush();
         return nodes;
     }
 
-    function parseMarkdown(source) {
-        const lines = String(source ?? "").replace(/\r\n?/g, "\n").split("\n");
+    // Blocks ------------------------------------------------------------
+
+    const FENCE = /^ {0,3}(`{3,}|~{3,})\s*([^`\s]*)[^`]*$/;
+    const HEADING = /^ {0,3}(#{1,6})(?:\s+(.*?))?(?:\s+#+)?\s*$/;
+    const RULE = /^ {0,3}([-*_])(?:\s*\1){2,}\s*$/;
+    const QUOTE = /^ {0,3}>\s?(.*)$/;
+    const ITEM = /^(\s*)([-*+]|\d{1,9}[.)])(\s+|$)(.*)$/;
+    const TABLE_DIVIDER = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
+    const SETEXT = /^ {0,3}(=+|-+)\s*$/;
+
+    const indentOf = text => {
+        let width = 0;
+        for (const ch of text) {
+            if (ch === " ") width++;
+            else if (ch === "\t") width += 4 - (width % 4);
+            else break;
+        }
+        return width;
+    };
+
+    // Removes `width` columns of leading indentation, tabs counted to 4.
+    function dedent(text, width) {
+        let removed = 0, i = 0;
+        while (i < text.length && removed < width) {
+            if (text[i] === " ") removed++;
+            else if (text[i] === "\t") removed += 4 - (removed % 4);
+            else break;
+            i++;
+        }
+        return text.slice(i);
+    }
+
+    // Splits a table row on its pipes (not escaped, not in code); the outer pipes
+    // are optional.
+    function tableCells(text) {
+        let line = text.trim();
+        if (line.startsWith("|")) line = line.slice(1);
+        if (line.endsWith("|") && !line.endsWith("\\|")) line = line.slice(0, -1);
+        const cells = [];
+        let cell = "", inCode = false;
+        for (let i = 0; i < line.length; i++) {
+            const ch = line[i];
+            if (ch === "\\" && line[i + 1] === "|") { cell += "|"; i++; continue; }
+            if (ch === "`") inCode = !inCode;
+            if (ch === "|" && !inCode) { cells.push(cell.trim()); cell = ""; continue; }
+            cell += ch;
+        }
+        cells.push(cell.trim());
+        return cells;
+    }
+
+    const startsBlock = text => FENCE.test(text) || HEADING.test(text) || RULE.test(text) || QUOTE.test(text) || ITEM.test(text);
+
+    // `lines` are { text, n }: n is the line's number in the note, so a task
+    // box can change the right line.
+    function parseBlocks(lines, depth) {
         const blocks = [];
-        let paragraph = [];
-        let list = null;
+        let i = 0;
+        while (i < lines.length) {
+            const { text } = lines[i];
+            if (!text.trim()) { i++; continue; }
+            let match;
 
-        const flushParagraph = () => {
-            if (paragraph.length) blocks.push({ type: "p", children: parseInline(paragraph.join(" ")) });
-            paragraph = [];
-        };
-        const flushList = () => {
-            if (list) blocks.push(list);
-            list = null;
-        };
-
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            if (/^\s*```/.test(line)) {
-                flushParagraph(); flushList();
+            if ((match = FENCE.exec(text))) {
+                const fence = match[1];
+                const lang = /^[\w+#.-]{1,24}$/.test(match[2]) ? match[2] : "";
+                const indent = indentOf(text);
                 const code = [];
-                for (i++; i < lines.length && !/^\s*```/.test(lines[i]); i++) code.push(lines[i]);
-                blocks.push({ type: "pre", text: code.join("\n") });
+                for (i++; i < lines.length; i++) {
+                    const close = new RegExp(`^ {0,3}${fence[0] === "`" ? "`" : "~"}{${fence.length},}\\s*$`);
+                    if (close.test(lines[i].text)) { i++; break; }
+                    code.push(dedent(lines[i].text, indent));
+                }
+                blocks.push({ type: "pre", text: code.join("\n"), lang });
                 continue;
             }
-            let match;
-            if ((match = /^(#{1,3})\s+(.+)$/.exec(line))) {
-                flushParagraph(); flushList();
-                blocks.push({ type: `h${match[1].length}`, children: parseInline(match[2].trim()) });
-            } else if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) {
-                flushParagraph(); flushList();
-                blocks.push({ type: "hr" });
-            } else if ((match = /^\s*>\s?(.*)$/.exec(line))) {
-                flushParagraph(); flushList();
-                blocks.push({ type: "blockquote", children: parseInline(match[1]) });
-            } else if ((match = /^\s*(?:[-*+]|(\d+)[.)])\s+(.+)$/.exec(line))) {
-                flushParagraph();
-                const ordered = match[1] !== undefined;
-                if (!list || list.ordered !== ordered) {
-                    flushList();
-                    list = { type: ordered ? "ol" : "ul", ordered, items: [] };
-                }
-                list.items.push(parseInline(match[2]));
-            } else if (!line.trim()) {
-                flushParagraph(); flushList();
-            } else {
-                flushList();
-                paragraph.push(line.trim());
+            if ((match = HEADING.exec(text))) {
+                blocks.push({ type: `h${match[1].length}`, children: parseInline((match[2] || "").trim()) });
+                i++;
+                continue;
             }
+            if (RULE.test(text)) {
+                blocks.push({ type: "hr" });
+                i++;
+                continue;
+            }
+            if (QUOTE.test(text)) {
+                const inner = [];
+                while (i < lines.length && (match = QUOTE.exec(lines[i].text))) {
+                    inner.push({ text: match[1], n: lines[i].n });
+                    i++;
+                }
+                blocks.push(depth < MAX_DEPTH
+                    ? { type: "blockquote", blocks: parseBlocks(inner, depth + 1) }
+                    : { type: "blockquote", blocks: [{ type: "p", children: parseInline(inner.map(line => line.text).join("\n")) }] });
+                continue;
+            }
+            if ((match = ITEM.exec(text)) && !RULE.test(text)) {
+                const parsed = parseList(lines, i, depth);
+                blocks.push(parsed.list);
+                i = parsed.next;
+                continue;
+            }
+            if (text.includes("|") && i + 1 < lines.length && TABLE_DIVIDER.test(lines[i + 1].text) && lines[i + 1].text.includes("-")) {
+                const head = tableCells(text).slice(0, MAX_TABLE_COLUMNS);
+                const divider = tableCells(lines[i + 1].text);
+                if (divider.length === tableCells(text).length) {
+                    const align = head.map((_, column) => {
+                        const spec = divider[column] || "";
+                        return spec.startsWith(":") && spec.endsWith(":") ? "center" : spec.endsWith(":") ? "right" : spec.startsWith(":") ? "left" : "";
+                    });
+                    const rows = [];
+                    for (i += 2; i < lines.length && lines[i].text.trim() && lines[i].text.includes("|") && rows.length < MAX_TABLE_ROWS; i++) {
+                        const cells = tableCells(lines[i].text);
+                        rows.push(head.map((_, column) => parseInline(cells[column] ?? "")));
+                    }
+                    blocks.push({ type: "table", align, head: head.map(cell => parseInline(cell)), rows });
+                    continue;
+                }
+            }
+
+            // A paragraph: lines until a blank one or the start of another block.
+            // Text underlined with === or --- is a heading instead.
+            const paragraph = [text.trim()];
+            for (i++; i < lines.length; i++) {
+                const next = lines[i].text;
+                if (!next.trim()) break;
+                if ((match = SETEXT.exec(next))) {
+                    blocks.push({ type: match[1][0] === "=" ? "h1" : "h2", children: parseInline(paragraph.join("\n")) });
+                    paragraph.length = 0;
+                    i++;
+                    break;
+                }
+                // A numbered line interrupts a paragraph only from 1, so "2026. A year" stays text.
+                const item = ITEM.exec(next);
+                if (startsBlock(next) && !(item && /\d/.test(item[2]) && parseInt(item[2], 10) !== 1)) break;
+                paragraph.push(next.trim());
+            }
+            if (paragraph.length) blocks.push({ type: "p", children: parseInline(paragraph.join("\n")) });
         }
-        flushParagraph();
-        flushList();
         return blocks;
     }
+
+    // One list from line `start`: its items, each with what's indented under it.
+    function parseList(lines, start, depth) {
+        const first = ITEM.exec(lines[start].text);
+        const ordered = /\d/.test(first[2]);
+        const indent = indentOf(first[1]);
+        const list = { type: ordered ? "ol" : "ul", ordered, start: ordered ? Math.min(parseInt(first[2], 10), 999999999) : 1, items: [] };
+        let i = start;
+        while (i < lines.length) {
+            const match = ITEM.exec(lines[i].text);
+            if (!match || indentOf(match[1]) > indent + 3 || indentOf(match[1]) < indent || /\d/.test(match[2]) !== ordered || RULE.test(lines[i].text)) break;
+            const content = indentOf(match[1]) + match[2].length + (match[3] ? Math.min(match[3].length, 4) : 1);
+            let body = match[4];
+            const lineNumber = lines[i].n;
+            let task = null;
+            const box = /^\[([ xX])\](?:\s+|$)/.exec(body);
+            if (box) {
+                task = box[1] !== " ";
+                body = body.slice(box[0].length);
+            }
+            const textLines = [body];
+            const children = [];
+            let blank = false;
+            for (i++; i < lines.length; i++) {
+                const next = lines[i].text;
+                if (!next.trim()) { blank = true; continue; }
+                const nextIndent = indentOf(next);
+                if (nextIndent >= content || (nextIndent > indent && ITEM.test(next))) {
+                    children.push({ text: dedent(next, Math.min(content, nextIndent)), n: lines[i].n });
+                    if (blank) children.splice(children.length - 1, 0, { text: "", n: lines[i].n });
+                    blank = false;
+                    continue;
+                }
+                if (blank || startsBlock(next)) break;
+                if (!children.length) textLines.push(next.trim());       // a wrapped line
+                else children.push({ text: next.trim(), n: lines[i].n });
+            }
+            list.items.push({
+                children: parseInline(textLines.join("\n")),
+                task, line: lineNumber,
+                blocks: children.length ? (depth < MAX_DEPTH ? parseBlocks(children, depth + 1) : [{ type: "p", children: parseInline(children.map(line => line.text).join("\n")) }]) : []
+            });
+            // The loop above goes on only while the next line is an item of this list.
+        }
+        return { list, next: i };
+    }
+
+    function parseMarkdown(source) {
+        const lines = String(source ?? "").replace(/\r\n?/g, "\n").split("\n").map((text, n) => ({ text, n }));
+        return parseBlocks(lines, 0);
+    }
+
+    // Ticks or clears the task box on line `lineNumber` (counted from 0), or
+    // returns null if that line no longer holds one.
+    function toggleTask(source, lineNumber) {
+        const lines = String(source ?? "").split("\n");
+        const line = lines[lineNumber];
+        if (line === undefined) return null;
+        const match = /^(\s*(?:[-*+]|\d{1,9}[.)])\s+\[)([ xX])(\].*)$/s.exec(line.replace(/\r$/, ""));
+        if (!match) return null;
+        lines[lineNumber] = match[1] + (match[2] === " " ? "x" : " ") + match[3] + (line.endsWith("\r") ? "\r" : "");
+        return lines.join("\n");
+    }
+
+    // The Markdown reference (2.0.0): each row is written as typed, and drawn by
+    // the same parser, so the chart can't promise more than the viewer does.
+    const MARKDOWN_REFERENCE = [
+        ["Headings", "# Heading 1\n## Heading 2\n### Heading 3"],
+        ["Smaller Headings", "#### Heading 4\n##### Heading 5\n###### Heading 6"],
+        ["Underlined Headings", "Heading 1\n===\nHeading 2\n---"],
+        ["Bold", "**bold** or __bold__"],
+        ["Italic", "*italic* or _italic_"],
+        ["Bold and Italic", "***both at once***"],
+        ["Strikethrough", "~~no longer true~~"],
+        ["Highlight", "==worth noticing=="],
+        ["Inline Code", "Run `maestro check` first"],
+        ["Code Block", "```js\nconst total = 1 + 2;\n```"],
+        ["Bulleted List", "- First\n- Second\n  - Indented under it"],
+        ["Numbered List", "1. First\n2. Second\n3. Third"],
+        ["Starting Number", "4. Picks up at four\n5. And goes on"],
+        ["Task List", "- [x] Done\n- [ ] Still to do"],
+        ["Quote", "> Quoted text\n> > A quote inside it"],
+        ["Table", "| Item | Count |\n| :--- | ---: |\n| Discs | 4 |\n| Pads | 2 |"],
+        ["Link", "[Maestro on GitHub](https://github.com)"],
+        ["Web Address", "https://retroachievements.org"],
+        ["Image", "![A screenshot](shot.png)"],
+        ["Line Break", "One line\nThe next line"],
+        ["Paragraph", "A paragraph.\n\nAnother, after a blank line."],
+        ["Horizontal Rule", "Above\n\n---\n\nBelow"],
+        ["Tag", "#work #ideas"],
+        ["Escape a Mark", "\\*not italic\\*"]
+    ];
 
     function wordCount(text) {
         const words = String(text ?? "").trim().match(/\S+/g);
         return words ? words.length : 0;
+    }
+
+    // Quick Notes (2.0.0): how a note opens. Read shows it formatted; a note with
+    // nothing in it yet, and code, which isn't Markdown, open in Edit.
+    function openingMode(note) {
+        if (!note || note.type === "code" || !String(note.content ?? "").trim()) return "edit";
+        return "read";
     }
 
     // ------------------------------------------------------------ placeholders
@@ -310,7 +687,7 @@
     }
 
     global.ASCSNotes = {
-        extractTags, matchesNoteQuery, tagCounts, parseMarkdown, parseInline, wordCount,
+        extractTags, matchesNoteQuery, findMatches, tagCounts, parseMarkdown, parseInline, toggleTask, MARKDOWN_REFERENCE, wordCount, openingMode,
         MARK_CLIPBOARD, MARK_CURSOR, PLACEHOLDER_MENU, askLabel, placeholderAsks,
         normalizeGroup, groupKey, groupNames, groupNotes, renameGroup, deleteGroup, groupedLabel, hasPlaceholders, fillPlaceholders, fillsPlaceholders,
         GAME_NOTE_GROUP, isGameKey, cleanGameLinks, findGameNote, gameNoteTitle, appendStamp

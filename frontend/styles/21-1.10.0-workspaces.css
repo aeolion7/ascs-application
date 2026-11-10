@@ -1,12 +1,8 @@
 /* ==========================================================================
-   1.10.0: the Workspaces view. A strip chooses a workspace or the launch rules;
-   a canvas draws one desktop at its monitor's real shape, and a panel beside
-   it edits the selected window.
+   1.10.0: the Workspaces view. A canvas draws one desktop at its monitor's real
+   shape, and a panel beside it edits the selected window. The page's layout,
+   type and controls are in 35-2.0.0-workspaces.css.
    ========================================================================== */
-
-#workspaces .page-heading {
-  margin-bottom: 18px;
-}
 
 .ws-tabs[hidden],
 .ws-panel[hidden],
@@ -14,87 +10,8 @@
   display: none;
 }
 
-#workspacesEmpty {
-  font-size: 14px;
-}
-
-.ws-strip {
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
-  margin-bottom: 20px;
-  padding-bottom: 6px;
-  overflow-x: auto;
-  scrollbar-width: thin;
-}
-
-.ws-strip-gap {
-  flex: 1 1 auto;
-}
-
-.ws-chip {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 12px;
-  max-width: 300px;
-  padding: 9px 16px 9px 11px;
-  border: 1px solid rgba(167, 174, 202, .14);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, .025);
-  color: #c9ccd8;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color var(--dur-fast, .12s) ease, background var(--dur-fast, .12s) ease;
-}
-
-.ws-chip:hover {
-  border-color: rgba(139, 111, 245, .35);
-}
-
-.ws-chip[aria-pressed="true"] {
-  border-color: rgba(139, 111, 245, .55);
-  background: rgba(74, 32, 170, .32);
-  color: #f0f1f8;
-}
-
-.ws-chip-copy {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-
-.ws-chip-copy strong {
-  overflow: hidden;
-  font-size: 14px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ws-chip-copy small {
-  color: #a4a9bb;
-  font-size: 12.5px;
-  white-space: nowrap;
-}
-
-.ws-chip[aria-pressed="true"] small {
-  color: var(--gold-text);
-}
-
-.ws-chip-add {
-  padding-left: 16px;
-  border-style: dashed;
-  color: #d6d0ef;
-  font-size: 14px;
-  font-weight: 600;
-}
-
 .ws-save {
   gap: 8px;
-  padding: 7px 8px;
-  cursor: default;
 }
 
 .ws-save input {
@@ -106,7 +23,7 @@
   background: var(--panel-input);
   color: var(--text);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--t-floor);
 }
 
 .ws-thumb {
@@ -144,14 +61,14 @@
 
 .ws-head h2 {
   margin: 0;
-  font-size: 26px;
+  font-size: calc(29px * var(--text-scale));
   line-height: 1.15;
 }
 
 .ws-head p {
   margin: 4px 0 0;
   color: #b8bccb;
-  font-size: 14px;
+  font-size: var(--t-floor);
 }
 
 .ws-name {
@@ -164,7 +81,7 @@
   background: var(--panel-input);
   color: var(--text);
   font: inherit;
-  font-size: 20px;
+  font-size: calc(23px * var(--text-scale));
   font-weight: 600;
 }
 
@@ -179,7 +96,6 @@
   gap: 6px;
   margin-bottom: 12px;
   overflow-x: auto;
-  scrollbar-width: thin;
 }
 
 .ws-tab {
@@ -190,7 +106,7 @@
   background: transparent;
   color: #c9ccd8;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--t-floor);
   font-weight: 600;
   cursor: pointer;
 }
@@ -202,7 +118,7 @@
 .ws-tab em {
   margin-left: 7px;
   color: #a4a9bb;
-  font-size: 13px;
+  font-size: var(--t-floor);
   font-style: normal;
   font-weight: 500;
 }
@@ -221,13 +137,6 @@
   color: var(--gold-text);
 }
 
-.ws-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  align-items: start;
-  gap: 18px;
-}
-
 /* The canvas. */
 .ws-screens {
   display: flex;
@@ -243,7 +152,7 @@
 
 .ws-monitor-label {
   color: #a4a9bb;
-  font-size: 13px;
+  font-size: var(--t-floor);
   font-weight: 600;
 }
 
@@ -286,14 +195,14 @@
 }
 
 .ws-window strong {
-  font-size: 15px;
+  font-size: var(--t-floor);
   font-weight: 650;
 }
 
 .ws-window > span {
   margin-top: 2px;
   color: #c8c1e6;
-  font-size: 13px;
+  font-size: var(--t-floor);
 }
 
 .ws-window.is-selected {
@@ -377,7 +286,7 @@
   background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--t-floor);
   text-align: left;
   cursor: pointer;
 }
@@ -406,7 +315,7 @@
 
 .ws-row small {
   color: #a4a9bb;
-  font-size: 13px;
+  font-size: var(--t-floor);
   white-space: nowrap;
 }
 
@@ -418,7 +327,7 @@
 .ws-empty {
   margin: 8px 12px;
   color: #a4a9bb;
-  font-size: 14px;
+  font-size: var(--t-floor);
 }
 
 .ws-add {
@@ -437,7 +346,7 @@
   color: var(--text);
   color-scheme: dark;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--t-floor);
 }
 
 .ws-add select {
@@ -458,20 +367,20 @@
 
 .ws-panel-head h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: calc(20px * var(--text-scale));
 }
 
 .ws-panel-head p {
   margin: 2px 0 0;
   color: #b8bccb;
-  font-size: 13px;
+  font-size: var(--t-floor);
   overflow-wrap: anywhere;
 }
 
 .ws-warning {
   margin: 0;
   color: var(--gold-text);
-  font-size: 13px;
+  font-size: var(--t-floor);
   line-height: 1.4;
 }
 
@@ -482,7 +391,7 @@
 
 .ws-field > span {
   color: #c4c8d7;
-  font-size: 13px;
+  font-size: var(--t-floor);
   font-weight: 600;
 }
 
@@ -504,7 +413,7 @@
   background: transparent;
   color: #d9dbe6;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--t-floor);
   cursor: pointer;
 }
 
@@ -532,7 +441,7 @@
 
 .ws-number span {
   color: #a4a9bb;
-  font-size: 12.5px;
+  font-size: var(--t-floor);
   text-align: center;
 }
 
@@ -556,7 +465,7 @@
   justify-content: space-between;
   gap: 10px;
   color: #e5e6ee;
-  font-size: 14px;
+  font-size: var(--t-floor);
   cursor: pointer;
 }
 
@@ -610,17 +519,10 @@
 .ws-panel-links .secondary {
   min-height: 30px;
   padding: 0 10px;
-  font-size: 13px;
+  font-size: var(--t-floor);
 }
 
 /* Launch rules. */
-.ws-rule-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  align-items: start;
-  gap: 18px;
-}
-
 .ws-rule-list {
   display: grid;
   margin: 0;
@@ -658,18 +560,18 @@
 }
 
 .ws-rule-copy strong {
-  font-size: 14.5px;
+  font-size: var(--t-floor);
   font-weight: 650;
 }
 
 .ws-rule-copy small {
   color: #c4c8d7;
-  font-size: 13.5px;
+  font-size: var(--t-floor);
 }
 
 .ws-rule .link-button.is-danger {
   color: var(--burgundy-bright);
-  font-size: 13.5px;
+  font-size: var(--t-floor);
 }
 
 .ws-rule-windows {
@@ -704,21 +606,14 @@
 
 .ws-rule-window strong {
   flex: 0 0 auto;
-  font-size: 14px;
+  font-size: var(--t-floor);
   font-weight: 650;
 }
 
 .ws-rule-window small {
   overflow: hidden;
   color: #a4a9bb;
-  font-size: 13px;
+  font-size: var(--t-floor);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-@media (max-width: 1100px) {
-  .ws-grid,
-  .ws-rule-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }

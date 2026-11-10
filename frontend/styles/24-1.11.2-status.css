@@ -9,26 +9,16 @@
   color: var(--burgundy-text);
 }
 
-.top-status[data-state="error"] .status-indicator {
-  background: var(--burgundy-bright);
-  box-shadow: 0 0 9px rgba(196, 88, 123, .45);
-}
-
 .top-status[data-state="test"] {
   border-color: var(--gold-border);
   background: rgba(214, 180, 96, .1);
   color: var(--gold-text);
 }
 
-.top-status[data-state="test"] .status-indicator {
-  background: var(--gold-text);
-  box-shadow: none;
-}
-
 #topStatusLog {
   height: 28px;
   padding: 0 10px;
-  font-size: 12.5px;
+  font-size: var(--t-floor);
   white-space: nowrap;
 }
 

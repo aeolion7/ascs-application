@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#111218">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
-  <title>ASCS | Aeolionware</title>
+  <title>Maestro | Aeolionware</title>
   <link rel="icon" href="assets/ascs.ico">
   <!-- Styles, in cascade order: each later file builds on the earlier ones. -->
   <link rel="stylesheet" href="styles/01-foundation.css">
@@ -16,42 +16,42 @@
   <link rel="stylesheet" href="styles/06-1.7.0-games.css">
   <link rel="stylesheet" href="styles/07-1.7.0-system.css">
   <link rel="stylesheet" href="styles/08-1.8.0-help.css">
-  <link rel="stylesheet" href="styles/09-1.8.0-sounds.css">
   <link rel="stylesheet" href="styles/10-1.8.0-calendar.css">
   <link rel="stylesheet" href="styles/11-1.8.0-polish.css">
-  <link rel="stylesheet" href="styles/12-1.8.0-sounds-board.css">
   <link rel="stylesheet" href="styles/13-1.8.0-sidebar-select.css">
   <link rel="stylesheet" href="styles/14-1.8.0-notes-groups.css">
-  <link rel="stylesheet" href="styles/15-1.8.1-sounds.css">
   <link rel="stylesheet" href="styles/16-1.9.0-calendar.css">
-  <link rel="stylesheet" href="styles/17-1.9.0-achievements.css">
-  <link rel="stylesheet" href="styles/19-1.9.1-fixes.css">
   <link rel="stylesheet" href="styles/20-1.9.2-ux.css">
   <link rel="stylesheet" href="styles/21-1.10.0-workspaces.css">
-  <link rel="stylesheet" href="styles/22-1.11.0-awards.css">
-  <link rel="stylesheet" href="styles/23-1.11.1-game-notes.css">
   <link rel="stylesheet" href="styles/24-1.11.2-status.css">
+  <link rel="stylesheet" href="styles/25-2.0.0-tokens.css">
+  <link rel="stylesheet" href="styles/26-2.0.0-shell.css">
+  <link rel="stylesheet" href="styles/27-2.0.0-pages.css">
+  <link rel="stylesheet" href="styles/28-2.0.0-components.css">
+  <link rel="stylesheet" href="styles/29-2.0.0-home.css">
+  <link rel="stylesheet" href="styles/30-2.0.0-games.css">
+  <link rel="stylesheet" href="styles/31-2.0.0-commands.css">
+  <link rel="stylesheet" href="styles/32-2.0.0-system.css">
+  <link rel="stylesheet" href="styles/33-2.0.0-sounds.css">
+    <link rel="stylesheet" href="styles/34-2.0.0-calendar.css">
+    <link rel="stylesheet" href="styles/35-2.0.0-workspaces.css">
+    <link rel="stylesheet" href="styles/36-2.0.0-notes.css">
+    <link rel="stylesheet" href="styles/37-2.0.0-preferences.css">
+  <link rel="stylesheet" href="styles/38-2.0.0-polish.css">
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar" aria-label="Application navigation">
-      <div class="brand">
-        <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 32 32" fill="none">
-            <path d="M16 4 28 26H4L16 4Z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
-            <path d="m16 12 7 13H9l7-13Z" fill="currentColor" opacity=".28"/>
-            <path d="M11.5 21h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </span>
+      <div class="brand" title="Aeolionware Maestro">
+        <span class="brand-mark" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="tbrand" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4420b4"/><stop offset=".55" stop-color="#2b0071"/><stop offset="1" stop-color="#17043f"/></linearGradient><linearGradient id="ebrand" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8e8ac"/><stop offset=".42" stop-color="#a9832f"/><stop offset=".68" stop-color="#f3dd92"/><stop offset="1" stop-color="#b08b36"/></linearGradient><linearGradient id="bbrand" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#dcd6ee"/></linearGradient><linearGradient id="wbrand" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fbeab0"/><stop offset="1" stop-color="#cda544"/></linearGradient></defs><rect x="2.2" y="2.2" width="59.6" height="59.6" rx="14" fill="url(#tbrand)" stroke="url(#ebrand)" stroke-width="2.4"/><path d="M44 9.6C35 5.4 20.4 6.8 14.4 14C10 19.4 11.6 25.4 17.6 28.2C25.6 32 37 33.4 46.4 36.4C51.4 38 55.8 41.4 55.2 45.8C54.8 49.2 51 50.6 49.8 48.2C51.2 49.4 53.2 48.2 53.4 45.8C53.6 43 49.8 40.6 45.4 39.4C35.6 36.6 24.2 35.2 15.6 31.2C7.4 27.2 5.8 18.8 11.8 12.2C18.6 4.8 35 5.6 44 9.6Z" fill="url(#wbrand)"/><circle cx="51.6" cy="47.6" r="2.7" fill="url(#wbrand)"/><path d="M27.4 23h9.2a1.6 1.6 0 0 1 1.5 1.1L50.4 50.6a2.8 2.8 0 0 1-2.6 3.9H16.2a2.8 2.8 0 0 1-2.6-3.9L25.9 24.1a1.6 1.6 0 0 1 1.5-1.1Z" fill="url(#bbrand)"/><path d="M20.5 47.8h23" stroke="#22066b" stroke-opacity=".32" stroke-width="1.6" stroke-linecap="round"/><g class="mark-arm"><path d="M32 47 L36.8 33.8" stroke="#22066b" stroke-width="3" stroke-linecap="round"/><path d="M36.8 33.8 L45.7 9.4" stroke="url(#wbrand)" stroke-width="3" stroke-linecap="round"/><rect x="36.6" y="15.2" width="11.4" height="7.2" rx="1.8" transform="rotate(20 42.3 18.8)" fill="url(#wbrand)"/></g></svg></span>
         <span class="brand-copy">
-          <strong>AEOLIONWARE</strong>
-          <span>SUPER COMMAND SYSTEM</span>
+          <span>Aeolionware</span>
+          <strong>Maestro</strong>
         </span>
-        <span class="brand-short" aria-hidden="true">ASCS</span>
+        <span id="sidebarVersion" hidden>Maestro <span>2.0.0</span></span>
       </div>
 
-      <div class="nav-label">WORKSPACE</div>
-      <nav class="primary-nav" aria-label="Workspace">
+      <nav class="primary-nav" aria-label="Pages">
         <button class="nav active" type="button" data-view="home" aria-controls="home" title="Command Center" aria-current="page">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg>
           <span>Command Center</span>
@@ -72,85 +72,75 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8h9a4.5 4.5 0 0 1 4.3 5.8l-1 3.3a2.2 2.2 0 0 1-3.7.9L14 16h-4l-2.1 2a2.2 2.2 0 0 1-3.7-.9l-1-3.3A4.5 4.5 0 0 1 7.5 8Z"/><path d="M8 11v3m-1.5-1.5h3M15.5 12h.01M17.5 13.5h.01"/></svg>
           <span>Games</span>
         </button>
-      </nav>
-
-      <div class="nav-label nav-label-group">SYSTEM</div>
-      <nav class="primary-nav" aria-label="System">
-        <button class="nav" type="button" data-view="dashboard" aria-controls="dashboard" title="System Dashboard">
+        <button class="nav" type="button" data-view="dashboard" aria-controls="dashboard" title="System">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5V12m5.3 7.5V5m5.4 14.5v-10m5.3 10V8"/></svg>
-          <span>System Dashboard</span>
+          <span>System</span>
         </button>
         <button class="nav" type="button" data-view="sounds" aria-controls="sounds" title="Sounds">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 9.5h3l4.5-4v13l-4.5-4h-3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1Z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
           <span>Sounds</span>
         </button>
+        <button class="nav" type="button" data-view="commands" aria-controls="commands" title="Commands">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 9h2m3 0h2m3 0h.01M7 13h.01m3 0h.01m3 0h.01m3 0h.01M8 16h8"/></svg>
+          <span>Commands</span>
+        </button>
       </nav>
 
-      <div class="nav-label nav-label-group">REFERENCE</div>
-      <nav class="primary-nav" aria-label="Reference">
-        <button class="nav" type="button" data-view="commands" aria-controls="commands" title="Super Commands">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 9h2m3 0h2m3 0h.01M7 13h.01m3 0h.01m3 0h.01m3 0h.01M8 16h8"/></svg>
-          <span>Super Commands</span>
-        </button>
+      <nav class="secondary-nav" aria-label="App">
         <button class="nav" type="button" data-view="settings" aria-controls="settings" title="Preferences">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="m19.4 15 .1.1a1.8 1.8 0 1 1-2.5 2.5l-.1-.1a1.8 1.8 0 0 0-3 .9v.2a1.8 1.8 0 1 1-3.6 0v-.2a1.8 1.8 0 0 0-3-.9l-.1.1a1.8 1.8 0 1 1-2.5-2.5l.1-.1a1.8 1.8 0 0 0-.9-3H3.7a1.8 1.8 0 1 1 0-3.6h.2a1.8 1.8 0 0 0 .9-3l-.1-.1a1.8 1.8 0 1 1 2.5-2.5l.1.1a1.8 1.8 0 0 0 3-.9v-.2a1.8 1.8 0 1 1 3.6 0v.2a1.8 1.8 0 0 0 3 .9l.1-.1a1.8 1.8 0 1 1 2.5 2.5l-.1.1a1.8 1.8 0 0 0 .9 3h.2a1.8 1.8 0 1 1 0 3.6h-.2a1.8 1.8 0 0 0-.9 3Z"/></svg>
           <span>Preferences</span>
         </button>
+        <button class="nav sidebar-power" type="button" id="powerTrayButton" aria-haspopup="dialog" aria-expanded="false" title="Power and audio">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v8"/><path d="M7.2 6.6a7.5 7.5 0 1 0 9.6 0"/></svg>
+          <span>Power</span>
+        </button>
       </nav>
-
-      <button class="nav sidebar-power" type="button" id="powerTrayButton" aria-haspopup="dialog" aria-expanded="false" title="Power and audio">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v8"/><path d="M7.2 6.6a7.5 7.5 0 1 0 9.6 0"/></svg>
-        <span>Power</span>
-      </button>
-
-      <div class="sidebar-bottom">
-        <span class="sidebar-status">
-          <strong id="sidebarVersion">ASCS <span>1.11.2</span></strong>
-          <small><span class="status-indicator" aria-hidden="true"></span>Standing by</small>
-        </span>
-        <span class="key-hint" aria-label="Super key">Super</span>
-      </div>
       <button class="sidebar-toggle" type="button" id="sidebarToggle" aria-pressed="false" aria-label="Collapse sidebar" title="Collapse sidebar">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 7-5 5 5 5"/></svg>
       </button>
     </aside>
           <div class="system-bar power-tray" id="powerTray" tabindex="-1" role="dialog" aria-label="Power and audio" hidden>
             <div class="system-group" role="group" aria-label="Instant">
-              <button class="system-button" type="button" data-power-now="lock" title="Lock"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg><span>Lock</span></button>
-              <button class="system-button" type="button" id="audioButton" aria-haspopup="true" aria-expanded="false" title="Choose the audio output"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 9.5h3l4-3.5v12l-4-3.5h-3z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg><span id="audioCurrent">Audio</span></button>
+              <button class="system-button" type="button" data-power-now="lock" title="Lock"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg><span class="power-label">Lock</span></button>
+              <button class="system-button" type="button" id="audioButton" aria-haspopup="true" aria-expanded="false" title="Choose the audio output"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 9.5h3l4-3.5v12l-4-3.5h-3z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg><span class="power-label" id="audioCurrent">Audio</span></button>
+              <div class="audio-menu" id="audioMenu" role="menu" aria-label="Audio output" hidden></div>
             </div>
             <div class="system-group is-guarded" role="group" aria-label="Press and hold to confirm">
-              <span class="system-group-label" id="powerHint" title="Press and hold for 1.5 seconds; let go to cancel"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" opacity=".35"/><path d="M12 4a8 8 0 0 1 8 8"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/></svg>HOLD</span>
-              <button class="system-button is-guarded" type="button" data-power-hold="recycle" title="Hold to recycle bin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12.5h8L17 7M10.5 10.5v6M13.5 10.5v6"/></svg><span>Recycle Bin</span><small id="recycleSize"></small></button>
-              <button class="system-button is-guarded" type="button" data-power-hold="sleep" title="Hold to sleep"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5Z"/></svg><span>Sleep</span></button>
-              <button class="system-button is-guarded" type="button" data-power-hold="restart" title="Hold to restart"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></svg><span>Restart</span></button>
-              <button class="system-button is-guarded" type="button" data-power-hold="shutdown" title="Hold to shut down"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v8"/><path d="M7.2 6.6a7.5 7.5 0 1 0 9.6 0"/></svg><span>Shut down</span></button>
-              <button class="system-button is-guarded" type="button" data-power-hold="signout" title="Hold to sign out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4.5h4.5a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H14"/><path d="M10 8l-4 4 4 4M6 12h9"/></svg><span>Sign out</span></button>
+              <span class="system-group-label" id="powerHint" title="Press and hold a button, or hold its letter, for 1.5 seconds. Letting go cancels."><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" opacity=".35"/><path d="M12 4a8 8 0 0 1 8 8"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/></svg><span id="powerHintText">Hold to confirm</span></span>
+              <button class="system-button is-guarded" type="button" data-power-hold="sleep" aria-keyshortcuts="Z" title="Hold Z, or press and hold here, to sleep"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5Z"/></svg><span class="power-label">Sleep</span><kbd class="power-key" aria-hidden="true">Z</kbd></button>
+              <button class="system-button is-guarded" type="button" data-power-hold="restart" aria-keyshortcuts="R" title="Hold R, or press and hold here, to restart"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></svg><span class="power-label"><u>R</u>estart</span><kbd class="power-key" aria-hidden="true">R</kbd></button>
+              <button class="system-button is-guarded" type="button" data-power-hold="shutdown" aria-keyshortcuts="S" title="Hold S, or press and hold here, to shut down"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v8"/><path d="M7.2 6.6a7.5 7.5 0 1 0 9.6 0"/></svg><span class="power-label"><u>S</u>hut down</span><kbd class="power-key" aria-hidden="true">S</kbd></button>
+              <button class="system-button is-guarded" type="button" data-power-hold="signout" aria-keyshortcuts="O" title="Hold O, or press and hold here, to sign out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4.5h4.5a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H14"/><path d="M10 8l-4 4 4 4M6 12h9"/></svg><span class="power-label">Sign <u>o</u>ut</span><kbd class="power-key" aria-hidden="true">O</kbd></button>
+              <button class="system-button is-guarded" type="button" data-power-hold="recycle" aria-keyshortcuts="B" title="Hold B, or press and hold here, to empty the Recycle Bin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12.5h8L17 7M10.5 10.5v6M13.5 10.5v6"/></svg><span class="power-label">Recycle <u>B</u>in</span><small id="recycleSize"></small><kbd class="power-key" aria-hidden="true">B</kbd></button>
             </div>
-            <div class="audio-menu" id="audioMenu" role="menu" aria-label="Audio output" hidden></div>
             <div class="power-confirm" id="powerConfirm" role="alert" hidden></div>
           </div>
 
     <main class="main">
       <header class="topbar">
         <div class="titlebar-drag">
-          <span class="titlebar-context">ASCS</span>
-          <span class="breadcrumb-divider" aria-hidden="true">/</span>
-          <span id="breadcrumb">COMMAND CENTER</span>
+          <span id="breadcrumb" class="page-title">Command Center</span>
+          <p class="title-status" id="settingsStatus" role="status" hidden>Changes save as you make them, on this PC</p>
+          <p class="title-status" id="gamesStatus" role="status" hidden>Changes save as you make them</p>
         </div>
+        <button class="secondary" type="button" id="arrangeButton" aria-pressed="false">Arrange</button>
         <button class="titlebar-command" type="button" id="titlebarCommand" aria-label="Open the command palette">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
           <span>Search or run a command</span>
-          <kbd>Super</kbd><kbd>Space</kbd>
+          <kbd aria-label="Slash">/</kbd>
         </button>
         <div class="titlebar-actions">
           <button class="titlebar-help" type="button" id="titlebarHelp" aria-label="Help" title="Help (F1)">?</button>
-          <div class="top-status" id="topStatus" data-state="nominal" role="status" title="Live system status">
-            <span class="status-indicator" aria-hidden="true"></span>
-            <span id="topStatusText">ALL SYSTEMS NOMINAL</span>
+          <span class="test-build-chip" id="testBuildChip" role="status" title="Running on a copy of your data. Go back with: maestro try --end" hidden>Test build, changes are discarded</span>
+          <button class="attention-button" type="button" id="attentionButton" aria-haspopup="dialog" aria-expanded="false" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z"/><path d="M12 10v5M12 17.5v.01"/></svg>
+            <span id="attentionLabel"></span>
+          </button>
+          <div class="top-time">
+            <span class="top-date" id="topDate"></span>
+            <time class="top-clock" id="topClock"></time>
           </div>
-          <button class="secondary" type="button" id="topStatusLog" title="Opens ASCS Logs, where the error is listed" hidden>View log</button>
-          <time class="top-clock" id="topClock"></time>
           <div class="window-controls" aria-label="Window controls">
             <button class="window-control" type="button" data-window-action="minimize" aria-label="Minimize window" title="Minimize">
               <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10"/></svg>
@@ -159,13 +149,17 @@
               <svg class="glyph-maximize" viewBox="0 0 10 10" aria-hidden="true"><rect x=".5" y=".5" width="9" height="9"/></svg>
               <svg class="glyph-restore" viewBox="0 0 10 10" aria-hidden="true"><rect x=".5" y="2.5" width="7" height="7"/><path d="M2.5 2.5V.5h7v7H7.5"/></svg>
             </button>
-            <button class="window-control window-control-close" type="button" data-window-action="close" aria-label="Hide ASCS" title="Hide (ASCS keeps running)">
+            <button class="window-control window-control-close" type="button" data-window-action="close" aria-label="Hide Maestro" title="Hide (Maestro keeps running)">
               <svg viewBox="0 0 10 10" aria-hidden="true"><path d="m.5.5 9 9m0-9-9 9"/></svg>
             </button>
           </div>
         </div>
       </header>
 
+      <div class="attention-panel" id="attentionPanel" role="dialog" aria-label="Needs attention" tabindex="-1" hidden>
+        <div class="attention-head"><h2>Needs Attention</h2><button class="secondary" type="button" id="attentionDismissAll">Dismiss all</button></div>
+        <div class="attention-list" id="attentionList"></div>
+      </div>
       <div class="power-banner" id="powerBanner" role="alert" hidden>
         <span class="power-banner-dot" aria-hidden="true"></span>
         <strong id="powerBannerText"></strong>
@@ -173,112 +167,200 @@
         <button class="secondary" type="button" id="powerCancel">Cancel</button>
       </div>
       <section class="view active" id="home" aria-labelledby="homeTitle">
-        <header class="home-header">
-          <div class="home-header-copy">
-            <span class="eyebrow"><span class="eyebrow-line"></span> <span id="homeDate"></span></span>
-            <h1 id="homeTitle">Command Center<span class="title-period">.</span></h1>
-          </div>
-          <div class="home-almanac" id="homeAlmanac" hidden></div>
-        </header>
+        <h1 class="sr-only" id="homeTitle">Command Center</h1>
+        <div class="face" id="homeFace">
+          <article class="module home-now" id="homeNow" data-module="now" aria-live="polite"></article>
 
-        <section class="content-section" aria-labelledby="overviewHeading">
-          <div class="section-title-row">
-            <div>
-              <span class="section-overline">AT A GLANCE</span>
-              <h2 id="overviewHeading">System overview</h2>
-            </div>
-            <span class="live-label"><span class="status-indicator" aria-hidden="true"></span> LIVE METRICS</span>
-          </div>
-          <div class="metrics">
-            <article class="metric-card">
-              <div class="metric-topline">
-                <span class="metric-icon processor-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2.75v3.5m6-3.5v3.5M9 18v3.25m6-3.25v3.25M2.75 9h3.5m-3.5 6h3.5M18 9h3.25M18 15h3.25M9.5 9.5h5v5h-5z"/></svg>
-                </span>
-                <span class="metric-label">PROCESSOR</span>
-                <span class="metric-state">CPU</span>
-              </div>
-              <strong class="metric-value" id="homeCpu">--%</strong>
-              <div class="metric-track" aria-hidden="true"><span id="homeCpuBar"></span></div>
-              <small>Current utilization</small>
-            </article>
-            <article class="metric-card">
-              <div class="metric-topline">
-                <span class="metric-icon memory-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><rect x="3.5" y="7" width="17" height="10" rx="2"/><path d="M7 10v4m4-4v4m4-4v4M7 4.5V7m5-2.5V7m5-2.5V7M7 17v2.5m5-2.5v2.5m5-2.5v2.5"/></svg>
-                </span>
-                <span class="metric-label">MEMORY</span>
-                <span class="metric-state">RAM</span>
-              </div>
-              <strong class="metric-value" id="homeRam">--%</strong>
-              <div class="metric-track" aria-hidden="true"><span id="homeRamBar"></span></div>
-              <small id="homeRamDetail">Waiting for metrics</small>
-            </article>
-            <div id="homeDrives" class="drive-metrics" aria-label="Drive storage"></div>
-          </div>
-          <section class="today-card" id="homeToday" aria-labelledby="todayHeading" hidden>
-            <div class="today-head">
-              <span class="section-overline" id="todayHeading">TODAY</span>
-              <span class="today-date" id="todayDate"></span>
-              <button class="link-button" type="button" id="todayOpen">Open calendar</button>
-            </div>
-            <ol class="today-list" id="todayList"></ol>
+          <section class="module" data-module="today" aria-labelledby="homeTodayTitle">
+            <div class="module-head"><h2 id="homeTodayTitle">Today</h2><button class="link-button" type="button" id="todaySettingsButton">Settings</button></div>
+            <div class="home-almanac" id="homeAlmanac" hidden></div>
           </section>
-        </section>
 
-        <section class="content-section quick-actions-section" aria-labelledby="actionsHeading">
-          <div class="section-title-row">
-            <div>
-              <span class="section-overline">WITHIN REACH</span>
-              <h2 id="actionsHeading">Quick actions</h2>
+          <section class="module" id="homeToday" data-module="next" aria-labelledby="todayHeading">
+            <div class="module-head">
+              <h2 id="todayHeading">Next Up</h2>
+              <button class="link-button" type="button" id="todayOpen">Open</button>
             </div>
-            <div class="section-actions">
-              <span class="section-shortcut"><kbd>Super + Space</kbd> to search</span>
-              <button class="secondary" type="button" id="editQuickActions" aria-pressed="false">Edit</button>
+            <ol class="module-list" id="todayList"></ol>
+            <div class="module-foot"><button class="secondary" type="button" id="homeNewEvent">New event</button></div>
+          </section>
+
+          <section class="module" data-module="system" aria-labelledby="homeSystemTitle">
+            <div class="module-head">
+              <h2 id="homeSystemTitle">System</h2>
+              <button class="link-button" type="button" data-view="dashboard">Open</button>
             </div>
+            <div class="sys-rows">
+              <div class="sys-row">
+                <div class="sys-line"><span class="sys-name">Processor</span><small class="sys-note"></small><strong class="sys-value" id="homeCpu">--%</strong></div>
+                <div class="metric-track" aria-hidden="true"><span id="homeCpuBar"></span></div>
+              </div>
+              <div class="sys-row">
+                <div class="sys-line"><span class="sys-name">Memory</span><small class="sys-note" id="homeRamDetail"></small><strong class="sys-value" id="homeRam">--%</strong></div>
+                <div class="metric-track" aria-hidden="true"><span id="homeRamBar"></span></div>
+              </div>
+              <div class="sys-drives" id="homeDrives" aria-label="Drive storage"></div>
+            </div>
+          </section>
+
+          <div class="face-stack" data-module="stack">
+            <section class="module" aria-labelledby="actionsHeading">
+              <div class="module-head">
+                <h2 id="actionsHeading">Quick Actions</h2>
+                <button class="link-button" type="button" id="editQuickActions">Edit</button>
+              </div>
+              <div class="actions" id="quickActions" aria-live="polite"></div>
+            </section>
+            <section class="module" aria-labelledby="homeWorkspacesTitle">
+              <div class="module-head">
+                <h2 id="homeWorkspacesTitle">Arrangements</h2>
+                <button class="link-button" type="button" data-view="workspaces">Open</button>
+              </div>
+              <div class="home-buttons" id="homeWorkspaces"></div>
+            </section>
           </div>
-          <div class="actions" id="quickActions" aria-live="polite"></div>
-          <div class="activity-block" aria-labelledby="activityHeading">
-            <div class="activity-heading"><span class="section-overline" id="activityHeading">RECENT ACTIVITY</span></div>
-            <ol id="activityList" class="activity-list"></ol>
-            <p id="activityEmpty" class="activity-empty">Launches, captures, pasted notes, and workspace changes appear here.</p>
+
+          <section class="module" data-module="continue" aria-labelledby="homeContinueTitle">
+            <div class="module-head">
+              <h2 id="homeContinueTitle">Continue Playing</h2>
+              <button class="link-button" type="button" data-view="games">Library</button>
+            </div>
+            <div class="home-continue" id="homeContinue"></div>
+          </section>
+
+          <section class="module" data-module="note" aria-labelledby="homeNoteTitle">
+            <div class="module-head">
+              <h2 id="homeNoteTitle">Quick Note</h2>
+              <button class="link-button" type="button" data-view="notes">Open</button>
+            </div>
+            <label class="sr-only" for="homeNoteInput">New note</label>
+            <textarea id="homeNoteInput" placeholder="Write something, Enter saves it" autocomplete="off"></textarea>
+            <ul class="module-list" id="homeNotes"></ul>
+          </section>
+
+          <!-- 2.0.0: modules that start hidden; Arrange shows them. -->
+          <section class="module" data-module="weather" aria-labelledby="homeWeatherTitle">
+            <div class="module-head"><h2 id="homeWeatherTitle">Weather</h2></div>
+            <div class="home-weather" id="homeWeather" aria-live="polite"></div>
+          </section>
+
+          <section class="module" data-module="processes" aria-labelledby="homeProcessesTitle">
+            <div class="module-head">
+              <h2 id="homeProcessesTitle">Top Apps</h2>
+              <button class="link-button" type="button" data-launch="taskmanager">Task Manager</button>
+            </div>
+            <div class="home-stats" id="homeProcesses"><p class="module-empty">Measuring…</p></div>
+          </section>
+
+          <section class="module" data-module="network" aria-labelledby="homeNetworkTitle">
+            <div class="module-head"><h2 id="homeNetworkTitle">Network</h2></div>
+            <div class="home-network" id="homeNetwork"><p class="module-empty">Measuring…</p></div>
+          </section>
+
+          <section class="module" data-module="audio" aria-labelledby="homeAudioTitle">
+            <div class="module-head">
+              <h2 id="homeAudioTitle">Audio</h2>
+              <button class="link-button" type="button" data-view="sounds">Sounds</button>
+            </div>
+            <div class="home-audio">
+              <div class="sound-output">
+                <button class="secondary" type="button" id="homeAudioButton" aria-haspopup="true" aria-expanded="false" title="Choose the audio output"><span class="sound-output-current" id="homeAudioCurrent">Audio output</span></button>
+                <div class="audio-menu" id="homeAudioMenu" role="menu" aria-label="Audio output" hidden></div>
+              </div>
+              <button class="secondary" type="button" id="homeMute">Mute or unmute</button>
+            </div>
+          </section>
+
+          <section class="module" data-module="controllers" aria-labelledby="homeControllersTitle">
+            <div class="module-head">
+              <h2 id="homeControllersTitle">Controllers</h2>
+              <button class="link-button" type="button" data-pref-go="games:controllers">Open</button>
+            </div>
+            <ul class="stat-list" id="homeControllers"></ul>
+          </section>
+
+          <section class="module" data-module="pinned" aria-labelledby="homePinnedTitle">
+            <div class="module-head">
+              <h2 id="homePinnedTitle">Pinned Notes</h2>
+              <button class="link-button" type="button" data-view="notes">Open</button>
+            </div>
+            <ul class="module-list" id="homePinned"></ul>
+          </section>
+
+          <section class="module" data-module="unlocks" aria-labelledby="homeUnlocksTitle">
+            <div class="module-head">
+              <h2 id="homeUnlocksTitle">Recent Unlocks</h2>
+              <button class="link-button" type="button" data-pref-go="games:achievements">Open</button>
+            </div>
+            <ul class="stat-list" id="homeUnlocks"></ul>
+          </section>
+
+          <section class="module" data-module="timer" aria-labelledby="homeTimerTitle">
+            <div class="module-head">
+              <h2 id="homeTimerTitle">Timer</h2>
+              <div class="timer-modes" id="timerModes" role="group" aria-label="Timer or stopwatch">
+                <button type="button" data-timer-mode="timer">Timer</button>
+                <button type="button" data-timer-mode="watch">Stopwatch</button>
+              </div>
+            </div>
+            <strong class="timer-display" id="timerDisplay" role="timer">5:00</strong>
+            <div class="timer-presets" id="timerPresets" role="group" aria-label="Length">
+              <button type="button" data-minutes="1">1 min</button>
+              <button type="button" data-minutes="5">5 min</button>
+              <button type="button" data-minutes="10">10 min</button>
+              <button type="button" data-minutes="25">25 min</button>
+            </div>
+            <div class="module-foot">
+              <button class="primary" type="button" id="timerStart">Start</button>
+              <button class="secondary" type="button" id="timerReset" hidden>Reset</button>
+            </div>
+          </section>
+        </div>
+        <p class="sr-only" id="arrangeLive" role="status"></p>
+        <p class="sr-only" id="arrangeKeys">Drag it, or use the arrow keys to move it; 1, 2 or 3 sets its width in squares, and Delete hides it. Tab goes to the next module.</p>
+        <div class="arrange-dock" id="arrangeDock" role="region" aria-labelledby="arrangeDockTitle" hidden>
+          <h2 id="arrangeDockTitle">Arrange</h2>
+          <p class="arrange-fit" id="arrangeFit"></p>
+          <p class="arrange-tray-label" id="arrangeTrayLabel">Hidden: click one to show it</p>
+          <div class="arrange-tray" id="arrangeTray" role="group" aria-labelledby="arrangeTrayLabel"></div>
+          <p class="arrange-tray-empty" id="arrangeTrayEmpty" hidden>Every module is showing.</p>
+          <div class="arrange-dock-buttons">
+            <button class="secondary" type="button" id="arrangeReset">Reset</button>
+            <button class="primary" type="button" id="arrangeDone">Done</button>
           </div>
-        </section>
+        </div>
       </section>
 
       <section class="view" id="notes" aria-labelledby="notesTitle">
-        <div class="page-heading">
-          <span class="eyebrow"><span class="eyebrow-line"></span> CAPTURE</span>
-          <h1 id="notesTitle">Quick Notes<span class="title-period">.</span></h1>
-          <p>Thoughts, references, and reusable text. Saved as you type, kept on this machine.</p>
-        </div>
+        <h1 class="sr-only" id="notesTitle">Quick Notes</h1>
         <div class="notes-layout">
-          <aside class="notes-list-card" aria-label="Notes list">
+          <aside class="module notes-list-card" aria-labelledby="notesListTitle">
+            <div class="module-head">
+              <h2 id="notesListTitle">Notes</h2>
+              <button class="primary" type="button" id="newNoteButton">New note</button>
+            </div>
             <div class="notes-list-toolbar">
               <label class="sr-only" for="notesFilter">Filter notes</label>
-              <input id="notesFilter" type="search" placeholder="Filter notes or #tags…" autocomplete="off">
-              <button class="primary" type="button" id="newNoteButton">New note</button>
+              <input id="notesFilter" type="search" placeholder="Filter notes or #tags…" autocomplete="off" title="Its words are marked in the open note: Enter goes to the next, Shift + Enter the one before">
+              <span class="notes-find-count" id="notesFindCount" role="status" hidden></span>
             </div>
             <div id="notesTags" class="notes-tags" aria-label="Filter by tag"></div>
             <div id="notesList" class="notes-list" aria-label="Notes"></div>
             <div class="note-group-menu" id="noteGroupMenu" role="menu" aria-label="Group" hidden></div>
             <p id="notesEmpty" class="notes-empty">Nothing captured yet. Start a note, or press Super + Shift + C in any app.</p>
           </aside>
-          <div class="editor-card">
-            <div class="editor-toolbar">
-              <div class="editor-heading">
-                <span class="editor-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M6.5 3.75h7l4 4v12.5h-11a2 2 0 0 1-2-2v-12a2.5 2.5 0 0 1 2-2.5Z"/><path d="M13.5 4v4h4m-9 4.5h6m-6 3.5h6"/></svg>
-                </span>
-                <span><strong id="noteKindLabel">NOTE</strong><small>Saved privately on this machine</small></span>
-              </div>
-              <span class="save-status" id="saveStatus" role="status" aria-live="polite"><span class="save-status-dot"></span> ALL CHANGES SAVED</span>
-            </div>
-            <div class="note-controls">
+          <section class="module editor-card" aria-label="The open note">
+            <div class="note-head">
               <label class="sr-only" for="noteTitle">Note title</label>
               <input id="noteTitle" type="text" placeholder="Untitled note" maxlength="160">
+              <div class="note-modes" id="noteModes" role="group" aria-label="Show the note">
+                <button type="button" id="noteReadButton" aria-pressed="true" title="The note formatted (Ctrl + M switches)" aria-keyshortcuts="Control+M">Markdown viewer</button>
+                <button type="button" id="noteEditButton" aria-pressed="false" title="The plain text, to change it (Ctrl + M switches)" aria-keyshortcuts="Control+M">Text editor</button>
+              </div>
+            </div>
+            <div class="note-controls">
               <label class="sr-only" for="noteType">Note style</label>
-              <select id="noteType" title="Text: Markdown preview and spell-check. Code: monospace, pasted exactly as written.">
+              <select id="noteType" title="Text: formatted in the Markdown viewer, with spell-check. Code: monospace, pasted exactly as written.">
                 <option value="note">Text</option>
                 <option value="code">Code</option>
               </select>
@@ -292,31 +374,33 @@
                   <label class="placeholder-fill" for="noteFillToggle"><input id="noteFillToggle" type="checkbox"><span><strong>Fill in when pasting</strong><small id="noteFillHint"></small></span></label>
                 </div>
               </span>
-              <button class="secondary" type="button" id="previewNoteButton" aria-pressed="false" title="Show formatted Markdown">Preview</button>
+              <button class="secondary" type="button" id="noteMarkdownButton" aria-haspopup="dialog" title="Everything the Markdown viewer shows, with examples">Markdown</button>
+              <span class="note-controls-gap"></span>
               <button class="secondary" type="button" id="pinNoteButton" aria-pressed="false">Pin</button>
               <button class="secondary danger" type="button" id="deleteNoteButton">Delete</button>
             </div>
             <div class="note-game-link" id="noteGameLink" hidden><span>Notes for <strong id="noteGameName"></strong></span><button class="secondary" type="button" id="noteGameStamp" title="Adds the date and time, and how far into the session you are if this game is running">Add timestamp</button><button class="secondary" type="button" id="noteGameUnlink" title="Keeps the note, but stops linking it to this game">Unlink</button></div>
-            <textarea id="noteText" data-primary-input aria-label="Note text" placeholder="Begin with a thought, a reminder, or an idea. Markdown and #tags work here." spellcheck="true"></textarea>
-            <div id="notePreview" class="note-preview" hidden></div>
-            <div class="editor-footer"><span id="noteUpdated">Changes save automatically</span><span class="editor-footer-meta"><span id="noteWords"></span><button class="secondary copy-snippet" type="button" id="copySnippetButton" title="Copy the text exactly as written" hidden>Copy</button></span></div>
-          </div>
+            <textarea id="noteText" data-primary-input aria-label="Note text" placeholder="Begin with a thought, a reminder, or an idea. Markdown and #tags work here." spellcheck="true" hidden></textarea>
+            <div id="notePreview" class="note-preview" tabindex="0" aria-label="The note, formatted. Double-click or Ctrl + M to edit it." title="Double-click or Ctrl + M to edit"></div>
+            <div class="editor-footer">
+              <span id="noteUpdated">Changes save automatically</span>
+              <span class="save-status" id="saveStatus" role="status" aria-live="polite"><span class="save-status-dot"></span> All changes saved</span>
+              <span class="editor-footer-meta"><label class="note-spellcheck" for="notesSpellcheck"><input id="notesSpellcheck" type="checkbox" checked><span>Spell-check</span></label><span id="noteWords"></span><button class="secondary copy-snippet" type="button" id="copySnippetButton" title="Copy the text exactly as written" hidden>Copy</button></span>
+            </div>
+          </section>
         </div>
       </section>
 
       <section class="view" id="calendar" aria-labelledby="calendarTitle">
-        <div class="page-heading">
-          <span class="eyebrow"><span class="eyebrow-line"></span> PLAN</span>
-          <h1 id="calendarTitle">Calendar<span class="title-period">.</span></h1>
-          <p>Your calendars, kept on this PC. Click a day to see its hours, a time to add an event, and an event to change it.</p>
-        </div>
-        <div class="cal-toolbar">
+        <h1 class="sr-only" id="calendarTitle">Calendar</h1>
+        <div class="section-bar cal-toolbar">
           <div class="cal-nav">
             <button class="secondary" type="button" id="calToday">Today</button>
             <button class="secondary cal-step" type="button" id="calPrev" aria-label="Previous">‹</button>
             <button class="secondary cal-step" type="button" id="calNext" aria-label="Next">›</button>
             <h2 id="calTitle" aria-live="polite"></h2>
           </div>
+          <p class="cal-status" id="calStatus" role="status" hidden></p>
           <div class="cal-modes" aria-label="Calendar view">
             <button type="button" data-cal-mode="day" aria-pressed="false">Day</button>
             <button type="button" data-cal-mode="week" aria-pressed="false">Week</button>
@@ -325,123 +409,112 @@
           </div>
           <button class="primary" type="button" id="calNewEvent">New event</button>
         </div>
-        <p class="cal-status" id="calStatus" role="status" hidden></p>
         <div class="cal-layout">
-          <aside class="games-panel cal-side" aria-label="Calendars">
-            <span class="games-panel-label">CALENDARS</span>
-            <ul class="cal-calendars" id="calCalendars"></ul>
-            <div class="cal-side-actions">
-              <button class="link-button" type="button" id="calNewCalendar">New calendar</button>
-              <button class="link-button" type="button" id="calImport" title="Add the events from an .ics file (from another calendar app, or an export) to a calendar">Import .ics…</button>
-            </div>
-          </aside>
+          <div class="cal-side">
+            <section class="module" aria-labelledby="calCalendarsTitle">
+              <div class="module-head"><h2 id="calCalendarsTitle">Calendars</h2></div>
+              <ul class="cal-calendars" id="calCalendars"></ul>
+              <div class="cal-side-actions">
+                <button class="link-button" type="button" id="calNewCalendar">New calendar</button>
+                <button class="link-button" type="button" id="calImport" title="Add the events from an .ics file (from another calendar app, or an export) to a calendar">Import .ics…</button>
+              </div>
+            </section>
+            <section class="module" aria-labelledby="calCountdownsTitle">
+              <div class="module-head">
+                <h2 id="calCountdownsTitle">Countdowns</h2>
+                <button class="link-button" type="button" id="calEditCountdowns">Edit</button>
+              </div>
+              <ul class="cal-countdowns" id="calCountdowns"></ul>
+            </section>
+          </div>
           <div class="cal-main" id="calMain"></div>
         </div>
       </section>
 
       <section class="view" id="workspaces" aria-labelledby="workspacesTitle">
-        <div class="page-heading">
-          <span class="eyebrow"><span class="eyebrow-line"></span> ARRANGE</span>
-          <h1 id="workspacesTitle">Workspaces<span class="title-period">.</span></h1>
-        </div>
-        <div class="ws-strip" id="workspaceStrip" role="group" aria-label="Saved workspaces and launch rules"></div>
-        <p id="workspacesEmpty" class="settings-note">No saved workspaces yet. Arrange your windows on your desktops, then save them here (or press Super + S).</p>
-        <div id="workspacePage" hidden>
-          <div class="ws-head">
-            <div>
-              <h2 id="workspaceTitle"></h2>
-              <p id="workspaceMeta"></p>
-            </div>
-            <div class="ws-actions" id="workspaceActions"></div>
+        <h1 class="sr-only" id="workspacesTitle">Workspaces</h1>
+        <div class="section-bar">
+          <div class="section-tabs" id="workspaceSections" role="tablist" aria-label="Workspaces sections">
+            <button type="button" role="tab" id="wsTabLayouts" data-section-tab="layouts" aria-controls="wsLayouts" aria-selected="true">Arrangements</button>
+            <button type="button" role="tab" id="wsTabRules" data-section-tab="rules" aria-controls="wsRules" aria-selected="false">Launch Rules</button>
           </div>
-          <div class="ws-tabs" id="workspaceTabs" role="group" aria-label="Desktops"></div>
-          <div class="ws-grid">
-            <div>
+        </div>
+
+        <div class="ws-layout" id="wsLayouts" role="tabpanel" aria-labelledby="wsTabLayouts">
+          <section class="module ws-editor" aria-labelledby="workspaceTitle">
+            <div class="ws-head">
+              <div class="ws-head-copy">
+                <h2 id="workspaceTitle">Workspaces</h2>
+                <p id="workspaceMeta"></p>
+              </div>
+              <div class="ws-actions" id="workspaceActions"></div>
+            </div>
+            <div id="workspacePage" class="ws-page" hidden>
+              <div class="ws-tabs" id="workspaceTabs" role="group" aria-label="Desktops"></div>
               <div class="ws-screens" id="workspaceScreens"></div>
               <div class="ws-rows" id="workspaceRows"></div>
               <form class="ws-add" id="workspaceAdd"></form>
             </div>
-            <aside class="ws-panel" id="workspaceInspector" aria-label="The selected window"></aside>
+            <div class="ws-waiting" id="workspacesEmpty"></div>
+          </section>
+          <div class="ws-side">
+            <section class="module ws-saved" aria-labelledby="wsSavedTitle">
+              <div class="module-head"><h2 id="wsSavedTitle">Saved Arrangements</h2></div>
+              <ul class="ws-list" id="workspaceList" aria-label="Saved arrangements"></ul>
+              <div class="ws-save-row" id="workspaceSave"></div>
+            </section>
+            <section class="module ws-inspector" aria-labelledby="wsWindowTitle">
+              <div class="module-head"><h2 id="wsWindowTitle">Selected Window</h2></div>
+              <p class="ws-panel-title" id="wsWindowSub" hidden></p>
+              <div class="ws-panel" id="workspaceInspector"></div>
+            </section>
           </div>
         </div>
-        <div id="rulesPage" hidden>
-          <div class="ws-head">
-            <div>
-              <h2>Launch rules</h2>
-              <p>When an app starts, its first window within 15 seconds goes where you remembered. Rules only move windows; they never open anything.</p>
-            </div>
-          </div>
-          <div class="ws-rule-grid">
-            <div>
-              <ul class="ws-rule-list" id="ruleList"></ul>
-              <p id="rulesEmpty" class="settings-note">No launch rules yet.</p>
-            </div>
-            <aside class="ws-panel" aria-labelledby="ruleAddHeading">
-              <div class="ws-panel-head">
-                <h3 id="ruleAddHeading">Add a rule</h3>
-                <p>Put a window where you want it, then choose it here.</p>
-              </div>
-              <div class="ws-rule-windows" id="ruleWindows"></div>
-              <button class="primary" type="button" id="ruleRemember" disabled>Remember where it goes</button>
-            </aside>
-          </div>
+
+        <div class="ws-layout" id="wsRules" role="tabpanel" aria-labelledby="wsTabRules" hidden>
+          <section class="module ws-rules" aria-labelledby="wsRulesTitle">
+            <div class="module-head"><h2 id="wsRulesTitle">Launch Rules</h2><span class="ws-count" id="ruleCount"></span></div>
+            <p class="ws-intro">When an app starts, its first window within 15 seconds goes where you remembered. Rules only move windows; they never open anything.</p>
+            <ul class="ws-rule-list" id="ruleList"></ul>
+            <p id="rulesEmpty" class="module-empty">No launch rules yet. Put a window where you want it, then choose it under Add a Rule.</p>
+          </section>
+          <section class="module ws-rule-add" aria-labelledby="ruleAddHeading">
+            <div class="module-head"><h2 id="ruleAddHeading">Add a Rule</h2></div>
+            <p class="ws-intro">Put a window where you want it, then choose it here.</p>
+            <div class="ws-rule-windows" id="ruleWindows"></div>
+            <div class="module-foot"><button class="primary" type="button" id="ruleRemember" disabled>Remember where it goes</button></div>
+          </section>
         </div>
       </section>
 
       <section class="view" id="games" aria-labelledby="gamesTitle">
-        <div class="page-heading">
-          <span class="eyebrow"><span class="eyebrow-line"></span> PLAY</span>
-          <h1 id="gamesTitle">Games<span class="title-period">.</span></h1>
-          <p>Play time, recent games, and achievements across Steam, RetroArch, Dolphin, PCSX2, and Phantasy Star Online.</p>
+        <h1 class="sr-only" id="gamesTitle">Games</h1>
+        <div class="section-bar">
+          <div class="section-tabs" id="gamesTabs" role="tablist" aria-label="Games sections">
+            <button type="button" role="tab" id="gamesTabPlaying" data-section-tab="playing" aria-controls="gamesPlaying" aria-selected="true">Playing</button>
+            <button type="button" role="tab" id="gamesTabLibrary" data-section-tab="library" aria-controls="gamesLibraryPanel" aria-selected="false">Library</button>
+            <button type="button" role="tab" id="gamesTabAchievements" data-section-tab="achievements" aria-controls="gamesAchievementsPanel" aria-selected="false">Achievements</button>
+            <button type="button" role="tab" id="gamesTabControllers" data-section-tab="controllers" aria-controls="gamesControllersPanel" aria-selected="false">Controllers</button>
+            <button type="button" role="tab" id="gamesTabSetup" data-section-tab="setup" aria-controls="gamesSetupPanel" aria-selected="false">Setup</button>
+          </div>
         </div>
 
-        <div class="games-top">
-          <article class="games-panel games-now" id="gamesNow" aria-live="polite"></article>
-          <article class="games-panel games-controllers" id="gamesControllers"></article>
-          <article class="games-panel games-totals" id="gamesTotals"></article>
+        <div class="games-playing" id="gamesPlaying" role="tabpanel" aria-labelledby="gamesTabPlaying">
+          <article class="module home-now games-now" id="gamesNow" aria-live="polite"></article>
+          <section class="module" id="gamesNowNotes" aria-label="Notes for this game"></section>
+          <section class="module" id="gamesNextUp" aria-labelledby="gamesNextUpTitle" hidden></section>
+          <section class="module" id="gamesTotals" aria-labelledby="gamesTotalsTitle"></section>
+          <section class="module" id="gamesContinueModule" aria-labelledby="continueHeading">
+            <div class="module-head">
+              <h2 id="continueHeading">Continue Playing</h2>
+              <button class="link-button" type="button" id="gamesOpenLibrary">Library</button>
+            </div>
+            <ol class="module-list" id="gamesContinue"></ol>
+          </section>
         </div>
 
-        <section class="games-panel" id="gamesNowNotes" aria-label="Notes for this game" hidden></section>
-
-        <section class="games-panel controller-tester" id="controllerTester" hidden aria-labelledby="testerTitle">
-          <div class="controller-tester-head">
-            <div><span class="games-panel-label">INPUT TEST</span><h2 id="testerTitle">Controller</h2></div>
-            <span class="settings-action-buttons"><button class="secondary" type="button" id="rumbleController">Rumble</button><button class="secondary" type="button" id="closeTester">Done</button></span>
-          </div>
-          <div id="testerBody" class="controller-tester-body" aria-live="off"></div>
-          <p class="games-panel-note" id="testerNote"></p>
-        </section>
-
-        <section class="content-section" aria-labelledby="continueHeading">
-          <div class="section-title-row">
-            <div>
-              <span class="section-overline">PICK UP WHERE YOU LEFT OFF</span>
-              <h2 id="continueHeading">Continue playing</h2>
-            </div>
-            <p class="games-hint" id="coversHint" hidden>Cover art is off. Turn it on in Preferences › Games &amp; apps.</p>
-          </div>
-          <div id="gamesContinue" class="games-continue"></div>
-        </section>
-
-        <section class="content-section" aria-labelledby="achievementsHeading">
-          <div class="section-title-row">
-            <div>
-              <span class="section-overline">RETROACHIEVEMENTS</span>
-              <h2 id="achievementsHeading">Achievements</h2>
-            </div>
-            <span class="settings-action-buttons ra-actions"><small class="ra-updated" id="raUpdated"></small><button class="secondary" type="button" id="raProfile" hidden>Profile</button><button class="secondary" type="button" id="refreshAchievements" hidden>Refresh</button></span>
-          </div>
-          <div id="gamesAchievements" class="games-achievements"></div>
-        </section>
-
-        <section class="content-section" aria-labelledby="libraryHeading">
-          <div class="section-title-row">
-            <div>
-              <span class="section-overline">LIBRARY</span>
-              <h2 id="libraryHeading">Every game you've played</h2>
-            </div>
-          </div>
-          <div class="logs-toolbar games-toolbar">
+        <div id="gamesLibraryPanel" role="tabpanel" aria-labelledby="gamesTabLibrary" hidden>
+          <div class="games-toolbar">
             <div class="logs-sources" role="group" aria-label="Emulator">
               <button type="button" data-game-filter="all" aria-pressed="true">All</button>
               <button type="button" data-game-filter="retroarch" aria-pressed="false">RetroArch</button>
@@ -455,32 +528,98 @@
               <button type="button" data-game-sort="title" aria-pressed="false">A–Z</button>
             </div>
             <input id="gameSearch" class="logs-search" type="search" placeholder="Filter games" autocomplete="off" spellcheck="false" aria-label="Filter games">
+            <label class="games-covers" for="showCovers" title="Box art from RetroArch's thumbnails and PCSX2's covers folder, read from this PC only (PNG or JPEG, up to 1.5 MB). Nothing is downloaded."><input id="showCovers" type="checkbox"><span>Cover art</span></label>
           </div>
-          <p class="logs-meta" id="gamesMeta" role="status">Loading…</p>
-          <ol id="gamesLibrary" class="games-library"></ol>
-        </section>
+          <div class="games-library-layout">
+            <section class="module" aria-label="Library">
+              <p class="games-meta" id="gamesMeta" role="status">Loading…</p>
+              <ol id="gamesLibrary" class="games-library"></ol>
+            </section>
+            <aside class="module game-detail" id="gameDetail" aria-label="Selected game" hidden></aside>
+          </div>
+        </div>
+
+        <div id="gamesAchievementsPanel" role="tabpanel" aria-labelledby="gamesTabAchievements" hidden>
+          <div class="ra-heading">
+            <h2 id="achievementsHeading">RetroAchievements</h2>
+            <span class="ra-actions"><small class="ra-updated" id="raUpdated"></small><button class="secondary" type="button" id="raProfile" hidden>Profile</button><button class="secondary" type="button" id="refreshAchievements" hidden>Refresh</button></span>
+          </div>
+          <div id="gamesAchievements" class="games-achievements"></div>
+        </div>
+
+        <div id="gamesControllersPanel" role="tabpanel" aria-labelledby="gamesTabControllers" hidden>
+          <div class="games-pads" id="gamesControllers"></div>
+          <section class="module controller-tester" id="controllerTester" hidden aria-labelledby="testerTitle">
+            <div class="controller-tester-head">
+              <h2 id="testerTitle">Controller Test</h2>
+              <span class="settings-action-buttons"><button class="secondary" type="button" id="rumbleController">Rumble</button><button class="secondary" type="button" id="closeTester">Done</button></span>
+            </div>
+            <div id="testerBody" class="controller-tester-body" aria-live="off"></div>
+            <p class="controller-tester-note" id="testerNote"></p>
+          </section>
+        </div>
+
+        <div class="games-setup" id="gamesSetupPanel" role="tabpanel" aria-labelledby="gamesTabSetup" hidden>
+          <section class="module" aria-labelledby="setupProgramsTitle">
+            <div class="module-head"><h2 id="setupProgramsTitle">Programs</h2></div>
+            <p class="pref-note">The emulators behind Games and the recent games keys (Super + M5, M6, M7). Prefilled from your keyboard macro script.</p>
+            <label class="settings-field" for="gamePathRetroarch"><span>RetroArch</span><input id="gamePathRetroarch" data-game-path="retroarch" data-game-setting type="text" disabled autocomplete="off" spellcheck="false"><small>retroarch.exe. Play time comes from its runtime logs; recent games from its history.</small></label>
+            <label class="settings-field" for="gamePathDolphin"><span>Dolphin</span><input id="gamePathDolphin" data-game-path="dolphin" data-game-setting type="text" disabled autocomplete="off" spellcheck="false"><small>Dolphin.exe. Play time comes from TimePlayed.ini.</small></label>
+            <label class="settings-field" for="gamePathPcsx2"><span>PCSX2</span><input id="gamePathPcsx2" data-game-path="pcsx2" data-game-setting type="text" disabled autocomplete="off" spellcheck="false"><small>pcsx2-qt.exe. Play time comes from playtime.dat.</small></label>
+          </section>
+          <section class="module" aria-labelledby="setupPsoTitle">
+            <div class="module-head"><h2 id="setupPsoTitle">PSO Session</h2></div>
+            <p class="pref-note">Super + M4: headphones, Discord's voice channel, then the PSO launcher.</p>
+            <label class="settings-field" for="gamePathPso"><span>PSO launcher</span><input id="gamePathPso" data-game-path="pso" data-game-setting type="text" disabled autocomplete="off" spellcheck="false"><small>Ephinea's online.exe.</small></label>
+            <label class="settings-field" for="gamePathDiscord"><span>Discord</span><input id="gamePathDiscord" data-game-path="discord" data-game-setting type="text" disabled autocomplete="off" spellcheck="false"><small>Started if it isn't running.</small></label>
+            <label class="settings-field" for="psoVoiceChannel"><span>Voice channel</span><input id="psoVoiceChannel" data-game-setting type="text" disabled placeholder="https://discord.com/channels/…" autocomplete="off" spellcheck="false"><small>In Discord, turn on Developer Mode (Settings › Advanced), right-click the channel › Copy Link. Leave empty for none.</small></label>
+            <label class="settings-field" for="headphonesDevice"><span>Headphones</span><input id="headphonesDevice" data-game-setting type="text" disabled list="audioDevices" autocomplete="off" spellcheck="false"><datalist id="audioDevices"></datalist><small>The output to switch to. Spacing, case and Windows' “2-” prefix don't matter.</small></label>
+            <label class="settings-field" for="soundSwitchKey"><span>SoundSwitch shortcut</span><input id="soundSwitchKey" data-game-setting type="text" disabled placeholder="Ctrl+Alt+F11" autocomplete="off" spellcheck="false"><small>Maestro presses it until the headphones are the default, checking after each press.</small></label>
+          </section>
+          <section class="module" aria-labelledby="setupRaTitle">
+            <div class="module-head"><h2 id="setupRaTitle">RetroAchievements</h2></div>
+            <div class="settings-row">
+              <span><strong>Sign-in</strong><small id="raStatusText">Not set up. Your user name and Web API key go in data\secrets.ini, which stays on this PC and is never committed. The key is never shown in Maestro or sent anywhere except retroachievements.org.</small></span>
+              <button class="secondary" type="button" id="setupRetroAchievements">Open secrets file</button>
+            </div>
+            <div class="settings-row">
+              <span><strong>Profile picture</strong><small>Checked for changes once a week.</small></span>
+              <button class="secondary" type="button" id="raPictureRefresh">Check now</button>
+            </div>
+          </section>
+        </div>
       </section>
 
-      <section class="view" id="sounds" aria-labelledby="soundsTitle">
-        <div class="page-heading">
-          <span class="eyebrow"><span class="eyebrow-line"></span> LISTEN</span>
-          <h1 id="soundsTitle">Sounds<span class="title-period">.</span></h1>
-          <p>Every Windows sound from 3.x to 11, as the originals. Click one to play it; level it or put it to use on the right.</p>
+<section class="view" id="sounds" aria-labelledby="soundsTitle">
+        <h1 class="sr-only" id="soundsTitle">Sounds</h1>
+        <div class="section-bar">
+          <div class="section-tabs" id="soundTabs" role="tablist" aria-label="Sounds sections">
+            <button type="button" role="tab" id="soundTabLibrary" data-section-tab="library" aria-controls="soundLibraryPanel" aria-selected="true">Library</button>
+            <button type="button" role="tab" id="soundTabInUse" data-section-tab="inuse" aria-controls="soundAssignments" aria-selected="false">In Use <span id="soundInUseCount"></span></button>
+            <button type="button" role="tab" id="soundTabStartup" data-section-tab="startup" aria-controls="soundStartup" aria-selected="false">Startup <span id="soundStartupCount"></span></button>
+          </div>
+          <div class="sounds-playback">
+            <button class="secondary" type="button" id="soundStop">Stop all</button>
+            <div class="sound-output">
+              <button class="secondary" type="button" id="soundOutputButton" aria-haspopup="true" aria-expanded="false" title="Choose the audio output"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 9.5h3l4-3.5v12l-4-3.5h-3z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg><span class="sound-output-current" id="soundOutputCurrent">Audio output</span></button>
+              <div class="audio-menu" id="soundOutputMenu" role="menu" aria-label="Audio output" hidden></div>
+            </div>
+            <label class="sounds-volume" for="soundVolume"><span>Volume</span><input id="soundVolume" type="range" min="0" max="100" step="1" value="70"></label>
+            <label class="sounds-maestro" for="ascsSounds" title="Plays the sounds set in In Use. Never at Windows sign-in or shutdown."><span>Maestro sounds</span><select id="ascsSounds" disabled><option value="show">On show and hide</option><option value="start">On start and exit</option><option value="off">Off</option></select></label>
+          </div>
         </div>
+
+        <div id="soundLibraryPanel" role="tabpanel" aria-labelledby="soundTabLibrary">
         <div class="sounds-toolbar">
           <div class="sounds-find">
             <label class="sr-only" for="soundSearch">Search sounds</label>
             <input id="soundSearch" type="search" placeholder="Search every version…" autocomplete="off" spellcheck="false">
             <button class="secondary" type="button" id="soundFavoritesOnly" aria-pressed="false">♥ Favorites</button>
             <span class="sound-own-folders" id="soundOwnFolders" hidden></span>
-          </div>
-          <div class="sounds-playback">
             <button class="secondary" type="button" id="soundRandom">Play random</button>
-            <button class="secondary" type="button" id="soundStop">Stop all</button>
-            <label class="sounds-volume" for="soundVolume"><span>Volume</span><input id="soundVolume" type="range" min="0" max="100" step="1" value="70"></label>
           </div>
         </div>
-        <div class="sound-eras" id="soundEras" aria-label="Windows versions"></div>
+        <div class="sound-eras" id="soundEras" aria-label="Windows versions" hidden></div>
         <div class="sounds-layout">
           <div class="sounds-main">
             <div class="sounds-meta-row">
@@ -495,8 +634,8 @@
             </div>
             <div class="sound-select-bar" id="soundSelectBar" role="toolbar" aria-label="Selected sounds" hidden></div>
             <div id="soundGroups"></div>
-            <form class="sound-library" id="soundLibraryForm">
-              <span class="sound-library-label">Library</span>
+            <form class="sound-library" id="soundLibraryForm" hidden>
+              <span class="sound-library-label">Library folder:</span>
               <code id="soundLibraryShown"></code>
               <button class="link-button" type="button" id="soundLibraryChange">Change</button>
               <button class="link-button" type="button" id="soundReindex" title="Look for new or removed files">Re-read</button>
@@ -506,373 +645,310 @@
                 <button class="secondary" type="submit">Use this folder</button>
                 <button class="link-button" type="button" id="soundLibraryCancel">Cancel</button>
               </span>
-              <small>Each version is a folder named like "(1998) Windows 98"; other folders are your own, with buttons beside Favorites. Leveled copies go into "ASCS Leveled".</small>
             </form>
           </div>
           <aside class="sounds-side">
-            <div class="sound-side-tabs" role="tablist" aria-label="Sound panel">
-              <button type="button" role="tab" id="soundTabSelected" aria-controls="soundDetail" aria-selected="true">Selected sound</button>
-              <button type="button" role="tab" id="soundTabInUse" aria-controls="soundAssignments" aria-selected="false">In use <span id="soundInUseCount"></span></button>
-              <button type="button" role="tab" id="soundTabStartup" aria-controls="soundStartup" aria-selected="false">Startup <span id="soundStartupCount"></span></button>
-            </div>
-            <section class="games-panel sound-detail" id="soundDetail" role="tabpanel" aria-labelledby="soundTabSelected" aria-live="polite"></section>
-            <section class="games-panel sound-in-use" id="soundAssignments" role="tabpanel" aria-labelledby="soundTabInUse" hidden></section>
-            <section class="games-panel sound-in-use sound-startup" id="soundStartup" role="tabpanel" aria-labelledby="soundTabStartup" hidden></section>
+            <section class="module sound-detail" id="soundDetail" aria-label="Selected sound" aria-live="polite"></section>
           </aside>
         </div>
+        </div>
+
+        <div class="sound-board" id="soundAssignments" role="tabpanel" aria-labelledby="soundTabInUse" hidden></div>
+        <div class="sound-board sound-startup" id="soundStartup" role="tabpanel" aria-labelledby="soundTabStartup" hidden></div>
       </section>
 
       <section class="view" id="dashboard" aria-labelledby="dashboardTitle">
-        <div class="page-heading">
-          <span class="eyebrow"><span class="eyebrow-line"></span> TELEMETRY</span>
-          <h1 id="dashboardTitle">System Dashboard<span class="title-period">.</span></h1>
-          <p>Live readings and a complete inventory of the machine at your fingertips.</p>
-        </div>
-        <div class="dashboard-grid">
-          <article class="metric-card dashboard-metric">
-            <div class="metric-topline">
-              <span class="metric-icon processor-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2.75v3.5m6-3.5v3.5M9 18v3.25m6-3.25v3.25M2.75 9h3.5m-3.5 6h3.5M18 9h3.25M18 15h3.25M9.5 9.5h5v5h-5z"/></svg>
-              </span>
-              <span class="metric-label">PROCESSOR</span>
-              <span class="metric-state">CPU</span>
-            </div>
-            <div class="dashboard-value"><strong class="metric-value" id="cpu">--%</strong><span>utilization</span></div>
-            <div class="metric-track" role="progressbar" aria-label="CPU utilization" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="cpuBar"></span></div>
-            <svg class="sparkline" id="cpuSpark" viewBox="0 0 300 56" preserveAspectRatio="none" aria-hidden="true"><path class="sparkline-area"/><path class="sparkline-line"/></svg>
-            <small class="metric-caption" id="cpuHistory">History builds every 10 seconds</small>
-          </article>
-          <article class="metric-card dashboard-metric">
-            <div class="metric-topline">
-              <span class="metric-icon memory-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><rect x="3.5" y="7" width="17" height="10" rx="2"/><path d="M7 10v4m4-4v4m4-4v4M7 4.5V7m5-2.5V7m5-2.5V7M7 17v2.5m5-2.5v2.5m5-2.5v2.5"/></svg>
-              </span>
-              <span class="metric-label">MEMORY</span>
-              <span class="metric-state">RAM</span>
-            </div>
-            <div class="dashboard-value"><strong class="metric-value" id="ram">--%</strong><span>utilization</span></div>
-            <div class="metric-track" role="progressbar" aria-label="RAM utilization" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="ramBar"></span></div>
-            <svg class="sparkline" id="ramSpark" viewBox="0 0 300 56" preserveAspectRatio="none" aria-hidden="true"><path class="sparkline-area"/><path class="sparkline-line"/></svg>
-            <small class="metric-caption"><span id="ramDetail">Waiting for metrics</span> <span id="ramHistory"></span></small>
-          </article>
-          <div id="dashboardDrives" class="drive-metrics" aria-label="Drive storage"></div>
-        </div>
-        <div class="dashboard-footer">
-          <span class="refresh-indicator"><span class="status-indicator" aria-hidden="true"></span> UPDATES AUTOMATICALLY</span>
-          <span id="metricsUpdated">Waiting for system metrics</span>
-          <button class="secondary" type="button" id="openLogsButton">ASCS Logs</button>
-        </div>
-        <article class="metric-card signin-card" aria-labelledby="signInHistoryTitle">
-          <div class="signin-head">
-            <span class="metric-label" id="signInHistoryTitle">SIGN-IN</span>
-            <strong id="signInLatest">--</strong>
-            <small id="signInSummary">Time until the taskbar is ready. No sign-ins recorded yet.</small>
+        <h1 class="sr-only" id="dashboardTitle">System</h1>
+        <div class="section-bar">
+          <div class="section-tabs" id="systemTabs" role="tablist" aria-label="System sections">
+            <button type="button" role="tab" id="systemTabLive" data-section-tab="live" aria-controls="systemLive" aria-selected="true">Live</button>
+            <button type="button" role="tab" id="systemTabHardware" data-section-tab="hardware" aria-controls="systemHardware" aria-selected="false">Hardware</button>
+            <button type="button" role="tab" id="systemTabSignIn" data-section-tab="signin" aria-controls="systemSignIn" aria-selected="false">Startup</button>
+            <button type="button" role="tab" id="systemTabActivity" data-section-tab="activity" aria-controls="systemActivity" aria-selected="false">Activity and Logs</button>
           </div>
-          <div class="signin-plot" id="signInPlot">
-            <svg class="signin-lines" viewBox="0 0 300 56" preserveAspectRatio="none" aria-hidden="true"><path class="sparkline-area"/><path class="sparkline-line"/></svg>
-            <span class="signin-rule" id="signInRule" hidden></span>
-            <div class="signin-points" id="signInPoints"></div>
-            <div class="signin-tip" id="signInTip" hidden></div>
+          <div class="history-scale" id="historyScale" role="group" aria-label="History shown">
+            <button type="button" data-scale="seconds" title="Each second, for the last 5 minutes">5 minutes</button>
+            <button type="button" data-scale="tens" title="Each 10 seconds, for the last hour">1 hour</button>
+            <button type="button" data-scale="minutes" title="Each minute, for the last 24 hours">24 hours</button>
           </div>
-          <div class="signin-axis" aria-hidden="true"><span id="signInFirst"></span><span id="signInLast"></span></div>
-        </article>
-        <section class="hardware-section" aria-labelledby="hardwareHeading">
-          <div class="section-title-row">
-            <div>
-              <span class="section-overline">DEVICE PROFILE</span>
-              <h2 id="hardwareHeading">Hardware &amp; system</h2>
-            </div>
-          </div>
-          <dl class="spec-sheet">
-            <div class="spec-row"><dt>Processor</dt><dd><strong id="hardwareCpu">Detecting hardware…</strong><small id="hardwareCores"></small></dd></div>
-            <div class="spec-row"><dt>Graphics</dt><dd><strong id="hardwareGpu">Detecting hardware…</strong><small id="hardwareGpuDetail"></small></dd></div>
-            <div class="spec-row"><dt>Memory</dt><dd><strong id="hardwareMemory">Detecting hardware…</strong></dd></div>
-            <div class="spec-row"><dt>Storage</dt><dd><strong id="hardwareDisks">Detecting hardware…</strong></dd></div>
-            <div class="spec-row"><dt>Device</dt><dd><strong id="hardwareDevice">Detecting hardware…</strong></dd></div>
-            <div class="spec-row"><dt>Motherboard</dt><dd><strong id="hardwareBoard">Detecting hardware…</strong><small id="hardwareBios"></small></dd></div>
-            <div class="spec-row"><dt>Windows</dt><dd><strong id="hardwareWindows">Detecting system…</strong></dd></div>
-          </dl>
-          <section class="physical-storage-section" aria-labelledby="physicalStorageTitle">
-            <div class="section-title-row">
-              <div><span class="section-overline">DISK LAYOUT</span><h3 id="physicalStorageTitle">Physical drives &amp; volumes</h3></div>
-              <span class="section-shortcut">Partitions and mounted letters</span>
-            </div>
-            <div id="physicalStorage" class="physical-storage-list" aria-live="polite">
-              <p class="physical-storage-empty">Detecting physical drives…</p>
+        </div>
+
+        <div class="system-live" id="systemLive" role="tabpanel" aria-labelledby="systemTabLive">
+          <section class="module system-gauge" aria-labelledby="cpuHeading">
+            <div class="module-head"><h2 id="cpuHeading">Processor</h2></div>
+            <div class="system-reading"><strong class="system-value" id="cpu">--%</strong><small id="cpuHistory">History builds every 10 seconds</small></div>
+            <div class="system-chart" aria-hidden="true">
+              <div class="chart-plot" id="cpuChart">
+                <div class="chart-grid"><span data-label="100%"></span><span data-label="50%"></span><span data-label="0%"></span></div>
+                <svg class="chart-lines" viewBox="0 0 300 100" preserveAspectRatio="none"><path class="chart-area"/><path class="chart-line"/></svg>
+                <span class="chart-rule" hidden></span>
+                <div class="chart-tip" hidden></div>
+              </div>
+              <div class="chart-axis"><span id="cpuSince"></span><span>Now</span></div>
             </div>
           </section>
-        </section>
-      </section>
-
-      <section class="view" id="commands" aria-labelledby="commandsTitle">
-        <div class="page-heading commands-heading">
-          <span class="eyebrow"><span class="eyebrow-line"></span> THE KEYMAP</span>
-          <h1 id="commandsTitle">Super Commands<span class="title-period">.</span></h1>
-          <p>Every command, one chord away. Hold Super; add Shift for the second layer.</p>
-        </div>
-        <div class="command-intro">
-          <span class="command-intro-key" aria-hidden="true"><kbd>Super</kbd></span>
-          <p><strong>Super is the dedicated command key.</strong><span>Tap it to show or hide ASCS (it reopens on the last view you used), or hold it while pressing a listed key.</span></p>
-        </div>
-        <section class="keymap-panel" aria-labelledby="keymapTitle">
-          <div class="keymap-heading">
-            <div><span class="section-overline">AT A GLANCE</span><h2 id="keymapTitle">Keyboard map</h2></div>
-            <label class="sr-only" for="commandSearch">Search shortcuts</label>
-            <input class="command-search" id="commandSearch" type="search" placeholder="Search shortcuts, such as “workspace” or “desktop”" autocomplete="off" spellcheck="false">
-            <div class="keymap-layers" role="group" aria-label="Layer">
-              <button type="button" class="keymap-layer" data-layer="super" aria-pressed="true">Super</button>
-              <button type="button" class="keymap-layer" data-layer="shift" aria-pressed="false">Super + Shift</button>
+          <section class="module system-gauge" aria-labelledby="ramHeading">
+            <div class="module-head"><h2 id="ramHeading">Memory</h2></div>
+            <div class="system-reading"><strong class="system-value" id="ram">--%</strong><small id="ramDetail"></small><small id="ramHistory"></small></div>
+            <div class="system-chart" aria-hidden="true">
+              <div class="chart-plot" id="ramChart">
+                <div class="chart-grid"><span data-label="100%"></span><span data-label="50%"></span><span data-label="0%"></span></div>
+                <svg class="chart-lines" viewBox="0 0 300 100" preserveAspectRatio="none"><path class="chart-area"/><path class="chart-line"/></svg>
+                <span class="chart-rule" hidden></span>
+                <div class="chart-tip" hidden></div>
+              </div>
+              <div class="chart-axis"><span id="ramSince"></span><span>Now</span></div>
             </div>
+          </section>
+          <section class="module system-drives" aria-labelledby="drivesHeading">
+            <div class="module-head">
+              <h2 id="drivesHeading">Drives</h2>
+              <button class="link-button" type="button" id="chooseDrives" aria-expanded="false" aria-controls="driveForm">Choose drives</button>
+            </div>
+            <form class="drive-form" id="driveForm" hidden>
+              <label class="settings-field" for="driveLetters"><span>Monitored drives</span><input id="driveLetters" name="drives" type="text" placeholder="C:, J:" autocomplete="off" spellcheck="false"><small>Comma-separated letters, up to 12.</small></label>
+              <div class="drive-form-actions">
+                <button class="primary" type="submit">Save</button>
+                <button class="secondary" type="button" id="driveCancel">Cancel</button>
+              </div>
+              <p class="drive-form-status" id="driveStatus" role="status"></p>
+            </form>
+            <div class="system-drive-grid" id="dashboardDrives" aria-label="Drive storage"></div>
+          </section>
+        </div>
+
+        <div class="system-hardware" id="systemHardware" role="tabpanel" aria-labelledby="systemTabHardware" hidden>
+          <section class="module hardware-waiting"><p class="loading-note" id="hardwareStatus" role="status">Detecting hardware</p></section>
+        </div>
+
+        <div id="systemSignIn" role="tabpanel" aria-labelledby="systemTabSignIn" hidden>
+          <section class="module" id="signInEmpty" aria-labelledby="signInEmptyTitle">
+            <div class="module-head"><h2 id="signInEmptyTitle">Startup</h2></div>
+            <p class="loading-note" id="signInNote" role="status">Loading</p>
+          </section>
+          <div class="system-signin" id="signInContent" hidden>
+            <section class="module system-signin-graph" aria-labelledby="signInHistoryTitle">
+              <div class="module-head"><h2 id="signInHistoryTitle">Time Until Startup Finishes</h2></div>
+              <p class="system-note">From when SignIn.ahk starts until its last task is done. Apps count once they've started, not once they've loaded.</p>
+              <div class="system-chart">
+                <div class="chart-plot" id="signInPlot">
+                  <div class="chart-grid" aria-hidden="true"><span></span><span></span><span data-label="0 s"></span></div>
+                  <svg class="chart-lines" viewBox="0 0 300 100" preserveAspectRatio="none" aria-hidden="true"><path class="chart-area"/><path class="chart-line"/></svg>
+                  <span class="chart-rule" id="signInRule" hidden></span>
+                  <div class="signin-points" id="signInPoints"></div>
+                  <div class="signin-tip" id="signInTip" hidden></div>
+                </div>
+                <div class="chart-axis" aria-hidden="true"><span id="signInFirst"></span><span id="signInLast"></span></div>
+              </div>
+            </section>
+            <section class="module system-signin-summary" aria-labelledby="signInSummaryTitle">
+              <div class="module-head"><h2 id="signInSummaryTitle">Summary</h2></div>
+              <dl class="signin-stats">
+                <div><dt>Latest</dt><dd id="signInLatest">--</dd></div>
+                <div><dt id="signInMiddleName">Middle</dt><dd id="signInMiddle">--</dd></div>
+                <div><dt>Fastest</dt><dd id="signInFastest">--</dd></div>
+                <div><dt>Slowest</dt><dd id="signInSlowest">--</dd></div>
+              </dl>
+            </section>
+            <section class="module system-signin-times" aria-labelledby="signInTimesTitle">
+              <div class="module-head"><h2 id="signInTimesTitle">Each Startup</h2></div>
+              <table class="signin-table">
+                <thead><tr><th scope="col">When</th><th scope="col" class="is-number">Windows Taskbar</th><th scope="col" class="is-number">RetroBar Ready</th><th scope="col" class="is-number">Apps Started</th><th scope="col" class="is-number">Keychron Started</th><th scope="col" class="is-number">Finished</th><th scope="col" class="is-sound">Sound</th></tr></thead>
+                <tbody id="signInRows"></tbody>
+              </table>
+            </section>
           </div>
-          <div id="keymap" class="keymap" aria-describedby="keymapDetail"></div>
-          <div class="keymap-footer">
+        </div>
+
+        <div class="system-activity" id="systemActivity" role="tabpanel" aria-labelledby="systemTabActivity" hidden>
+          <section class="module system-recent" aria-labelledby="activityHeading">
+            <div class="module-head"><h2 id="activityHeading">Recent Activity</h2></div>
+            <ol class="activity-list" id="activityList"></ol>
+            <p class="activity-empty" id="activityEmpty">Launches, captures, pasted notes, and arrangement changes appear here.</p>
+          </section>
+          <section class="module" id="logs" aria-labelledby="logsTitle">
+            <div class="module-head"><h2 id="logsTitle">Logs</h2></div>
+            <div class="logs-toolbar">
+              <div class="logs-sources" role="group" aria-label="Log source">
+                <button type="button" data-log-source="ascs" aria-pressed="true">Maestro</button>
+                <button type="button" data-log-source="activity" aria-pressed="false">Activity</button>
+                <button type="button" data-log-source="codebutton" aria-pressed="false">Code key</button>
+              </div>
+              <div class="logs-levels" role="group" aria-label="Show">
+                <button type="button" data-log-level="all" aria-pressed="true">All <span data-count="all"></span></button>
+                <button type="button" data-log-level="issues" aria-pressed="false">Issues <span data-count="issues"></span></button>
+                <button type="button" data-log-level="errors" aria-pressed="false">Errors <span data-count="errors"></span></button>
+              </div>
+              <input id="logSearch" class="logs-search" type="search" placeholder="Filter lines" autocomplete="off" spellcheck="false" aria-label="Filter log lines">
+              <span class="logs-actions">
+                <button class="secondary" type="button" id="copyLogButton">Copy</button>
+                <button class="secondary" type="button" id="openLogButton">Open file</button>
+              </span>
+            </div>
+            <p class="logs-meta" id="logMeta" role="status">Loading…</p>
+            <div class="log-list" id="logList"></div>
+          </section>
+        </div>
+      </section>
+      <section class="view" id="commands" aria-labelledby="commandsTitle">
+        <h1 class="sr-only" id="commandsTitle">Commands</h1>
+        <div class="section-bar">
+          <div class="section-tabs" id="commandsTabs" role="tablist" aria-label="Commands sections">
+            <button type="button" role="tab" id="commandsTabKeymap" data-section-tab="keymap" aria-controls="commandsKeymap" aria-selected="true">Key Map</button>
+            <button type="button" role="tab" id="commandsTabCustom" data-section-tab="custom" aria-controls="commandsCustom" aria-selected="false">Custom Commands</button>
+            <button type="button" role="tab" id="commandsTabPalette" data-section-tab="palette" aria-controls="commandsPalette" aria-selected="false">Palette</button>
+            <button type="button" role="tab" id="commandsTabQuick" data-section-tab="quick" aria-controls="commandsQuick" aria-selected="false">Quick Actions</button>
+          </div>
+          <label class="sr-only" for="commandSearch">Find a command or key</label>
+          <input class="command-search" id="commandSearch" type="search" placeholder="Find a command or key" autocomplete="off" spellcheck="false">
+        </div>
+
+        <div class="commands-keymap" id="commandsKeymap" role="tabpanel" aria-labelledby="commandsTabKeymap">
+          <section class="module keymap-module" aria-labelledby="keymapTitle">
+            <div class="module-head">
+              <h2 id="keymapTitle">Your Keyboard</h2>
+              <div class="keymap-layers" role="group" aria-label="Layer">
+                <button type="button" class="keymap-layer" data-layer="super" aria-pressed="true">Super</button>
+                <button type="button" class="keymap-layer" data-layer="shift" aria-pressed="false">Super + Shift</button>
+              </div>
+            </div>
+            <div id="keymap" class="keymap" aria-describedby="keymapDetail"></div>
             <p id="keymapDetail" class="keymap-detail" aria-live="polite"></p>
             <ul class="keymap-legend" aria-label="Legend">
               <li data-cat="apps">Apps &amp; views</li>
               <li data-cat="windows">Windows &amp; system</li>
-              <li data-cat="saved">Workspaces, notes &amp; text</li>
+              <li data-cat="saved">Arrangements, notes &amp; text</li>
               <li data-cat="custom">Custom commands</li>
               <li data-cat="free">Free</li>
               <li data-cat="super">Super key</li>
               <li data-cat="planned">Macro keys</li>
             </ul>
-          </div>
-        </section>
-
-        <p class="command-search-empty" id="commandSearchEmpty" hidden>No shortcuts match.</p>
-        <div class="command-groups">
-          <section class="command-group" aria-labelledby="commandViewsTitle">
-            <div class="command-group-heading">
-              <span class="command-group-index">01</span>
-              <div><h2 id="commandViewsTitle">ASCS views</h2><p>Open a workspace inside ASCS</p></div>
-            </div>
-            <div class="shortcut-list">
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd></span><span class="shortcut-description"><strong>Show / hide ASCS</strong><small>Tap Super by itself. Opens on the Command Center after startup, then on the last view you used.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Space</kbd></span><span class="shortcut-description"><strong>Command palette</strong><small>Search commands, custom commands, notes, workspaces, and open windows; = calculates, ? searches the web, + adds an event.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="notes">Q</kbd></span><span class="shortcut-description"><strong>Quick Notes</strong><small>Opens the persistent notes editor (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>C</kbd></span><span class="shortcut-description"><strong>Quick capture</strong><small>Saves the selected text (or the clipboard) as a new note without opening ASCS.</small></span><span class="shortcut-status is-new">NEW</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="dashboard">I</kbd></span><span class="shortcut-description"><strong>System Dashboard</strong><small>Shows live metrics and physical system details (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
-            </div>
           </section>
-
-          <section class="command-group" aria-labelledby="commandAppsTitle">
-            <div class="command-group-heading">
-              <span class="command-group-index">02</span>
-              <div><h2 id="commandAppsTitle">Applications</h2><p>Launch a Windows application</p></div>
-            </div>
-            <div class="shortcut-list">
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="everything">F</kbd></span><span class="shortcut-description"><strong>Everything</strong><small>Opens Everything, ready to search as you type (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>B</kbd></span><span class="shortcut-description"><strong>Vivaldi</strong><small>Focuses Vivaldi on this desktop, switches to its desktop if needed, or opens the browser.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="terminal">T</kbd></span><span class="shortcut-description"><strong>Windows Terminal</strong><small>Focuses an existing window, switching desktops if needed; hold Shift for a new window (D/F create Explorer items).</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="explorer">E</kbd></span><span class="shortcut-description"><strong>File Explorer</strong><small>Focuses an existing window, switching desktops if needed; hold Shift for a new window (D/F create Explorer items).</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="claude">C</kbd></span><span class="shortcut-description"><strong>Ask Claude</strong><small>Opens Claude's quick-entry prompt, or starts the Claude app (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd data-hotkey-display="taskmanager">H</kbd></span><span class="shortcut-description"><strong>Task Manager</strong><small>Opens Task Manager (default; configurable).</small></span><span class="shortcut-status">ACTIVE</span></article>
-            </div>
+          <aside class="module key-detail" id="keyDetail" aria-labelledby="keyDetailTitle">
+            <div class="module-head"><h2 id="keyDetailTitle">Super + Q</h2></div>
+            <strong class="key-detail-name" id="keyDetailName"></strong>
+            <p class="key-detail-text" id="keyDetailText"></p>
+            <form class="key-edit" id="keyEditForm" novalidate>
+              <label class="key-field" id="keyLetterField" for="keyLetter" hidden><span>Letter</span><input id="keyLetter" type="text" maxlength="1" autocomplete="off" spellcheck="false"></label>
+              <label class="key-field" id="keyRunsField" for="keyRuns" hidden><span>Runs</span><select id="keyRuns"></select></label>
+              <label class="key-field" id="claudeField" for="claudeShortcut" hidden><span>Claude quick-entry shortcut</span><input id="claudeShortcut" type="text" placeholder="Ctrl+Alt+Space" autocomplete="off" spellcheck="false"><small>The shortcut set in the Claude app, which Maestro presses for you. Leave it empty to just open the app.</small></label>
+              <p class="key-status" id="keyStatus" role="status"></p>
+              <div class="key-buttons">
+                <button class="primary" type="submit" id="keySave" hidden>Save</button>
+                <button class="secondary" type="button" id="keyReset" hidden>Reset</button>
+              </div>
+            </form>
+          </aside>
+          <section class="module" aria-labelledby="keyListAppsTitle">
+            <div class="module-head"><h2 id="keyListAppsTitle">Apps and Views</h2></div>
+            <ul class="key-list" id="keyListApps"></ul>
           </section>
-
-          <section class="command-group" aria-labelledby="commandFilesTitle">
-            <div class="command-group-heading">
-              <span class="command-group-index">03</span>
-              <div><h2 id="commandFilesTitle">Explorer items</h2><p>Create items in the active File Explorer folder</p></div>
-            </div>
-            <div class="shortcut-list">
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>D</kbd></span><span class="shortcut-description"><strong>New folder</strong><small>Prompts for a folder name and creates it in the active Explorer location.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>F</kbd></span><span class="shortcut-description"><strong>New file</strong><small>Prompts for a filename including its extension and creates an empty file in the active Explorer location.</small></span><span class="shortcut-status">ACTIVE</span></article>
-            </div>
+          <section class="module" aria-labelledby="keyListWindowsTitle">
+            <div class="module-head"><h2 id="keyListWindowsTitle">Windows and System</h2></div>
+            <ul class="key-list" id="keyListWindows"></ul>
           </section>
-
-          <section class="command-group" aria-labelledby="commandDesktopTitle">
-            <div class="command-group-heading">
-              <span class="command-group-index">04</span>
-              <div><h2 id="commandDesktopTitle">Virtual desktops</h2><p>Switch to a numbered Windows virtual desktop</p></div>
-            </div>
-            <div class="shortcut-list">
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>1</kbd>–<kbd>9</kbd></span><span class="shortcut-description"><strong>Desktop 1–9</strong><small>Focuses the numbered virtual desktop (top row or numpad).</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>1</kbd>–<kbd>9</kbd></span><span class="shortcut-description"><strong>Move active window to desktop</strong><small>Moves the focused resizable window and switches there; nonexistent desktops are ignored.</small></span><span class="shortcut-status">ACTIVE</span></article>
-            </div>
+          <section class="module" aria-labelledby="keyListSavedTitle">
+            <div class="module-head"><h2 id="keyListSavedTitle">Arrangements, Notes and Text</h2></div>
+            <ul class="key-list" id="keyListSaved"></ul>
           </section>
+          <p class="commands-empty" id="commandSearchEmpty" hidden>No commands match.</p>
+        </div>
 
-          <section class="command-group" aria-labelledby="commandWindowTitle">
-            <div class="command-group-heading">
-              <span class="command-group-index">05</span>
-              <div><h2 id="commandWindowTitle">Window positioning</h2><p>Arrange the active resizable window</p></div>
-            </div>
-            <div class="shortcut-list">
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>←</kbd>/<kbd>→</kbd></span><span class="shortcut-description"><strong>Snap left / right</strong><small>Places the active window in half of its monitor work area.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>↑</kbd>/<kbd>↓</kbd></span><span class="shortcut-description"><strong>Maximize / restore / minimize</strong><small>Up maximizes; down restores a maximized window or minimizes it.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>←</kbd>, then <kbd>↑</kbd></span><span class="shortcut-description"><strong>Snap to a quadrant</strong><small>Press a horizontal arrow, then an up/down arrow within 150 ms. Any direction pair selects its corresponding quadrant.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>←</kbd>/<kbd>→</kbd></span><span class="shortcut-description"><strong>Move to adjacent monitor</strong><small>Moves the active window left/right; Preferences controls whether its size is preserved.</small></span><span class="shortcut-status">ACTIVE</span></article>
-            </div>
+        <div id="commandsCustom" role="tabpanel" aria-labelledby="commandsTabCustom" hidden>
+          <section class="module" aria-labelledby="commandsSettingsTitle">
+            <div class="module-head"><h2 id="commandsSettingsTitle">Custom Commands</h2></div>
+            <div id="commandRows" class="command-rows"></div>
+            <p id="commandsEmpty" class="commands-note">No custom commands yet. They appear in the palette, and a letter puts one on the key map.</p>
+            <p class="commands-note">Applications must be .exe or .lnk files and start without arguments.</p>
+            <div class="commands-actions"><span id="commandsStatus" role="status">Stored in data\commands.ini.</span><span><button class="secondary" type="button" id="addCommandButton">Add command</button><button class="primary" type="button" id="saveCommandsButton">Save commands</button></span></div>
           </section>
+        </div>
 
-          <section class="command-group" aria-labelledby="commandSystemTitle">
-            <div class="command-group-heading">
-              <span class="command-group-index">06</span>
-              <div><h2 id="commandSystemTitle">System controls</h2><p>Control Windows features</p></div>
-            </div>
-            <div class="shortcut-list">
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>L</kbd></span><span class="shortcut-description"><strong>Lock workstation</strong><small>Locks the current Windows session.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>M</kbd></span><span class="shortcut-description"><strong>Toggle audio mute</strong><small>Mutes or unmutes system audio.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Ctrl</kbd><i>+</i><kbd>Alt</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>A</kbd></span><span class="shortcut-description"><strong>Start or reload ASCS</strong><small>Starts ASCS when it isn't running (via ASCS Launcher, set up by tools\Install-Shortcut.ps1); otherwise saves notes and reloads it.</small></span><span class="shortcut-status is-new">NEW</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>D</kbd></span><span class="shortcut-description"><strong>Show desktop</strong><small>Windows' own Win+D, passed through while D has no ASCS action.</small></span><span class="shortcut-status">WINDOWS</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>P</kbd></span><span class="shortcut-description"><strong>Project to a display</strong><small>Windows' own Win+P, passed through while P has no ASCS action.</small></span><span class="shortcut-status">WINDOWS</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>V</kbd></span><span class="shortcut-description"><strong>Clipboard History</strong><small>Opens the Windows clipboard history with Win+V.</small></span><span class="shortcut-status">ACTIVE</span></article>
-            </div>
+        <div class="commands-palette" id="commandsPalette" role="tabpanel" aria-labelledby="commandsTabPalette" hidden>
+          <section class="module" aria-labelledby="paletteSettingsTitle">
+            <div class="module-head"><h2 id="paletteSettingsTitle">Command Palette</h2></div>
+            <p class="commands-note">Super + Space searches commands, notes, arrangements and open windows.</p>
+            <form class="key-edit" id="paletteForm" novalidate>
+              <label class="key-field" for="searchTemplate"><span>Web search address</span><input id="searchTemplate" type="text" placeholder="https://duckduckgo.com/?q=%s" autocomplete="off" spellcheck="false"><small>Must start with https:// and contain %s where the search text goes.</small></label>
+              <p class="key-status" id="paletteStatus" role="status"></p>
+              <div class="key-buttons"><button class="primary" type="submit">Save</button></div>
+            </form>
           </section>
+          <section class="module" aria-labelledby="paletteTypeTitle">
+            <div class="module-head"><h2 id="paletteTypeTitle">What You Can Type</h2></div>
+            <ul class="key-list">
+              <li><div class="key-row"><span class="key-row-name">Calculate (or just type math)</span><span class="key-row-keys"><kbd>=</kbd></span></div></li>
+              <li><div class="key-row"><span class="key-row-name">Search the web</span><span class="key-row-keys"><kbd>?</kbd></span></div></li>
+              <li><div class="key-row"><span class="key-row-name">Add a calendar event</span><span class="key-row-keys"><kbd>+</kbd></span></div></li>
+              <li><div class="key-row"><span class="key-row-name">Leave a mode, in an empty search</span><span class="key-row-keys"><kbd>Backspace</kbd></span></div></li>
+            </ul>
+          </section>
+        </div>
 
-          <section class="command-group" aria-labelledby="commandTextTitle">
-            <div class="command-group-heading">
-              <span class="command-group-index">07</span>
-              <div><h2 id="commandTextTitle">Text utilities</h2><p>Type date and time at the cursor</p></div>
+        <div id="commandsQuick" role="tabpanel" aria-labelledby="commandsTabQuick" hidden>
+          <section class="module" aria-labelledby="quickActionsTitle">
+            <div class="module-head">
+              <h2 id="quickActionsTitle">Quick Actions</h2>
+              <span class="quick-head-end"><span id="quickActionCount"></span><button class="secondary" type="button" id="addQuickAction">Add quick action</button></span>
             </div>
-            <div class="shortcut-list">
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>J</kbd></span><span class="shortcut-description"><strong>Insert timestamp</strong><small>Types the current date and time: yyyy-MM-dd HH:mm:ss.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Y</kbd></span><span class="shortcut-description"><strong>Insert date</strong><small>Types today's date: yyyy-MM-dd.</small></span><span class="shortcut-status">ACTIVE</span></article>
-            </div>
+            <p class="commands-note">The buttons on the Command Center: any page, app, custom command, arrangement or note. Drag one to change the order, or use the arrow keys on its grip.</p>
+            <p class="sr-only" id="quickActionLive" role="status"></p>
+            <ul class="quick-editor" id="quickActionEditor"></ul>
           </section>
-
-          <section class="command-group" aria-labelledby="commandWorkspaceTitle">
-            <div class="command-group-heading">
-              <span class="command-group-index">08</span>
-              <div><h2 id="commandWorkspaceTitle">Workspaces and notes</h2><p>Window layouts and reusable text</p></div>
-            </div>
-            <div class="shortcut-list">
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>S</kbd></span><span class="shortcut-description"><strong>Save workspace</strong><small>Stores the visible app layout as the Default workspace.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>R</kbd></span><span class="shortcut-description"><strong>Restore workspace</strong><small>Restores the Default workspace: reuses open windows first, then relaunches missing apps.</small></span><span class="shortcut-status">ACTIVE</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>S</kbd></span><span class="shortcut-description"><strong>Save workspace as…</strong><small>Type a name and press Enter to save the current window layout under it; Super + S still saves the default workspace.</small></span><span class="shortcut-status is-new">NEW</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>R</kbd></span><span class="shortcut-description"><strong>Choose a workspace</strong><small>Opens the palette on your saved workspaces; “Save workspace as…” stores named layouts.</small></span><span class="shortcut-status is-new">NEW</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>P</kbd></span><span class="shortcut-description"><strong>Paste a note</strong><small>Opens the palette on your notes; Enter pastes into the window you were using (filling placeholders), Shift+Enter copies.</small></span><span class="shortcut-status is-new">NEW</span></article>
-            </div>
-          </section>
-
-          <section class="command-group" aria-labelledby="commandGamesTitle">
-            <div class="command-group-heading">
-              <span class="command-group-index">09</span>
-              <div><h2 id="commandGamesTitle">Games and macro keys</h2><p>Super with the keyboard's M4 to M7</p></div>
-            </div>
-            <div class="shortcut-list">
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>M4</kbd></span><span class="shortcut-description"><strong>PSO session</strong><small>Headphones on through SoundSwitch, Discord, then the Ephinea launcher. When the game closes, your audio comes back and ASCS offers to close Discord.</small></span><span class="shortcut-status is-new">NEW</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>M5</kbd></span><span class="shortcut-description"><strong>Recent RetroArch games</strong><small>Opens the palette on your recent RetroArch games; Enter plays one.</small></span><span class="shortcut-status is-new">NEW</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>M6</kbd></span><span class="shortcut-description"><strong>Recent Dolphin games</strong><small>Opens the palette on your recent Dolphin games; Enter plays one.</small></span><span class="shortcut-status is-new">NEW</span></article>
-              <article class="shortcut-row"><span class="shortcut-keys"><kbd>Super</kbd><i>+</i><kbd>M7</kbd></span><span class="shortcut-description"><strong>Recent PCSX2 games</strong><small>Opens the palette on your recent PCSX2 games; Enter plays one.</small></span><span class="shortcut-status is-new">NEW</span></article>
-            </div>
-          </section>
-          <p class="settings-note">Default letter assignments for apps and views can be changed in Preferences, where you can also give custom commands their own letters. B, S, R, L, M, V, J, and Y are reserved for fixed commands. With Shift, C, P, D, and F always perform their Shift-layer action (capture, paste a note, new folder, new file). When C, D, F, or P has no assignment, Super + that letter passes through to Windows (for example, Win + D shows the desktop). Super + Shift + S saves the current layout under a name you type; the Snipping Tool is in the command palette. On their own, the macro keys (M1 to M7) and the Code key belong to the keyboard's macro scripts; with Super, M4 to M7 run the game commands above, and with Super + Shift they are deliberately vacant.</p>
         </div>
       </section>
 
-      <section class="view" id="settings" aria-labelledby="settingsTitle">
-        <div class="page-heading">
-          <span class="eyebrow"><span class="eyebrow-line"></span> CONFIGURATION</span>
-          <h1 id="settingsTitle">Preferences<span class="title-period">.</span></h1>
-          <p>Tuned to your displays, your keys, and the way you work.</p>
-        </div>
-        <div class="settings-nav" role="tablist" aria-label="Preferences sections">
-          <button type="button" role="tab" id="tab-prefGeneral" data-section="prefGeneral" aria-controls="prefGeneral" aria-selected="false">General</button>
-          <button type="button" role="tab" id="tab-prefShortcuts" data-section="prefShortcuts" aria-controls="prefShortcuts" aria-selected="false">Shortcuts</button>
-          <button type="button" role="tab" id="tab-prefPalette" data-section="prefPalette" aria-controls="prefPalette" aria-selected="false">Palette</button>
-          <button type="button" role="tab" id="tab-prefAlmanac" data-section="prefAlmanac" aria-controls="prefAlmanac" aria-selected="false">Almanac</button>
-          <button type="button" role="tab" id="tab-prefCountdowns" data-section="prefCountdowns" aria-controls="prefCountdowns" aria-selected="false">Countdowns</button>
-          <button type="button" role="tab" id="tab-prefGames" data-section="prefGames" aria-controls="prefGames" aria-selected="false">Games &amp; apps</button>
-          <button type="button" role="tab" id="tab-prefCommands" data-section="prefCommands" aria-controls="prefCommands" aria-selected="false">Custom commands</button>
-        </div>
-        <form id="settingsForm" class="settings-grid">
-          <section class="settings-card" id="prefGeneral" role="tabpanel" aria-labelledby="driveSettingsTitle">
-            <div class="settings-heading"><h2 id="driveSettingsTitle">System overview</h2><p>Choose the drive letters shown in storage metrics.</p></div>
-            <label class="settings-field" for="driveLetters"><span>Monitored drives</span><input id="driveLetters" name="drives" type="text" placeholder="C:, J:" autocomplete="off"><small>Comma-separated letters, such as C:, J:. Up to 12 drives.</small></label>
-            <label class="settings-field" for="snapGap"><span>Snap gap <output id="snapGapValue">0 px</output></span><input id="snapGap" name="snapGap" type="range" min="0" max="48" step="2" value="0"><small>Space around snapped windows and between tiles.</small></label>
-            <label class="settings-toggle" for="preserveWindowSize"><input id="preserveWindowSize" name="preserveSize" type="checkbox" checked><span><strong>Preserve size when moving monitors</strong><small>Keep the window's size and relative position on its new display.</small></span></label>
-            <label class="settings-toggle" for="notesSpellcheck"><input id="notesSpellcheck" type="checkbox" checked><span><strong>Spell-check in Quick Notes</strong><small>Underlines misspellings in text notes, never in code notes. Applies at once.</small></span></label>
-            <div class="settings-heading settings-subheading"><h2>Power and sounds</h2><p>The power tray's hold buttons, and the sounds ASCS itself plays.</p></div>
-            <label class="settings-field" for="powerDelay"><span>Delay before power actions</span><select id="powerDelay"><option value="0">None: act as soon as the hold completes</option><option value="5">5 seconds</option><option value="30">30 seconds</option></select><small>For Restart, Shut down, Sign out and Sleep: a countdown with Cancel on the banner. Apps with unsaved work can still stop a restart or shutdown.</small></label>
-            <label class="settings-field" for="ascsSounds"><span>ASCS sounds</span><select id="ascsSounds"><option value="show">When ASCS shows and hides</option><option value="start">When ASCS starts and exits</option><option value="off">Off</option></select><small>Plays the sounds set in Sounds › In use. Never at Windows sign-in or shutdown.</small></label>
+<section class="view" id="settings" aria-labelledby="settingsTitle">
+        <h1 class="sr-only" id="settingsTitle">Preferences</h1>
+        <div class="pref-grid">
+          <section class="module" aria-labelledby="prefAppearanceTitle">
+            <div class="module-head"><h2 id="prefAppearanceTitle">Appearance</h2></div>
+            <label class="settings-field" for="textSize"><span>Text size</span><select id="textSize"><option value="100">Default</option><option value="110">Larger</option><option value="120">Largest</option></select><small>The text on every page. The keyboard map on Commands keeps its size.</small></label>
+            <label class="settings-field" for="logoSwing"><span>Logo swing</span><select id="logoSwing"><option value="first">First time after Maestro starts</option><option value="every">Every time the window opens</option><option value="never">Never</option></select><small>The metronome's arm swings when the window opens. Windows' reduced motion setting turns it off.</small></label>
           </section>
-          <section class="settings-card" id="prefShortcuts" role="tabpanel" aria-labelledby="shortcutSettingsTitle">
-            <div class="settings-heading"><h2 id="shortcutSettingsTitle">Super-key shortcuts</h2><p>Choose unique letters for these app and view commands. Changes apply immediately.</p></div>
-            <div class="shortcut-settings">
-              <label for="hotkeyNotes"><span>Quick Notes</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyNotes" data-hotkey="notes" type="text" maxlength="1" autocomplete="off" aria-label="Quick Notes shortcut"></span></label>
-              <label for="hotkeyEverything"><span>Everything</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyEverything" data-hotkey="everything" type="text" maxlength="1" autocomplete="off" aria-label="Everything shortcut"></span></label>
-              <label for="hotkeyDashboard"><span>System Dashboard</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyDashboard" data-hotkey="dashboard" type="text" maxlength="1" autocomplete="off" aria-label="System Dashboard shortcut"></span></label>
-              <label for="hotkeyTerminal"><span>Windows Terminal</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyTerminal" data-hotkey="terminal" type="text" maxlength="1" autocomplete="off" aria-label="Windows Terminal shortcut"></span></label>
-              <label for="hotkeyExplorer"><span>File Explorer</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyExplorer" data-hotkey="explorer" type="text" maxlength="1" autocomplete="off" aria-label="File Explorer shortcut"></span></label>
-              <label for="hotkeyClaude"><span>Ask Claude</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyClaude" data-hotkey="claude" type="text" maxlength="1" autocomplete="off" aria-label="Ask Claude shortcut"></span></label>
-              <label for="hotkeyTaskManager"><span>Task Manager</span><span class="hotkey-input"><kbd>Super</kbd> + <input id="hotkeyTaskManager" data-hotkey="taskmanager" type="text" maxlength="1" autocomplete="off" aria-label="Task Manager shortcut"></span></label>
-            </div>
-            <label class="settings-field" for="claudeShortcut"><span>Claude quick-entry shortcut</span><input id="claudeShortcut" name="claudeShortcut" type="text" placeholder="Ctrl+Alt+Space" autocomplete="off" spellcheck="false"><small>The shortcut set in the Claude app; ASCS presses it for Ask Claude. Ctrl, Alt, Shift or Win plus Space, a letter, a digit, or F1 to F12. Leave it empty to just open the app.</small></label>
-            <p class="settings-note">Reserved keys: B, S, R, L, M, V, J, and Y. With Shift, the Terminal or Explorer key opens a new window, while C, P, D, and F always capture, paste a note, or create Explorer items. Number and arrow shortcuts are fixed.</p>
+          <section class="module" aria-labelledby="prefWindowsTitle">
+            <div class="module-head"><h2 id="prefWindowsTitle">Windows</h2></div>
+            <label class="settings-field" for="snapGap"><span>Snap gap <output id="snapGapValue">0 px</output></span><input id="snapGap" name="snapGap" type="range" min="0" max="48" step="2" value="0" disabled><small>Space around snapped windows and between tiles.</small></label>
+            <label class="settings-toggle" for="preserveWindowSize"><input id="preserveWindowSize" name="preserveSize" type="checkbox" checked disabled><span><strong>Keep size across monitors</strong><small>A window moved to another display keeps its size and relative position.</small></span></label>
           </section>
-          <section class="settings-card" id="prefPalette" role="tabpanel" aria-labelledby="paletteSettingsTitle">
-            <div class="settings-heading"><h2 id="paletteSettingsTitle">Command palette</h2><p>Super + Space searches commands, notes, workspaces, and open windows.</p></div>
-            <label class="settings-field" for="searchTemplate"><span>Web search address</span><input id="searchTemplate" name="searchTemplate" type="text" placeholder="https://duckduckgo.com/?q=%s" autocomplete="off" spellcheck="false"><small>Used by “Search the web” and queries starting with ?. Must start with https:// and contain %s where the search text goes.</small></label>
-            <p class="settings-note">Start a query with = for the calculator (or just type math, such as 18*1.2) and ? for a web search. Backspace in an empty search leaves a mode such as Snippets.</p>
+          <section class="module" aria-labelledby="prefPowerTitle">
+            <div class="module-head"><h2 id="prefPowerTitle">Power</h2></div>
+            <label class="settings-field" for="powerDelay"><span>Delay before power actions</span><select id="powerDelay" disabled><option value="0">None</option><option value="5">5 seconds</option><option value="30">30 seconds</option></select><small>For Restart, Shut down, Sign out and Sleep: a countdown with Cancel on the banner. Apps with unsaved work can still stop a restart or shutdown.</small></label>
           </section>
-          <div class="settings-actions settings-savebar" id="settingsSavebar"><span id="settingsStatus" role="status">Settings are stored locally on this PC.</span><button class="primary" type="submit">Save preferences</button></div>
-        </form>
-
-        <div class="settings-grid settings-grid-secondary">
-          <section class="settings-card settings-card-wide" id="prefAlmanac" role="tabpanel" aria-labelledby="almanacSettingsTitle">
-            <div class="settings-heading"><h2 id="almanacSettingsTitle">Almanac</h2><p>The strip beneath the Command Center title: moon, daylight, your next countdown, and a rotating line with the quote of the day and, if you allow it, Wikipedia's day.</p></div>
-            <label class="settings-toggle" for="almanacWikipedia"><input id="almanacWikipedia" type="checkbox"><span><strong>Wikipedia almanac</strong><small>On this day, today's observances, and the featured article. Once a day ASCS downloads two small feeds from en.wikipedia.org over HTTPS, identifying itself with your email address as Wikimedia asks. They are shown as plain text and cached in data\almanac. Off by default; turning it off deletes the cache.</small></span></label>
-            <div class="settings-row">
-              <span><strong>Location</strong><small>Used for sunrise and sunset, worked out on this PC.</small></span>
-              <span class="settings-value" id="almanacPlace">New York City</span>
-            </div>
-            <div class="settings-actions"><span id="almanacStatus" role="status">Stored in data\settings.ini.</span><span class="settings-action-buttons"><button class="primary" type="button" id="saveAlmanacButton">Save almanac</button></span></div>
-          </section>
-          <section class="settings-card settings-card-wide" id="prefCountdowns" role="tabpanel" aria-labelledby="countdownSettingsTitle">
-            <div class="settings-heading"><h2 id="countdownSettingsTitle">Countdowns</h2><p>The nearest one shows on the Command Center, beside daylight; hover it to see the rest.</p></div>
-            <div class="settings-row settings-row-stack">
-              <span><strong>Your dates</strong><small>MM-DD repeats every year; YYYY-MM-DD happens once. Up to 12. They are sorted when saved: yearly dates January to December, then one-off dates.</small></span>
-              <div id="countdownRows" class="countdown-rows"></div>
-              <p id="countdownsEmpty" class="settings-note">No countdowns yet.</p>
-            </div>
-            <label class="settings-toggle" for="holidayCountdowns"><input id="holidayCountdowns" type="checkbox" checked><span><strong>Count down to US holidays</strong><small>The federal holidays and common observances (Easter, Mother's Day, Halloween…), worked out on this PC. One of yours with the same name or date replaces the holiday. Applies at once.</small></span></label>
-            <div class="settings-actions"><span id="countdownStatus" role="status">Stored in data\settings.ini.</span><span class="settings-action-buttons"><button class="secondary" type="button" id="addCountdownButton">Add countdown</button><button class="primary" type="button" id="saveCountdownsButton">Save countdowns</button></span></div>
-          </section>
-          <section class="settings-card settings-card-wide" id="prefGames" role="tabpanel" aria-labelledby="gamesSettingsTitle">
-            <div class="settings-heading"><h2 id="gamesSettingsTitle">Games &amp; apps</h2><p>The programs behind the Games tab, the PSO session (Super + M4), and recent games (Super + M5, M6, M7). Prefilled from your keyboard macro script.</p></div>
-            <label class="settings-field" for="gamePathRetroarch"><span>RetroArch</span><input id="gamePathRetroarch" data-game-path="retroarch" type="text" autocomplete="off" spellcheck="false"><small>retroarch.exe. Play time comes from its runtime logs; recent games from its history.</small></label>
-            <label class="settings-field" for="gamePathDolphin"><span>Dolphin</span><input id="gamePathDolphin" data-game-path="dolphin" type="text" autocomplete="off" spellcheck="false"><small>Dolphin.exe. Play time comes from TimePlayed.ini.</small></label>
-            <label class="settings-field" for="gamePathPcsx2"><span>PCSX2</span><input id="gamePathPcsx2" data-game-path="pcsx2" type="text" autocomplete="off" spellcheck="false"><small>pcsx2-qt.exe. Play time comes from playtime.dat.</small></label>
-            <label class="settings-field" for="gamePathPso"><span>PSO launcher</span><input id="gamePathPso" data-game-path="pso" type="text" autocomplete="off" spellcheck="false"><small>Ephinea's online.exe, started by the PSO session.</small></label>
-            <label class="settings-field" for="gamePathDiscord"><span>Discord</span><input id="gamePathDiscord" data-game-path="discord" type="text" autocomplete="off" spellcheck="false"><small>Started by the PSO session if it isn't running.</small></label>
-            <label class="settings-field" for="psoVoiceChannel"><span>PSO voice channel</span><input id="psoVoiceChannel" type="text" placeholder="https://discord.com/channels/…" autocomplete="off" spellcheck="false"><small>Opened in Discord by the PSO session. In Discord, turn on Developer Mode (Settings › Advanced), right-click the channel › Copy Link. Leave empty for none.</small></label>
-            <label class="settings-field" for="headphonesDevice"><span>Headphones</span><input id="headphonesDevice" type="text" list="audioDevices" autocomplete="off" spellcheck="false"><datalist id="audioDevices"></datalist><small>The playback device for PSO sessions. Spacing, case and Windows' “2-” prefix don't matter.</small></label>
-            <label class="settings-field" for="soundSwitchKey"><span>SoundSwitch shortcut</span><input id="soundSwitchKey" type="text" placeholder="Ctrl+Alt+F11" autocomplete="off" spellcheck="false"><small>The shortcut SoundSwitch uses to cycle devices; ASCS presses it until the headphones are the default, checking after each press.</small></label>
-            <label class="settings-toggle" for="showCovers"><input id="showCovers" type="checkbox"><span><strong>Cover art</strong><small>Box art from RetroArch's thumbnails and PCSX2's covers folder, read from this PC only (PNG or JPEG, up to 1.5 MB). Nothing is downloaded. On by default.</small></span></label>
-            <div class="settings-row">
-              <span><strong>RetroAchievements</strong><small id="raStatusText">Not set up. Your user name and Web API key go in data\secrets.ini, which stays on this PC and is never committed. The key is never shown in ASCS or sent anywhere except retroachievements.org.</small></span>
-              <button class="secondary" type="button" id="setupRetroAchievements">Open secrets file</button>
-            </div>
-            <div class="settings-actions"><span id="gamesStatus" role="status">Stored in data\settings.ini.</span><span class="settings-action-buttons"><button class="primary" type="button" id="saveGamesButton">Save games &amp; apps</button></span></div>
-          </section>
-          <section class="settings-card settings-card-wide" id="prefCommands" role="tabpanel" aria-labelledby="commandsSettingsTitle">
-            <div class="settings-heading"><h2 id="commandsSettingsTitle">Custom commands</h2><p>Add your own applications, folders, and web links to the command palette, with an optional Super-key letter.</p></div>
-            <div id="commandRows" class="command-rows"></div>
-            <p id="commandsEmpty" class="settings-note">No custom commands yet.</p>
-            <p class="settings-note">Applications must be .exe or .lnk files and start without arguments. Letters follow the same rules as the Shortcuts tab and must be unique.</p>
-            <div class="settings-actions"><span id="commandsStatus" role="status">Stored in data\commands.ini.</span><span class="settings-action-buttons"><button class="secondary" type="button" id="addCommandButton">Add command</button><button class="primary" type="button" id="saveCommandsButton">Save commands</button></span></div>
+          <section class="module" aria-labelledby="prefElsewhereTitle">
+            <div class="module-head"><h2 id="prefElsewhereTitle">On Their Own Pages</h2></div>
+            <p class="pref-note">A setting for one page lives on that page.</p>
+            <ul class="pref-links">
+              <li><button class="link-button" type="button" data-pref-go="games:setup">Games › Setup</button><span>Programs, the PSO session, RetroAchievements</span></li>
+              <li><button class="link-button" type="button" data-pref-go="home:today">Command Center › Today</button><span>The Wikipedia almanac, under the Today module's Settings</span></li>
+              <li><button class="link-button" type="button" data-pref-go="notes">Quick Notes</button><span>Spell-check, at the foot of a note</span></li>
+              <li><button class="link-button" type="button" data-pref-go="sounds">Sounds</button><span>Maestro's own sounds, in the bar</span></li>
+              <li><button class="link-button" type="button" data-pref-go="commands">Commands</button><span>Keys, custom commands, the palette, quick actions</span></li>
+              <li><button class="link-button" type="button" data-pref-go="dashboard:live">System</button><span>Monitored drives, under Live</span></li>
+              <li><button class="link-button" type="button" data-pref-go="calendar">Calendar</button><span>Countdowns</span></li>
+            </ul>
           </section>
         </div>
       </section>
 
       <div class="launcher-backdrop" id="launcher" hidden>
         <section class="launcher-dialog" role="dialog" aria-modal="true" aria-labelledby="launcherTitle">
-          <div class="launcher-heading"><span class="eyebrow">COMMAND PALETTE</span><button class="secondary" id="closeLauncher" type="button" aria-label="Close command launcher">Esc</button></div>
-          <h2 id="launcherTitle">Commands</h2>
+          <div class="launcher-heading"><h2 id="launcherTitle">Command Palette</h2><button class="secondary" id="closeLauncher" type="button" aria-label="Close the command palette">Esc</button></div>
           <label class="sr-only" for="launcherSearch">Search commands</label>
           <div class="launcher-search-row">
             <span class="launcher-mode" id="launcherMode" hidden></span>
             <input id="launcherSearch" type="search" placeholder="Search commands, notes, windows…" autocomplete="off" spellcheck="false">
           </div>
           <div id="launcherResults" class="launcher-results" role="listbox" aria-label="Available commands"></div>
-          <p class="launcher-hint" id="launcherHint"></p>
+          <div class="launcher-foot">
+            <p class="launcher-hint" id="launcherHint"></p>
+            <p class="launcher-anywhere"><kbd>Super</kbd> + <kbd>Space</kbd> opens it from anywhere</p>
+          </div>
         </section>
       </div>
 
       <div class="confirm-backdrop" id="confirmDialog" hidden>
         <section class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogMessage">
-          <span class="eyebrow">CONFIRM</span>
           <h2 id="confirmDialogTitle"></h2>
           <p id="confirmDialogMessage"></p>
           <div class="confirm-actions">
@@ -882,37 +958,24 @@
         </section>
       </div>
 
-      <div class="confirm-backdrop help-backdrop" id="logsDialog" hidden>
-        <section class="help-dialog logs-dialog" id="logs" role="dialog" aria-modal="true" aria-labelledby="logsTitle">
+      <div class="confirm-backdrop help-backdrop" id="todaySettingsDialog" hidden>
+        <section class="help-dialog today-settings" role="dialog" aria-modal="true" aria-labelledby="todaySettingsTitle" tabindex="-1">
           <header class="help-header">
-            <div>
-              <span class="eyebrow">DIAGNOSTICS</span>
-              <h2 id="logsTitle">ASCS Logs</h2>
-              <p class="help-meta">What ASCS and its helpers have been doing, newest first.</p>
-            </div>
-            <button class="help-close" type="button" id="logsClose" aria-label="Close logs" title="Close (Esc)">
+            <div><h2 id="todaySettingsTitle">Today Settings</h2></div>
+            <button class="help-close" type="button" id="todaySettingsClose" aria-label="Close Today settings" title="Close (Esc)">
               <svg viewBox="0 0 10 10" aria-hidden="true"><path d="m1.5 1.5 7 7m0-7-7 7"/></svg>
             </button>
           </header>
-        <div class="logs-toolbar">
-          <div class="logs-sources" role="tablist" aria-label="Log source">
-            <button type="button" role="tab" data-log-source="ascs" aria-selected="true">ASCS</button>
-            <button type="button" role="tab" data-log-source="activity" aria-selected="false">Activity</button>
-            <button type="button" role="tab" data-log-source="codebutton" aria-selected="false">Code key</button>
+          <section class="arrange-today" aria-label="Today">
+            <label class="settings-toggle" for="almanacWikipedia"><input id="almanacWikipedia" type="checkbox" disabled><span><strong>Wikipedia almanac</strong><small>On this day, today's observances and the featured article. Once a day Maestro downloads two small feeds from en.wikipedia.org over HTTPS, identifying itself with your email address as Wikimedia asks. They're shown as plain text and cached in data\almanac. Off by default; turning it off deletes the cache.</small></span></label>
+            <label class="settings-toggle" for="weatherEnabled"><input id="weatherEnabled" type="checkbox" disabled><span><strong>Weather</strong><small>For the Weather module: the weather now and for three days at the location below, from Open-Meteo (open-meteo.com) over HTTPS. Maestro asks only while that module shows, at most every 30 minutes, and sends only the location, to about a kilometer: no account or key. It's cached in data\weather.json; turning it off deletes it.</small></span></label>
+            <p class="arrange-place"><strong>Location</strong> <span id="almanacPlace">New York City</span><small>For sunrise and sunset, worked out on this PC.</small></p>
+            <p class="arrange-status" id="almanacStatus" role="status"></p>
+          </section>
+          <div class="arrange-actions">
+            <span></span>
+            <button class="primary" type="button" id="todaySettingsDone">Done</button>
           </div>
-          <div class="logs-levels" role="group" aria-label="Show">
-            <button type="button" data-log-level="all" aria-pressed="true">All <span data-count="all"></span></button>
-            <button type="button" data-log-level="issues" aria-pressed="false">Issues <span data-count="issues"></span></button>
-            <button type="button" data-log-level="errors" aria-pressed="false">Errors <span data-count="errors"></span></button>
-          </div>
-          <input id="logSearch" class="logs-search" type="search" placeholder="Filter lines" autocomplete="off" spellcheck="false" aria-label="Filter log lines" data-primary-input>
-          <span class="logs-actions">
-            <button class="secondary" type="button" id="copyLogButton">Copy</button>
-            <button class="secondary" type="button" id="openLogButton">Open file</button>
-          </span>
-        </div>
-        <p class="logs-meta" id="logMeta" role="status">Loading…</p>
-        <div id="logList" class="log-list"></div>
         </section>
       </div>
 
@@ -920,8 +983,7 @@
         <section class="help-dialog" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
           <header class="help-header">
             <div>
-              <span class="eyebrow">HELP</span>
-              <h2 id="helpTitle">ASCS at a glance</h2>
+              <h2 id="helpTitle">Maestro at a Glance</h2>
               <p class="help-meta" id="helpMeta"></p>
             </div>
             <button class="help-close" type="button" id="helpClose" aria-label="Close help" title="Close (F1 or Esc)">
@@ -930,11 +992,11 @@
           </header>
           <div class="help-columns">
             <section aria-labelledby="helpInsideTitle">
-              <h3 id="helpInsideTitle">Inside ASCS</h3>
+              <h3 id="helpInsideTitle">Inside Maestro</h3>
               <dl class="help-keys" id="helpInside"></dl>
             </section>
             <section aria-labelledby="helpAnywhereTitle">
-              <h3 id="helpAnywhereTitle">From anywhere</h3>
+              <h3 id="helpAnywhereTitle">From Anywhere</h3>
               <dl class="help-keys" id="helpAnywhere"></dl>
             </section>
           </div>
@@ -943,9 +1005,29 @@
             <div class="help-page-list" id="helpPages"></div>
           </section>
           <footer class="help-footer">
-            <p>Every Super shortcut, on a map of your keyboard, is on the Super Commands page.</p>
+            <p>Every Super shortcut, on a map of your keyboard, is on the Commands page.</p>
             <button class="secondary" type="button" id="helpAllShortcuts">All Super shortcuts</button>
           </footer>
+        </section>
+      </div>
+
+      <div class="confirm-backdrop" id="markdownDialog" hidden>
+        <section class="help-dialog markdown-dialog" role="dialog" aria-modal="true" aria-labelledby="markdownTitle">
+          <header class="help-header">
+            <div>
+              <h2 id="markdownTitle">Markdown Reference</h2>
+              <p class="help-meta">What to type in the text editor, and how the Markdown viewer shows it. Ctrl + M switches between them.</p>
+            </div>
+            <button class="help-close" type="button" id="markdownClose" aria-label="Close the Markdown reference" title="Close (Esc)">
+              <svg viewBox="0 0 10 10" aria-hidden="true"><path d="m1.5 1.5 7 7m0-7-7 7"/></svg>
+            </button>
+          </header>
+          <div class="markdown-ref-scroll">
+            <table class="markdown-ref">
+              <thead><tr><th scope="col">Kind</th><th scope="col">Type</th><th scope="col">Shows</th></tr></thead>
+              <tbody id="markdownRows"></tbody>
+            </table>
+          </div>
         </section>
       </div>
 
@@ -953,8 +1035,7 @@
         <form class="help-dialog cal-dialog" id="calEventForm" role="dialog" aria-modal="true" aria-labelledby="calEventHeading" novalidate>
           <header class="help-header">
             <div>
-              <span class="eyebrow">EVENT</span>
-              <h2 id="calEventHeading">New event</h2>
+              <h2 id="calEventHeading">New Event</h2>
             </div>
             <button class="help-close" type="button" data-cal-close aria-label="Close" title="Close (Esc)"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="m1.5 1.5 7 7m0-7-7 7"/></svg></button>
           </header>
@@ -1033,8 +1114,7 @@
         <form class="help-dialog cal-dialog cal-dialog-small" id="calCalendarForm" role="dialog" aria-modal="true" aria-labelledby="calCalendarHeading" novalidate>
           <header class="help-header">
             <div>
-              <span class="eyebrow">CALENDAR</span>
-              <h2 id="calCalendarHeading">New calendar</h2>
+              <h2 id="calCalendarHeading">New Calendar</h2>
             </div>
             <button class="help-close" type="button" data-cal-close aria-label="Close" title="Close (Esc)"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="m1.5 1.5 7 7m0-7-7 7"/></svg></button>
           </header>
@@ -1042,11 +1122,38 @@
           <input class="cal-summary" id="calCalendarName" type="text" maxlength="60" autocomplete="off">
           <span class="cal-field-label">Color</span>
           <div class="cal-swatches" id="calSwatches" role="radiogroup" aria-label="Color"></div>
+          <div class="cal-custom-color">
+            <label for="calCustomColor">Custom</label>
+            <input id="calCustomColor" type="color" value="#8b6ff5" title="Pick any color">
+            <input id="calCustomHex" type="text" maxlength="7" spellcheck="false" autocomplete="off" placeholder="#8B6FF5" aria-label="Custom color as a hex code">
+          </div>
           <p class="cal-form-error" id="calCalendarError" role="alert" hidden></p>
           <footer class="help-footer cal-dialog-actions">
             <button class="secondary danger" type="button" id="calDeleteCalendar">Delete calendar</button>
-            <button class="secondary" type="button" id="calManageCountdowns" hidden>Manage in Preferences</button>
+            <button class="secondary" type="button" id="calManageCountdowns" hidden>Edit countdowns</button>
             <button class="secondary" type="button" id="calExportCalendar" title="Save this calendar as an .ics file, for another calendar app or as a backup">Export .ics</button>
+            <span class="cal-dialog-spacer"></span>
+            <button class="secondary" type="button" data-cal-close>Cancel</button>
+            <button class="primary" type="submit">Save</button>
+          </footer>
+        </form>
+      </div>
+
+      <div class="confirm-backdrop" id="calCountdownDialog" hidden>
+        <form class="help-dialog cal-dialog cal-countdown-dialog" id="calCountdownForm" role="dialog" aria-modal="true" aria-labelledby="calCountdownHeading" novalidate>
+          <header class="help-header">
+            <div>
+              <h2 id="calCountdownHeading">Countdowns</h2>
+            </div>
+            <button class="help-close" type="button" data-cal-close aria-label="Close" title="Close (Esc)"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="m1.5 1.5 7 7m0-7-7 7"/></svg></button>
+          </header>
+          <p class="cal-move-text">MM-DD repeats every year; YYYY-MM-DD happens once. Up to 12, sorted when saved. The nearest shows on the Command Center.</p>
+          <div id="countdownRows" class="countdown-rows"></div>
+          <p id="countdownsEmpty" class="settings-note">No countdowns yet.</p>
+          <div><button class="secondary" type="button" id="addCountdownButton">Add countdown</button></div>
+          <label class="settings-toggle" for="holidayCountdowns"><input id="holidayCountdowns" type="checkbox" checked><span><strong>Count down to US holidays</strong><small>The federal holidays and common observances, worked out on this PC. One of yours with the same name or date replaces the holiday. Applies at once.</small></span></label>
+          <p class="cal-form-error" id="countdownStatus" role="status"></p>
+          <footer class="help-footer cal-dialog-actions">
             <span class="cal-dialog-spacer"></span>
             <button class="secondary" type="button" data-cal-close>Cancel</button>
             <button class="primary" type="submit">Save</button>
@@ -1058,8 +1165,7 @@
         <div class="help-dialog cal-dialog cal-dialog-small" role="dialog" aria-modal="true" aria-labelledby="calMoveHeading">
           <header class="help-header">
             <div>
-              <span class="eyebrow">REPEATING EVENT</span>
-              <h2 id="calMoveHeading">Move a repeating event</h2>
+              <h2 id="calMoveHeading">Move a Repeating Event</h2>
             </div>
           </header>
           <p class="cal-move-text" id="calMoveText"></p>
@@ -1076,8 +1182,7 @@
         <form class="help-dialog cal-dialog cal-dialog-small" id="calImportForm" role="dialog" aria-modal="true" aria-labelledby="calImportHeading" novalidate>
           <header class="help-header">
             <div>
-              <span class="eyebrow">IMPORT</span>
-              <h2 id="calImportHeading">Import events</h2>
+              <h2 id="calImportHeading">Import Events</h2>
             </div>
             <button class="help-close" type="button" data-cal-close aria-label="Close" title="Close (Esc)"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="m1.5 1.5 7 7m0-7-7 7"/></svg></button>
           </header>
@@ -1097,12 +1202,22 @@
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
     </main>
   </div>
+  <script src="attention.js"></script>
+  <script src="hardware.js"></script>
+  <script src="powerkeys.js"></script>
+  <script src="appearance.js"></script>
+  <script src="viewhistory.js"></script>
+  <script src="keynav.js"></script>
+  <script src="homelayout.js"></script>
+  <script src="sectiontabs.js"></script>
+  <script src="dragsort.js"></script>
   <script src="palette.js"></script>
   <script src="keymap.js"></script>
   <script src="notes.js"></script>
   <script src="charts.js"></script>
   <script src="almanac.js"></script>
   <script src="quotes.js"></script>
+  <script src="composers.js"></script>
   <script src="logs.js"></script>
   <script src="games.js"></script>
   <script src="sounds.js"></script>
@@ -1112,7 +1227,11 @@
   <script src="soundsview.js"></script>
   <script src="calendarview.js"></script>
   <script src="awardsview.js"></script>
+  <script src="commandsview.js"></script>
+  <script src="systemview.js"></script>
   <script src="gamenotes.js"></script>
   <script src="workspacesview.js"></script>
+  <script src="homeview.js"></script>
+  <script src="homemodules.js"></script>
 </body>
 </html>

@@ -1,0 +1,318 @@
+/* ==========================================================================
+   2.0.0: Preferences, and the settings that moved to their own pages: Games ›
+   Setup, the Today section in Arrange, Maestro sounds in the Sounds bar, and
+   spell-check at the foot of a note. Everything saves as it changes, so there
+   are no Save buttons.
+   ========================================================================== */
+
+/* ---- Fields, shared by Preferences, Games › Setup and Arrange ---- */
+
+:root .settings-field {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+:root .settings-field > span {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-body);
+  font-weight: 600;
+}
+
+:root .settings-field > span output {
+  color: var(--brand-tint-text);
+  font-family: var(--font-body);
+  font-size: var(--t-sub);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+:root .settings-field > small,
+:root .settings-toggle small,
+:root .settings-row small {
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+  line-height: 1.45;
+}
+
+:root .settings-field > input:not([type="range"]),
+:root .settings-field > select {
+  width: 100%;
+  min-height: var(--height-control);
+  padding: 0 14px;
+  font-size: var(--t-body);
+}
+
+:root .settings-field > select {
+  padding-right: 34px;
+}
+
+:root .settings-field > input[type="range"] {
+  width: 100%;
+}
+
+:root .settings-field :disabled,
+:root .settings-toggle :disabled {
+  opacity: .55;
+  cursor: progress;
+}
+
+/* A checkbox drawn as a switch, at the 2.0.0 size (as in Workspaces). */
+:root .settings-toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+}
+
+:root .settings-toggle > span {
+  display: grid;
+  gap: 4px;
+  grid-column: 1;
+  grid-row: 1;
+}
+
+:root .settings-toggle strong {
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-body);
+  font-weight: 600;
+}
+
+:root .settings-toggle > input[type="checkbox"],
+:root .note-spellcheck > input[type="checkbox"] {
+  position: relative;
+  flex: none;
+  width: 48px;
+  height: 26px;
+  margin: 2px 0 0;
+  border: 1px solid var(--line-control);
+  border-radius: 13px;
+  background: var(--surface-field);
+  cursor: pointer;
+  appearance: none;
+}
+
+:root .settings-toggle > input[type="checkbox"] {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+:root .settings-toggle > input[type="checkbox"]::after,
+:root .note-spellcheck > input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-soft);
+  transition: left .12s ease;
+}
+
+:root .settings-toggle > input[type="checkbox"]:checked,
+:root .note-spellcheck > input[type="checkbox"]:checked {
+  border-color: var(--brand-tint);
+  background: var(--brand-indigo-control);
+}
+
+:root .settings-toggle > input[type="checkbox"]:checked::after,
+:root .note-spellcheck > input[type="checkbox"]:checked::after {
+  left: 25px;
+  background: #ffffff;
+}
+
+:root .settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+:root .settings-row > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+:root .settings-row strong {
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-body);
+  font-weight: 600;
+}
+
+:root .settings-row > button {
+  flex: none;
+}
+
+.pref-note {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: var(--t-body);
+  line-height: 1.45;
+}
+
+/* ---- Preferences ---- */
+
+.pref-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(440px * var(--text-scale))), 1fr));
+  align-items: start;
+  gap: var(--space-between);
+}
+
+:root #settings .module {
+  gap: 20px;
+}
+
+.pref-links {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pref-links li {
+  display: grid;
+  gap: 2px;
+}
+
+.pref-links .link-button {
+  justify-self: start;
+  font-size: var(--t-body);
+}
+
+.pref-links span {
+  padding-left: 13px;
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+/* ---- Games › Setup ---- */
+
+.games-setup {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-content: start;
+  align-items: start;
+  gap: var(--space-between);
+}
+
+.games-setup[hidden] {
+  display: none;
+}
+
+.games-setup > .module {
+  grid-column: span 4;
+  gap: 20px;
+}
+
+@media (max-width: 1500px) {
+  .games-setup > .module {
+    grid-column: span 6;
+  }
+}
+
+@media (max-width: 1100px) {
+  .games-setup > .module {
+    grid-column: span 12;
+  }
+}
+
+/* ---- Maestro sounds, in the Sounds bar ---- */
+
+.sounds-maestro {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-soft);
+  font-family: var(--font-display);
+  font-size: var(--t-sub);
+  white-space: nowrap;
+}
+
+:root .sounds-maestro select {
+  min-height: var(--height-control);
+  padding: 0 34px 0 12px;
+  font-size: var(--t-body);
+}
+
+/* ---- Today, in Arrange ---- */
+
+.arrange-today {
+  display: grid;
+  gap: 14px;
+  margin-top: 8px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+:root .arrange-today h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-subhead);
+  font-weight: 600;
+}
+
+.arrange-place {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--t-body);
+}
+
+.arrange-place strong {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+.arrange-place small {
+  flex-basis: 100%;
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+.arrange-status {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+.arrange-status:empty {
+  display: none;
+}
+
+/* ---- Spell-check, at the foot of a note ---- */
+
+.note-spellcheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+  cursor: pointer;
+}
+
+:root .note-spellcheck > input[type="checkbox"] {
+  margin: 0;
+}

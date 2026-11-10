@@ -18,7 +18,8 @@ LoadSoundSettings() {
         WriteLog("Sounds: " err.Message)
     reminder := ExpandEnvironment(ReadWindowsSound([".Default", "Notification.Reminder", ""])["value"])
     ASCS_AscsSoundFiles["reminder"] := reminder != "" ? reminder : A_WinDir "\Media\Windows Notify Calendar.wav"
-    for kind in ["show", "hide", "reminder"] {
+    ASCS_AscsSoundFiles["timer"] := A_WinDir "\Media\Windows Notify System Generic.wav"
+    for kind in AscsSoundLabels() {
         path := IniRead(ASCS_SettingsFile, "Sounds", AscsSoundKey(kind), "")
         if (path != "" && FileExist(path) && RegExMatch(path, "i)\.wav$"))
             ASCS_AscsSoundFiles[kind] := path
@@ -381,7 +382,7 @@ RecordLeveledOrigin(copyPath, originPath) {
     try IniWrite(originPath, ASCS_OriginsFile, "Origins", name)
 }
 
-; Copies saved with Selected sound › Save leveled copy are yours: they're
+; Copies saved with Selected Sound › Save leveled copy are yours: they're
 ; never cleared away when something stops using them (RetireReplacedCopy).
 MarkLeveledCopySaved(copyPath) {
     global ASCS_OriginsFile
@@ -504,7 +505,7 @@ StartupSounds() {
 ; Written whole, as UTF-16 (so IniRead reads any path), then moved into place.
 WriteStartupSounds(sounds) {
     global ASCS_StartupFile
-    text := "; Startup sounds, written by ASCS (Sounds > Startup). Read at sign-in by`r`n"
+    text := "; Startup sounds, written by Maestro (Sounds > Startup). Read at sign-in by`r`n"
         . "; C:\Scripts\SignIn.ahk and at shutdown by Shutdown Sound.ahk.`r`n"
         . "; Sign-in entries are chance|path; the chances add up to 100.`r`n"
         . "[SignIn]`r`nCount=" sounds["signin"].Length "`r`n"
@@ -839,16 +840,16 @@ RestoreAllSounds() {
             WriteLog("Sounds: couldn't restore " event[3] ": " err.Message)
         }
     }
-    for kind in ["show", "hide", "reminder"] {
+    for kind in AscsSoundLabels() {
         try restored += RestoreAscsSoundValue(kind)
         catch as err {
             failed++
-            WriteLog("Sounds: couldn't restore the ASCS " kind " sound: " err.Message)
+            WriteLog("Sounds: couldn't restore the Maestro " kind " sound: " err.Message)
         }
     }
     if restored
         RecordActivity("system", "Sounds restored: " restored)
-    message := !restored && !failed ? "Nothing to restore: ASCS hasn't changed any sounds."
+    message := !restored && !failed ? "Nothing to restore: Maestro hasn't changed any sounds."
         : restored " sound" (restored = 1 ? "" : "s") " restored" (failed ? "; " failed " couldn't be (see Logs)." : ".")
     SendToFrontend('{"type":"notice","message":' JsonQuote(message) '}')
     SendWindowsSounds()
@@ -874,7 +875,7 @@ DeleteLeveledSound(id) {
 ; one a Windows event or ASCS sound plays now.
 RecycleLeveledCopy(id) {
     if !IsLeveledCopyId(id)
-        throw Error("Only leveled copies in ASCS Leveled can be deleted here.")
+        throw Error("Only leveled copies in Maestro Leveled can be deleted here.")
     path := IndexedSound(id)["path"]
     if !FileExist(path)
         throw Error("It's already gone.")
@@ -893,7 +894,7 @@ LeveledCopyUse(path, backups := false) {
     for event in WindowsSoundEvents()
         if (ResolveSoundPath(ExpandEnvironment(ReadWindowsSound(event)["value"]), A_WinDir) = path)
             return event[3] " plays it now. Restore or change that first."
-    for kind, label in Map("show", "ASCS show", "hide", "ASCS hide", "reminder", "Calendar reminder")
+    for kind, label in AscsSoundLabels()
         if (ASCS_AscsSoundFiles[kind] = path)
             return label " plays it now. Restore or change that first."
     startup := StartupSounds()
@@ -954,12 +955,12 @@ PreviewWindowsSound(content) {
 
 ; ---- ASCS's own show/hide sounds, chosen from the library
 
-AscsSoundKey(kind) => Map("show", "ShowFile", "hide", "HideFile", "reminder", "ReminderFile")[kind]
+AscsSoundKey(kind) => Map("show", "ShowFile", "hide", "HideFile", "reminder", "ReminderFile", "timer", "TimerFile")[kind]
 
 AscsSoundsJson() {
     global ASCS_AscsSoundFiles, ASCS_SoundLibrary, ASCS_SettingsFile
     json := ""
-    for kind in ["show", "hide", "reminder"] {
+    for kind in AscsSoundLabels() {
         path := ASCS_AscsSoundFiles[kind]
         SplitPath(path, &file)
         id := InStr(path, ASCS_SoundLibrary "\") = 1 ? SubStr(path, StrLen(ASCS_SoundLibrary) + 2) : ""
@@ -979,18 +980,18 @@ ApplyAscsSound(kind, path) {
     replaced := ASCS_AscsSoundFiles[kind]
     ASCS_AscsSoundFiles[kind] := path
     IniWrite(path, ASCS_SettingsFile, "Sounds", AscsSoundKey(kind))
-    WriteLog("Sounds: ASCS " kind " sound set to " path ".")
+    WriteLog("Sounds: Maestro " kind " sound set to " path ".")
     if (replaced != path)
         RetireReplacedCopy(replaced)
 }
 
 RestoreAscsSound(kind) {
     try {
-        if !(kind = "show" || kind = "hide" || kind = "reminder")
+        if !AscsSoundLabels().Has(kind)
             throw Error("Malformed request.")
         if !RestoreAscsSoundValue(kind)
             throw Error("Nothing to restore.")
-        SendToFrontend('{"type":"notice","message":' JsonQuote(Map("show", "ASCS show", "hide", "ASCS hide", "reminder", "Calendar reminder")[kind] " sound restored.") '}')
+        SendToFrontend('{"type":"notice","message":' JsonQuote(AscsSoundLabels()[kind] " sound restored.") '}')
     } catch as err {
         SendToFrontend('{"type":"notice","message":' JsonQuote(err.Message) '}')
     }
@@ -1009,24 +1010,24 @@ RestoreAscsSoundValue(kind) {
     ASCS_AscsSoundFiles[kind] := path
     IniWrite(path, ASCS_SettingsFile, "Sounds", AscsSoundKey(kind))
     IniDelete(ASCS_SettingsFile, "AscsSoundBackup", kind)
-    WriteLog("Sounds: ASCS " kind " sound restored.")
+    WriteLog("Sounds: Maestro " kind " sound restored.")
     if (replaced != path)
         RetireReplacedCopy(replaced)
     return true
 }
 
-; Payload: show|id or hide|id.
+; Payload: kind|id, the kind show, hide, reminder or timer.
 SetAscsSound(content) {
     global ASCS_SettingsFile, ASCS_AscsSoundFiles
     try {
         parts := StrSplit(content, "|", , 2)
-        if (parts.Length != 2 || !(parts[1] = "show" || parts[1] = "hide" || parts[1] = "reminder"))
+        if (parts.Length != 2 || !AscsSoundLabels().Has(parts[1]))
             throw Error("Malformed request.")
         sound := IndexedSound(parts[2])
         if (sound["ext"] != "wav")
-            throw Error("ASCS's own sounds must be WAV files.")
+            throw Error("Maestro's own sounds must be WAV files.")
         ApplyAscsSound(parts[1], sound["path"])
-        SendToFrontend('{"type":"notice","message":' JsonQuote(Map("show", "ASCS show", "hide", "ASCS hide", "reminder", "Calendar reminder")[parts[1]] " sound: " sound["name"] ".") '}')
+        SendToFrontend('{"type":"notice","message":' JsonQuote(AscsSoundLabels()[parts[1]] " sound: " sound["name"] ".") '}')
     } catch as err {
         SendToFrontend('{"type":"notice","message":' JsonQuote(err.Message) '}')
     }

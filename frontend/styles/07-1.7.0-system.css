@@ -16,8 +16,8 @@
 }
 
 .power-hint {
-  color: #7d8298;
-  font-size: 11.5px;
+  color: var(--text-muted);
+  font-size: var(--t-floor);
   transition: color 200ms ease;
 }
 
@@ -80,7 +80,7 @@
 }
 
 .power-button span {
-  font-size: 12px;
+  font-size: var(--t-floor);
   font-weight: 600;
 }
 
@@ -88,7 +88,7 @@
   max-width: 100%;
   overflow: hidden;
   color: #8f94aa;
-  font-size: 10.5px;
+  font-size: var(--t-floor);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -135,7 +135,7 @@
   color: #d9dbe6;
   cursor: pointer;
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--t-floor);
   text-align: left;
 }
 
@@ -165,7 +165,7 @@
   border-radius: 10px;
   background: rgba(201, 162, 74, .1);
   color: #ecd9a8;
-  font-size: 12.5px;
+  font-size: var(--t-floor);
   line-height: 1.5;
 }
 
@@ -191,7 +191,7 @@
 }
 
 .power-banner strong {
-  font-size: 13.5px;
+  font-size: var(--t-floor);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
@@ -251,7 +251,6 @@
    Continue playing is a sideways-scrolling row with snap points.
    ========================================================================== */
 
-#settings .settings-nav,
 .logs-sources,
 .logs-levels {
   flex-wrap: nowrap;
@@ -260,49 +259,15 @@
   scrollbar-width: none;
 }
 
-#settings .settings-nav::-webkit-scrollbar,
 .logs-sources::-webkit-scrollbar,
-.logs-levels::-webkit-scrollbar,
-.games-continue::-webkit-scrollbar {
+.logs-levels::-webkit-scrollbar {
   display: none;
 }
 
-#settings .settings-nav button,
 .logs-sources button,
 .logs-levels button {
   flex: 0 0 auto;
   white-space: nowrap;
-}
-
-.games-continue {
-  display: grid;
-  grid-auto-columns: max(150px, calc((100% - 5 * 14px) / 6));
-  grid-auto-flow: column;
-  grid-template-columns: none;
-  padding-bottom: 4px;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scroll-snap-type: x proximity;
-  scrollbar-width: none;
-}
-
-.games-continue.has-more {
-  mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent);
-}
-
-.games-continue .game-tile {
-  scroll-snap-align: start;
-}
-
-.games-continue > p {
-  grid-column: 1 / -1;
-}
-
-@media (max-width: 1250px) {
-  .games-continue {
-    grid-auto-columns: max(150px, calc((100% - 3 * 14px) / 4));
-    grid-template-columns: none;
-  }
 }
 
 /* ==========================================================================
@@ -342,8 +307,8 @@
   align-items: center;
   gap: 5px;
   padding: 0 6px 0 7px;
-  color: #7d8298;
-  font-size: 9.5px;
+  color: var(--text-muted);
+  font-size: var(--t-floor);
   font-weight: 700;
   letter-spacing: 1.3px;
 }
@@ -386,7 +351,7 @@
   color: #d9dbe6;
   cursor: pointer;
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--t-floor);
   font-weight: 600;
   white-space: nowrap;
   touch-action: none;
@@ -427,7 +392,7 @@
 
 .system-button small {
   color: #8f94aa;
-  font-size: 11px;
+  font-size: var(--t-floor);
   font-weight: 500;
 }
 
@@ -474,240 +439,6 @@
   background: rgba(32, 25, 12, .97);
 }
 
-/* ---- RetroAchievements badges and game icons ---- */
-.ra-with-image {
-  display: grid !important;
-  grid-template-columns: 40px minmax(0, 1fr);
-  align-items: start;
-  gap: 12px;
-}
-
-.ra-item-body {
-  display: grid;
-  min-width: 0;
-  gap: 3px;
-}
-
-.ra-image {
-  display: block;
-  width: 40px;
-  height: 40px;
-  overflow: hidden;
-  border: 1px solid rgba(167, 174, 202, .14);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, .04);
-}
-
-.ra-image img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.ra-badge.is-hardcore {
-  border-color: var(--gold-border, rgba(227, 192, 114, .6));
-  box-shadow: 0 0 8px rgba(227, 192, 114, .25);
-}
-
-/* ==========================================================================
-   1.7.0: Now playing
-   The game in front gets its cover as a soft, blurred backdrop, a session
-   timer, total play time, achievement progress and Show file.
-   ========================================================================== */
-
-.games-now {
-  position: relative;
-  overflow: hidden;
-  isolation: isolate;
-}
-
-.games-now > :not(.now-backdrop) {
-  position: relative;
-}
-
-.now-backdrop {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-}
-
-.now-backdrop img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  filter: blur(26px) saturate(1.25);
-  opacity: .26;
-  transform: scale(1.25);
-  -webkit-mask-image: linear-gradient(100deg, rgba(0, 0, 0, .35) 0%, #000 70%);
-  mask-image: linear-gradient(100deg, rgba(0, 0, 0, .35) 0%, #000 70%);
-}
-
-.games-now.is-playing {
-  border-color: rgba(79, 209, 139, .22);
-}
-
-.games-now.is-playing > .games-panel-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: #8fe0b3;
-}
-
-.games-now.is-playing > .games-panel-label::before {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #4fd18b;
-  box-shadow: 0 0 8px rgba(79, 209, 139, .6);
-  content: "";
-  animation: now-pulse 2.4s ease-in-out infinite;
-}
-
-@keyframes now-pulse {
-  50% { opacity: .45; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .games-now.is-playing > .games-panel-label::before { animation: none; }
-}
-
-.now-main {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 14px;
-}
-
-.game-cover-now {
-  flex: 0 0 auto;
-  width: 58px;
-  height: 78px;
-  border-radius: 8px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
-}
-
-.now-dot {
-  flex: 0 0 auto;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #4fd18b;
-}
-
-.now-copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.now-kicker {
-  color: #8f94aa;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 1.1px;
-}
-
-.now-copy .now-title {
-  overflow: hidden;
-  color: #eef0f7;
-  font-size: 19px;
-  font-weight: 600;
-  letter-spacing: -.2px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.now-copy small {
-  overflow: hidden;
-  color: #8f94aa;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.now-stats {
-  display: flex;
-  gap: 26px;
-}
-
-.now-stats span {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.now-stats small,
-.now-ra-head small {
-  color: #8f94aa;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 1.1px;
-}
-
-.now-stats strong {
-  color: #eef0f7;
-  font-size: 20px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.now-stats .now-session {
-  color: #8fe0b3;
-}
-
-.now-ra {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.now-ra-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.now-ra-head strong {
-  color: var(--gold-text);
-  font-size: 12.5px;
-  font-weight: 600;
-}
-
-.now-ra-latest,
-.now-presence {
-  overflow: hidden;
-  margin: 0;
-  color: #a4a9bb;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.now-presence {
-  color: #8f94aa;
-  font-style: italic;
-}
-
-.now-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: auto;
-}
-
-.now-actions button {
-  min-height: 30px;
-  padding: 0 14px;
-}
-
-.now-stats .now-actions {
-  align-self: flex-end;
-  margin: 0 0 0 auto;
-}
-
 /* 1.8.0: selects in Preferences match the text fields. */
 .settings-field select {
   min-height: 43px;
@@ -724,14 +455,6 @@
   color: #eef0f7;
 }
 
-.settings-subheading {
-  margin-top: 14px;
-  padding-top: 18px;
-  border-top: 1px solid rgba(152, 151, 181, .12);
-}
-
-
-
 /* 1.8.0: Ctrl numbers on the sidebar, and the shortcuts button in the title bar. */
 .nav .nav-key {
   margin-left: auto;
@@ -740,9 +463,9 @@
   border: 1px solid rgba(167, 174, 202, .14);
   border-radius: 5px;
   background: rgba(255, 255, 255, .03);
-  color: #6f7489;
+  color: var(--text-muted);
   font-family: inherit;
-  font-size: 10px;
+  font-size: var(--t-floor);
   font-weight: 600;
   line-height: 1.4;
   text-align: center;
@@ -768,7 +491,7 @@
   color: #8f94aa;
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--t-floor);
   font-weight: 700;
   line-height: 1;
   -webkit-app-region: no-drag;
@@ -785,4 +508,3 @@
 body.sidebar-collapsed .nav .nav-key {
   display: none;
 }
-

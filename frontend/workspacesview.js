@@ -1,17 +1,18 @@
-// The Workspaces view (1.10.0): a strip to choose a saved workspace or the
-// launch rules, then the whole page for it. A canvas draws one desktop at its
-// monitor's real shape; the panel beside it edits the selected window. Edits
-// change only the saved file, never an open window: Restore is what moves them.
-// The page sends places and switches, and an app's path only ever comes from a
-// real window, in AHK.
+// The Workspaces view (1.10.0; 2.0.0 layout). Two sections: Workspaces, where the
+// saved workspaces are listed beside the one being edited, and Launch Rules. A
+// canvas draws one desktop at its monitor's real shape; Selected Window edits
+// the window chosen on it. Edits change only the saved file, never an open
+// window: Restore is what moves them. The page sends places and switches, and an
+// app's path only ever comes from a real window, in AHK.
 
 const wsView = {
-    page: "workspace",      // or "rules"
+    page: "workspace",      // or "rules": follows the section tabs
+    loaded: false,          // the first list has arrived
     selected: "",           // the workspace's name
     desktop: null,          // the desktop tab's key
     window: 0,              // the selected window's index in the file
     monitors: 1,
-    saving: false,          // the Save current as… chip is showing its name field
+    saving: false,          // the save field is showing
     naming: false,          // the heading is showing a name field
     addOpen: false,
     addChoice: "",
@@ -26,6 +27,16 @@ let launchRules = [];
 const currentWorkspace = () => savedWorkspaces.find(item => item.name.toLowerCase() === wsView.selected.toLowerCase()) || savedWorkspaces[0] || null;
 const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
+// Launch Rules asks for the open windows, which its picker lists.
+const workspaceSections = MaestroSections.create($("workspaceSections"), {
+    onChange(section) {
+        wsView.page = section === "rules" ? "rules" : "workspace";
+        if (section === "rules") send("GetWindows");
+        renderWorkspaceManager();
+        window.scrollTo(0, 0);
+    }
+});
+
 function wsButton(label, className, onClick, hint = "") {
     const node = element("button", className, label);
     node.type = "button";
@@ -34,7 +45,7 @@ function wsButton(label, className, onClick, hint = "") {
     return node;
 }
 
-// A tiny drawing of where windows sit: for the chips and the launch rules.
+// A tiny drawing of where windows sit: for the list and the launch rules.
 function wsThumb(windows) {
     const thumb = element("span", "ws-thumb");
     windows.forEach(win => {
@@ -50,6 +61,7 @@ function wsThumb(windows) {
 
 function renderWorkspaceManager(monitors) {
     if (Number.isInteger(monitors) && monitors >= 1) wsView.monitors = monitors;
+    if (monitors !== undefined) wsView.loaded = true;
     if (monitors !== undefined && wsView.expect) {
         if (savedWorkspaces.some(item => item.name.toLowerCase() === wsView.expect.toLowerCase())) {
             wsView.selected = wsView.expect;
@@ -72,63 +84,68 @@ function renderWorkspaceManager(monitors) {
     const view = $("workspaces");
     if (wsView.drag || !view.classList.contains("active")) return;
     const focusKey = view.contains(document.activeElement) ? document.activeElement.dataset.wsFocus : "";
-    renderWorkspaceStrip();
-    const rules = wsView.page === "rules";
-    const workspace = rules ? null : currentWorkspace();
-    $("rulesPage").hidden = !rules;
-    $("workspacePage").hidden = !workspace;
-    $("workspacesEmpty").hidden = rules || Boolean(workspace);
-    if (rules) renderRulesPage();
-    else if (workspace) renderWorkspacePage(workspace);
+    if (wsView.page === "rules") {
+        renderRulesPage();
+    } else {
+        renderWorkspaceList();
+        const workspace = currentWorkspace();
+        $("workspacePage").hidden = !workspace;
+        $("workspacesEmpty").hidden = Boolean(workspace);
+        if (workspace) renderWorkspacePage(workspace);
+        else renderWorkspaceWaiting();
+    }
     if (focusKey) view.querySelector(`[data-ws-focus="${CSS.escape(focusKey)}"]`)?.focus({ preventScroll: true });
 }
 
-// ---- the strip
+// Before the first list arrives, and when there's nothing saved: the editor and
+// the panel keep their space, so nothing moves when one arrives.
+function renderWorkspaceWaiting() {
+    $("workspaceTitle").removeAttribute("data-user-text");
+    if (!wsView.naming) $("workspaceTitle").textContent = wsView.loaded ? "No Saved Arrangements Yet" : "Workspaces";
+    $("workspaceMeta").textContent = "";
+    $("workspaceActions").replaceChildren();
+    $("workspacesEmpty").replaceChildren(wsView.loaded
+        ? element("p", "module-empty", "Arrange your windows on your desktops, then save them with Save open windows. Super + S saves them as Default.")
+        : loadingNote("Loading arrangements"));
+    $("wsWindowTitle").textContent = "Selected Window";
+    $("wsWindowTitle").removeAttribute("data-user-text");
+    $("wsWindowSub").hidden = true;
+    $("workspaceInspector").replaceChildren(element("p", "module-empty", wsView.loaded ? "A saved window's place shows here." : ""));
+}
 
-function renderWorkspaceStrip() {
-    const strip = $("workspaceStrip");
-    // An open save field is kept as it is, so what's being typed isn't lost.
-    const openForm = wsView.saving ? strip.querySelector(".ws-save") : null;
-    const typing = Boolean(openForm) && openForm.contains(document.activeElement);
-    strip.replaceChildren();
-    const chip = (label, meta, on, onClick, focusKey, thumb) => {
-        const node = element("button", "ws-chip");
-        node.type = "button";
-        node.dataset.wsChip = "";
-        node.dataset.wsFocus = focusKey;
-        node.setAttribute("aria-pressed", on ? "true" : "false");
-        if (thumb) node.append(thumb);
-        const copy = element("span", "ws-chip-copy");
-        copy.append(element("strong", "", label), element("small", "", meta));
-        node.append(copy);
-        node.addEventListener("click", onClick);
-        return node;
-    };
-    savedWorkspaces.forEach(workspace => {
+// ---- the list
+
+function renderWorkspaceList() {
+    const list = $("workspaceList");
+    if (!wsView.loaded) {
+        list.replaceChildren(loadingNote("Loading arrangements"));
+        renderWorkspaceSave();
+        return;
+    }
+    list.replaceChildren(...savedWorkspaces.map(workspace => {
         const windows = Workspaces.workspaceWindows(workspace.layout);
         const desktops = Workspaces.workspaceDesktops(workspace).filter(tab => typeof tab.key === "number" && tab.count);
         const first = desktops[0] ? windows.filter(win => win.key === desktops[0].key) : windows;
-        const on = wsView.page === "workspace" && workspace === currentWorkspace();
-        strip.append(chip(workspace.name, `${plural(windows.length, "window")}${desktops.length > 1 ? ` · ${desktops.length} desktops` : ""}`,
-            on, () => selectWorkspace(workspace.name), `chip:${workspace.name}`, wsThumb(first)));
-    });
-    strip.append(openForm || (wsView.saving ? workspaceSaveForm() : wsButton("+ Save current as…", "ws-chip ws-chip-add", () => {
-        wsView.saving = true;
-        renderWorkspaceManager();
-    })));
-    if (typing) openForm.querySelector("input").focus({ preventScroll: true });
-    strip.append(element("span", "ws-strip-gap"));
-    const active = launchRules.filter(rule => rule.enabled).length;
-    strip.append(chip("Launch rules", launchRules.length ? `${plural(launchRules.length, "rule")} · ${active} on` : "Where apps open",
-        wsView.page === "rules", () => {
-            wsView.page = "rules";
-            send("GetWindows");
-            renderWorkspaceManager();
-        }, "chip:rules"));
+        const on = workspace === currentWorkspace();
+        const item = element("li");
+        const node = element("button", "ws-item");
+        node.type = "button";
+        node.dataset.wsLayout = "";
+        node.dataset.wsFocus = `layout:${workspace.name}`;
+        node.setAttribute("aria-pressed", on ? "true" : "false");
+        const copy = element("span", "ws-item-copy");
+        copy.append(element("strong", "", workspace.name),
+            element("small", "", `${plural(windows.length, "window")}${desktops.length > 1 ? ` · ${desktops.length} desktops` : ""}`));
+        node.append(wsThumb(first), copy);
+        node.addEventListener("click", () => selectWorkspace(workspace.name));
+        item.append(node);
+        return item;
+    }));
+    if (!savedWorkspaces.length) list.append(element("li", "module-empty", "None yet."));
+    renderWorkspaceSave();
 }
 
 function selectWorkspace(name) {
-    wsView.page = "workspace";
     if (name.toLowerCase() !== currentWorkspace()?.name.toLowerCase()) {
         wsView.desktop = null;
         wsView.window = 0;
@@ -138,14 +155,26 @@ function selectWorkspace(name) {
     renderWorkspaceManager();
 }
 
+// The save field stays as it is while it's open, so what's being typed isn't
+// lost when a reply redraws the list.
+function renderWorkspaceSave() {
+    const holder = $("workspaceSave");
+    const openForm = holder.querySelector(".ws-save");
+    if (wsView.saving && openForm) return;
+    holder.replaceChildren(wsView.saving ? workspaceSaveForm() : wsButton("Save open windows…", "secondary ws-save-open", () => {
+        wsView.saving = true;
+        renderWorkspaceManager();
+    }, "Save the windows open now, on every desktop, as a new arrangement"));
+}
+
 function workspaceSaveForm() {
-    const form = element("form", "ws-chip ws-save");
+    const form = element("form", "ws-save");
     const input = element("input");
     input.type = "text";
     input.maxLength = 40;
     input.placeholder = "Name, such as Coding";
     input.autocomplete = "off";
-    input.setAttribute("aria-label", "Workspace name");
+    input.setAttribute("aria-label", "Arrangement name");
     const finish = () => {
         wsView.saving = false;
         renderWorkspaceManager();
@@ -154,23 +183,22 @@ function workspaceSaveForm() {
         event.preventDefault();
         const name = input.value.trim();
         if (!Palette.isValidWorkspaceName(name)) {
-            showToast("Workspace names use letters, numbers, spaces, - and _ (up to 40 characters).");
+            showToast("Arrangement names use letters, numbers, spaces, - and _ (up to 40 characters).");
             input.focus();
             return;
         }
         if (savedWorkspaces.some(item => item.name.toLowerCase() === name.toLowerCase())) {
-            const ok = await confirmDialog({ title: `Save over “${name}”?`, message: "It's replaced by the windows open now, on every desktop.", confirmLabel: "Save over" });
+            const ok = await confirmDialog({ title: `Save Over “${name}”?`, message: "It's replaced by the windows open now, on every desktop.", confirmLabel: "Save over" });
             if (!ok) { input.focus(); return; }
         }
         wsView.expect = name;
         send("SaveWorkspace", name);
-        wsView.page = "workspace";
         finish();
     });
     input.addEventListener("keydown", event => {
         if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); finish(); }
     });
-    form.append(input, wsSubmit("Save"));
+    form.append(input, wsSubmit("Save"), wsButton("Cancel", "secondary", finish));
     requestAnimationFrame(() => input.focus());
     return form;
 }
@@ -186,6 +214,7 @@ function wsSubmit(label) {
 function renderWorkspacePage(workspace) {
     if (!wsView.naming) {
         $("workspaceTitle").replaceChildren(document.createTextNode(workspace.name));
+        $("workspaceTitle").setAttribute("data-user-text", "");
         renderWorkspaceHead(workspace);
     }
     const tabs = Workspaces.workspaceDesktops(workspace);
@@ -215,7 +244,7 @@ function renderWorkspaceHead(workspace) {
     actions.replaceChildren(
         wsButton("Restore", "primary", () => send("RestoreWorkspace", workspace.name), "Put these windows back, each on its desktop"),
         wsButton("Save over", "secondary", async () => {
-            const ok = await confirmDialog({ title: `Save over “${workspace.name}”?`, message: "It's replaced by the windows open now, on every desktop.", confirmLabel: "Save over" });
+            const ok = await confirmDialog({ title: `Save Over “${workspace.name}”?`, message: "It's replaced by the windows open now, on every desktop.", confirmLabel: "Save over" });
             if (ok) send("SaveWorkspace", workspace.name);
         }, "Replace it with the windows open now"),
         ...(workspace.name === "Default" ? [] : [wsButton("Rename", "secondary", () => askWorkspaceName(workspace.name, `New name for ${workspace.name}`, name => {
@@ -227,7 +256,7 @@ function renderWorkspaceHead(workspace) {
             send("DuplicateWorkspace", `${workspace.name}|${name}`);
         }, true)),
         wsButton("Delete", "secondary danger", async () => {
-            const ok = await confirmDialog({ title: `Delete workspace “${workspace.name}”?`, message: "The saved layout is removed. Open windows are not affected.", confirmLabel: "Delete workspace", danger: true });
+            const ok = await confirmDialog({ title: `Delete Arrangement “${workspace.name}”?`, message: "The saved layout is removed. Open windows are not affected.", confirmLabel: "Delete arrangement", danger: true });
             if (ok) send("DeleteWorkspace", workspace.name);
         })
     );
@@ -246,7 +275,7 @@ function askWorkspaceName(initial, label, onName, acceptInitial = false) {
         const name = input.value.trim();
         const valid = name && Palette.isValidWorkspaceName(name);
         if (keep && name && !valid) {
-            showToast("Workspace names use letters, numbers, spaces, - and _ (up to 40 characters).");
+            showToast("Arrangement names use letters, numbers, spaces, - and _ (up to 40 characters).");
             input.focus();
             return;
         }
@@ -293,6 +322,7 @@ function renderWorkspaceScreens(workspace, shown) {
         if (list.length > 1) holder.append(element("span", "ws-monitor-label", `Monitor ${monitor}`));
         const screen = element("div", "ws-screen");
         screen.style.aspectRatio = String(aspect);
+        screen.style.setProperty("--aspect", String(aspect));
         screen.dataset.monitor = String(monitor);
         windows.forEach((win, position) => screen.append(workspaceWindowNode(win, windows.length - position)));
         holder.append(screen);
@@ -387,13 +417,17 @@ function renderWorkspaceAdd(workspace, count) {
 function renderWorkspaceInspector(workspace, win, tabs) {
     const panel = $("workspaceInspector");
     panel.replaceChildren();
-    panel.hidden = !win;
-    if (!win) return;
+    // One heading: the window's app, with its title beneath.
+    $("wsWindowTitle").textContent = win ? win.app : "Selected Window";
+    $("wsWindowTitle").toggleAttribute("data-user-text", Boolean(win));
+    $("wsWindowSub").textContent = win?.title || "";
+    $("wsWindowSub").hidden = !win?.title;
+    if (!win) {
+        panel.append(element("p", "module-empty", "No windows on this desktop."));
+        return;
+    }
     const change = next => editWorkspaceWindow(workspace, next);
 
-    const head = element("div", "ws-panel-head");
-    head.append(element("h3", "", win.app), element("p", "", win.title));
-    panel.append(head);
     if (win.missing) panel.append(element("p", "ws-warning", "This app isn't on this PC now, so Restore skips this window."));
 
     const desktops = tabs.filter(tab => typeof tab.key === "number");
@@ -482,7 +516,7 @@ function renderWorkspaceInspector(workspace, win, tabs) {
         }, "Pin this window to every desktop when it's restored");
     }
     toggle("Restore this window", win.enabled, "enabled", on => change({ ...win, enabled: on }),
-        "Off keeps it in the workspace, but Restore leaves it alone");
+        "Off keeps it in the arrangement, but Restore leaves it alone");
 
     const links = element("div", "ws-panel-links");
     links.append(
@@ -490,10 +524,10 @@ function renderWorkspaceInspector(workspace, win, tabs) {
             `Make a launch rule: when ${win.app} starts, its first window goes to this place`),
         wsButton("Remove", "secondary danger", async () => {
             if (Workspaces.workspaceWindows(workspace.layout).length <= 1) {
-                showToast("It's the last window; delete the workspace instead.");
+                showToast("It's the last window; delete the arrangement instead.");
                 return;
             }
-            const ok = await confirmDialog({ title: `Remove ${win.app} from “${workspace.name}”?`, message: "Only the saved entry goes. The window itself isn't affected.", confirmLabel: "Remove", danger: true });
+            const ok = await confirmDialog({ title: `Remove ${win.app} From “${workspace.name}”?`, message: "Only the saved entry goes. The window itself isn't affected.", confirmLabel: "Remove", danger: true });
             if (ok) send("RemoveWorkspaceWindow", `${workspace.name}|${win.index}`);
         })
     );
@@ -619,6 +653,8 @@ function renderRulesPage() {
     const list = $("ruleList");
     list.replaceChildren();
     $("rulesEmpty").hidden = launchRules.length > 0;
+    const active = launchRules.filter(rule => rule.enabled).length;
+    $("ruleCount").textContent = launchRules.length ? `${plural(launchRules.length, "rule")} · ${active} on` : "";
     launchRules.forEach(rule => {
         const item = element("li", `ws-rule${rule.enabled ? "" : " is-off"}`);
         const [drawn] = Workspaces.workspaceWindows([{ ...rule, index: 1 }]);
@@ -634,8 +670,8 @@ function renderRulesPage() {
         box.setAttribute("aria-label", `${rule.app}: rule on`);
         box.addEventListener("change", () => send("SetLaunchRuleEnabled", `${box.checked ? 1 : 0}|${rule.path}`));
         label.append(box);
-        const remove = wsButton("Delete", "link-button is-danger", async () => {
-            const ok = await confirmDialog({ title: `Delete the rule for ${rule.app}?`, message: "Its windows will open wherever the app puts them.", confirmLabel: "Delete rule", danger: true });
+        const remove = wsButton("Delete", "secondary danger", async () => {
+            const ok = await confirmDialog({ title: `Delete the Rule for ${rule.app}?`, message: "Its windows will open wherever the app puts them.", confirmLabel: "Delete rule", danger: true });
             if (ok) send("DeleteLaunchRule", rule.path);
         });
         item.append(wsThumb([drawn]), copy, label, remove);
@@ -665,5 +701,4 @@ $("ruleRemember").addEventListener("click", () => {
     if (/^\d{1,20}$/.test(wsView.ruleWindow)) send("RememberWindowRule", wsView.ruleWindow);
 });
 
-enableTabWheel($("workspaceStrip"), ".ws-chip[data-ws-chip]");
 enableTabWheel($("workspaceTabs"), ".ws-tab");

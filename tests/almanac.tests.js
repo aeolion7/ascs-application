@@ -131,4 +131,69 @@
     check("holidays: yours replace one on the same day", !merged.some(item => item.name === "Thanksgiving" && item.date === "2026-11-26"));
     check("holidays: next year's still counted", merged.some(item => item.name === "Thanksgiving" && item.date === "2027-11-25"));
     equal("holidays: nearest countdown includes them", A.countdownItems(A.withHolidays([], new Date(2026, 10, 4)), new Date(2026, 10, 4))[0].text, "7 days until Veterans Day");
+
+    // 2.0.0: seasons, against the published 2026 times (UTC), within half an hour.
+    const events = A.seasonEvents(2026);
+    const hoursOff = (date, expected) => Math.abs(date.getTime() - expected) / 3600000;
+    near("2026 spring equinox (Mar 20 14:46 UTC)", hoursOff(events[0].date, Date.UTC(2026, 2, 20, 14, 46)), 0, 0.5);
+    near("2026 summer solstice (Jun 21 08:24 UTC)", hoursOff(events[1].date, Date.UTC(2026, 5, 21, 8, 24)), 0, 0.5);
+    near("2026 fall equinox (Sep 23 00:05 UTC)", hoursOff(events[2].date, Date.UTC(2026, 8, 23, 0, 5)), 0, 0.5);
+    near("2026 winter solstice (Dec 21 20:50 UTC)", hoursOff(events[3].date, Date.UTC(2026, 11, 21, 20, 50)), 0, 0.5);
+    const season = A.seasonNow(new Date(2026, 10, 9, 12));
+    equal("Nov 9 is fall, with the winter solstice next", `${season.season} ${season.next}`, "Fall winter solstice");
+    equal("in 42 days", season.days, 42);
+    check("and about halfway through fall", season.progress > 45 && season.progress < 60);
+    equal("in late December it's winter, spring next", A.seasonNow(new Date(2026, 11, 28)).next, "spring equinox");
+
+    equal("day of the year", A.dayOfYear(new Date(2026, 10, 9)), 313);
+    equal("the first day of the year", A.dayOfYear(new Date(2026, 0, 1)), 1);
+    equal("ISO week of Nov 9, 2026", A.isoWeek(new Date(2026, 10, 9)), 46);
+    equal("Jan 1, 2026 (a Thursday) is in week 1", A.isoWeek(new Date(2026, 0, 1)), 1);
+    equal("Jan 1, 2027 (a Friday) is in 2026's week 53", A.isoWeek(new Date(2027, 0, 1)), 53);
+
+    // Golden and blue hour come in order, around sunset.
+    const hours = A.goldenHours(new Date(2026, 10, 9, 12), 40.7, -74);
+    const sunset = A.sunTimes(new Date(2026, 10, 9, 12), 40.7, -74).sunset;
+    check("evening golden hour comes before blue hour", hours.eveningGolden[0] < hours.eveningGolden[1] && hours.eveningGolden[1] <= hours.eveningBlue[0] && hours.eveningBlue[0] < hours.eveningBlue[1]);
+    check("and sunset falls within golden hour", hours.eveningGolden[0] < sunset && sunset < hours.eveningGolden[1]);
+    check("morning blue hour comes first", hours.morningBlue[0] < hours.morningBlue[1] && hours.morningBlue[1] <= hours.morningGolden[0]);
+    equal("the sun never reaches 6° near the pole in winter", A.goldenHours(new Date(2026, 11, 21, 12), 80, 0).eveningGolden, null);
+
+    // The moon: rising means climbing through the horizon.
+    const moonDay = A.moonTimes(new Date(2026, 10, 9), 40.7, -74);
+    check("the moon rises or sets on a given day", moonDay.rise || moonDay.set);
+    if (moonDay.rise) check("at moonrise it's climbing", A.moonAltitude(new Date(moonDay.rise.getTime() + 600000), 40.7, -74) > A.moonAltitude(new Date(moonDay.rise.getTime() - 600000), 40.7, -74));
+    if (moonDay.set) check("at moonset it's sinking", A.moonAltitude(new Date(moonDay.set.getTime() + 600000), 40.7, -74) < A.moonAltitude(new Date(moonDay.set.getTime() - 600000), 40.7, -74));
+    const nextPhases = A.nextMoonPhases(new Date(Date.UTC(2024, 0, 20)));
+    near("the next full moon from Jan 20, 2024 is Jan 25 (days)", (nextPhases.full - Date.UTC(2024, 0, 25, 17, 54)) / 86400000, 0, 1);
+    check("a full moon is lit at the time given", A.moonPhase(nextPhases.full).illumination > 0.97);
+
+    // Meteor showers, including one across New Year.
+    equal("on Nov 9 the Leonids are active", A.activeShowers(new Date(2026, 10, 9)).map(shower => `${shower.name} ${shower.days}`).join(), "Leonids 8");
+    equal("on Dec 30 the Quadrantids peak in 4 days", A.activeShowers(new Date(2026, 11, 30)).map(shower => `${shower.name} ${shower.days}`).join(), "Quadrantids 4");
+    equal("and on Jan 2 in 1", A.activeShowers(new Date(2027, 0, 2))[0].days, 1);
+    equal("none in early June", A.activeShowers(new Date(2026, 5, 3)).length, 0);
+
+    // Composers born today: a well-formed list.
+    const composers = globalThis.ASCSComposers;
+    check("composers: every entry has a real date, a name and a year", composers.every(([day, name, year]) => /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(day) && typeof name === "string" && name.length > 3 && year > 1000 && year < 2000));
+    check("composers: none twice", new Set(composers.map(entry => entry[1])).size === composers.length);
+    equal("composers: born on Dec 16", A.bornOn(composers, new Date(2026, 11, 16)).map(entry => entry[1]).join(), "Ludwig van Beethoven,Zoltán Kodály");
+    equal("composers: in the rotating line", A.rotationItem({ composers: A.bornOn(composers, new Date(2026, 0, 27)) }, 0).text, "Wolfgang Amadeus Mozart, in 1756");
+    equal("the moon in the rotating line", A.rotationItem({ moon: "Full moon on Sat, Nov 21." }, 0).label, "The moon");
+
+    // Weather (2.0.0): Open-Meteo's reply, read strictly.
+    const reply = { current: { temperature_2m: 48.3, apparent_temperature: 44.1, relative_humidity_2m: 61, weather_code: 3, wind_speed_10m: 9.4 },
+        daily: { time: ["2026-11-09", "2026-11-10", "2026-11-11"], temperature_2m_max: [52, 55, 49], temperature_2m_min: [40, 43, 38], weather_code: [3, 61, 0], precipitation_probability_max: [10, 80, 0] } };
+    const weather = A.parseWeather(JSON.stringify(reply));
+    equal("weather: the temperature now", weather.current.temperature, 48.3);
+    equal("weather: three days", weather.days.map(day => `${day.date} ${day.high}/${day.low} ${A.weatherName(day.code)} ${day.rain}%`).join("; "), "2026-11-09 52/40 Cloudy 10%; 2026-11-10 55/43 Light rain 80%; 2026-11-11 49/38 Clear 0%");
+    equal("weather: not JSON", A.parseWeather("<html>"), null);
+    equal("weather: a missing reading", A.parseWeather(JSON.stringify({ current: { ...reply.current, temperature_2m: "48" }, daily: reply.daily })), null);
+    equal("weather: a reading out of range", A.parseWeather(JSON.stringify({ current: { ...reply.current, relative_humidity_2m: 400 }, daily: reply.daily })), null);
+    equal("weather: an unknown code", A.parseWeather(JSON.stringify({ current: { ...reply.current, weather_code: 3.5 }, daily: reply.daily })), null);
+    equal("weather: a day with a bad date is dropped", A.parseWeather(JSON.stringify({ ...reply, daily: { ...reply.daily, time: ["<b>x</b>", "2026-11-10", "2026-11-11"] } })).days.length, 2);
+    equal("weather: markup in a field isn't kept", JSON.stringify(A.parseWeather(JSON.stringify({ ...reply, extra: "<script>" }))).includes("script"), false);
+    equal("weather: a name for every code", A.weatherName(95), "Thunderstorms");
+    equal("weather: and a fallback", A.weatherName(42), "Unknown");
 })();

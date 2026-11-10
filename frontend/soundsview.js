@@ -10,12 +10,22 @@
 // app.js.
 
 const Sounds = globalThis.ASCSSounds;
+// Library, In Use and Startup (2.0.0): tabs for the page. In Use and Startup are
+// measured only while they show.
+const soundSections = MaestroSections.create($("soundTabs"), {
+    onChange(section) {
+        if (section === "startup") send("GetStartupSounds");
+        if (section !== "library") renderSoundAssignments();
+        fitSoundSide();
+        window.scrollTo(0, 0);
+    }
+});
 const SOUND_PREFS = "ascs.sounds";
 const soundState = {
     library: null, era: "", query: "", favoritesOnly: false, selected: "",
     bytes: new Map(), decoded: new Map(), waiting: new Map(), levels: new Map(),
     windowsSounds: [], ascsSounds: {}, context: null, master: null, playing: new Set(),
-    measuring: false, plan: null, sideTab: "selected", editingLibrary: false, playToken: 0,
+    measuring: false, plan: null, editingLibrary: false, playToken: 0,
     inUse: new Map(), matchWaits: new Map(), measuringInUse: false, matching: false, playingRow: "",
     selecting: false, picked: new Set(), anchor: "", deleting: null, deleteWait: null,
     matchQueue: [], matchingKey: "",
@@ -56,8 +66,10 @@ function saveSoundPrefs() {
 
 function openSoundsView() {
     if (!soundState.library) send("GetSoundLibrary");
+    if (!settingsLoaded) send("GetSettings");          // for Maestro sounds, in the bar
     send("GetWindowsSounds");
     send("GetStartupSounds");
+    send("GetAudioDevices");
 }
 
 // ---- messages from ASCS
@@ -65,7 +77,7 @@ function openSoundsView() {
 function handleSoundLibrary(data) {
     const eras = (Array.isArray(data.eras) ? data.eras : [])
         .filter(era => era && typeof era.folder === "string")
-        .map(era => ({ folder: era.folder, year: Number.isFinite(era.year) ? era.year : 0, label: typeof era.label === "string" ? era.label : era.folder }))
+        .map(era => ({ folder: era.folder, year: Number.isFinite(era.year) ? era.year : 0, label: Sounds.folderLabel(era.folder, typeof era.label === "string" ? era.label : era.folder) }))
         .sort((a, b) => (a.year || 9999) - (b.year || 9999) || a.label.localeCompare(b.label));
     const labels = new Map(eras.map(era => [era.folder, era.label]));
     const sounds = (Array.isArray(data.sounds) ? data.sounds : [])
@@ -100,10 +112,11 @@ function handleSoundBytes(id, base64) {
     soundState.waiting.delete(id);
     const bytes = base64 ? Sounds.base64ToBytes(base64) : null;
     if (bytes) soundState.bytes.set(id, bytes);
-    waiting?.forEach(({ resolve, reject }) => (bytes ? resolve(bytes) : reject(new Error("ASCS couldn't send that sound."))));
+    waiting?.forEach(({ resolve, reject }) => (bytes ? resolve(bytes) : reject(new Error("Maestro couldn't send that sound."))));
 }
 
 function handleWindowsSounds(data) {
+    soundState.windowsLoaded = true;
     soundState.windowsSounds = (Array.isArray(data.events) ? data.events : []).filter(event => event && typeof event.key === "string");
     if (data.ascsSounds && typeof data.ascsSounds === "object") soundState.ascsSounds = data.ascsSounds;
     inUseRows().forEach(row => { if (soundState.inUse.has(row.key) && soundState.inUse.get(row.key).file !== row.file) forgetInUse(row.key); });
@@ -113,6 +126,7 @@ function handleWindowsSounds(data) {
 
 // The sign-in roll and the shutdown sound (1.8.1), from data\startup-sounds.ini.
 function handleStartupSounds(data) {
+    soundState.startupLoaded = true;
     const entry = item => item && typeof item === "object" ? {
         file: String(item.file || ""), id: String(item.id || ""), origin: String(item.origin || ""),
         exists: item.exists === true, changed: item.changed === true, weight: Number.isFinite(item.weight) ? item.weight : 0
@@ -133,7 +147,7 @@ function handleSoundSaved(data) {
     soundState.selected = data.id;
     const sound = soundState.library?.byId.get(data.id);
     if (sound) soundState.era = sound.era;
-    showNotice(`Saved "${sound?.name || "the leveled copy"}" in ASCS Leveled.`);
+    showNotice(`Saved "${sound?.name || "the leveled copy"}" in Maestro Leveled.`);
     renderSounds();
 }
 
@@ -311,7 +325,7 @@ function renderSounds() {
     const strip = $("soundEras");
     const grid = showingVersionGrid();
     // Windows versions (folders with a year) fill the grid and the strip;
-    // folders of your own (Aeolionware Startup, ASCS Leveled…) are buttons
+    // folders of your own (Aeolionware Startup, Maestro Leveled…) are buttons
     // beside Favorites instead.
     const versions = (library?.eras || []).filter(era => era.year);
     renderOwnFolders((library?.eras || []).filter(era => !era.year));
@@ -333,11 +347,13 @@ function renderSounds() {
     }));
     if (!strip.hidden) requestAnimationFrame(() => strip.querySelector(".sound-era.is-active")?.scrollIntoView({ block: "nearest", inline: "nearest" }));
     $("soundFavoritesOnly").setAttribute("aria-pressed", String(soundState.favoritesOnly));
+    // The folder's line waits for the library, so it arrives below the list.
+    $("soundLibraryForm").hidden = !library;
 
     const sounds = visibleSounds();
     const groups = $("soundGroups");
     if (!library) {
-        groups.replaceChildren(element("p", "settings-note", "Loading the library…"));
+        groups.replaceChildren(loadingNote("Loading the library"));
     } else if (!library.exists) {
         groups.replaceChildren(element("p", "settings-note", `The library folder ${library.root} wasn't found. Set it below, under Library.`));
     } else if (grid) {
@@ -353,7 +369,7 @@ function renderSounds() {
         const byEra = across ? Sounds.groupSounds(sounds.map(sound => ({ ...sound, group: sound.eraLabel }))) : Sounds.groupSounds(sounds);
         groups.replaceChildren(...byEra.map(({ group, items }) => {
             const section = element("section", "sound-group");
-            if (group || across) section.append(element("h3", "", group || "Loose sounds"));
+            if (group || across) section.append(element("h3", "", group || "Loose Sounds"));
             const grid = element("div", "sound-grid");
             grid.append(...items.slice(0, 400).map(soundTile));
             section.append(grid);
@@ -362,7 +378,7 @@ function renderSounds() {
     }
     const era = library?.eras.find(item => item.folder === soundState.era);
     $("soundsMeta").textContent = !library ? "" : grid
-        ? `${versions.length} versions · ${library.sounds.length} sounds · choose one, or search them all`
+        ? `${versions.length} versions · ${library.sounds.length} sounds`
         : soundState.query.trim() || soundState.favoritesOnly
         ? `${sounds.length} sound${sounds.length === 1 ? "" : "s"} across every version`
         : `${era ? `${era.year ? `${era.year} · ` : ""}${era.label}` : ""} · ${sounds.length} sound${sounds.length === 1 ? "" : "s"}`;
@@ -518,7 +534,7 @@ async function deletePicked() {
     if (!ids.length || soundState.deleting) return;
     const names = ids.map(id => soundState.library?.byId.get(id)?.name || id);
     const ok = await confirmDialog({
-        title: `Delete ${ids.length} leveled ${ids.length === 1 ? "copy" : "copies"}?`,
+        title: `Delete ${ids.length} Leveled ${ids.length === 1 ? "Copy" : "Copies"}?`,
         message: `${names.slice(0, 5).join(", ")}${names.length > 5 ? ` and ${names.length - 5} more` : ""} go to the Recycle Bin. The sounds they were made from aren't touched.`,
         confirmLabel: `Delete ${ids.length}`, danger: true
     });
@@ -534,7 +550,7 @@ async function deletePicked() {
             deleted += reply.deleted;
             skipped.push(...reply.skipped);
             if (!reply.ok) {
-                failure = reply.message || "ASCS refused the request";
+                failure = reply.message || "Maestro refused the request";
                 break;
             }
         } catch (error) {
@@ -559,12 +575,12 @@ async function deletePicked() {
 // One batch, answered by ASCS with soundsDeleted.
 function deleteBatch(batch) {
     return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => { soundState.deleteWait = null; reject(new Error("ASCS didn't answer")); }, 20000);
+        const timer = setTimeout(() => { soundState.deleteWait = null; reject(new Error("Maestro didn't answer")); }, 20000);
         soundState.deleteWait = reply => { clearTimeout(timer); soundState.deleteWait = null; resolve(reply); };
         if (!send("DeleteLeveledSounds", batch.join("\n"))) {
             clearTimeout(timer);
             soundState.deleteWait = null;
-            reject(new Error("ASCS isn't connected"));
+            reject(new Error("Maestro isn't connected"));
         }
     });
 }
@@ -586,7 +602,7 @@ function toggleFavorite(id) {
 }
 
 function selectSound(id) {
-    if (soundState.sideTab !== "selected") showSoundTab("selected");
+    if (soundSections.current() !== "library") soundSections.show("library");
     if (soundState.selected === id) return;
     soundState.selected = id;
     soundState.plan = null;
@@ -597,9 +613,10 @@ function selectSound(id) {
 // What the selected sound is used for: Windows events and ASCS's sounds.
 function soundUses(id) {
     const uses = soundState.windowsSounds.filter(event => event.id === id).map(event => event.label);
-    if (soundState.ascsSounds?.show?.id === id) uses.push("ASCS show");
-    if (soundState.ascsSounds?.hide?.id === id) uses.push("ASCS hide");
+    if (soundState.ascsSounds?.show?.id === id) uses.push("Maestro show");
+    if (soundState.ascsSounds?.hide?.id === id) uses.push("Maestro hide");
     if (soundState.ascsSounds?.reminder?.id === id) uses.push("Calendar reminders");
+    if (soundState.ascsSounds?.timer?.id === id) uses.push("Timer");
     if (soundState.startup.signin.some(item => item.id === id)) uses.push("Sign-in sounds");
     if (soundState.startup.shutdown?.id === id) uses.push("Shutdown sound");
     return uses;
@@ -609,7 +626,7 @@ function renderSoundDetail() {
     const panel = $("soundDetail");
     const sound = soundState.library?.byId.get(soundState.selected);
     if (!sound) {
-        panel.replaceChildren(element("p", "settings-note", "Click a sound to play it. Its level, a leveled copy, and where to use it appear here."));
+        panel.replaceChildren(element("p", "settings-note", "Click a sound to play it and see its level."));
         return;
     }
     const level = soundState.levels.get(sound.id);
@@ -649,7 +666,7 @@ function renderSoundDetail() {
     if (Sounds.isLeveledCopy(sound.id)) {
         const remove = button("Delete", async () => {
             const ok = await confirmDialog({
-                title: "Delete this leveled copy?",
+                title: "Delete This Leveled Copy?",
                 message: `"${sound.name}" goes to the Recycle Bin. The sound it was made from isn't touched.`,
                 confirmLabel: "Delete", danger: true
             });
@@ -668,7 +685,8 @@ function renderSoundDetail() {
     if (sound.kind === "windows") {
         levels.append(element("p", "settings-note", "MIDI and WMA sounds play through Windows and can't be measured here."));
     } else if (!level) {
-        levels.append(element("p", "settings-note", "Measuring…"));
+        levels.classList.add("is-measuring");
+        levels.append(loadingNote("Measuring"));
         measureSound(sound.id).then(() => {
             if (soundState.selected === sound.id) renderSoundDetail();
         }, error => {
@@ -706,7 +724,7 @@ function renderSoundDetail() {
         presets.setAttribute("aria-label", "Set the target");
         const thisLevel = Math.round(level.rmsDb * 10) / 10;
         [["Your startup sounds", -26.4, "The level your startup sounds were matched to"],
-            ["Your ASCS sounds", -33.7, "The level of your ASCS show and hide sounds"],
+            ["Your Maestro sounds", -33.7, "The level of your Maestro show and hide sounds"],
             ["This sound", thisLevel, "Make this sound's level the target, then level others to match it"]].forEach(([name, value, hint]) => {
             if (!Number.isFinite(value)) return;
             const chip = element("button", `sound-preset${Math.abs(soundPrefs.reference - value) < 0.05 ? " is-on" : ""}`);
@@ -750,7 +768,7 @@ function renderSoundDetail() {
             const save = element("button", "primary", "Save leveled copy");
             save.type = "button";
             save.disabled = !wav || Math.abs(plan.gainDb) < 0.05 || !sourcePlan || Math.abs(sourcePlan.gainDb) < 0.05;
-            save.title = wav ? "Saved in the library's ASCS Leveled folder; the original is never changed" : "Only WAV files can be leveled";
+            save.title = wav ? "Saved in the library's Maestro Leveled folder; the original is never changed" : "Only WAV files can be leveled";
             save.addEventListener("click", () => saveLeveled(source, sourcePlan.gainDb, save));
             row.append(preview, save);
             levels.append(row);
@@ -764,9 +782,9 @@ function renderSoundDetail() {
 
     // Use as
     const use = element("div", "sound-use");
-    use.append(element("h3", "", "Use as"));
+    use.append(element("h3", "", "Use As"));
     if (!wav) {
-        use.append(element("p", "settings-note", "Windows and ASCS sounds must be WAV files."));
+        use.append(element("p", "settings-note", "Windows and Maestro sounds must be WAV files."));
     } else {
         const select = element("select");
         select.setAttribute("aria-label", "Use this sound as");
@@ -783,8 +801,8 @@ function renderSoundDetail() {
             groupWindows.append(option);
         });
         const groupAscs = element("optgroup");
-        groupAscs.label = "ASCS";
-        [["ascs:show", "When ASCS shows"], ["ascs:hide", "When ASCS hides"], ["ascs:reminder", "Calendar reminders"]].forEach(([value, text]) => {
+        groupAscs.label = "Maestro";
+        [["ascs:show", "When Maestro shows"], ["ascs:hide", "When Maestro hides"], ["ascs:reminder", "Calendar reminders"], ["ascs:timer", "When a timer ends"]].forEach(([value, text]) => {
             const option = element("option", "", text);
             option.value = value;
             groupAscs.append(option);
@@ -806,7 +824,7 @@ function renderSoundDetail() {
         matchBox.type = "checkbox";
         matchBox.checked = true;
         const matchLabel = element("label", "sound-clip");
-        matchLabel.title = "Saves a leveled copy in ASCS Leveled and uses that; the original is never changed";
+        matchLabel.title = "Saves a leveled copy in Maestro Leveled and uses that; the original is never changed";
         matchLabel.hidden = true;
         let versus = null;
         const offerFor = value => {
@@ -894,7 +912,7 @@ const NOTIFY_PRESETS = [["Quiet", -30], ["Balanced", -24], ["Clear", -18]];
 
 function inUseRows() {
     const ascs = soundState.ascsSounds || {};
-    const rows = [["show", "ASCS shows"], ["hide", "ASCS hides"], ["reminder", "Calendar reminders"]].map(([kind, label]) => {
+    const rows = [["show", "Maestro shows"], ["hide", "Maestro hides"], ["reminder", "Calendar reminders"], ["timer", "Timer ends"]].map(([kind, label]) => {
         const entry = ascs[kind] || {};
         return { key: `ascs:${kind}`, label, file: entry.file || "", exists: entry.exists === true, changed: entry.changed === true,
             restore: () => send("RestoreAscsSound", kind) };
@@ -932,7 +950,7 @@ function startupRows() {
         restore: () => send("RestoreStartupSound", String(index + 1)),
         remove: signin.length > 1 ? () => send("RemoveStartupSound", String(index + 1)) : null
     }));
-    if (shutdown) rows.push({ key: "startup:shutdown", label: `Shutdown · ${startupLabel(shutdown)}`, file: shutdown.file, exists: shutdown.exists,
+    if (shutdown) rows.push({ key: "startup:shutdown", label: startupLabel(shutdown), shutdown: true, file: shutdown.file, exists: shutdown.exists,
         changed: shutdown.changed, restore: () => send("RestoreStartupSound", "shutdown") });
     rows.forEach(row => { row.measurable = row.exists && /\.wav$/i.test(row.file); });
     return rows;
@@ -1033,7 +1051,7 @@ async function matchInUse(row) {
         soundState.matchWaits.set(row.key, resolve);
         if (!send("UseLeveledSound", `${row.key}|origin|${gain.toFixed(2)}|${Sounds.bytesToBase64(copy)}`)) {
             soundState.matchWaits.delete(row.key);
-            resolve({ ok: false, message: "ASCS didn't answer" });
+            resolve({ ok: false, message: "Maestro didn't answer" });
         }
     }).then(result => ({ ...result, limited }));
 }
@@ -1121,7 +1139,7 @@ async function resetAllLevels() {
     const changes = Sounds.levelChanges(soundPrefs);
     if (!changes.length) return;
     const ok = await confirmDialog({
-        title: "Reset all levels?",
+        title: "Reset All Levels?",
         message: `${changes.join("; ")}. No sound changes: each keeps playing what it plays now, so rows may read louder or quieter until you Match them.`,
         confirmLabel: "Reset levels"
     });
@@ -1145,17 +1163,18 @@ function setStartupTarget(value) {
 // The two boards (1.8.1): notifications (In use) and startup sounds
 // (Startup), drawn by one renderer, each with its own level.
 const NOTIFY_BOARD = {
-    panel: "soundAssignments", count: "soundInUseCount", title: "Notification level", rows: () => inUseRows(),
+    loaded: () => soundState.windowsLoaded,
+    panel: "soundAssignments", count: "soundInUseCount", title: "Notification Level", rows: () => inUseRows(),
     target: () => soundPrefs.notifyTarget, setTarget: value => setNotifyTarget(value), presets: () => NOTIFY_PRESETS,
-    note: "Loudness as the ear hears it (LUFS). Within ±1.5 dB of the target counts as matched; Match saves a leveled copy and switches to it, and Restore goes back. Drag a sound's gold handle to give it its own level.",
+    note: "Loudness is measured in LUFS. A sound within 1.5 dB of the target counts as matched. Match saves a leveled copy and switches to it; Restore goes back. Drag a sound's gold handle to give it its own level.",
     restoreAll: changed => {
         const button = element("button", "link-button is-danger", `Restore all (${changed.length})`);
         button.type = "button";
-        button.title = "Every sound ASCS changed goes back to what it played before";
+        button.title = "Every sound Maestro changed goes back to what it played before";
         button.addEventListener("click", async () => {
             const ok = await confirmDialog({
-                title: "Restore all sounds?",
-                message: `${changed.map(row => row.label).join(", ")} go back to what they played before ASCS changed them. Leveled copies stay in the library.`,
+                title: "Restore All Sounds?",
+                message: `${changed.map(row => row.label).join(", ")} go back to what they played before Maestro changed them. Leveled copies stay in the library.`,
                 confirmLabel: "Restore all", danger: true
             });
             if (ok) send("RestoreAllSounds");
@@ -1166,7 +1185,8 @@ const NOTIFY_BOARD = {
 
 const STARTUP_PRESETS = [["Quiet", -24], ["Balanced", -20], ["Bold", -16]];
 const STARTUP_BOARD = {
-    panel: "soundStartup", count: "soundStartupCount", title: "Startup level", rows: () => startupRows(),
+    loaded: () => soundState.startupLoaded,
+    panel: "soundStartup", count: "soundStartupCount", title: "Startup Level", rows: () => startupRows(),
     target: () => soundPrefs.startupTarget, setTarget: value => setStartupTarget(value),
     // "Like XP": the level of the XP startup sound's original, once measured.
     presets: () => {
@@ -1174,7 +1194,7 @@ const STARTUP_BOARD = {
         const measured = xp && !xp.changed ? soundState.inUse.get(xp.key) : null;
         return [...STARTUP_PRESETS, ...(measured?.lufs > -70 ? [["Like XP", Math.round(measured.lufs * 10) / 10]] : [])];
     },
-    note: "The sounds played at Windows sign-in (one picked by chance) and at shutdown, by the scripts in C:\\Scripts, which read them from ASCS. Add sounds with Selected sound › Use as. Match levels a copy of the original; Restore goes back to it. Drag a sound's gold handle to give it its own level.",
+    note: "These play at Windows sign-in (one picked by chance) and at shutdown. Add sounds with Selected Sound › Use As. Match levels a copy of the original; Restore goes back to it. Drag a sound's gold handle to give it its own level.",
     restoreAll: changed => {
         const button = element("button", "link-button is-danger", `Restore all (${changed.length})`);
         button.type = "button";
@@ -1184,14 +1204,19 @@ const STARTUP_BOARD = {
     },
     head: head => {
         if (soundState.startup.taskWarning) head.append(element("p", "startup-task-warning", soundState.startup.taskWarning));
-        head.append(startupOddsLine());
-    }
+    },
+    groups: rows => [
+        { title: "Sign-in Sounds", className: "is-signin", rows: rows.filter(row => !row.shutdown), lead: startupOddsLine,
+            empty: "No sign-in sounds yet. Add one with Selected Sound › Use As." },
+        { title: "Shutdown Sound", className: "is-shutdown", rows: rows.filter(row => row.shutdown),
+            empty: "None set, so Windows' own plays. Add one with Selected Sound › Use As." }
+    ]
 };
 
 function renderSoundAssignments() {
     renderBoard(NOTIFY_BOARD);
     renderBoard(STARTUP_BOARD);
-    if (soundState.sideTab === "inuse" || soundState.sideTab === "startup") measureInUseSounds();
+    if (soundSections.current() !== "library") measureInUseSounds();
 }
 
 // ---- the sign-in chances (1.8.1)
@@ -1243,8 +1268,9 @@ function renderBoard(board) {
 
     // The target, with presets, and what to do about it.
     const head = element("div", "notify-head");
-    const title = element("div", "notify-title");
-    title.append(element("h3", "", board.title));
+    head.classList.add("module");
+    const level = element("div", "notify-level");
+    level.append(element("h2", "", board.title));
     const stepper = element("div", "notify-stepper");
     const step = (label, delta, hint) => {
         const button = element("button", "secondary", label);
@@ -1254,22 +1280,27 @@ function renderBoard(board) {
         return button;
     };
     stepper.append(step("−", -1, "1 dB quieter"), element("strong", "", `${target.toFixed(1)} LUFS`), step("+", 1, "1 dB louder"));
-    title.append(stepper);
-    head.append(title);
+    level.append(stepper);
     const presets = element("div", "sound-presets");
     const loudness = measured.map(row => soundState.inUse.get(row.key).lufs).sort((a, b) => a - b);
     const middle = loudness.length ? Math.round(loudness[Math.floor((loudness.length - 1) / 2)] * 10) / 10 : null;
-    [...board.presets(), ...(middle !== null ? [["Middle of yours", middle]] : [])].forEach(([name, value]) => {
-        const chip = element("button", `sound-preset${Math.abs(target - value) < 0.05 ? " is-on" : ""}`);
+    // Middle of yours is there from the start, waiting for its figure, so the
+    // row doesn't change when the measuring ends.
+    [...board.presets(), ["Middle of yours", middle]].forEach(([name, value]) => {
+        const known = value !== null;
+        const chip = element("button", `sound-preset${known && Math.abs(target - value) < 0.05 ? " is-on" : ""}`);
         chip.type = "button";
+        chip.disabled = !known;
         chip.title = name === "Middle of yours" ? "The median of the sounds below: matching to it changes the fewest" : `${value} LUFS`;
-        chip.append(element("span", "", name), element("b", "", value.toFixed(1)));
+        chip.append(element("span", "", name), element("b", "", known ? value.toFixed(1) : "--"));
         chip.addEventListener("click", () => board.setTarget(value));
         presets.append(chip);
     });
-    head.append(presets);
-    head.append(element("p", "settings-note", board.note));
-    board.head?.(head);
+    level.append(presets);
+    const help = element("details", "sound-board-help");
+    help.open = Boolean(soundState.boardHelpOpen);
+    help.addEventListener("toggle", () => { soundState.boardHelpOpen = help.open; });
+    help.append(element("summary", "", "How leveling works"), element("p", "", board.note));
     const actions = element("div", "notify-actions");
     const pending = rows.filter(row => row.measurable && soundState.inUse.get(row.key)?.file !== row.file).length;
     actions.append(element("span", "notify-summary",
@@ -1283,7 +1314,9 @@ function renderBoard(board) {
     matchAll.disabled = !off.length || off.every(row => row.key === soundState.matchingKey || soundState.matchQueue.some(item => item.key === row.key));
     matchAll.addEventListener("click", () => matchRows(off));
     actions.append(playAll, matchAll);
-    head.append(actions);
+    level.append(actions);
+    head.append(level);
+    board.head?.(head);
     // The rarer, undoing actions sit beneath as links (1.8.1): Reset levels
     // (the levels and own levels back to their defaults, on either board;
     // sound files stay as they are) and Restore all.
@@ -1297,79 +1330,22 @@ function renderBoard(board) {
     }
     const changed = rows.filter(row => row.changed);
     if (changed.length) tools.append(board.restoreAll(changed));
-    if (tools.childElementCount) head.append(tools);
+    const more = element("div", "notify-more");
+    more.append(help, tools);
+    head.append(more);
 
-    const list = element("div", "sound-assignments");
-    rows.forEach(row => {
-        const item = element("div", `sound-assignment${soundState.playingRow === row.key ? " is-playing" : ""}`);
-        const copy = element("span", "sound-assignment-copy");
-        copy.title = row.file ? `${row.label} · ${row.file}` : row.label;
-        copy.append(element("strong", "", row.label), element("small", row.exists || !row.file ? "" : "is-missing", row.file ? (row.exists ? row.file : `${row.file} (missing)`) : "No sound"));
-        const buttons = element("span", "sound-assignment-actions");
-        const link = (label, onClick, hint = "") => {
-            const button = element("button", "link-button", label);
-            button.type = "button";
-            if (hint) button.title = hint;
-            button.addEventListener("click", onClick);
-            buttons.append(button);
-            return button;
-        };
-        const entry = soundState.inUse.get(row.key);
-        const compare = inUseComparison(row.key);
-        if (row.exists && row.file) link("Play", () => (entry && !entry.error ? playInUse(row.key) : row.preview ? row.preview() : null));
-        if (compare && !compare.matched && entry.levelable && Math.abs(compare.gainDb) >= 0.05) {
-            const queued = soundState.matchQueue.some(item => item.key === row.key);
-            const running = soundState.matchingKey === row.key;
-            const match = link(running ? "Matching…" : queued ? "Queued" : "Match", () => matchRows([row]), `Save a copy ${Sounds.formatDb(compare.gainDb)} and use it${compare.limited ? " (held back to avoid clipping)" : ""}`);
-            match.disabled = running || queued;
-        }
-        if (row.changed) link("Restore", row.restore, "Back to the sound it had before ASCS changed it");
-        if (row.remove) link("Remove", row.remove, "Take it out of the sign-in sounds; its chance goes to the first one");
-        const own = ownLevel(row.key);
-        item.append(copy, buttons);
-        // A sign-in sound's chance, in its own column at the left.
-        if (row.weight !== undefined) {
-            const odds = element("label", "startup-odds-wrap");
-            odds.append(oddsInput(row), element("span", "", "%"));
-            item.classList.add("has-odds");
-            item.prepend(odds);
-        }
-        // The meter: the target in the middle, ±12 dB to either side.
-        const meter = element("div", "notify-meter");
-        const bar = element("span", "notify-bar");
-        bar.append(element("i"));
-        const status = element("small", "notify-status");
-        if (row.measurable || compare) bar.append(ownHandle(row, bar, own));
-        if (compare) {
-            const dot = element("b", compare.matched ? "is-matched" : compare.difference > 0 ? "is-loud" : "is-quiet");
-            // The bar is centered on the board's level; the dot is where the sound is.
-            dot.style.left = `${Math.max(0, Math.min(100, 50 + (compare.difference + own) / 12 * 50))}%`;
-            bar.append(dot);
-            status.textContent = describeDifference(compare);
-            status.className = `notify-status${compare.matched ? " is-matched" : ""}`;
-            status.title = `${entry.lufs.toFixed(1)} LUFS, peak ${Sounds.formatDb(entry.peakDb)}${entry.levelable ? "" : " · compressed WAV: can't be leveled here"}${compare.limited && !compare.matched ? " · can only be raised until the peak reaches −0.3 dB" : ""}`;
-        } else {
-            status.textContent = entry?.error ? "Can't measure" : !row.measurable ? (row.file ? "Not a WAV" : "") : "Measuring…";
-            if (entry?.error) status.title = entry.error;
-        }
-        // A slot of the same width on every row, so the bars line up.
-        const slot = element("span", "notify-own-slot");
-        if (soundState.ownEditing === row.key) slot.append(ownInput(row));
-        else if (own) {
-            const label = element("button", "link-button notify-own-label", `Own ${Sounds.formatDb(own)}`);
-            label.type = "button";
-            label.title = "This sound's own level, from the board's. Click to type one.";
-            label.addEventListener("click", () => { soundState.ownEditing = row.key; renderSoundAssignments(); });
-            const reset = element("button", "notify-own-reset", "×");
-            reset.type = "button";
-            reset.title = "Back to the board's level";
-            reset.setAttribute("aria-label", `${row.label}: back to the board's level`);
-            reset.addEventListener("click", () => setOwnLevel(row.key, 0));
-            slot.append(label, reset);
-        }
-        meter.append(bar, slot, status);
-        if (row.measurable || compare) item.append(meter);
-        list.append(item);
+    const groups = board.groups ? board.groups(rows) : [{ rows }];
+    const modules = groups.map(group => {
+        const section = element("section", `module sound-board-list${group.className ? ` ${group.className}` : ""}`);
+        if (group.title) section.append(element("h2", "", group.title));
+        if (group.lead) section.append(group.lead());
+        if (!board.loaded()) section.append(loadingNote("Loading"));
+        else if (group.rows.length) {
+            const list = element("div", "sound-assignments");
+            list.append(...group.rows.map(boardRow));
+            section.append(list);
+        } else section.append(element("p", "sound-board-empty", group.empty || "Nothing in use yet."));
+        return section;
     });
     $(board.count).textContent = `${rows.length}`;
     // Typing a chance, or stepping a level, redraws the board: keep the focus
@@ -1378,7 +1354,7 @@ function renderBoard(board) {
     const selector = focusData.oddsIndex !== undefined ? `input[data-odds-index="${focusData.oddsIndex}"]`
         : focusData.ownKey !== undefined ? `[data-own-key="${CSS.escape(focusData.ownKey)}"]` : "";
     const hadFocus = selector && panel.contains(document.activeElement);
-    panel.replaceChildren(head, list);
+    panel.replaceChildren(head, ...modules);
     const editing = soundState.ownEditing ? panel.querySelector(`input[data-own-key="${CSS.escape(soundState.ownEditing)}"]`) : null;
     const refocus = editing || (hadFocus ? panel.querySelector(selector) : null);
     if (refocus && document.activeElement !== refocus) {
@@ -1388,6 +1364,81 @@ function renderBoard(board) {
             try { refocus.setSelectionRange(end, end); } catch { /* number inputs have no selection */ }
         }
     }
+}
+
+// One sound on a board. Play is always the last button; Match and Restore come
+// and go to its left, so it's always in the same place.
+function boardRow(row) {
+    const item = element("div", `sound-assignment${soundState.playingRow === row.key ? " is-playing" : ""}`);
+    const copy = element("span", "sound-assignment-copy");
+    copy.title = row.file ? `${row.label} · ${row.file}` : row.label;
+    copy.append(element("strong", "", row.label), element("small", row.exists || !row.file ? "" : "is-missing", row.file ? (row.exists ? row.file : `${row.file} (missing)`) : "No sound"));
+    const buttons = element("span", "sound-assignment-actions");
+    const link = (label, onClick, hint = "") => {
+        const button = element("button", "link-button", label);
+        button.type = "button";
+        if (hint) button.title = hint;
+        button.addEventListener("click", onClick);
+        buttons.prepend(button);
+        return button;
+    };
+    const entry = soundState.inUse.get(row.key);
+    const compare = inUseComparison(row.key);
+    if (row.exists && row.file) link("Play", () => (entry && !entry.error ? playInUse(row.key) : row.preview ? row.preview() : null));
+    if (compare && !compare.matched && entry.levelable && Math.abs(compare.gainDb) >= 0.05) {
+        const queued = soundState.matchQueue.some(item => item.key === row.key);
+        const running = soundState.matchingKey === row.key;
+        const match = link(running ? "Matching…" : queued ? "Queued" : "Match", () => matchRows([row]), `Save a copy ${Sounds.formatDb(compare.gainDb)} and use it${compare.limited ? " (held back to avoid clipping)" : ""}`);
+        match.disabled = running || queued;
+    }
+    if (row.changed) link("Restore", row.restore, "Back to the sound it had before Maestro changed it");
+    if (row.remove) link("Remove", row.remove, "Take it out of the sign-in sounds; its chance goes to the first one");
+    const own = ownLevel(row.key);
+    item.append(copy, buttons);
+    // A sign-in sound's chance, in its own column at the left.
+    if (row.weight !== undefined) {
+        const odds = element("label", "startup-odds-wrap");
+        odds.append(oddsInput(row), element("span", "", "%"));
+        item.classList.add("has-odds");
+        item.prepend(odds);
+    }
+    // The meter: the target in the middle, ±12 dB to either side.
+    const meter = element("div", "notify-meter");
+    const bar = element("span", "notify-bar");
+    bar.append(element("i"));
+    const status = element("small", "notify-status");
+    if (row.measurable || compare) bar.append(ownHandle(row, bar, own));
+    if (compare) {
+        const dot = element("b", compare.matched ? "is-matched" : compare.difference > 0 ? "is-loud" : "is-quiet");
+        // The bar is centered on the board's level; the dot is where the sound is.
+        dot.style.left = `${Math.max(0, Math.min(100, 50 + (compare.difference + own) / 12 * 50))}%`;
+        bar.append(dot);
+        status.textContent = describeDifference(compare);
+        status.className = `notify-status${compare.matched ? " is-matched" : ""}`;
+        status.title = `${entry.lufs.toFixed(1)} LUFS, peak ${Sounds.formatDb(entry.peakDb)}${entry.levelable ? "" : " · compressed WAV: can't be leveled here"}${compare.limited && !compare.matched ? " · can only be raised until the peak reaches −0.3 dB" : ""}`;
+    } else {
+        status.textContent = entry?.error ? "Can't measure" : !row.measurable ? (row.file ? "Not a WAV" : "") : "Measuring…";
+        if (entry?.error) status.title = entry.error;
+    }
+    // A slot of the same width on every row, so the bars line up.
+    const slot = element("span", "notify-own-slot");
+    if (soundState.ownEditing === row.key) slot.append(ownInput(row));
+    else if (own) {
+        const label = element("button", "link-button notify-own-label", `Own ${Sounds.formatDb(own)}`);
+        label.type = "button";
+        label.title = "This sound's own level, from the board's. Click to type one.";
+        label.addEventListener("click", () => { soundState.ownEditing = row.key; renderSoundAssignments(); });
+        const reset = element("button", "notify-own-reset", "×");
+        reset.type = "button";
+        reset.title = "Back to the board's level";
+        reset.setAttribute("aria-label", `${row.label}: back to the board's level`);
+        reset.addEventListener("click", () => setOwnLevel(row.key, 0));
+        slot.append(label, reset);
+    }
+    meter.append(bar, slot, status);
+    if (!row.measurable && !compare) meter.classList.add("is-empty");
+    item.append(meter);
+    return item;
 }
 
 // ---- own levels (1.8.1)
@@ -1524,22 +1575,6 @@ $("soundVolume").addEventListener("input", () => {
     if (soundState.master) soundState.master.gain.value = soundPrefs.volume / 100;
     saveSoundPrefs();
 });
-function showSoundTab(tab) {
-    soundState.sideTab = tab;
-    $("soundTabSelected").setAttribute("aria-selected", String(tab === "selected"));
-    $("soundTabInUse").setAttribute("aria-selected", String(tab === "inuse"));
-    $("soundTabStartup").setAttribute("aria-selected", String(tab === "startup"));
-    $("soundDetail").hidden = tab !== "selected";
-    $("soundAssignments").hidden = tab !== "inuse";
-    $("soundStartup").hidden = tab !== "startup";
-    if (tab === "startup") send("GetStartupSounds");
-    if (tab === "inuse" || tab === "startup") renderSoundAssignments();
-    fitSoundSide();
-}
-$("soundTabSelected").addEventListener("click", () => showSoundTab("selected"));
-$("soundTabInUse").addEventListener("click", () => showSoundTab("inuse"));
-$("soundTabStartup").addEventListener("click", () => showSoundTab("startup"));
-
 function editSoundLibrary(editing) {
     soundState.editingLibrary = editing;
     $("soundLibraryEdit").hidden = !editing;
@@ -1562,7 +1597,6 @@ $("soundLibraryForm").addEventListener("submit", event => {
 });
 $("soundReindex").addEventListener("click", () => send("GetSoundLibrary", "refresh"));
 enableTabWheel($("soundEras"), ".sound-era");
-enableTabWheel(document.querySelector(".sound-side-tabs"), "[role='tab']");
 
 // The side column fits the space left below its top edge, which moves as the
 // page scrolls (it is sticky), so it never makes the page longer than the

@@ -41,10 +41,6 @@ body {
   box-shadow: 0 0 10px rgba(176, 74, 109, .35);
 }
 
-.memory-icon {
-  color: var(--burgundy-text);
-}
-
 /* Destructive actions. */
 .secondary.danger {
   color: var(--burgundy-text);
@@ -75,13 +71,6 @@ body {
   box-shadow: 0 0 9px rgba(196, 88, 123, .45);
 }
 
-
-.shortcut-status.is-new {
-  border-color: var(--burgundy-border);
-  background: var(--burgundy-soft);
-  color: var(--burgundy-text);
-}
-
 /* ==========================================================================
    1.6.0: Command palette
    ========================================================================== */
@@ -106,17 +95,16 @@ body {
   border-radius: 7px;
   background: var(--burgundy-soft);
   color: var(--burgundy-text);
-  font-size: 11px;
+  font-size: var(--t-floor);
   font-weight: 700;
   letter-spacing: .5px;
   pointer-events: none;
 }
 
-
 .launcher-group {
   margin: 8px 12px 2px;
   color: #8f94aa;
-  font-size: 10px;
+  font-size: var(--t-floor);
   font-weight: 700;
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -132,7 +120,7 @@ body {
 .launcher-option-meta kbd {
   min-width: auto;
   padding: 3px 6px;
-  font-size: 10px;
+  font-size: var(--t-floor);
 }
 
 .launcher-option[aria-disabled="true"] {
@@ -157,7 +145,7 @@ body {
 
 .launcher-option[data-kind="result"] strong {
   color: #c7b8fd;
-  font-size: 18px;
+  font-size: calc(20px * var(--text-scale));
   font-variant-numeric: tabular-nums;
 }
 
@@ -168,140 +156,17 @@ body {
 }
 
 .launcher-hint i {
-  color: #5d6175;
+  color: var(--text-muted);
   font-style: normal;
-}
-
-/* ==========================================================================
-   1.6.0: Command Center activity feed
-   ========================================================================== */
-
-.activity-block {
-  margin-top: 16px;
-}
-
-.activity-heading {
-  margin-bottom: 8px;
-}
-
-.activity-list {
-  display: grid;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.activity-item {
-  display: grid;
-  grid-template-columns: 8px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  min-height: 34px;
-  padding: 5px 10px;
-  border-radius: 8px;
-}
-
-.activity-item:nth-child(odd) {
-  background: rgba(255, 255, 255, .018);
-}
-
-.activity-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent-secondary);
-  box-shadow: 0 0 7px rgba(139, 111, 245, .45);
-}
-
-.activity-item[data-kind="workspace"] .activity-dot,
-.activity-item[data-kind="snippet"] .activity-dot,
-.activity-item[data-kind="note"] .activity-dot {
-  background: var(--burgundy-bright);
-  box-shadow: 0 0 7px rgba(196, 88, 123, .45);
-}
-
-.activity-item[data-kind="system"] .activity-dot {
-  background: #6f7489;
-  box-shadow: none;
-}
-
-.activity-item[data-kind="error"] .activity-dot {
-  background: #ff7b9c;
-  box-shadow: 0 0 8px rgba(255, 123, 156, .5);
-}
-
-.activity-copy {
-  display: flex;
-  min-width: 0;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.activity-copy small {
-  flex-shrink: 0;
-  color: #8f94aa;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: .6px;
-  text-transform: uppercase;
-}
-
-.activity-copy span {
-  overflow: hidden;
-  color: #d9dbe6;
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.activity-item[data-kind="error"] .activity-copy span {
-  color: var(--burgundy-text);
-}
-
-.activity-item time {
-  color: #8f94aa;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.activity-empty {
-  margin: 0;
-  padding: 10px 12px;
-  border: 1px dashed var(--border-soft);
-  border-radius: 10px;
-  color: #a5aabd;
-  font-size: 12px;
-}
-
-/* Keep the Command Center free of scrolling on shorter windows. */
-@media (max-height: 820px) {
-  .activity-item:nth-child(n + 4) {
-    display: none;
-  }
 }
 
 /* ==========================================================================
    1.6.0: Preferences (palette, custom commands, workspaces)
    ========================================================================== */
 
-.settings-grid-secondary {
-  margin-top: 16px;
-}
-
-.settings-card-wide {
-  grid-column: 1 / -1;
-}
-
 .settings-action-buttons {
   display: flex;
   gap: 8px;
-}
-
-.settings-card .settings-actions {
-  margin-top: 16px;
-  padding: 0;
 }
 
 .command-rows {
@@ -329,7 +194,7 @@ body {
   background: var(--panel-input);
   color: var(--text);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--t-floor);
 }
 
 .command-row .hotkey-input input {
@@ -385,25 +250,6 @@ body {
   box-shadow: 0 0 10px rgba(227, 192, 114, .4);
 }
 
-/* Drive fullness on the Dashboard's disk layout. */
-.physical-volume-row {
-  flex-wrap: wrap;
-  row-gap: 8px;
-}
-
-.volume-meter {
-  flex-basis: 100%;
-  height: 5px;
-  margin: 0;
-}
-
-/* Gold accents. */
-.shortcut-status.is-new {
-  border-color: var(--gold-border);
-  background: var(--gold-soft);
-  color: var(--gold-text);
-}
-
 .pin-mark {
   color: var(--gold-bright);
 }
@@ -425,11 +271,6 @@ body {
   border-color: var(--gold-border);
   background: var(--gold-soft);
   color: var(--gold-text);
-}
-
-.activity-item[data-kind="command"] .activity-dot {
-  background: var(--gold-bright);
-  box-shadow: 0 0 7px rgba(227, 192, 114, .45);
 }
 
 .hero-emblem svg {
@@ -455,15 +296,15 @@ body {
 }
 
 .titlebar-context {
-  color: #7d8196;
-  font-size: 11px;
+  color: var(--text-muted);
+  font-size: var(--t-floor);
   font-weight: 700;
   letter-spacing: 1.4px;
 }
 
 .titlebar-drag #breadcrumb {
   color: #e2e4ee;
-  font-size: 11px;
+  font-size: var(--t-floor);
   letter-spacing: 1.3px;
 }
 
@@ -480,7 +321,7 @@ body {
   color: #8f94aa;
   cursor: pointer;
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--t-floor);
   -webkit-app-region: no-drag;
   transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
 }
@@ -513,7 +354,7 @@ body {
 .titlebar-command kbd {
   min-width: auto;
   padding: 2px 6px;
-  font-size: 10px;
+  font-size: var(--t-floor);
 }
 
 .titlebar-actions {
@@ -527,7 +368,7 @@ body {
   border-radius: 999px;
   background: rgba(102, 217, 168, .05);
   color: #9fd9bf;
-  font-size: 10.5px;
+  font-size: var(--t-floor);
   letter-spacing: .9px;
 }
 
@@ -537,14 +378,9 @@ body {
   color: var(--gold-text);
 }
 
-.top-status[data-state="attention"] .status-indicator {
-  background: var(--gold-bright);
-  box-shadow: 0 0 8px rgba(227, 192, 114, .55);
-}
-
 .top-clock {
   color: #c9ccd8;
-  font-size: 13px;
+  font-size: var(--t-floor);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   letter-spacing: .4px;
@@ -599,34 +435,6 @@ body {
   }
 }
 
-/* ==========================================================================
-   1.6.0: Keyboard map (Super Commands)
-   ========================================================================== */
-
-.keymap-panel {
-  margin: 0 0 24px;
-  padding: 18px 18px 14px;
-  border: 1px solid var(--border-soft);
-  border-radius: 14px;
-  background: linear-gradient(145deg, rgba(29, 33, 48, .92), rgba(22, 25, 37, .96));
-  box-shadow: var(--panel-shadow), inset 0 1px rgba(255, 255, 255, .025);
-}
-
-.keymap-heading {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 14px;
-}
-
-.keymap-heading h2 {
-  margin: 4px 0 0;
-  color: #eef0f7;
-  font-size: 19px;
-  font-weight: 600;
-}
-
 .keymap-layers {
   display: inline-flex;
   padding: 3px;
@@ -643,7 +451,7 @@ body {
   color: #a5aabd;
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--t-floor);
   font-weight: 600;
 }
 
@@ -667,14 +475,14 @@ body {
 
 .km-label {
   fill: #6f7489;
-  font-size: 11px;
+  font-size: var(--t-floor);
   font-weight: 600;
   pointer-events: none;
 }
 
 .km-caption {
   fill: #fff;
-  font-size: 9.5px;
+  font-size: var(--t-floor);
   font-weight: 700;
   letter-spacing: .3px;
   pointer-events: none;
@@ -730,21 +538,12 @@ body {
   stroke-width: 1.6;
 }
 
-.keymap-footer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px 20px;
-  margin-top: 12px;
-}
-
 .keymap-detail {
   flex: 1 1 420px;
   min-height: 20px;
   margin: 0;
   color: #a5aabd;
-  font-size: 13px;
+  font-size: var(--t-floor);
 }
 
 .keymap-detail strong {
@@ -765,7 +564,7 @@ body {
   align-items: center;
   gap: 6px;
   color: #a5aabd;
-  font-size: 11.5px;
+  font-size: var(--t-floor);
 }
 
 .keymap-legend li::before {
@@ -782,14 +581,10 @@ body {
 .keymap-legend li[data-cat="custom"]::before { background: rgba(201, 162, 74, .7); }
 .keymap-legend li[data-cat="free"]::before { background: transparent; }
 
-.keymap[data-layer="shift"] + .keymap-footer .keymap-detail strong {
-  color: var(--gold-text);
-}
-
 .km-label,
 .km-caption {
   stroke: none;
-  font-family: "Segoe UI", "Segoe UI Variable", sans-serif;
+  font-family: var(--font-body);
 }
 
 /* ==========================================================================
@@ -895,11 +690,11 @@ body {
 }
 
 .titlebar-context {
-  color: #6f7489;
+  color: var(--text-muted);
 }
 
 .titlebar-drag .breadcrumb-divider {
-  color: #3d4052;
+  color: var(--text-muted);
 }
 
 .titlebar-command {
@@ -1004,11 +799,11 @@ body {
 
 .titlebar-context,
 .titlebar-drag #breadcrumb {
-  font-size: 11px;
+  font-size: var(--t-floor);
 }
 
 .titlebar-drag .breadcrumb-divider {
-  font-size: 13px;
+  font-size: var(--t-floor);
 }
 
 /* Command bar */
@@ -1026,7 +821,7 @@ body {
 }
 
 .titlebar-command span {
-  font-size: 12.5px;
+  font-size: var(--t-floor);
 }
 
 .titlebar-command kbd {
@@ -1035,7 +830,7 @@ body {
   place-items: center;
   padding: 0 6px;
   border-radius: 5px;
-  font-size: 10px;
+  font-size: var(--t-floor);
 }
 
 /* Status pill */
@@ -1046,15 +841,9 @@ body {
 }
 
 #topStatusText {
-  font-size: 10.5px;
+  font-size: var(--t-floor);
   font-weight: 700;
   letter-spacing: .9px;
-}
-
-.top-status .status-indicator {
-  flex: 0 0 6px;
-  width: 6px;
-  height: 6px;
 }
 
 /* Clock, with its divider drawn independently of the trimmed text box */
@@ -1062,7 +851,7 @@ body {
   position: relative;
   padding-left: 15px;
   border-left: 0;
-  font-size: 12.5px;
+  font-size: var(--t-floor);
   letter-spacing: .5px;
 }
 
@@ -1120,7 +909,7 @@ body {
 
 /* "Planned" fits within 1u macro keys. */
 .km-key[data-cat="planned"] .km-caption {
-  font-size: 8px;
+  font-size: var(--t-floor);
   letter-spacing: .2px;
 }
 

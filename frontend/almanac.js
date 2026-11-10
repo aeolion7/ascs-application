@@ -48,7 +48,9 @@
     const toDays = date => date.getTime() / DAY_MS - 0.5 + J1970 - J2000;
     const fromJulian = j => new Date((j + 0.5 - J1970) * DAY_MS);
 
-    function sunTimes(date, latitude, longitude) {
+    // altitude: -0.833 for sunrise and sunset (the sun's edge, with refraction);
+    // 6, -4 and -6 bound golden hour and blue hour.
+    function sunTimes(date, latitude, longitude, altitude = -0.833) {
         const lw = RAD * -longitude;
         const phi = RAD * latitude;
         const d = toDays(date);
@@ -59,7 +61,7 @@
         const L = M + C + RAD * 102.9372 + Math.PI;
         const dec = Math.asin(Math.sin(RAD * 23.4397) * Math.sin(L));
         const jNoon = J2000 + ds + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L);
-        const cosW = (Math.sin(RAD * -0.833) - Math.sin(phi) * Math.sin(dec)) / (Math.cos(phi) * Math.cos(dec));
+        const cosW = (Math.sin(RAD * altitude) - Math.sin(phi) * Math.sin(dec)) / (Math.cos(phi) * Math.cos(dec));
         if (cosW < -1 || cosW > 1) return null;   // polar day or night
         const w = Math.acos(cosW);
         const jSet = J2000 + (0.0009 + (w + lw) / (2 * Math.PI) + n) + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L);
@@ -67,6 +69,222 @@
         const sunrise = fromJulian(jRise);
         const sunset = fromJulian(jSet);
         return { sunrise, sunset, daylightMinutes: Math.round((sunset - sunrise) / 60000) };
+    }
+
+    // Golden hour (the sun between 6° and -4°) and blue hour (-4° to -6°), morning
+    // and evening. Any part the sun never reaches is null.
+    function goldenHours(date, latitude, longitude) {
+        const at = altitude => sunTimes(date, latitude, longitude, altitude);
+        const high = at(6), low = at(-4), deep = at(-6);
+        return {
+            morningBlue: deep && low ? [deep.sunrise, low.sunrise] : null,
+            morningGolden: low && high ? [low.sunrise, high.sunrise] : null,
+            eveningGolden: high && low ? [high.sunset, low.sunset] : null,
+            eveningBlue: low && deep ? [low.sunset, deep.sunset] : null
+        };
+    }
+
+    // The sun's apparent ecliptic longitude, radians from the March equinox
+    // (Meeus, Astronomical Algorithms, ch. 25: good to about 0.01 degrees, so
+    // an equinox or solstice to within minutes).
+    function solarLongitude(date) {
+        const T = toDays(date) / 36525;
+        const L0 = 280.46646 + 36000.76983 * T + 0.0003032 * T * T;
+        const M = RAD * (357.52911 + 35999.05029 * T - 0.0001537 * T * T);
+        const C = (1.914602 - 0.004817 * T - 0.000014 * T * T) * Math.sin(M)
+            + (0.019993 - 0.000101 * T) * Math.sin(2 * M) + 0.000289 * Math.sin(3 * M);
+        const omega = RAD * (125.04 - 1934.136 * T);
+        const apparent = RAD * (L0 + C - 0.00569 - 0.00478 * Math.sin(omega));
+        return ((apparent % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    }
+
+    // Equinoxes and solstices of a year, found where the sun's longitude passes
+    // each quarter; good to well within a day. Named for the northern hemisphere.
+    const SEASON_EVENTS = [
+        [0, "spring equinox", "Spring"], [90, "summer solstice", "Summer"],
+        [180, "fall equinox", "Fall"], [270, "winter solstice", "Winter"]
+    ];
+    function seasonEvents(year) {
+        return SEASON_EVENTS.map(([degrees, name, season]) => {
+            const target = RAD * degrees;
+            const past = date => {
+                const gap = solarLongitude(date) - target;
+                return Math.sin(gap) >= 0 && Math.cos(gap) > 0;
+            };
+            // From a week before the usual date, a day at a time, then halving.
+            let low = Date.UTC(year, [2, 5, 8, 11][degrees / 90], 12);
+            while (!past(new Date(low + DAY_MS))) low += DAY_MS;
+            let high = low + DAY_MS;
+            for (let i = 0; i < 20; i++) {
+                const middle = (low + high) / 2;
+                if (past(new Date(middle))) high = middle;
+                else low = middle;
+            }
+            return { name, season, date: new Date(Math.round(high)) };
+        });
+    }
+
+    // Where the year is: the season, how far through it, and what comes next.
+    function seasonNow(date = new Date()) {
+        const year = date.getFullYear();
+        const events = [...seasonEvents(year - 1), ...seasonEvents(year), ...seasonEvents(year + 1)];
+        const nextIndex = events.findIndex(event => event.date > date);
+        const previous = events[nextIndex - 1];
+        const next = events[nextIndex];
+        const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const nextDay = new Date(next.date.getFullYear(), next.date.getMonth(), next.date.getDate());
+        return {
+            season: previous.season,
+            progress: Math.round((date - previous.date) / (next.date - previous.date) * 100),
+            next: next.name,
+            nextDate: next.date,
+            days: Math.round((nextDay - start) / DAY_MS)
+        };
+    }
+
+    function dayOfYear(date) {
+        return Math.round((new Date(date.getFullYear(), date.getMonth(), date.getDate()) - new Date(date.getFullYear(), 0, 0)) / DAY_MS);
+    }
+
+    // ISO 8601: weeks start on Monday, and week 1 holds the year's first Thursday.
+    function isoWeek(date) {
+        const day = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        const weekday = day.getUTCDay() || 7;
+        day.setUTCDate(day.getUTCDate() + 4 - weekday);
+        const yearStart = Date.UTC(day.getUTCFullYear(), 0, 1);
+        return Math.ceil(((day - yearStart) / DAY_MS + 1) / 7);
+    }
+
+    // ------------------------------------------------------------- moon in the sky
+    // Low-precision lunar position (good to a few minutes for rising and setting).
+    const OBLIQUITY = RAD * 23.4397;
+    function moonAltitude(date, latitude, longitude) {
+        const d = toDays(date);
+        const L = RAD * (218.316 + 13.176396 * d);
+        const M = RAD * (134.963 + 13.064993 * d);
+        const F = RAD * (93.272 + 13.22935 * d);
+        const l = L + RAD * 6.289 * Math.sin(M);
+        const b = RAD * 5.128 * Math.sin(F);
+        const ra = Math.atan2(Math.sin(l) * Math.cos(OBLIQUITY) - Math.tan(b) * Math.sin(OBLIQUITY), Math.cos(l));
+        const dec = Math.asin(Math.sin(b) * Math.cos(OBLIQUITY) + Math.cos(b) * Math.sin(OBLIQUITY) * Math.sin(l));
+        const phi = RAD * latitude;
+        const hourAngle = RAD * (280.16 + 360.9856235 * d) + RAD * longitude - ra;
+        return Math.asin(Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(hourAngle));
+    }
+
+    // Moonrise and moonset on a local calendar day; either can be null, since the
+    // moon skips one about once a month.
+    function moonTimes(date, latitude, longitude) {
+        const start = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+        const horizon = RAD * 0.133;
+        const step = 10 * 60000;
+        let rise = null;
+        let set = null;
+        let before = moonAltitude(new Date(start), latitude, longitude) - horizon;
+        for (let time = start + step; time <= start + DAY_MS; time += step) {
+            const now = moonAltitude(new Date(time), latitude, longitude) - horizon;
+            if ((before < 0) !== (now < 0)) {
+                const crossed = new Date(Math.round(time - step + step * before / (before - now)));
+                if (now > 0 && !rise) rise = crossed;
+                if (now < 0 && !set) set = crossed;
+            }
+            before = now;
+        }
+        return { rise, set };
+    }
+
+    // The next full moon and the next new moon, from the same mean month.
+    function nextMoonPhases(date) {
+        const { age } = moonPhase(date);
+        const untilFull = ((SYNODIC / 2 - age) % SYNODIC + SYNODIC) % SYNODIC;
+        const untilNew = (SYNODIC - age) % SYNODIC;
+        return {
+            full: new Date(date.getTime() + untilFull * DAY_MS),
+            new: new Date(date.getTime() + untilNew * DAY_MS)
+        };
+    }
+
+    // ------------------------------------------------------------- meteor showers
+    // The major annual showers: when each is active, and its usual peak (IMO).
+    const SHOWERS = [
+        ["Quadrantids", [12, 28], [1, 12], [1, 3]],
+        ["Lyrids", [4, 14], [4, 30], [4, 22]],
+        ["Eta Aquariids", [4, 19], [5, 28], [5, 6]],
+        ["Southern Delta Aquariids", [7, 12], [8, 23], [7, 30]],
+        ["Perseids", [7, 17], [8, 24], [8, 12]],
+        ["Draconids", [10, 6], [10, 10], [10, 8]],
+        ["Orionids", [10, 2], [11, 7], [10, 21]],
+        ["Leonids", [11, 6], [11, 30], [11, 17]],
+        ["Geminids", [12, 4], [12, 20], [12, 14]],
+        ["Ursids", [12, 17], [12, 26], [12, 22]]
+    ];
+    function activeShowers(date) {
+        const today = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const year = today.getFullYear();
+        const found = [];
+        SHOWERS.forEach(([name, from, to, peak]) => {
+            // A shower that runs across New Year is tried from both years.
+            [year - 1, year].forEach(startYear => {
+                const start = new Date(startYear, from[0] - 1, from[1]);
+                const endYear = to[0] < from[0] ? startYear + 1 : startYear;
+                const end = new Date(endYear, to[0] - 1, to[1]);
+                if (today < start || today > end) return;
+                const peakYear = peak[0] < from[0] ? startYear + 1 : startYear;
+                const peakDate = new Date(peakYear, peak[0] - 1, peak[1]);
+                found.push({ name, peak: peakDate, days: Math.round((peakDate - today) / DAY_MS) });
+            });
+        });
+        return found.sort((left, right) => Math.abs(left.days) - Math.abs(right.days));
+    }
+
+    // Composers born on this day, from composers.js.
+    function bornOn(composers, date) {
+        const key = `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+        return (Array.isArray(composers) ? composers : []).filter(entry => entry[0] === key);
+    }
+
+    // ------------------------------------------------------------- weather (2.0.0)
+    // Open-Meteo's reply, read strictly: only the numbers the Weather module
+    // shows, each checked; anything else, or a wrong shape, is null.
+    const WEATHER_NAMES = [
+        [[0], "Clear"], [[1], "Mostly clear"], [[2], "Partly cloudy"], [[3], "Cloudy"], [[45, 48], "Fog"],
+        [[51, 53, 55], "Drizzle"], [[56, 57], "Freezing drizzle"], [[61], "Light rain"], [[63], "Rain"], [[65], "Heavy rain"],
+        [[66, 67], "Freezing rain"], [[71], "Light snow"], [[73], "Snow"], [[75], "Heavy snow"], [[77], "Snow grains"],
+        [[80, 81], "Showers"], [[82], "Heavy showers"], [[85, 86], "Snow showers"], [[95], "Thunderstorms"], [[96, 99], "Thunderstorms with hail"]
+    ];
+    function weatherName(code) {
+        return WEATHER_NAMES.find(([codes]) => codes.includes(code))?.[1] ?? "Unknown";
+    }
+
+    function parseWeather(text) {
+        let raw;
+        try { raw = JSON.parse(String(text ?? "")); } catch { return null; }
+        if (!raw || typeof raw !== "object") return null;
+        const number = (value, low, high) => (typeof value === "number" && Number.isFinite(value) && value >= low && value <= high ? value : null);
+        const code = value => (Number.isInteger(value) && value >= 0 && value <= 99 ? value : null);
+        const now = raw.current || {};
+        const current = {
+            temperature: number(now.temperature_2m, -100, 150),
+            feelsLike: number(now.apparent_temperature, -120, 170),
+            humidity: number(now.relative_humidity_2m, 0, 100),
+            wind: number(now.wind_speed_10m, 0, 300),
+            code: code(now.weather_code)
+        };
+        if (Object.values(current).some(value => value === null)) return null;
+        const daily = raw.daily || {};
+        const days = [];
+        const dates = Array.isArray(daily.time) ? daily.time.slice(0, 3) : [];
+        dates.forEach((date, index) => {
+            const day = {
+                date: typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null,
+                high: number(daily.temperature_2m_max?.[index], -100, 150),
+                low: number(daily.temperature_2m_min?.[index], -100, 150),
+                code: code(daily.weather_code?.[index]),
+                rain: number(daily.precipitation_probability_max?.[index], 0, 100)
+            };
+            if (day.date && day.high !== null && day.low !== null && day.code !== null) days.push(day);
+        });
+        return { current, days };
     }
 
     // ------------------------------------------------------------- feeds
@@ -244,6 +462,10 @@
         if (sources.holidays?.length) kinds.push("observance");
         if (sources.featured) kinds.push("featured");
         if (sources.quote) kinds.push("quote");
+        if (sources.composers?.length) kinds.push("composer");
+        if (sources.golden) kinds.push("golden");
+        if (sources.moon) kinds.push("moon");
+        if (sources.showers?.length) kinds.push("meteors");
         if (sources.countdowns?.length) kinds.push("countdown");
         if (!kinds.length) return null;
         const position = ((step % kinds.length) + kinds.length) % kinds.length;
@@ -264,6 +486,14 @@
                 return { ...base, label: "Today's featured article", text: `${sources.featured.display}. ${sources.featured.extract}`.trim(), title: sources.featured.title };
             case "quote":
                 return { ...base, label: "Quote of the day", text: `“${sources.quote.text}”`, attribution: sources.quote.source };
+            case "composer": {
+                const [, name, year, note] = pick(sources.composers);
+                return { ...base, label: "Born today", text: `${name}, in ${year}${note ? ` (${note})` : ""}` };
+            }
+            case "golden":
+            case "moon":
+            case "meteors":
+                return { ...base, label: { golden: "Golden hour", moon: "The moon", meteors: "Meteor shower" }[kind], text: sources[{ golden: "golden", moon: "moon", meteors: "showerText" }[kind]] };
             default: {
                 const item = pick(sources.countdowns);
                 return { ...base, label: "Countdown", text: item.text };
@@ -280,7 +510,8 @@
     }
 
     global.ASCSAlmanac = {
-        moonPhase, moonPath, sunTimes, parseFeatured, parseHolidays,
+        moonPhase, moonPath, sunTimes, goldenHours, solarLongitude, seasonEvents, seasonNow, dayOfYear, isoWeek,
+        moonAltitude, moonTimes, nextMoonPhases, activeShowers, bornOn, weatherName, parseWeather, parseFeatured, parseHolidays,
         countdownItems, nextOccurrence, rotationItem, quoteFor, clean, usHolidays, withHolidays
     };
 })(globalThis);

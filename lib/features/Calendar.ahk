@@ -53,7 +53,7 @@ StartCalendarServer() {
     global ASCS_CalendarState, ASCS_CalendarPid
     paths := CalendarPaths()
     if !FileExist(paths["pythonw"]) || !FileExist(paths["config"]) || !FileExist(paths["users"]) || !CalendarCredentials() {
-        SetCalendarState("notInstalled", "The calendar server isn't installed. Run tools\Install-Radicale.ps1, then reload ASCS.")
+        SetCalendarState("notInstalled", "The calendar server isn't installed. Run tools\Install-Radicale.ps1, then reload Maestro.")
         return
     }
     if (owner := CalendarPortOwner()) {
@@ -352,7 +352,7 @@ StartPsoSession(*) {
     }
     launcher := ASCS_GamePaths["pso"]
     if (launcher = "" || !FileExist(launcher)) {
-        MsgBox("Set the PSO launcher in Preferences › Games & apps.", "PSO session", "Icon! T15")
+        MsgBox("Set the PSO launcher in Games › Setup.", "PSO session", "Icon! T15")
         return
     }
     if IsObject(ASCS_PsoSession) {

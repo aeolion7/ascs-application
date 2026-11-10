@@ -117,15 +117,15 @@ RenameWorkspace(content) {
         oldName := ValidateWorkspaceName(parts[1]), newName := ValidateWorkspaceName(parts[2])
         oldPath := GetWorkspacePath(oldName), newPath := GetWorkspacePath(newName)
         if !FileExist(oldPath)
-            throw Error("That workspace isn't there any more.")
+            throw Error("That arrangement isn't there any more.")
         if (oldName != newName && FileExist(newPath))
-            throw Error("A workspace called “" newName "” already exists.")
+            throw Error("An arrangement called “" newName "” already exists.")
         if (oldPath != newPath)
             FileMove(oldPath, newPath)
         else
             FileMove(oldPath, newPath ".tmp"), FileMove(newPath ".tmp", newPath)    ; a change of case only
         IniWrite(newName, newPath, "Workspace", "Name")
-        RecordActivity("workspace", "Renamed workspace “" oldName "” to “" newName "”")
+        RecordActivity("workspace", "Renamed arrangement “" oldName "” to “" newName "”")
         NotifyFrontend("Renamed to “" newName "”.")
     } catch as err {
         NotifyFrontend("Not renamed: " err.Message)
@@ -176,11 +176,11 @@ EditWorkspaceFile(path, change) {
 ; The file's section for a saved window; throws if it isn't there.
 SavedWorkspaceWindow(path, index) {
     if !FileExist(path)
-        throw Error("That workspace isn't there any more.")
+        throw Error("That arrangement isn't there any more.")
     section := "Window" index
     if (index > WorkspaceInteger(IniRead(path, "Workspace", "WindowCount", "0"), 0)
         || IniRead(path, section, "path", "") = "")
-        throw Error("That window isn't in the workspace any more.")
+        throw Error("That window isn't in the arrangement any more.")
     return section
 }
 
@@ -191,7 +191,7 @@ SetWorkspaceWindow(content) {
         section := SavedWorkspaceWindow(path, parsed["index"])
         desktops := WorkspaceInteger(IniRead(path, "Workspace", "Desktops", "0"), 0)
         if (parsed["desktop"] >= desktops || (parsed["pinned"] && desktops < 1))
-            throw Error("That workspace has no such desktop.")
+            throw Error("That arrangement has no such desktop.")
         EditWorkspaceFile(path, WriteWorkspaceWindowEdit.Bind(section, parsed))
     } catch as err {
         NotifyFrontend("Not saved: " err.Message)
@@ -216,10 +216,10 @@ RemoveWorkspaceWindow(content) {
         SavedWorkspaceWindow(path, ref["index"])
         count := WorkspaceInteger(IniRead(path, "Workspace", "WindowCount", "0"), 0)
         if (count <= 1)
-            throw Error("It's the last window; delete the workspace instead.")
+            throw Error("It's the last window; delete the arrangement instead.")
         app := RegExReplace(IniRead(path, "Window" ref["index"], "process", ""), "i)\.exe$")
         EditWorkspaceFile(path, WriteWorkspaceWindowRemoved.Bind(ref["index"], count))
-        RecordActivity("workspace", "Removed " app " from workspace “" ref["name"] "”")
+        RecordActivity("workspace", "Removed " app " from arrangement “" ref["name"] "”")
     } catch as err {
         NotifyFrontend("Not removed: " err.Message)
     }
@@ -244,10 +244,10 @@ AddWorkspaceWindow(content) {
         name := WorkspaceEditName(parts[1])
         path := GetWorkspacePath(name)
         if !FileExist(path)
-            throw Error("That workspace isn't there any more.")
+            throw Error("That arrangement isn't there any more.")
         count := WorkspaceInteger(IniRead(path, "Workspace", "WindowCount", "0"), 0)
         if (count >= 48)
-            throw Error("A workspace holds 48 windows.")
+            throw Error("An arrangement holds 48 windows.")
         hwnd := Integer(parts[2])
         available := DesktopsAvailable()
         if available
@@ -260,7 +260,7 @@ AddWorkspaceWindow(content) {
             throw Error("That window's app can't be told.")
         EditWorkspaceFile(path, WriteWorkspaceWindowAdded.Bind(record, count))
         app := RegExReplace(record["process"], "i)\.exe$")
-        RecordActivity("workspace", "Added " app " to workspace “" name "”")
+        RecordActivity("workspace", "Added " app " to arrangement “" name "”")
         NotifyFrontend("Added " app ".")
     } catch as err {
         NotifyFrontend("Not added: " err.Message)
@@ -305,15 +305,15 @@ DuplicateWorkspace(content) {
         newName := ValidateWorkspaceName(parts[2])
         path := GetWorkspacePath(name), newPath := GetWorkspacePath(newName)
         if !FileExist(path)
-            throw Error("That workspace isn't there any more.")
+            throw Error("That arrangement isn't there any more.")
         if FileExist(newPath)
-            throw Error("A workspace called “" newName "” already exists.")
+            throw Error("An arrangement called “" newName "” already exists.")
         DirCreate(ASCS_WorkspaceDir)
         temp := newPath ".tmp"
         FileCopy(path, temp, 1)
         IniWrite(newName, temp, "Workspace", "Name")
         FileMove(temp, newPath)
-        RecordActivity("workspace", "Copied workspace “" name "” to “" newName "”")
+        RecordActivity("workspace", "Copied arrangement “" name "” to “" newName "”")
         NotifyFrontend("Copied to “" newName "”.")
     } catch as err {
         NotifyFrontend("Not copied: " err.Message)
@@ -327,11 +327,11 @@ DeleteWorkspace(name) {
         path := GetWorkspacePath(displayName)
         if FileExist(path)
             FileDelete(path)
-        RecordActivity("workspace", "Deleted workspace “" displayName "”")
-        NotifyFrontend("Workspace “" displayName "” deleted.")
+        RecordActivity("workspace", "Deleted arrangement “" displayName "”")
+        NotifyFrontend("Arrangement “" displayName "” deleted.")
     } catch as err {
-        WriteLog("Workspace delete failed: " err.Message)
-        NotifyFrontend("Unable to delete the workspace: " err.Message)
+        WriteLog("Arrangement delete failed: " err.Message)
+        NotifyFrontend("Unable to delete the arrangement: " err.Message)
     }
     SendWorkspaces()
 }

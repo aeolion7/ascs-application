@@ -2,9 +2,9 @@
 #SingleInstance Off
 #NoTrayIcon
 
-; Asks a running ASCS to save its notes and exit, for the ASCS command's `try`.
-;   AutoHotkey64.exe ascs-exit.ahk "<full path of the ASCS.ahk that's running>"
-; Exit code: 0 it agreed, 1 it didn't answer (an older ASCS), 2 it isn't running.
+; Asks a running Maestro to save its notes and exit, for the Maestro command's `try`.
+;   AutoHotkey64.exe maestro-exit.ahk "<full path of the ASCS.ahk that's running>"
+; Exit code: 0 it agreed, 1 it didn't answer (an older Maestro), 2 it isn't running.
 
 OnError((*) => ExitApp(1))
 

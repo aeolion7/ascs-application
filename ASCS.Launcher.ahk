@@ -37,7 +37,7 @@ $^!+a::StartOrReloadASCS()
 FindASCSWindow() {
     DetectHiddenWindows(true)
     SetTitleMatchMode(2)
-    ; Any folder: during ASCS try, the test build is the ASCS that's running, and
+    ; Any folder: during maestro try, the test build is the ASCS that's running, and
     ; starting this folder's copy beside it would make their hotkeys fight.
     return WinExist("\ASCS.ahk - AutoHotkey ahk_class AutoHotkey")
 }
@@ -54,10 +54,10 @@ StartOrReloadASCS(*) {
             return
     }
     try {
+        ; Maestro says it's tuning up in its own toast, at the top of the screen,
+        ; rather than a tooltip at the pointer.
         Run('"' A_AhkPath '" "' ASCS_ScriptPath '"', A_ScriptDir)
-        ToolTip("Starting ASCS…")
-        SetTimer(() => ToolTip(), -1500)
     } catch as err {
-        MsgBox("ASCS could not be started.`n`n" err.Message, "ASCS Launcher", "Iconx")
+        MsgBox("Maestro could not be started.`n`n" err.Message, "Maestro Launcher", "Iconx")
     }
 }

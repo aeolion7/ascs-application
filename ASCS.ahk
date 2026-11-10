@@ -6,9 +6,15 @@
 
 SetWorkingDir(A_ScriptDir)
 
+; Hotkeys wait until the window exists (2.0.0): a press of Super while Maestro
+; was starting reached for a window that wasn't there yet, and AutoHotkey showed
+; an error. Super itself still answers, with a toast; Ctrl+Alt+Shift+A still
+; reloads. Both are #SuspendExempt in SuperKey.ahk.
+Suspend(true)
+
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 1.11.2
+; Version 2.0.0
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -18,7 +24,7 @@ SetWorkingDir(A_ScriptDir)
 ; GLOBAL VARIABLES
 ; ==========================================
 
-global ASCS_Version := "1.11.2"
+global ASCS_Version := "2.0.0"
 global ASCS_App := ""
 global ASCS_WindowIcon := 0
 global ASCS_IconPath := A_ScriptDir "\frontend\assets\ascs.ico"
@@ -36,13 +42,14 @@ global ASCS_LaunchRules := Map()
 global ASCS_RuleAppliedPids := Map()
 global ASCS_Notices := []          ; 1.11.0: toasts at the top of the screen
 global ASCS_NoticeWindow := 0
+global ASCS_StartedAt := A_TickCount   ; 2.0.0: Super waits for the page until 30 s after this
 global ASCS_CommandsFile := ASCS_DataDir "\commands.ini"
 global ASCS_ActivityFile := ASCS_DataDir "\activity.log"
 
-; Default window size (1.7.0): 15% larger than 1920 x 1080, so the Command
-; Center and Quick Notes fit without scrolling; always capped to the screen.
-global ASCS_WindowWidth := 2208
-global ASCS_WindowHeight := 1242
+; Default window size (2.0.0): tall enough for the fullest Command Center without
+; scrolling, measured at 1341 px; always capped to the screen.
+global ASCS_WindowWidth := 2540
+global ASCS_WindowHeight := 1360
 global ASCS_AlmanacDir := ASCS_DataDir "\almanac"
 
 ; Almanac (1.7.0). The location is fixed to New York City for now.
@@ -53,6 +60,12 @@ global ASCS_AlmanacLatitude := 40.7128
 global ASCS_AlmanacLongitude := -74.006
 global ASCS_AlmanacRequests := Map()
 global ASCS_AlmanacRetryAt := 0
+global ASCS_WeatherEnabled := true        ; 2.0.0: the Weather module's forecast
+global ASCS_WeatherRequest := 0
+global ASCS_WeatherRetryAt := 0
+global ASCS_NetworkSample := 0           ; the last reading, for speeds and app use
+global ASCS_ProcessSample := 0
+global ASCS_TimerEnds := 0
 ; Logs tab (1.7.0): the last stamp sent per source, to skip unchanged refreshes.
 global ASCS_LogStamps := Map()
 
@@ -123,7 +136,7 @@ global ASCS_PendingView := "home"
 global ASCS_DashboardErrorShown := false
 global ASCS_DriveCache := Map()
 global ASCS_DriveProbes := Map()
-global ASCS_Wmi := 0
+global ASCS_HardwareProbe := 0          ; the inventory worker while it runs
 global ASCS_NotesRecovered := false
 global ASCS_DesktopAccessorWarningShown := false
 global ASCS_PendingWindowDirection := ""
@@ -135,6 +148,8 @@ global ASCS_WorkspaceRestorePending := []
 global ASCS_WorkspaceClaimed := Map()
 global ASCS_HardwareJson := ""
 global ASCS_CpuSample := 0
+global ASCS_HistoryCpuSample := 0       ; the history's own baseline; see ReadCpuUsage
+global ASCS_HardwareDue := false        ; the page needs the hardware details sent
 global ASCS_NotesFileTime := ""
 global ASCS_PendingLauncherMode := ""
 global ASCS_PreviousWindow := 0
@@ -148,7 +163,9 @@ global ASCS_SearchTemplate := "https://duckduckgo.com/?q=%s"
 global ASCS_ClaudeShortcut := Map("display", "Ctrl+Alt+Space", "send", "^!{Space}")
 global ASCS_ClaudeAppId := "Claude_pzs8sxrjxfjjc!Claude"
 global ASCS_QuickActions := 0          ; 0 = never customized (frontend defaults)
-global ASCS_MetricHistory := []        ; [cpu, ram] every 10 s, newest last (15 min)
+global ASCS_MetricHistory := NewMetricHistory()   ; 2.0.0: each second, 10 s and minute; see Core
+global ASCS_HistoryScale := "tens"     ; the one System is showing
+global ASCS_HistorySentSeq := -1       ; what the page has of it
 ; Defaults; user selections are persisted in settings.ini.
 global ASCS_Drives := ["C:", "J:"]
 
@@ -157,6 +174,7 @@ DirCreate(ASCS_WebViewDataDir)
 DirCreate(ASCS_WorkspaceDir)
 LoadUserSettings()
 LoadAlmanacSettings()
+LoadWeatherSettings()
 LoadGameSettings()
 LoadSoundSettings()
 StartLaunchRules()      ; 1.10.0: the shell hook for launch rules
@@ -178,6 +196,10 @@ if !FileExist(ASCS_NotesFile)
 ; WEBVIEW2 INITIALIZATION
 ; ==========================================
 
+; Every start says so at once (2.0.0), and "Maestro is ready." follows when the
+; page has loaded. The toast needs nothing from the window.
+ShowNotice("Maestro is tuning up…")
+
 try {
     MonitorGetWorkArea(1, &workLeft, &workTop, &workRight, &workBottom)
     windowWidth := Min(ASCS_WindowWidth, workRight - workLeft - 32)
@@ -187,7 +209,7 @@ try {
 
     ASCS_App := WebViewGui(
         "-Caption +Resize +MinSize760x520 +E0x40000",
-        "Aeolionware SCS",
+        "Aeolionware Maestro",
         ,
         {
             DataDir: ASCS_WebViewDataDir,
@@ -243,24 +265,25 @@ try {
     ; Keep the application hidden at startup.
     ASCS_App.Hide()
     SetupTrayMenu()
-    SampleCpuUsage()                          ; baseline for the history sampler
-    SetTimer(SampleMetricHistory, 10000)
+    ReadCpuUsage(&ASCS_HistoryCpuSample)      ; baseline for the history sampler
+    SetTimer(SampleMetricHistory, 1000)
 
-    WriteLog("ASCS " ASCS_Version " initialized.")
-    RecordActivity("system", "ASCS " ASCS_Version " started")
+    WriteLog("Maestro " ASCS_Version " initialized.")
+    RecordActivity("system", "Maestro " ASCS_Version " started")
 
 } catch as err {
     WriteLog("WebView2 initialization failed: " err.Message)
 
     MsgBox(
-        "ASCS could not initialize WebView2.`n`n"
+        "Maestro could not initialize WebView2.`n`n"
         err.Message,
-        "ASCS Startup Error",
+        "Maestro Startup Error",
         "Iconx"
     )
 
     ExitApp()
 }
+Suspend(false)
 
 #Include lib\features\SuperKey.ahk
 ; ==========================================
@@ -291,7 +314,15 @@ ShowCommandLauncher(mode := "") {
 ; last open this session (the Command Center after a fresh start).
 ToggleCommandCenter() {
     global ASCS_App
+    global ASCS_PageReady
+    global ASCS_StartedAt
 
+    ; Until the page has loaded, the window would open blank. After 30 s it opens
+    ; anyway, so a page that never loads can't keep it shut.
+    if !IsObject(ASCS_App) || (!ASCS_PageReady && A_TickCount - ASCS_StartedAt < 30000) {
+        ShowNotice("Maestro is still tuning up; it's ready in a moment.")
+        return
+    }
     if WinActive("ahk_id " ASCS_App.Hwnd)
         HandleClose()
     else
@@ -327,6 +358,9 @@ ShowASCS(view := "") {
     global ASCS_PendingView
     global ASCS_PreviousWindow
 
+    if !IsObject(ASCS_App)
+        return
+
     if (view != "")
         ASCS_PendingView := view
 
@@ -345,6 +379,8 @@ ShowASCS(view := "") {
         WriteLog("Window was minimized when shown; restored to its normal size.")
     }
     ASCS_App.Show()
+    if (!wasVisible && ASCS_PageReady)
+        SendToFrontend('{"type":"windowShown"}')
     if (!wasVisible && ASCS_AscsSoundMode = "show")
         PlayAscsSound("show")
     EnsureWindowUsable()
@@ -420,7 +456,7 @@ ApplyWindowIcon() {
 
     hwnd := ASCS_App.Hwnd
     if !DllCall("IsWindow", "Ptr", hwnd, "Int")
-        throw Error("ASCS window handle is invalid")
+        throw Error("Maestro window handle is invalid")
 
     DllCall("SendMessageW", "Ptr", hwnd, "UInt", 0x80, "Ptr", 1, "Ptr", ASCS_WindowIcon, "Ptr")
     DllCall("SendMessageW", "Ptr", hwnd, "UInt", 0x80, "Ptr", 0, "Ptr", ASCS_WindowIcon, "Ptr")
@@ -439,7 +475,7 @@ HandleNavigationStarting(sender, args) {
         ; WebViewToo loads its own data: template before ASCS navigates;
         ; canceling that is expected and is not worth logging.
         if !RegExMatch(uri, "i)^data:")
-            WriteLog("Blocked navigation outside the ASCS origin.")
+            WriteLog("Blocked navigation outside the Maestro origin.")
         return
     }
 
@@ -472,7 +508,7 @@ PlayAscsSound(kind, wait := false) {
         return
     try SoundPlay(file, wait)
     catch as err
-        WriteLog("ASCS sound not played: " err.Message)
+        WriteLog("Maestro sound not played: " err.Message)
 }
 
 ; Windows' shell host (sihost.exe) starts at sign-in; ASCS starting within two
@@ -501,14 +537,28 @@ HandleClose(*) {
         PlayAscsSound("hide")
     ASCS_App.Hide()
     SetTimer(PushDashboard, 0)
+    ; After Windows has finished closing the window, so the logo resetting for
+    ; its next swing can't be seen.
+    SetTimer(TellPageWindowHidden, -400)
+}
+
+TellPageWindowHidden() {
+    global ASCS_App
+    if !DllCall("IsWindowVisible", "Ptr", ASCS_App.Hwnd, "Int")
+        SendToFrontend('{"type":"windowHidden"}')
 }
 
 HandleASCSSize(guiObj, minMax, width, height) {
     global ASCS_PageReady
 
-    ; Lets the title bar show the maximize or restore glyph.
-    if (minMax != -1)
+    ; Lets the title bar show the maximize or restore glyph, and the page stop
+    ; asking for readings while it's minimized.
+    if (minMax = -1)
+        SendToFrontend('{"type":"windowMinimized","minimized":true}')
+    else {
+        SendToFrontend('{"type":"windowMinimized","minimized":false}')
         SendToFrontend('{"type":"windowState","maximized":' (minMax = 1 ? "true" : "false") '}')
+    }
 
     if (minMax = -1) {
         SetTimer(PushDashboard, 0)
@@ -522,6 +572,9 @@ HandleASCSSize(guiObj, minMax, width, height) {
 ; ==========================================
 
 HandleWebMessage(sender, args) {
+    global ASCS_HardwareDue
+    global ASCS_HistoryScale
+    global ASCS_HistorySentSeq
     global ASCS_PageReady
     global ASCS_PendingView
     global ASCS_PendingLauncher
@@ -570,11 +623,20 @@ HandleWebMessage(sender, args) {
                 ASCS_PageReady := true
 
                 WriteLog("Frontend ready.")
+                ; Once a run: the page can load again (after a failed load) without
+                ; Maestro having restarted.
+                static announced := false
+                if !announced {
+                    announced := true
+                    ShowNotice("Maestro is ready.")
+                }
 
                 SendToFrontend(
                     '{"type":"navigate","view":'
                     JsonQuote(ASCS_PendingView) '}'
                 )
+                if DllCall("IsWindowVisible", "Ptr", ASCS_App.Hwnd, "Int")
+                    SendToFrontend('{"type":"windowShown"}')
 
                 GetNotes()
                 SendSettings()
@@ -582,7 +644,7 @@ HandleWebMessage(sender, args) {
                 SendWorkspaces()
                 SendActivity()
                 SendQuickActions()
-                if FileExist(ASCS_DataDir "\test-build.txt")   ; made by the ASCS command's `try`
+                if FileExist(ASCS_DataDir "\test-build.txt")   ; made by the Maestro command's `try`
                     SendToFrontend('{"type":"testBuild"}')
                 if ASCS_PendingLauncher {
                     ASCS_PendingLauncher := false
@@ -633,11 +695,23 @@ HandleWebMessage(sender, args) {
             case "GetMetrics":
                 if (content = "home" || content = "dashboard") {
                     ASCS_PendingView := content
+                    ASCS_HardwareDue := content = "dashboard"
+                    ASCS_HistorySentSeq := -1      ; a page opened: send it the history
                     RequestDashboardPush()
                 } else if (content = "") {
                     RequestDashboardPush()
                 } else {
                     WriteLog("Rejected GetMetrics payload.")
+                }
+
+            case "SetHistoryScale":
+                ; 2.0.0: which history System's graphs show.
+                if IsMetricHistoryScale(content) {
+                    ASCS_HistoryScale := content
+                    ASCS_HistorySentSeq := -1
+                    RequestDashboardPush()
+                } else {
+                    WriteLog("Rejected SetHistoryScale payload.")
                 }
 
             case "Log":
@@ -651,6 +725,20 @@ HandleWebMessage(sender, args) {
 
             case "GetAlmanac":
                 HandleGetAlmanac()
+                SendWeatherSettings()
+
+            case "GetWeather":
+                HandleGetWeather()
+
+            case "SetWeather":
+                SetWeather(content)
+
+            case "GetHomeStats":
+                if (StrLen(content) <= 32)
+                    HandleGetHomeStats(content)
+
+            case "CountdownTimer":
+                CountdownTimer(content)
 
             case "SaveAlmanac":
                 if (StrLen(content) <= 2048)
@@ -747,6 +835,9 @@ HandleWebMessage(sender, args) {
             case "GetGameSettings":
                 SendGameSettings()
 
+            case "SetShowCovers":
+                SetShowCovers(content)
+
             case "SaveGameSettings":
                 if (StrLen(content) <= 4096)
                     SaveGameSettings(content)
@@ -767,6 +858,9 @@ HandleWebMessage(sender, args) {
             case "GetRaUnlocks":
                 ; The last 30 days of unlocks (1.9.0); "refresh" to ask again.
                 FetchRaUnlocks(content = "refresh")
+
+            case "RefreshRaPicture":
+                RefreshRaPicture()
 
             case "GetRaImages":
                 if (StrLen(content) <= 600)
@@ -1000,6 +1094,10 @@ HandleWebMessage(sender, args) {
                 if (StrLen(content) <= 1000)
                     SearchWeb(content)
 
+            case "OpenNoteLink":
+                if (StrLen(content) <= 2048)
+                    OpenNoteLink(content)
+
             case "SearchFiles":
                 if (StrLen(content) <= 1000)
                     SearchFiles(content)
@@ -1044,6 +1142,9 @@ PushDashboardOnce(*) {
 IsDashboardWindowVisible() {
     global ASCS_App
 
+    ; Asked before the window exists while starting (2.0.0): no window, nothing to show.
+    if !IsObject(ASCS_App)
+        return false
     try {
         return (DllCall("IsWindowVisible", "Ptr", ASCS_App.Hwnd, "Int")
             && WinGetMinMax("ahk_id " ASCS_App.Hwnd) != -1)
@@ -1098,6 +1199,7 @@ SendToFrontend(json) {
 #Include lib\features\Tray.ahk
 #Include lib\features\ActivityFeed.ahk
 #Include lib\features\Almanac.ahk
+#Include lib\features\HomeExtras.ahk
 #Include lib\features\Logs.ahk
 #Include lib\features\Games.ahk
 #Include lib\features\Sounds.ahk

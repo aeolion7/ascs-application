@@ -36,20 +36,17 @@ LoadGameSettings() {
 SendGameSettings() {
     global ASCS_GamePaths, ASCS_Headphones, ASCS_SoundSwitchKey, ASCS_ShowCovers, ASCS_PsoVoiceChannel
 
+    outputs := PlaybackDevices()
     devices := "["
-    Loop 32 {
-        try name := SoundGetName(, A_Index)
-        catch
-            break
-        devices .= (A_Index > 1 ? "," : "") JsonQuote(name)
-    }
+    for device in outputs
+        devices .= (A_Index > 1 ? "," : "") JsonQuote(device.label)
     devices .= "]"
     paths := "{"
     for name, path in ASCS_GamePaths
         paths .= (A_Index > 1 ? "," : "") JsonQuote(name) ":" JsonQuote(path)
     paths .= "}"
     SendToFrontend('{"type":"gameSettings","paths":' paths
-        ',"headphones":' JsonQuote(ASCS_Headphones)
+        ',"headphones":' JsonQuote(AudioLabelFromName(outputs, ASCS_Headphones))
         ',"soundSwitch":' JsonQuote(ASCS_SoundSwitchKey["display"])
         ',"covers":' (ASCS_ShowCovers ? "true" : "false")
         ',"voiceChannel":' JsonQuote(ASCS_PsoVoiceChannel = "" ? "" : StrReplace(ASCS_PsoVoiceChannel, "discord://-/", "https://discord.com/"))
@@ -71,7 +68,7 @@ SaveGameSettings(content) {
         paths := Map()
         Loop 5
             paths[names[A_Index]] := ValidateExecutablePath(fields[A_Index], labels[A_Index])
-        headphones := ValidateDeviceName(fields[6])
+        headphones := AudioNameFromLabel(PlaybackDevices(), ValidateDeviceName(fields[6]))
         soundSwitch := ParseKeyCombo(fields[7])
 
         for name, path in paths
@@ -87,13 +84,31 @@ SaveGameSettings(content) {
         ASCS_SoundSwitchKey := soundSwitch
         ASCS_ShowCovers := fields[8] = "1"
         ASCS_GameLibraryStamp := ""
-        SendToFrontend('{"type":"gameSettingsSaved","message":"Games & apps saved."}')
+        SendToFrontend('{"type":"gameSettingsSaved","message":"Saved."}')
         SendGameSettings()
     } catch as err {
         WriteLog("Games settings save failed: " err.Message)
         SendToFrontend('{"type":"error","scope":"games","message":' JsonQuote(err.Message) '}')
         SendGameSettings()
     }
+}
+
+; Payload: 0 or 1. Answered with the library, whose cover references depend on it.
+SetShowCovers(content) {
+    global ASCS_SettingsFile, ASCS_ShowCovers, ASCS_GameLibraryStamp
+
+    if !(content = "0" || content = "1") {
+        WriteLog("Rejected an invalid cover art setting.")
+        return
+    }
+    try {
+        IniWrite(content, ASCS_SettingsFile, "Games", "Covers")
+        ASCS_ShowCovers := content = "1"
+        ASCS_GameLibraryStamp := ""
+    } catch as err {
+        WriteLog("Cover art setting save failed: " err.Message)
+    }
+    SendGames()
 }
 
 ; ---- the library
@@ -172,7 +187,8 @@ BuildGameLibrary() {
             . ',"seconds":' seconds ',"last":' JsonQuote(last) ',"plays":' count
             . ',"launchable":' (IsObject(launch) ? "true" : "false")
             . ',"installed":' (IsObject(launch) && launch.Has("installed") && !launch["installed"] ? "false" : "true")
-            . ',"cover":' (cover != "" ? "true" : "false") '}'
+            . ',"cover":' (cover != "" ? "true" : "false")
+            . ',"coverAngled":' (IsAngledCover(emulator, cover) ? "true" : "false") '}'
     }
 
     ; RetroArch: runtime logs (play time), joined to history (how to launch).
@@ -361,7 +377,7 @@ LaunchGame(id) {
         game := ASCS_GameIndex[id]
         launch := game["launch"]
         if !IsObject(launch)
-            throw Error("ASCS doesn't know where “" game["title"] "” is stored.")
+            throw Error("Maestro doesn't know where “" game["title"] "” is stored.")
         if (game["emulator"] = "steam") {
             if !RegExMatch(launch["appid"], "^\d{1,10}$")
                 throw Error("Invalid Steam app id.")
@@ -371,7 +387,7 @@ LaunchGame(id) {
         }
         exe := ASCS_GamePaths[game["emulator"]]
         if (exe = "" || !FileExist(exe))
-            throw Error("Set the " game["emulator"] " program in Preferences › Games & apps.")
+            throw Error("Set the " game["emulator"] " program in Games › Setup.")
         content := launch["content"]
         if (InStr(content, '"') || !FileExist(content))
             throw Error("The game file was not found: " content)
@@ -651,7 +667,7 @@ RunningGameApps() {
     return running
 }
 
-; System Dashboard's sign-in comparison (1.9.1): the end of the log SignIn.ahk
+; System's sign-in history (1.9.1): the end of the log SignIn.ahk
 ; writes, read only when the page opens.
 SendSignInHistory() {
     global ASCS_SoundLibrary
@@ -1084,7 +1100,7 @@ RenameController(content) {
             RegWrite(name, "REG_SZ", oem, "OEMName")
         }
         RecordActivity("system", name = "" ? "Controller name reset" : "Controller renamed “" name "”")
-        SendToFrontend('{"type":"notice","message":' JsonQuote(name = "" ? "Controller name reset." : "Renamed in ASCS and in Windows' game controller list.") '}')
+        SendToFrontend('{"type":"notice","message":' JsonQuote(name = "" ? "Controller name reset." : "Renamed in Maestro and in Windows' game controller list.") '}')
         SendGamesLive()
     } catch as err {
         SendToFrontend('{"type":"notice","message":' JsonQuote(err.Message) '}')
@@ -1244,7 +1260,7 @@ RetroAchievementsState() {
 SetupRetroAchievements() {
     global ASCS_SecretsFile
     if !FileExist(ASCS_SecretsFile) {
-        FileAppend("; ASCS secrets. This file stays on this PC: the data folder is not committed to git.`r`n"
+        FileAppend("; Maestro secrets. This file stays on this PC: the data folder is not committed to git.`r`n"
             . "; RetroAchievements: your user name, and the Web API key from`r`n"
             . "; https://retroachievements.org/settings (Authentication, Web API Key).`r`n"
             . "[RetroAchievements]`r`nUser=`r`nKey=`r`n", ASCS_SecretsFile, "UTF-8")
@@ -1391,9 +1407,8 @@ HttpGetAsync(name, url, onDone, maxBytes := 2000000, binary := false) {
         request.Option[6] := false
         request.SetTimeouts(5000, 5000, 10000, 15000)
         request.Open("GET", url, true)
-        ; A generic client name: the owner's contact address is shared with
-        ; Wikimedia only (the almanac), at the owner's request.
-        request.SetRequestHeader("User-Agent", "ASCS/" ASCS_Version " (Aeolionware Super Command System)")
+        ; A generic client name, as every request Maestro makes uses.
+        request.SetRequestHeader("User-Agent", "Maestro/" ASCS_Version " (Aeolionware)")
         request.SetRequestHeader("Accept", binary ? "image/png" : "application/json")
         request.Send()
         ASCS_HttpRequests[name] := Map("request", request, "started", A_TickCount, "done", onDone, "max", maxBytes, "binary", binary)
@@ -1460,11 +1475,14 @@ HttpResponseBytes(request, maxBytes) {
     return bytes
 }
 
-; ---- RetroAchievements images (badges and game icons)
-; The page asks by token ("b:250336", "i:066043"); ASCS validates it, builds
-; the media.retroachievements.org address itself, and keeps each image in
-; data\ra-images, so it is downloaded once. Only PNGs under 256 KB are kept.
-; At most four downloads run at once; cached images are sent one per tick.
+; ---- RetroAchievements images (badges, game icons and the user's picture)
+; The page asks by token ("b:250336", "i:066043", "u:Name"); ASCS validates it,
+; builds the media.retroachievements.org address itself, and keeps each image in
+; data\ra-images. Badges and icons never change, so each is downloaded once. A
+; user can change their picture, so that one is checked again after a week, with
+; the cached copy shown meanwhile and kept if the check fails. Only PNGs under
+; 256 KB are kept. At most four downloads run at once; cached images are sent
+; one per tick.
 
 SendRaImages(content) {
     global ASCS_RaImageQueue
@@ -1491,12 +1509,18 @@ PumpRaImages() {
     path := ASCS_RaImageFolder "\" image["file"]
     if FileExist(path) {
         ASCS_RaImageQueue.RemoveAt(1)
-        ; Mark it as recently used (at most once a day), for the cache cap.
+        isPicture := SubStr(token, 1, 2) = "u:"
+        recheck := false
         try {
-            if (SubStr(FileGetTime(path, "M"), 1, 8) != SubStr(A_Now, 1, 8))
+            if isPicture
+                recheck := DateDiff(A_Now, FileGetTime(path, "M"), "Days") >= 7
+            ; Mark it as recently used (at most once a day), for the cache cap.
+            else if (SubStr(FileGetTime(path, "M"), 1, 8) != SubStr(A_Now, 1, 8))
                 FileSetTime(A_Now, path, "M")
         }
         SendRaImage(token, path)
+        if (recheck && !ASCS_HttpRequests.Has("raimage " token))
+            HttpGetAsync("raimage " token, image["url"], RaImageDownloaded.Bind(token, path), 262144, true)
         return
     }
     downloads := 0
@@ -1511,15 +1535,45 @@ PumpRaImages() {
     HttpGetAsync("raimage " token, image["url"], RaImageDownloaded.Bind(token, path), 262144, true)
 }
 
+; Preferences' Check now: the picture for the name in secrets.ini, fetched again
+; whatever its age. A failure leaves the cached copy in place.
+RefreshRaPicture() {
+    global ASCS_RaImageFolder, ASCS_HttpRequests
+    tell := message => SendToFrontend('{"type":"raPicture","message":' JsonQuote(message) '}')
+    try {
+        credentials := RetroAchievementsCredentials()
+        if !credentials {
+            tell("Set up RetroAchievements first.")
+            return
+        }
+        token := "u:" credentials["user"]
+        image := RetroAchievementsImage(token)
+    } catch {
+        tell("The RetroAchievements user name isn't valid.")
+        return
+    }
+    if ASCS_HttpRequests.Has("raimage " token) {
+        tell("Already checking for a new profile picture.")
+        return
+    }
+    HttpGetAsync("raimage " token, image["url"], RaPictureChecked.Bind(token, ASCS_RaImageFolder "\" image["file"]), 262144, true)
+}
+
+RaPictureChecked(token, path, ok, result) {
+    saved := RaImageDownloaded(token, path, ok, result)
+    SendToFrontend('{"type":"raPicture","message":' JsonQuote(saved ? "Profile picture is up to date." : "Couldn't get the picture, so the one you have stays.") '}')
+}
+
+; Returns whether the image was saved.
 RaImageDownloaded(token, path, ok, result) {
     if !ok {
         WriteLog("RetroAchievements image " token " unavailable: " result)
-        return
+        return false
     }
     ; Keep it only if it really is a PNG (its 8-byte signature).
     if (result.Size < 8 || NumGet(result, 0, "UInt") != 0x474E5089 || NumGet(result, 4, "UInt") != 0x0A1A0A0D) {
         WriteLog("RetroAchievements image " token " was not a PNG; discarded.")
-        return
+        return false
     }
     try {
         DirCreate(ASCS_RaImageFolderPath())
@@ -1529,8 +1583,10 @@ RaImageDownloaded(token, path, ok, result) {
         FileMove(path ".tmp", path, 1)
         SendRaImage(token, path)
         SetTimer(PruneRaImageCache, -5000)      ; once the batch settles
+        return true
     } catch as err {
         WriteLog("RetroAchievements image " token " not cached: " err.Message)
+        return false
     }
 }
 

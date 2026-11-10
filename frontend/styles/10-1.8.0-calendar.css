@@ -22,9 +22,9 @@
   overflow: hidden;
   margin: 0 0 0 8px;
   color: #f0f1f8;
-  font-size: 22px;
+  font-size: calc(25px * var(--text-scale));
   font-weight: 600;
-  letter-spacing: -.3px;
+  letter-spacing: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -32,7 +32,7 @@
 .cal-step {
   width: 34px;
   padding: 0;
-  font-size: 18px;
+  font-size: calc(20px * var(--text-scale));
   line-height: 1;
 }
 
@@ -54,7 +54,7 @@
   color: #a4a9bb;
   cursor: pointer;
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--t-floor);
   font-weight: 600;
 }
 
@@ -70,7 +70,7 @@
   border-radius: 10px;
   background: var(--gold-soft);
   color: var(--gold-text);
-  font-size: 13px;
+  font-size: var(--t-floor);
 }
 
 .cal-status[data-state="starting"] {
@@ -115,7 +115,7 @@
   gap: 9px;
   color: #dfe1ea;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--t-floor);
 }
 
 .cal-calendar label span {
@@ -142,7 +142,7 @@
 
 .cal-calendar .link-button {
   flex: 0 0 auto;
-  font-size: 11.5px;
+  font-size: var(--t-floor);
 }
 
 /* Month */
@@ -162,7 +162,7 @@
   padding: 8px 10px;
   border-bottom: 1px solid var(--border-soft);
   color: #8f94aa;
-  font-size: 10.5px;
+  font-size: var(--t-floor);
   font-weight: 700;
   letter-spacing: 1.1px;
   text-transform: uppercase;
@@ -199,7 +199,7 @@
 }
 
 .cal-day.is-other .cal-day-number {
-  color: #4f5468;
+  color: var(--text-muted);
 }
 
 .cal-day-number {
@@ -209,7 +209,7 @@
   padding: 2px 6px;
   border-radius: 999px;
   color: #c9ccd8;
-  font-size: 12.5px;
+  font-size: var(--t-floor);
   font-weight: 600;
   text-align: center;
 }
@@ -234,14 +234,14 @@
   color: #e6e8f0;
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--t-floor);
   text-align: left;
 }
 
 .cal-chip small {
   flex: 0 0 auto;
   color: color-mix(in srgb, var(--cal-color) 70%, #ffffff);
-  font-size: 11px;
+  font-size: var(--t-floor);
   font-variant-numeric: tabular-nums;
 }
 
@@ -286,7 +286,7 @@
   color: #a4a9bb;
   cursor: pointer;
   font: inherit;
-  font-size: 11.5px;
+  font-size: var(--t-floor);
 }
 
 .cal-more:hover {
@@ -326,7 +326,7 @@
 }
 
 .cal-week-day small {
-  font-size: 10.5px;
+  font-size: var(--t-floor);
   font-weight: 700;
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -343,7 +343,7 @@
   padding: 0 6px;
   border-radius: 999px;
   color: #eef0f7;
-  font-size: 17px;
+  font-size: var(--t-body);
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
@@ -354,8 +354,8 @@
 
 .cal-gutter {
   padding: 6px 8px 0 0;
-  color: #6f7489;
-  font-size: 10.5px;
+  color: var(--text-muted);
+  font-size: var(--t-floor);
   text-align: right;
 }
 
@@ -375,7 +375,6 @@
 
 .cal-week-scroll {
   overflow-y: auto;
-  scrollbar-width: thin;
 }
 
 .cal-hours {
@@ -384,10 +383,10 @@
 }
 
 .cal-hours span {
-  height: 48px;
+  height: 60px;
   padding-right: 8px;
-  color: #6f7489;
-  font-size: 10.5px;
+  color: var(--text-muted);
+  font-size: var(--t-floor);
   line-height: 1;
   text-align: right;
   transform: translateY(-5px);
@@ -396,7 +395,7 @@
 .cal-column {
   position: relative;
   border-left: 1px solid rgba(152, 151, 181, .08);
-  background-image: repeating-linear-gradient(to bottom, rgba(152, 151, 181, .08) 0 1px, transparent 1px 48px);
+  background-image: repeating-linear-gradient(to bottom, rgba(152, 151, 181, .08) 0 1px, transparent 1px 60px);
   cursor: pointer;
 }
 
@@ -440,7 +439,7 @@
 .cal-agenda-day h3 {
   margin: 0 0 6px;
   color: #a4a9bb;
-  font-size: 11px;
+  font-size: var(--t-floor);
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
@@ -473,7 +472,7 @@
 
 .cal-agenda-time {
   color: #a4a9bb;
-  font-size: 12.5px;
+  font-size: var(--t-floor);
   font-variant-numeric: tabular-nums;
 }
 
@@ -486,7 +485,7 @@
 
 .cal-agenda-row strong {
   overflow: hidden;
-  font-size: 13.5px;
+  font-size: var(--t-floor);
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -494,8 +493,8 @@
 
 .cal-agenda-row small {
   overflow: hidden;
-  color: #7d8298;
-  font-size: 12px;
+  color: var(--text-muted);
+  font-size: var(--t-floor);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -517,7 +516,7 @@
   background: var(--panel-input);
   color: var(--text);
   font: inherit;
-  font-size: 16px;
+  font-size: var(--t-sub);
 }
 
 .cal-fields {
@@ -532,7 +531,7 @@
 .cal-field-label {
   padding-top: 8px;
   color: #a4a9bb;
-  font-size: 12.5px;
+  font-size: var(--t-floor);
 }
 
 .cal-dialog input[type="text"],
@@ -549,7 +548,7 @@
   color: var(--text);
   color-scheme: dark;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--t-floor);
 }
 
 .cal-dialog textarea {
@@ -580,7 +579,7 @@
   align-items: center;
   gap: 8px;
   color: #a4a9bb;
-  font-size: 12.5px;
+  font-size: var(--t-floor);
 }
 
 .cal-check {
@@ -588,7 +587,7 @@
   align-items: center;
   gap: 6px;
   color: #c9ccd8;
-  font-size: 13px;
+  font-size: var(--t-floor);
 }
 
 .cal-every {
@@ -620,7 +619,7 @@
   color: #a4a9bb;
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--t-floor);
   font-weight: 700;
 }
 
@@ -640,13 +639,13 @@
   border-radius: 10px;
   background: var(--gold-soft);
   color: #dfe1ea;
-  font-size: 13px;
+  font-size: var(--t-floor);
 }
 
 .cal-scope legend {
   padding: 0 6px;
   color: var(--gold-text);
-  font-size: 12px;
+  font-size: var(--t-floor);
 }
 
 .cal-scope label {
@@ -658,7 +657,7 @@
 .cal-form-error {
   margin: 0;
   color: var(--burgundy-text, #ff9aab);
-  font-size: 13px;
+  font-size: var(--t-floor);
 }
 
 .cal-dialog-actions {
@@ -743,14 +742,6 @@
   padding-top: 8px;
 }
 
-.sound-library {
-  align-items: baseline;
-}
-
-.sound-in-use .sound-assignments {
-  padding-right: 10px;
-}
-
 .cal-agenda-row i {
   transform: translateY(2px);
 }
@@ -780,7 +771,7 @@
 }
 
 .cal-week.is-day .cal-week-day small {
-  font-size: 12px;
+  font-size: var(--t-floor);
 }
 
 .cal-allday-cell {
@@ -920,7 +911,6 @@
   grid-template-rows: 28px repeat(var(--lanes, 0), 24px) minmax(24px, 1fr);
 }
 
-
 /* ==========================================================================
    1.8.0: the Command Center's Today card, and calendar import
    ========================================================================== */
@@ -949,13 +939,13 @@
 
 .today-date {
   color: #dfe1ea;
-  font-size: 13px;
+  font-size: var(--t-floor);
   font-weight: 600;
 }
 
 .today-head .link-button {
   margin-left: auto;
-  font-size: 12px;
+  font-size: var(--t-floor);
 }
 
 .today-list {
@@ -990,7 +980,7 @@
 
 .today-time {
   color: #a4a9bb;
-  font-size: 12.5px;
+  font-size: var(--t-floor);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -1006,7 +996,7 @@
 
 .today-row strong {
   overflow: hidden;
-  font-size: 13.5px;
+  font-size: var(--t-floor);
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1014,8 +1004,8 @@
 
 .today-row small {
   overflow: hidden;
-  color: #7d8298;
-  font-size: 12px;
+  color: var(--text-muted);
+  font-size: var(--t-floor);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1023,7 +1013,7 @@
 .today-empty {
   padding: 6px 8px 0;
   color: #8f94aa;
-  font-size: 13px;
+  font-size: var(--t-floor);
 }
 
 .today-more {
@@ -1031,7 +1021,7 @@
 }
 
 .today-more .link-button {
-  font-size: 12px;
+  font-size: var(--t-floor);
 }
 
 .cal-side-actions {
@@ -1043,6 +1033,5 @@
 .cal-import-summary {
   margin: 0;
   color: #dfe1ea;
-  font-size: 14px;
+  font-size: var(--t-floor);
 }
-

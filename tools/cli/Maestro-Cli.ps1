@@ -1,6 +1,6 @@
-# The ASCS command line, run through C:\Scripts\ASCS.cmd: ASCS <command> [options]
+# The Maestro command line, run through C:\Scripts\maestro.cmd: maestro <command> [options]
 # To add a command: write a function, then add it to $Commands below.
-# Keep this file ASCII. Only `try` starts or closes ASCS, and it never commits.
+# Keep this file ASCII. Only `try` starts or closes Maestro, and it never commits.
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)][string]$Command = 'help',
@@ -17,7 +17,7 @@ $TestMarker = 'test-build.txt'
 $CacheFolders = @('Cache', 'Code Cache', 'GPUCache', 'DawnWebGPUCache', 'DawnGraphiteCache', 'GrShaderCache', 'ShaderCache', 'component_crx_cache')
 
 function Stop-WithError([string]$message) {
-    [Console]::Error.WriteLine("ASCS: $message")
+    [Console]::Error.WriteLine("maestro: $message")
     exit 1
 }
 
@@ -76,7 +76,7 @@ function Get-RunningBuilds {
 }
 
 function Close-Build($build) {
-    $helper = Start-Process $AhkExe -ArgumentList @("`"$(Join-Path $PSScriptRoot 'ascs-exit.ahk')`"", "`"$($build.Script)`"") -PassThru -WindowStyle Hidden
+    $helper = Start-Process $AhkExe -ArgumentList @("`"$(Join-Path $PSScriptRoot 'maestro-exit.ahk')`"", "`"$($build.Script)`"") -PassThru -WindowStyle Hidden
     $null = $helper.Handle
     if (-not $helper.WaitForExit(10000)) { $helper.Kill(); return $false }
     if ($helper.ExitCode -ne 0) { return $false }
@@ -108,7 +108,7 @@ function Invoke-CutRelease([string[]]$options) {
         switch -Regex ($option) {
             '^(--yes|-y)$' { $yes = $true; break }
             '^(--dry-run|-n)$' { $dryRun = $true; break }
-            '^-' { Stop-WithError "cut-release doesn't know $option. See: ASCS help" }
+            '^-' { Stop-WithError "cut-release doesn't know $option. See: maestro help" }
             default { if ($named) { Stop-WithError 'Name one branch at most.' }; $named = $option }
         }
     }
@@ -199,9 +199,19 @@ function Invoke-CutRelease([string[]]$options) {
 # The AHK parse check: parses without running. The copy has to sit beside
 # ASCS.ahk for its #Includes, and it's always deleted.
 function Test-AhkParse([string]$folder) {
+    # The two workers run as their own scripts, so ASCS.ahk's parse doesn't cover them.
+    foreach ($script in 'ASCS.ahk', 'ASCS.DriveProbe.ahk', 'ASCS.HardwareProbe.ahk') {
+        if (-not (Test-Path -LiteralPath (Join-Path $folder $script))) { continue }
+        $problem = Test-AhkScriptParse $folder $script
+        if ($problem) { return "${script}: $problem" }
+    }
+    return ''
+}
+
+function Test-AhkScriptParse([string]$folder, [string]$script) {
     $copy = Join-Path $folder '_syntaxcheck.ahk'
     $out = Join-Path ([IO.Path]::GetTempPath()) "ascs-parse-$PID"
-    $text = [IO.File]::ReadAllText((Join-Path $folder 'ASCS.ahk'))
+    $text = [IO.File]::ReadAllText((Join-Path $folder $script))
     $text = $text -replace '#SingleInstance Force', '#SingleInstance Off'
     $text = [regex]::Replace($text, '(?m)^#Warn\b.*$', '')
     $text = "#Warn All, StdOut`r`n#Warn LocalSameAsGlobal, StdOut`r`n" + $text
@@ -235,7 +245,7 @@ function Invoke-Check([string[]]$options) {
     $quick = $false
     foreach ($option in $options) {
         if ($option -in '--quick', '-q') { $quick = $true }
-        else { Stop-WithError "check doesn't know $option. See: ASCS help" }
+        else { Stop-WithError "check doesn't know $option. See: maestro help" }
     }
     $folder = Get-HereCheckout
     Write-Host "Checking $folder"
@@ -272,7 +282,7 @@ function Get-VersionSpots([string]$folder) {
     $spots = [ordered]@{
         'ASCS.ahk header'  = [regex]::Match($ahk, '(?m)^; Version ([\d.]+)').Groups[1].Value
         'ASCS_Version'     = [regex]::Match($ahk, 'ASCS_Version := "([\d.]+)"').Groups[1].Value
-        'sidebar'          = [regex]::Match((& $read 'frontend\index.html'), 'ASCS <span>([\d.]+)</span>').Groups[1].Value
+        'sidebar'          = [regex]::Match((& $read 'frontend\index.html'), 'Maestro <span>([\d.]+)</span>').Groups[1].Value
         'README'           = [regex]::Match((& $read 'README.md'), '\*\*Version:\*\* ([\d.]+)').Groups[1].Value
     }
     $prodIds = @([regex]::Matches((& $read 'frontend\calendar.js'), '//ASCS ([\d.]+)//EN') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
@@ -307,12 +317,12 @@ function Invoke-Status {
     Write-Host ''
     $builds = @(Get-RunningBuilds)
     if (-not $builds.Count) {
-        Write-Host "Running:    nothing. ASCS isn't running."
+        Write-Host "Running:    nothing. Maestro isn't running."
         return
     }
     if ($builds.Count -gt 1) { Write-Host 'WARNING:    two builds are running, and their hotkeys will fight. Close one from its tray icon.' }
     foreach ($build in $builds) {
-        $kind = if (Test-SamePath $build.Folder $Repo) { 'your real ASCS' } else { 'a test build, on a copy of your data. End it with: ASCS try --end' }
+        $kind = if (Test-SamePath $build.Folder $Repo) { 'your real Maestro' } else { 'a test build, on a copy of your data. End it with: maestro try --end' }
         Write-Host "Running:    $($build.Folder), $kind"
         Write-Host "  Started:  $($build.Started)"
 
@@ -321,7 +331,7 @@ function Invoke-Status {
             @(Get-ChildItem -LiteralPath (Join-Path $build.Folder 'frontend'), (Join-Path $build.Folder 'lib') -Recurse -File -ErrorAction SilentlyContinue)
         $newest = $sources | Sort-Object LastWriteTime -Descending | Select-Object -First 1
         if ($newest -and $newest.LastWriteTime -gt $build.Started) {
-            Write-Host "  Code:     OLDER than what's on disk ($($newest.Name) was saved $($newest.LastWriteTime)). Restart ASCS."
+            Write-Host "  Code:     OLDER than what's on disk ($($newest.Name) was saved $($newest.LastWriteTime)). Restart Maestro."
         } else {
             Write-Host '  Code:     up to date'
         }
@@ -365,13 +375,13 @@ function Remove-TestData([string]$folder) {
     if (Test-SamePath $folder $Repo) { Stop-WithError 'Refusing to delete the real data folder.' }
     $data = Join-Path $folder 'data'
     if (-not (Test-Path -LiteralPath $data)) { return $true }
-    if (-not (Test-Path -LiteralPath (Join-Path $data $TestMarker))) { Stop-WithError "$data wasn't made by ASCS try, so it was left alone." }
+    if (-not (Test-Path -LiteralPath (Join-Path $data $TestMarker))) { Stop-WithError "$data wasn't made by maestro try, so it was left alone." }
     for ($i = 0; $i -lt 10; $i++) {
         try {
             [IO.Directory]::Delete($data, $true)
             return $true
         } catch {
-            Start-Sleep -Seconds 1     # WebView2 can hold files briefly after ASCS closes.
+            Start-Sleep -Seconds 1     # WebView2 can hold files briefly after Maestro closes.
         }
     }
     return $false
@@ -392,7 +402,7 @@ function Invoke-Try([string[]]$options) {
     $end = $false; $named = ''
     foreach ($option in $options) {
         if ($option -eq '--end') { $end = $true }
-        elseif ($option -like '-*') { Stop-WithError "try doesn't know $option. See: ASCS help" }
+        elseif ($option -like '-*') { Stop-WithError "try doesn't know $option. See: maestro help" }
         elseif ($named) { Stop-WithError 'Name one folder at most.' }
         else { $named = $option }
     }
@@ -411,26 +421,26 @@ function Invoke-Try([string[]]$options) {
             }
         }
         if (-not ($running | Where-Object { Test-SamePath $_.Folder $Repo })) {
-            Write-Host 'Starting your real ASCS...'
+            Write-Host 'Starting your real Maestro...'
             Start-Build $Repo
         }
-        Write-Host "Done. You're back on your real ASCS."
+        Write-Host "Done. You're back on your real Maestro."
         return
     }
 
     $target = Get-TestTarget $named
-    if ($running | Where-Object { Test-SamePath $_.Folder $target }) { Stop-WithError "You're already trying $target. End it with: ASCS try --end" }
+    if ($running | Where-Object { Test-SamePath $_.Folder $target }) { Stop-WithError "You're already trying $target. End it with: maestro try --end" }
     # Checked before anything closes.
     $targetData = Join-Path $target 'data'
     if ((Test-Path -LiteralPath $targetData) -and -not (Test-Path -LiteralPath (Join-Path $targetData $TestMarker))) {
-        Stop-WithError "$targetData wasn't made by ASCS try, so it was left alone."
+        Stop-WithError "$targetData wasn't made by maestro try, so it was left alone."
     }
 
     # Only one build at a time: two would fight over the hotkeys. Closing first
     # saves pending notes and stops the real calendar server.
     foreach ($build in $running) {
         Write-Host "Closing $($build.Folder)..."
-        if (-not (Close-Build $build)) { Stop-WithError 'ASCS did not close, so nothing was started. Exit it from its tray icon, then run this again.' }
+        if (-not (Close-Build $build)) { Stop-WithError 'Maestro did not close, so nothing was started. Exit it from its tray icon, then run this again.' }
     }
 
     $realData = Join-Path $Repo 'data'
@@ -439,9 +449,9 @@ function Invoke-Try([string[]]$options) {
         Write-Host 'Copying your data...'
         if (-not (Copy-DataFolder $realData $targetData)) { throw 'Some of your data could not be copied.' }
         Set-CalendarConfigPaths $realData $targetData
-        [IO.File]::WriteAllText((Join-Path $targetData $TestMarker), "Made by ASCS try. Everything in this folder is deleted by ASCS try --end.`r`n")
+        [IO.File]::WriteAllText((Join-Path $targetData $TestMarker), "Made by maestro try. Everything in this folder is deleted by maestro try --end.`r`n")
     } catch {
-        Write-Host 'That failed, so your real ASCS is being restarted.'
+        Write-Host 'That failed, so your real Maestro is being restarted.'
         Start-Build $Repo
         Stop-WithError "$_"
     }
@@ -451,8 +461,8 @@ function Invoke-Try([string[]]$options) {
     Write-Host ''
     Write-Host 'The title bar says TEST BUILD while this is running.'
     Write-Host 'Notes, settings and calendar changes go to the copy, and are discarded when you end.'
-    Write-Host 'Still real: Windows sounds, controller names, power actions, audio switches, games and workspaces moving your windows.'
-    Write-Host 'To go back: ASCS try --end'
+    Write-Host 'Still real: Windows sounds, controller names, power actions, audio switches, games and arrangements moving your windows.'
+    Write-Host 'To go back: maestro try --end'
 }
 
 # ---- backup-data
@@ -467,7 +477,7 @@ function Invoke-BackupData {
     $files = @(Get-ChildItem -LiteralPath $target -Recurse -File)
     $size = ($files | Measure-Object Length -Sum).Sum
     Write-Host ('{0:N0} files, {1:N1} MB. It includes your secrets file, so keep it on this PC.' -f $files.Count, ($size / 1MB))
-    if (-not $complete) { Write-Host 'WARNING: some files were in use and were skipped. Exit ASCS from the tray for a complete copy.' }
+    if (-not $complete) { Write-Host 'WARNING: some files were in use and were skipped. Exit Maestro from the tray for a complete copy.' }
 
     # Keeps the newest ten, and only ever removes folders named like its own.
     $old = @(Get-ChildItem -LiteralPath $Backups -Directory | Where-Object { $_.Name -match '^data-\d{8}-\d{6}$' } | Sort-Object Name -Descending | Select-Object -Skip 10)
@@ -480,7 +490,7 @@ function Invoke-BackupData {
 
 function Invoke-Help {
     Write-Host @'
-ASCS <command> [options]
+maestro <command> [options]
 
   status
       Each checkout's branch and version, what's running and from where,
@@ -492,10 +502,10 @@ ASCS <command> [options]
       one result, for the checkout you're standing in. --quick skips the tests.
 
   try [folder]
-      Closes ASCS and runs a second checkout (from git worktree) on a copy of
+      Closes Maestro and runs a second checkout (from git worktree) on a copy of
       your data, including its own calendar.
   try --end
-      Closes the test build, deletes the copy, and starts your real ASCS.
+      Closes the test build, deletes the copy, and starts your real Maestro.
 
   backup-data
       Copies your data folder to your private app data folder, keeping the
@@ -525,5 +535,5 @@ $Commands = @{
 }
 
 if ($Command -in '--help', '-h', '/?') { $Command = 'help' }
-if (-not $Commands.ContainsKey($Command)) { Stop-WithError "Unknown command: $Command. See: ASCS help" }
+if (-not $Commands.ContainsKey($Command)) { Stop-WithError "Unknown command: $Command. See: maestro help" }
 & $Commands[$Command]

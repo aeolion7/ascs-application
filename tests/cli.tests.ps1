@@ -1,5 +1,5 @@
 <#
-    Tests the ASCS command line (tools\cli) against throwaway repositories in the
+    Tests the Maestro command line (tools\cli) against throwaway repositories in the
     temp folder, with stand-in ASCS.ahk scripts that only answer the exit message.
     It never touches the real repo, the running ASCS, or the data folder.
     Prints "PASS n FAIL m", then each failure. Usage: pwsh -File tests\cli.tests.ps1
@@ -7,7 +7,7 @@
 [CmdletBinding()]
 param()
 $ErrorActionPreference = 'Stop'
-$cli = Join-Path (Split-Path $PSScriptRoot -Parent) 'tools\cli\ASCS-Cli.ps1'
+$cli = Join-Path (Split-Path $PSScriptRoot -Parent) 'tools\cli\Maestro-Cli.ps1'
 $ahk = Join-Path $env:ProgramFiles 'AutoHotkey\v2\AutoHotkey64.exe'
 $scratch = Join-Path ([IO.Path]::GetTempPath()) "ascs-cli-tests-$PID"
 [IO.Directory]::CreateDirectory($scratch) | Out-Null
@@ -304,7 +304,7 @@ try {
 
     # Status on the real one.
     $run = Invoke-Cli $r @('status')
-    Add-Check 'status: names the real ASCS' ($run.text -match 'your real ASCS') $run.text
+    Add-Check 'status: names the real Maestro' ($run.text -match 'your real Maestro') $run.text
     Add-Check 'status: up to date' ($run.text -match 'up to date') $run.text
     Add-Check 'status: the changelog' ($run.text -match 'Changelog: Version 1') $run.text
     Start-Sleep -Seconds 2

@@ -73,11 +73,11 @@ body.is-resizing-event * {
   min-height: 20px;
   margin-bottom: 2px;
   padding: 1px 6px;
-  font-size: 11.5px;
+  font-size: var(--t-floor);
 }
 
 .cal-drop-ghost.is-month strong {
-  font-size: 11px;
+  font-size: var(--t-floor);
 }
 
 /* The wheel pickers (times and dates): they look like the fields they
@@ -98,7 +98,7 @@ body.is-resizing-event * {
   border-radius: 8px;
   background: var(--panel-input);
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--t-floor);
   font-variant-numeric: tabular-nums;
 }
 
@@ -240,7 +240,7 @@ body.is-resizing-event * {
   color: #ffffff;
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--t-floor);
   font-weight: 600;
 }
 

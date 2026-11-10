@@ -3,10 +3,11 @@
 ; ==========================================
 
 PushDashboard(*) {
+    global ASCS_HistoryScale
     global ASCS_DashboardErrorShown
+    global ASCS_HardwareDue
     global ASCS_HardwareJson
     global ASCS_PendingView
-    global ASCS_Wmi
 
     if !IsDashboardWindowVisible() {
         SetTimer(PushDashboard, 0)
@@ -30,14 +31,17 @@ PushDashboard(*) {
         diskUsed := drives["cUsed"]
         diskTotal := drives["cTotal"]
 
-        ; Hardware inventory (about 0.1–0.5 s of WMI) runs on its own timer
-        ; after this push, so the Dashboard renders live metrics first.
+        ; The hardware inventory runs in its own process, and goes out only when
+        ; due: Live pushes every second, and it hardly ever changes.
         if (ASCS_PendingView = "dashboard" && ASCS_HardwareJson = "")
             SetTimer(CollectHardwareDetails, -50)
-        hardwareJson := ASCS_HardwareJson != ""
-            ? ASCS_HardwareJson
-            : "null"
+        hardwareJson := "null"
+        if (ASCS_HardwareDue && ASCS_HardwareJson != "") {
+            hardwareJson := ASCS_HardwareJson
+            ASCS_HardwareDue := false
+        }
 
+        historyJson := MetricHistoryUpdate(&historyTimes)
         json := '{"type":"metrics","cpu":' cpuUsage
             . ',"ram":' ramUsage
             . ',"ramUsed":' Round(totalRAM - freeRAM, 1)
@@ -46,7 +50,9 @@ PushDashboard(*) {
             . ',"diskUsed":' Round(diskUsed, 1)
             . ',"diskTotal":' Round(diskTotal, 1)
             . ',"hardware":' hardwareJson
-            . ',"history":' MetricHistoryJson()
+            . ',"historyScale":"' ASCS_HistoryScale '"'
+            . ',"history":' historyJson
+            . ',"historyTimes":' historyTimes
             . ',"drives":' drives["json"] '}'
 
         SendToFrontend(json)
@@ -54,7 +60,6 @@ PushDashboard(*) {
         ASCS_DashboardErrorShown := false
 
     } catch as err {
-        ASCS_Wmi := 0
         if !ASCS_DashboardErrorShown {
             WriteLog("Dashboard metrics failed: " err.Message)
 
@@ -67,28 +72,33 @@ PushDashboard(*) {
     }
 }
 
-; Returns system CPU utilization (0–100) since the previous sample. Samples
-; taken less than 250 ms apart reuse the last value to avoid noisy readings.
+; Returns system CPU utilization (0–100) since the previous reading. Readings
+; less than 250 ms apart reuse the last value to avoid noise.
 SampleCpuUsage() {
     global ASCS_CpuSample
+    return ReadCpuUsage(&ASCS_CpuSample)
+}
 
+; `sample` holds the last reading, so each caller measures its own stretch: the
+; history's second-by-second samples stay their own however often Live reads.
+ReadCpuUsage(&sample) {
     idle := 0, kernel := 0, user := 0
     if !DllCall("GetSystemTimes", "Int64*", &idle, "Int64*", &kernel, "Int64*", &user, "Int")
-        return IsObject(ASCS_CpuSample) ? ASCS_CpuSample["usage"] : 0
+        return IsObject(sample) ? sample["usage"] : 0
 
     now := A_TickCount
     total := kernel + user   ; kernel time includes idle time
     usage := 0
-    if IsObject(ASCS_CpuSample) {
-        if (now - ASCS_CpuSample["tick"] < 250)
-            return ASCS_CpuSample["usage"]
-        totalDelta := total - ASCS_CpuSample["total"]
-        idleDelta := idle - ASCS_CpuSample["idle"]
+    if IsObject(sample) {
+        if (now - sample["tick"] < 250)
+            return sample["usage"]
+        totalDelta := total - sample["total"]
+        idleDelta := idle - sample["idle"]
         usage := totalDelta > 0
             ? Max(0, Min(100, Round((totalDelta - idleDelta) / totalDelta * 100)))
-            : ASCS_CpuSample["usage"]
+            : sample["usage"]
     }
-    ASCS_CpuSample := Map("idle", idle, "total", total, "tick", now, "usage", usage)
+    sample := Map("idle", idle, "total", total, "tick", now, "usage", usage)
     return usage
 }
 
@@ -102,20 +112,19 @@ ReadMemoryStatus(&totalGB, &freeGB) {
     freeGB := NumGet(memory, 16, "UInt64") / 1073741824
 }
 
-; Every 10 s, even while ASCS is hidden, so the Dashboard's history graphs
-; are ready when it opens. Two near-instant system calls per sample; the
-; newest 90 samples (15 minutes) are kept in memory only.
+; Every second, even while Maestro is hidden, so System's graphs are ready when
+; it opens: two near-instant system calls a second, and the history is kept in
+; memory only (see NewMetricHistory in Core).
 SampleMetricHistory(*) {
+    global ASCS_HistoryCpuSample
     global ASCS_MetricHistory
     static failed := false
 
     try {
-        cpu := SampleCpuUsage()
+        cpu := ReadCpuUsage(&ASCS_HistoryCpuSample)
         ReadMemoryStatus(&totalGB, &freeGB)
-        ram := totalGB ? Round((totalGB - freeGB) / totalGB * 100) : 0
-        ASCS_MetricHistory.Push([cpu, ram])
-        while (ASCS_MetricHistory.Length > 90)
-            ASCS_MetricHistory.RemoveAt(1)
+        ram := totalGB ? (totalGB - freeGB) / totalGB * 100 : 0
+        AddMetricSample(ASCS_MetricHistory, cpu, ram)
         failed := false
     } catch as err {
         if !failed
@@ -124,335 +133,87 @@ SampleMetricHistory(*) {
     }
 }
 
-MetricHistoryJson() {
+; The scale on screen goes out only when it has a new point, or when asked for
+; again (a page opened, or the scale changed); otherwise null, and the page keeps
+; what it has. A day of minutes would otherwise go out every second.
+; `times` gets the points' times (Unix seconds) to go with them.
+MetricHistoryUpdate(&times) {
     global ASCS_MetricHistory
+    global ASCS_HistoryScale
+    global ASCS_HistorySentSeq
 
-    json := "["
-    for index, sample in ASCS_MetricHistory
-        json .= (index > 1 ? "," : "") "[" sample[1] "," sample[2] "]"
-    return json "]"
+    times := "null"
+    seq := ASCS_MetricHistory["seq"][ASCS_HistoryScale]
+    if (seq = ASCS_HistorySentSeq)
+        return "null"
+    ASCS_HistorySentSeq := seq
+    times := MetricHistoryTimesJson(ASCS_MetricHistory, ASCS_HistoryScale)
+    return MetricHistoryJson(ASCS_MetricHistory, ASCS_HistoryScale)
 }
 
+; The inventory runs in ASCS.HardwareProbe.ahk, so nothing here waits on Windows.
 CollectHardwareDetails(*) {
     global ASCS_HardwareJson
-    global ASCS_Wmi
+    global ASCS_HardwareProbe
 
-    if (ASCS_HardwareJson != "")
+    if (ASCS_HardwareJson != "" || IsObject(ASCS_HardwareProbe))
         return
     try {
-        if !IsObject(ASCS_Wmi)
-            ASCS_Wmi := ComObjGet("winmgmts:\\.\root\cimv2")
-        ASCS_HardwareJson := GetHardwareDetails(ASCS_Wmi)
+        probeId := DllCall("GetCurrentProcessId", "UInt") "-" A_TickCount
+        Run('"' A_AhkPath '" "' A_ScriptDir '\ASCS.HardwareProbe.ahk" ' probeId,, "Hide", &pid)
+        ASCS_HardwareProbe := Map(
+            "pid", pid,
+            "started", A_TickCount,
+            "result", A_ScriptDir "\data\hardware-" probeId ".probe"
+        )
+        SetTimer(PollHardwareProbe, 250)
     } catch as err {
-        ASCS_Wmi := 0
-        ASCS_HardwareJson := "null"   ; do not retry every refresh this session
-        WriteLog("Hardware inventory failed: " err.Message)
+        WriteLog("Hardware inventory worker could not start: " err.Message)
+        FinishHardwareProbe('{"failed":true}')
     }
-    RequestDashboardPush()
 }
 
-GetHardwareDetails(wmi) {
-    processors := QueryHardware(
-        wmi,
-        "SELECT Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed FROM Win32_Processor",
-        "processor"
-    )
-    systems := QueryHardware(
-        wmi,
-        "SELECT Manufacturer, Model FROM Win32_ComputerSystem",
-        "computer"
-    )
-    modules := QueryHardware(
-        wmi,
-        "SELECT Capacity, Speed, ConfiguredClockSpeed FROM Win32_PhysicalMemory",
-        "memory"
-    )
-    graphics := QueryHardware(
-        wmi,
-        "SELECT Name, AdapterRAM, DriverVersion FROM Win32_VideoController",
-        "graphics"
-    )
-    disks := QueryHardware(
-        wmi,
-        "SELECT Index, Model, Size, InterfaceType, MediaType, Status FROM Win32_DiskDrive",
-        "storage"
-    )
-    partitions := QueryHardware(
-        wmi,
-        "SELECT DiskIndex, Index, Size, Type, BootPartition FROM Win32_DiskPartition",
-        "partitions"
-    )
-    volumeLinks := QueryHardware(
-        wmi,
-        "SELECT Antecedent, Dependent FROM Win32_LogicalDiskToPartition",
-        "volume mapping"
-    )
-    logicalDisks := QueryHardware(
-        wmi,
-        "SELECT DeviceID, VolumeName, FileSystem, Size, FreeSpace, Status FROM Win32_LogicalDisk",
-        "logical volumes"
-    )
-    baseBoards := QueryHardware(
-        wmi,
-        "SELECT Manufacturer, Product FROM Win32_BaseBoard",
-        "motherboard"
-    )
-    biosRows := QueryHardware(
-        wmi,
-        "SELECT Manufacturer, SMBIOSBIOSVersion FROM Win32_BIOS",
-        "BIOS"
-    )
-    operatingSystems := QueryHardware(
-        wmi,
-        "SELECT Caption, BuildNumber FROM Win32_OperatingSystem",
-        "Windows"
-    )
+PollHardwareProbe(*) {
+    global ASCS_HardwareProbe
 
-    cpu := "Unavailable"
-    cores := ""
-    if processors.Length {
-        cpu := HardwareField(processors[1], "Name")
-        if (cpu = "")
-            cpu := "Unavailable"
-        coreCount := HardwareField(processors[1], "NumberOfCores")
-        threadCount := HardwareField(processors[1], "NumberOfLogicalProcessors")
-        if (coreCount != "" && threadCount != "")
-            cores := coreCount " cores · " threadCount " threads"
-        clockSpeed := HardwareField(processors[1], "MaxClockSpeed")
-        ; Win32_Processor.MaxClockSpeed reports the rated (base) clock, not
-        ; boost. Keep this on one line: AutoHotkey only joins a continuation
-        ; line that starts with an operator, so a call on the next line would
-        ; silently run as its own discarded statement.
-        if RegExMatch(clockSpeed, "^\d+$")
-            cores .= (cores != "" ? " · " : "") Round(Integer(clockSpeed) / 1000, 1) " GHz base"
-    }
-
-    manufacturer := ""
-    model := ""
-    if systems.Length {
-        manufacturer := HardwareField(systems[1], "Manufacturer")
-        model := HardwareField(systems[1], "Model")
-    }
-
-    totalMemory := 0
-    memorySpeed := 0
-    moduleCount := 0
-    for module in modules {
+    probe := ASCS_HardwareProbe
+    if FileExist(probe["result"]) {
         try {
-            totalMemory += Integer(module.Capacity)
-            moduleCount++
+            lines := StrSplit(FileRead(probe["result"], "UTF-8"), "`n")
+            if !RegExMatch(lines[1], "^\{.*\}$")
+                throw Error("Its result wasn't JSON.")
+            for line in lines {
+                if (A_Index > 1)
+                    WriteLog(line)
+            }
+            FinishHardwareProbe(lines[1])
         } catch as err {
-            WriteLog("Physical memory detail could not be read: " err.Message)
+            WriteLog("Hardware inventory result could not be read: " err.Message)
+            FinishHardwareProbe('{"failed":true}')
         }
-        speed := HardwareField(module, "ConfiguredClockSpeed")
-        if (speed = "")
-            speed := HardwareField(module, "Speed")
-        if RegExMatch(speed, "^\d+$")
-            memorySpeed := Max(memorySpeed, Integer(speed))
+        try FileDelete(probe["result"])
+        return
     }
-    if !totalMemory {
-        computers := QueryHardware(
-            wmi,
-            "SELECT TotalPhysicalMemory FROM Win32_ComputerSystem",
-            "total memory"
-        )
-        if computers.Length {
-            try totalMemory := Integer(computers[1].TotalPhysicalMemory)
-            catch as err
-                WriteLog("Total memory detail could not be read: " err.Message)
-        }
+    if ProcessExist(probe["pid"]) {
+        if (A_TickCount - probe["started"] < 20000)
+            return
+        try ProcessClose(probe["pid"])
     }
-    memory := totalMemory
-        ? Round(totalMemory / 1073741824, 1) " GB"
-        : "Unavailable"
-    if (moduleCount && memory != "Unavailable")
-        memory .= " · " moduleCount " modules"
-    if (memorySpeed && memory != "Unavailable")
-        memory .= " · " memorySpeed " MHz"
-
-    gpuNames := []
-    gpuDetails := []
-    for controller in graphics {
-        name := HardwareField(controller, "Name")
-        if (name != "") {
-            gpuNames.Push(name)
-            adapterRAM := HardwareField(controller, "AdapterRAM")
-            driverVersion := HardwareField(controller, "DriverVersion")
-            details := []
-            if RegExMatch(adapterRAM, "^\d+$")
-                details.Push(Round(Integer(adapterRAM) / 1073741824, 1) " GB reported memory")
-            if (driverVersion != "")
-                details.Push("Driver " driverVersion)
-            if details.Length
-                gpuDetails.Push(JoinArray(details, " · "))
-        }
-    }
-    gpu := gpuNames.Length ? JoinArray(gpuNames, ", ") : "Unavailable"
-    gpuDetail := gpuDetails.Length ? JoinArray(gpuDetails, " | ") : ""
-
-    board := "Unavailable"
-    if baseBoards.Length {
-        boardManufacturer := HardwareField(baseBoards[1], "Manufacturer")
-        boardProduct := HardwareField(baseBoards[1], "Product")
-        board := Trim(boardManufacturer " " boardProduct)
-        if (board = "")
-            board := "Unavailable"
-    }
-
-    bios := ""
-    if biosRows.Length {
-        biosManufacturer := HardwareField(biosRows[1], "Manufacturer")
-        biosVersion := HardwareField(biosRows[1], "SMBIOSBIOSVersion")
-        bios := Trim(biosManufacturer (biosVersion != "" ? " · " biosVersion : ""))
-    }
-
-    partitionDetails := Map()
-    for partition in partitions {
-        diskIndex := HardwareField(partition, "DiskIndex")
-        partitionIndex := HardwareField(partition, "Index")
-        if (diskIndex = "" || partitionIndex = "")
-            continue
-        if !partitionDetails.Has(diskIndex)
-            partitionDetails[diskIndex] := []
-        bootStatus := HardwareField(partition, "BootPartition")
-        partitionDetails[diskIndex].Push(Map(
-            "size", HardwareNumber(partition, "Size"),
-            "type", HardwareField(partition, "Type"),
-            "boot", bootStatus = "True" || bootStatus = "1"
-        ))
-    }
-
-    logicalByLetter := Map()
-    for logicalDisk in logicalDisks {
-        letter := StrUpper(HardwareField(logicalDisk, "DeviceID"))
-        if (letter != "")
-            logicalByLetter[letter] := logicalDisk
-    }
-
-    volumesByDisk := Map()
-    volumeSeenByDisk := Map()
-    for link in volumeLinks {
-        antecedent := HardwareField(link, "Antecedent")
-        dependent := HardwareField(link, "Dependent")
-        if (
-            !RegExMatch(antecedent, "Disk #(\d+), Partition #(\d+)", &partitionMatch)
-            || !RegExMatch(dependent, 'i)DeviceID="([A-Z]:)"', &volumeMatch)
-        )
-            continue
-        diskIndex := partitionMatch[1]
-        volumeLetter := StrUpper(volumeMatch[1])
-        if !volumesByDisk.Has(diskIndex) {
-            volumesByDisk[diskIndex] := []
-            volumeSeenByDisk[diskIndex] := Map()
-        }
-        if !volumeSeenByDisk[diskIndex].Has(volumeLetter) {
-            volumeSeenByDisk[diskIndex][volumeLetter] := true
-            volumesByDisk[diskIndex].Push(volumeLetter)
-        }
-    }
-
-    storageJson := "["
-    storageCount := 0
-    for disk in disks {
-        storageCount++
-        index := HardwareField(disk, "Index")
-        if (index = "" && RegExMatch(HardwareField(disk, "DeviceID"), "i)PHYSICALDRIVE(\d+)", &deviceMatch))
-            index := deviceMatch[1]
-        model := HardwareField(disk, "Model")
-        interfaceType := HardwareField(disk, "InterfaceType")
-        mediaType := HardwareField(disk, "MediaType")
-        diskStatus := HardwareField(disk, "Status")
-
-        partitionJson := "["
-        partitionCount := partitionDetails.Has(index) ? partitionDetails[index].Length : 0
-        if (partitionCount) {
-            for partition in partitionDetails[index] {
-                partitionJson .= (A_Index > 1 ? "," : "")
-                    . '{"sizeBytes":' partition["size"]
-                    . ',"type":' JsonQuote(partition["type"])
-                    . ',"boot":' (partition["boot"] ? "true" : "false") '}'
-            }
-        }
-        partitionJson .= "]"
-
-        volumeJson := "["
-        volumeCount := volumesByDisk.Has(index) ? volumesByDisk[index].Length : 0
-        if (volumeCount) {
-            for volumeLetter in volumesByDisk[index] {
-                volume := logicalByLetter.Has(volumeLetter) ? logicalByLetter[volumeLetter] : ""
-                volumeName := volume != "" ? HardwareField(volume, "VolumeName") : ""
-                fileSystem := volume != "" ? HardwareField(volume, "FileSystem") : ""
-                volumeStatus := volume != "" ? HardwareField(volume, "Status") : ""
-                size := volume != "" ? HardwareNumber(volume, "Size") : "null"
-                free := volume != "" ? HardwareNumber(volume, "FreeSpace") : "null"
-                volumeJson .= (A_Index > 1 ? "," : "")
-                    . '{"letter":' JsonQuote(volumeLetter)
-                    . ',"label":' JsonQuote(volumeName)
-                    . ',"fileSystem":' JsonQuote(fileSystem)
-                    . ',"status":' JsonQuote(volumeStatus)
-                    . ',"sizeBytes":' size
-                    . ',"freeBytes":' free '}'
-            }
-        }
-        volumeJson .= "]"
-
-        storageJson .= (storageCount > 1 ? "," : "")
-            . '{"model":' JsonQuote(model)
-            . ',"sizeBytes":' HardwareNumber(disk, "Size")
-            . ',"interfaceType":' JsonQuote(interfaceType)
-            . ',"mediaType":' JsonQuote(mediaType)
-            . ',"status":' JsonQuote(diskStatus)
-            . ',"partitions":' partitionJson
-            . ',"volumes":' volumeJson '}'
-    }
-    storageJson .= "]"
-
-    windows := "Unavailable"
-    if operatingSystems.Length {
-        caption := HardwareField(operatingSystems[1], "Caption")
-        build := HardwareField(operatingSystems[1], "BuildNumber")
-        if (caption != "")
-            windows := caption (build != "" ? " · Build " build : "")
-    }
-
-    return (
-        '{"manufacturer":' JsonQuote(manufacturer)
-        . ',"model":' JsonQuote(model)
-        . ',"cpu":' JsonQuote(cpu)
-        . ',"cores":' JsonQuote(cores)
-        . ',"gpu":' JsonQuote(gpu)
-        . ',"gpuDetail":' JsonQuote(gpuDetail)
-        . ',"memory":' JsonQuote(memory)
-        . ',"storage":' storageJson
-        . ',"board":' JsonQuote(board)
-        . ',"bios":' JsonQuote(bios)
-        . ',"windows":' JsonQuote(windows) '}'
-    )
+    WriteLog("Hardware inventory worker stopped without a result.")
+    FinishHardwareProbe('{"failed":true}')
 }
 
-HardwareNumber(item, property) {
-    value := HardwareField(item, property)
-    return RegExMatch(value, "^\d+$") ? value : "null"
-}
+; A failure isn't retried this session.
+FinishHardwareProbe(json) {
+    global ASCS_HardwareDue
+    global ASCS_HardwareJson
+    global ASCS_HardwareProbe
 
-QueryHardware(wmi, query, category) {
-    rows := []
-    try {
-        for item in wmi.ExecQuery(query)
-            rows.Push(item)
-    } catch as err {
-        WriteLog("Hardware " category " query failed: " err.Message)
-    }
-    return rows
-}
-
-HardwareField(item, property) {
-    try {
-        return Trim(String(item.%property%))
-    } catch as err {
-        WriteLog("Hardware property " property " could not be read: " err.Message)
-        return ""
-    }
+    SetTimer(PollHardwareProbe, 0)
+    ASCS_HardwareProbe := 0
+    ASCS_HardwareJson := json
+    ASCS_HardwareDue := true
+    RequestDashboardPush()
 }
 
 GetDriveMetrics() {
@@ -618,7 +379,7 @@ PollDriveProbes(*) {
         SetTimer(PollDriveProbes, 0)
 
     if metricsChanged
-        SetTimer(PushDashboard, -1)
+        RequestDashboardPush()
 }
 
 OfflineDriveMetric(drive) {
