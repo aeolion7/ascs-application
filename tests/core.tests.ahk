@@ -1108,6 +1108,60 @@ StrRepeat(text, count) {
     return output
 }
 
+; The notes trash (2.1.0)
+CheckNoteTrash('{"version":2,"notes":[],"trash":[]}')
+CheckNoteTrash('{"trash":[{"id":"a","deletedAt":"2026-11-10T20:00:00.000Z"},{"id":"b","deletedAt" : "2026-11-10T20:00:00Z"}]}')
+Check("a trashed note's time is accepted, with or without milliseconds", true)
+Throws("a trashed note's time that is text is rejected", () => CheckNoteTrash('{"trash":[{"deletedAt":"never"}]}'), "isn't a time")
+Throws("a trashed note's time that is a number is rejected", () => CheckNoteTrash('{"trash":[{"deletedAt":99999999999999}]}'), "isn't a time")
+Throws("a trashed note's time with more after it is rejected", () => CheckNoteTrash('{"trash":[{"deletedAt":"2026-11-10T20:00:00Z<b>"}]}'), "isn't a time")
+CheckNoteTrash('{"notes":[{"content":"the text \"deletedAt\": never is only text"}]}')
+Check("the words in a note's own text are left alone", true)
+
+; Backups (2.1.0)
+Equal("backup time kept", ValidateBackupTime(" 1800 "), "1800")
+Equal("backup time at midnight", ValidateBackupTime("0000"), "0000")
+Equal("backup time at 23:59", ValidateBackupTime("2359"), "2359")
+Throws("backup time 24:00 rejected", () => ValidateBackupTime("2400"), "time of day")
+Throws("backup time 18:60 rejected", () => ValidateBackupTime("1860"), "time of day")
+Throws("backup time with a colon rejected", () => ValidateBackupTime("18:00"), "time of day")
+Throws("backup time empty rejected", () => ValidateBackupTime(""), "time of day")
+
+Equal("backups folder kept", ValidateBackupsFolder("J:\Maestro-Backups", "C:\ASCS"), "J:\Maestro-Backups")
+Equal("backups folder loses its last backslash", ValidateBackupsFolder(" J:\Backups\Maestro\ ", "C:\ASCS"), "J:\Backups\Maestro")
+Equal("backups folder beside Maestro's is fine", ValidateBackupsFolder("C:\ASCS-Backups", "C:\ASCS"), "C:\ASCS-Backups")
+Throws("backups folder empty rejected", () => ValidateBackupsFolder("", "C:\ASCS"), "Choose a folder")
+Throws("backups folder a whole drive rejected", () => ValidateBackupsFolder("J:\", "C:\ASCS"), "J:\Maestro-Backups")
+Throws("backups folder on a network rejected", () => ValidateBackupsFolder("\\server\share\backups", "C:\ASCS"), "full path")
+Throws("backups folder without a drive rejected", () => ValidateBackupsFolder("backups", "C:\ASCS"), "full path")
+Throws("backups folder with forward slashes rejected", () => ValidateBackupsFolder("J:/backups", "C:\ASCS"), "full path")
+Throws("backups folder climbing out rejected", () => ValidateBackupsFolder("J:\a\..\b", "C:\ASCS"), "full path")
+Throws("backups folder with a wildcard rejected", () => ValidateBackupsFolder("J:\back*", "C:\ASCS"), "full path")
+Throws("backups folder with a quote rejected", () => ValidateBackupsFolder('J:\back"up', "C:\ASCS"), "full path")
+Throws("backups folder with a stream rejected", () => ValidateBackupsFolder("J:\backups:x", "C:\ASCS"), "full path")
+Throws("backups folder ending in a dot rejected", () => ValidateBackupsFolder("J:\backups.", "C:\ASCS"), "full path")
+Throws("backups folder with a line break rejected", () => ValidateBackupsFolder("J:\back`nups", "C:\ASCS"), "full path")
+Throws("backups folder too long rejected", () => ValidateBackupsFolder("J:\" Format("{:0200}", 0), "C:\ASCS"), "full path")
+Throws("backups folder inside Maestro rejected", () => ValidateBackupsFolder("C:\ASCS\data\backups", "C:\ASCS"), "own folder")
+Throws("backups folder that is Maestro's rejected", () => ValidateBackupsFolder("c:\ascs\", "C:\ASCS\"), "own folder")
+
+Check("backup due when none was ever tried", BackupDue("20261110120000", "1800", "", ""))
+Check("backup due with a junk last time", BackupDue("20261110120000", "1800", "yesterday", "ok"))
+Check("backup not due before today's time, with yesterday's made", !BackupDue("20261110175959", "1800", "20261109180003", "ok"))
+Check("backup due at today's time", BackupDue("20261110180000", "1800", "20261109180003", "ok"))
+Check("backup not due again once today's is made", !BackupDue("20261110235959", "1800", "20261110180004", "ok"))
+Check("backup due in the morning when the PC was off last evening", BackupDue("20261111080000", "1800", "20261109180003", "ok"))
+Check("backup not due in the morning when last evening's was made", !BackupDue("20261111080000", "1800", "20261110180004", "ok"))
+Check("a backup made by hand after the time counts", !BackupDue("20261110230000", "1800", "20261110220000", "ok"))
+Check("a backup made by hand before the time doesn't", BackupDue("20261110180000", "1800", "20261110160957", "ok"))
+Check("backup across a month's end", BackupDue("20261201010000", "1800", "20261129180000", "ok"))
+Check("a failed backup isn't retried within the hour", !BackupDue("20261110185900", "1800", "20261110180004", "failed"))
+Check("a failed backup is retried after an hour", BackupDue("20261110190004", "1800", "20261110180004", "failed"))
+Check("a midnight backup is due just after midnight", BackupDue("20261111000001", "0000", "20261110000005", "ok"))
+
+Equal("backup detail loses its line breaks", TidyBackupDetail("  one`r`ntwo`tthree  "), "one two three")
+Equal("backup detail is capped", StrLen(TidyBackupDetail(Format("{:0300}", 0))), 200)
+
 report := "PASS " Passed " FAIL " Failures.Length "`n"
 for failure in Failures
     report .= "FAIL: " failure "`n"

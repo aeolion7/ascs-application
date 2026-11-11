@@ -2267,6 +2267,18 @@ CheckNoteGames(content) {
     CheckNoteTextField(content, "game", "A game link", 320)
 }
 
+; 2.1.0: when a trashed note was deleted. Only a plain UTC time is saved, so a
+; hand edit can't keep a note in the trash forever or put text there.
+CheckNoteTrash(content) {
+    position := 1
+    while (found := RegExMatch(content, '"deletedAt"\s*:\s*', &key, position)) {
+        position := found + key.Len
+        if !RegExMatch(content, '\G"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d{1,3})?Z"', &value, position)
+            throw Error("A trashed note's time isn't a time.")
+        position += value.Len
+    }
+}
+
 CheckNoteTextField(content, field, label, limit) {
     position := 1
     while (found := RegExMatch(content, '"' field '"\s*:\s*', &key, position)) {
@@ -2652,4 +2664,58 @@ TopEntries(list, n) {
             sorted.Pop()
     }
     return sorted
+}
+
+; ==========================================
+; BACKUPS (2.1.0)
+; ==========================================
+
+; The time of day the daily backup runs, as HHmm.
+ValidateBackupTime(value) {
+    value := Trim(String(value))
+    if RegExMatch(value, "^([01]\d|2[0-3])[0-5]\d$")
+        return value
+    throw Error("The backup time must be a time of day.")
+}
+
+; Where backups go: a folder (not a whole drive) by its full path on a lettered
+; drive, outside Maestro's own folder, which git watches. Whether the drive is
+; inside this PC is asked of Windows by the caller.
+ValidateBackupsFolder(value, ownFolder) {
+    value := RTrim(Trim(String(value)), "\")
+    if (value = "")
+        throw Error("Choose a folder for backups.")
+    if RegExMatch(value, "^[A-Za-z]:$")
+        throw Error("Choose or make a folder on that drive, such as " value "\Maestro-Backups.")
+    if (StrLen(value) > 200 || !RegExMatch(value, '^[A-Za-z]:(\\[^\\/:*?"<>|\x00-\x1F]+)+$'))
+        throw Error("The backups folder must be a full path on a drive of this PC.")
+    for part in StrSplit(SubStr(value, 4), "\") {
+        if (part = "." || part = ".." || RegExMatch(part, "[ .]$") || RegExMatch(part, "^ "))
+            throw Error("The backups folder must be a full path on a drive of this PC.")
+    }
+    ownFolder := RTrim(ownFolder, "\")
+    if (ownFolder != "" && InStr(value "\", ownFolder "\") = 1)
+        throw Error("Backups can't go inside Maestro's own folder.")
+    return value
+}
+
+; Whether the daily backup is due. now and lastAttempt are yyyyMMddHHmmss and
+; time is HHmm. It's due when nothing has been tried since that time of day last
+; came round, which also catches up after the PC was off; after a failure, it's
+; tried again once an hour.
+BackupDue(now, time, lastAttempt, lastResult) {
+    scheduled := SubStr(now, 1, 8) time "00"
+    if (now < scheduled)
+        scheduled := DateAdd(scheduled, -1, "Days")
+    if (!RegExMatch(lastAttempt, "^\d{14}$") || lastAttempt < scheduled)
+        return true
+    if (lastResult = "failed")
+        return DateDiff(now, lastAttempt, "Minutes") >= 60
+    return false
+}
+
+; A backup's result as one line of plain text for the page and the log.
+TidyBackupDetail(text) {
+    text := Trim(RegExReplace(String(text), "[\x00-\x1F\x7F]+", " "))
+    return StrLen(text) > 200 ? SubStr(text, 1, 199) "…" : text
 }

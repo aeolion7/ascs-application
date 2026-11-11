@@ -1530,6 +1530,126 @@
             checks.push(["the Wikipedia almanac saves as it's switched", $("almanacWikipedia").disabled || messages.some(message => message.startsWith("SaveAlmanac")) ? [] : [messages.join(";") || "nothing sent"]]);
             $("almanacWikipedia").checked = !$("almanacWikipedia").checked;
             $("todaySettingsDone").click();
+            // 2.1.0: Backups, in Preferences. The page never sends a folder.
+            navigate("settings");
+            const backupControls = ["backupsEnabled", "backupsTime", "backupsChoose", "backupsOpen", "backupsNow"];
+            const noBackups = { type: "backups", enabled: false, time: "1800", folder: "", running: false, off: false, lastTime: "", lastResult: "", lastDetail: "", goodTime: "" };
+            const withFolder = { ...noBackups, folder: "J:\\Maestro-Backups", lastTime: "20200102180000", lastResult: "ok", lastDetail: "10 files, 1.0 MB", goodTime: "20200102180000" };
+            backupsState = null;
+            renderBackups();
+            checks.push(["Backups waits for Maestro before anything can be changed", backupControls.filter(id => !$(id).disabled)]);
+            checks.push(["Backups' messages are allowlisted", ["SaveBackups", "ChooseBackupsFolder", "BackupNow", "OpenBackupsFolder"].filter(type => !new Set(window.SMOKE_ALLOWLIST || []).has(type))]);
+            handleWebMessage({ data: noBackups });
+            checks.push(["with no folder, only choosing one and the time are offered", backupControls.filter(id => $(id).disabled).join() === "backupsEnabled,backupsOpen,backupsNow" ? [] : [backupControls.filter(id => $(id).disabled).join()]]);
+            checks.push(["and it says so", $("backupsFolder").textContent === "No folder chosen" && $("backupsStatus").textContent === "Choose a folder to turn backups on." ? [] : [$("backupsFolder").textContent, $("backupsStatus").textContent]]);
+            messages.length = 0;
+            $("backupsChoose").click();
+            checks.push(["Choose asks Maestro for Windows' folder picker, and sends no path", messages.join(";") === "ChooseBackupsFolder\n" ? [] : [messages.join(";")]]);
+            handleWebMessage({ data: withFolder });
+            checks.push(["with a folder, everything is offered", backupControls.filter(id => $(id).disabled)]);
+            checks.push(["the folder and the last backup are shown", $("backupsFolder").textContent === "J:\\Maestro-Backups" && $("backupsStatus").textContent === "Last backup made on Jan 2, 2020 at 6:00 PM · 10 files, 1.0 MB" ? [] : [$("backupsFolder").textContent, $("backupsStatus").textContent]]);
+            checks.push(["every hour is offered, with the one that's set chosen", $("backupsTime").options.length === 24 && $("backupsTime").value === "1800" && $("backupsTime").selectedOptions[0].textContent === "6:00 PM" ? [] : [`${$("backupsTime").options.length} ${$("backupsTime").value}`]]);
+            messages.length = 0;
+            $("backupsEnabled").checked = true;
+            $("backupsEnabled").dispatchEvent(new Event("change", { bubbles: true }));
+            $("backupsTime").value = "0700";
+            $("backupsTime").dispatchEvent(new Event("change", { bubbles: true }));
+            checks.push(["each change saves at once, as on or off and a time", messages.join(";") === "SaveBackups\n1|1800;SaveBackups\n1|0700" ? [] : [messages.join(";")]]);
+            handleWebMessage({ data: { type: "backupsSaved", ok: true, message: "Saved." } });
+            checks.push(["and says so in the title bar", /^Saved at \d{1,2}:\d{2}\s?[AP]M$/.test($("settingsStatus").textContent) ? [] : [$("settingsStatus").textContent]]);
+            $("toast").textContent = "";
+            handleWebMessage({ data: { type: "backupsSaved", ok: false, message: "Backups must go to a drive inside this PC." } });
+            checks.push(["a refusal is said, with why", $("settingsStatus").textContent === "Not saved" && $("toast").textContent.includes("inside this PC") ? [] : [$("settingsStatus").textContent, $("toast").textContent]]);
+            messages.length = 0;
+            $("backupsNow").click();
+            $("backupsOpen").click();
+            checks.push(["Back up now and Open folder ask Maestro", messages.join(";") === "BackupNow\n;OpenBackupsFolder\n" ? [] : [messages.join(";")]]);
+            handleWebMessage({ data: { ...withFolder, enabled: true, running: true } });
+            checks.push(["a backup under way can't be started again", $("backupsNow").disabled && $("backupsStatus").textContent === "Backing up…" ? [] : [$("backupsStatus").textContent]]);
+            handleWebMessage({ data: { ...withFolder, enabled: true, lastTime: "20200103180000", lastResult: "failed", lastDetail: "Drive J: isn't available." } });
+            checks.push(["a failed backup is said where it's set", $("backupsStatus").classList.contains("is-failed") && $("backupsStatus").textContent.includes("Drive J: isn't available.") ? [] : [$("backupsStatus").textContent]]);
+            checks.push(["and is on the attention list", !$("attentionButton").hidden && $("attentionList").textContent.includes("Backup failed") ? [] : [$("attentionList").textContent || "nothing listed"]]);
+            navigate("home");
+            toggleAttention(true);
+            [...$("attentionList").querySelectorAll(".attention-row")].find(row => row.textContent.includes("Backup failed"))?.querySelector("button")?.click();
+            checks.push(["whose button opens Preferences", $("settings").classList.contains("active") && $("attentionPanel").hidden ? [] : ["not opened"]]);
+            handleWebMessage({ data: { ...withFolder, enabled: true } });
+            checks.push(["years without a backup is on the list too", /No backup for \d+ days/.test($("attentionList").textContent) ? [] : [$("attentionList").textContent || "nothing listed"]]);
+            handleWebMessage({ data: { ...withFolder, enabled: true, off: true } });
+            checks.push(["a test build offers nothing, and says why", backupControls.every(id => $(id).disabled) && $("backupsStatus").textContent === "Backups are off in a test build." && !/backup/i.test($("attentionList").textContent) ? [] : [$("backupsStatus").textContent]]);
+            handleWebMessage({ data: noBackups });
+            checks.push(["with backups off, nothing about them needs attention", /backup/i.test($("attentionList").textContent) ? [$("attentionList").textContent] : []]);
+            // 2.1.0: the notes trash. Delete asks nothing and can be undone; only
+            // deleting from the trash is for good, and that asks first.
+            {
+                const notesBefore = serializeNotes();
+                const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+                const at = "2026-11-01T00:00:00.000Z";
+                const plain = (id, title, content) => ({ id, title, type: "note", content, pinned: false, created: at, updated: at });
+                navigate("notes");
+                handleWebMessage({ data: { type: "notes", recovered: false, data: JSON.stringify({ version: 2, activeId: "t2", notes: [plain("t1", "Keep me", "one"), plain("t2", "Bin me", "two")],
+                    trash: [{ ...plain("t0", "<b>Old</b>", "three"), deletedAt: new Date(Date.now() - 86400000).toISOString() }, { ...plain("gone", "Long gone", "four"), deletedAt: "2020-01-01T00:00:00.000Z" }] }) } });
+                flushPendingNotes();
+                checks.push(["a trashed note past its 30 days is gone when notes load", notesData.trash.map(entry => entry.id).join() === "t0" ? [] : [notesData.trash.map(entry => entry.id).join()]]);
+                checks.push(["the Trash button shows how many it holds", !$("notesTrashButton").hidden && $("notesTrashButton").textContent === "Trash · 1" ? [] : [$("notesTrashButton").textContent]]);
+                messages.length = 0;
+                $("toast").textContent = "";
+                $("deleteNoteButton").click();
+                checks.push(["Delete asks nothing", $("confirmDialog").hidden ? [] : ["a dialog opened"]]);
+                checks.push(["the note leaves the list for the trash", !$("notesList").textContent.includes("Bin me") && notesData.trash.map(entry => entry.id).join() === "t2,t0" && $("notesTrashButton").textContent === "Trash · 2" ? [] : [$("notesTrashButton").textContent]]);
+                checks.push(["and the toast offers Undo", $("toast").textContent.includes('Deleted "Bin me"') && $("toast").querySelector("button")?.textContent === "Undo" ? [] : [$("toast").textContent]]);
+                flushPendingNotes();
+                const savedTrash = JSON.parse((messages.filter(message => message.startsWith("SaveNotes\n")).pop() || "SaveNotes\n{}").slice(10));
+                checks.push(["the trash is saved with the notes, each entry with when it was deleted", savedTrash.notes?.length === 1 && savedTrash.trash?.length === 2 && /^\d{4}-\d\d-\d\dT[\d:.]+Z$/.test(savedTrash.trash[0].deletedAt) ? [] : [JSON.stringify(savedTrash).slice(0, 200)]]);
+                $("toast").querySelector("button").click();
+                checks.push(["Undo puts the note back and opens it", notesData.notes.some(note => note.id === "t2") && notesData.activeId === "t2" && notesData.trash.length === 1 && $("noteTitle").value === "Bin me" ? [] : [notesData.activeId]]);
+
+                $("notesTrashButton").click();
+                const rows = () => [...$("notesTrashList").querySelectorAll(".notes-trash-row")];
+                checks.push(["the Trash button opens the trash", !$("notesTrashDialog").hidden && rows().length === 1 && $("notesTrashDialog").contains(document.activeElement) ? [] : [`${rows().length} rows`]]);
+                checks.push(["a trashed note's title is shown as text, with the days it has left", rows()[0]?.querySelector("strong").textContent === "<b>Old</b>" && !$("notesTrashList").querySelector("b") && /^Deleted \w{3} \d{1,2} · 29 days left$/.test(rows()[0]?.querySelector("small").textContent) ? [] : [rows()[0]?.textContent]]);
+                $("notesTrashDialog").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+                checks.push(["Esc closes it, and the focus goes back to the button", $("notesTrashDialog").hidden && document.activeElement === $("notesTrashButton") ? [] : ["still open"]]);
+                $("notesTrashButton").click();
+                [...rows()[0].querySelectorAll("button")].find(button => button.textContent === "Restore").click();
+                checks.push(["Restore puts it among the notes and opens it", notesData.notes.some(note => note.id === "t0") && notesData.activeId === "t0" ? [] : [notesData.activeId]]);
+                checks.push(["an emptied trash closes, and its button goes", $("notesTrashDialog").hidden && $("notesTrashButton").hidden ? [] : ["still showing"]]);
+
+                $("deleteNoteButton").click();
+                $("notesTrashButton").click();
+                [...rows()[0].querySelectorAll("button")].find(button => button.textContent === "Delete forever").click();
+                checks.push(["Delete forever asks first, over the trash", !$("confirmDialog").hidden && !$("notesTrashDialog").hidden && $("confirmDialogTitle").textContent.includes("forever") ? [] : ["no dialog"]]);
+                $("confirmDialogCancel").click();
+                await tick();
+                checks.push(["Cancel keeps the note", notesData.trash.length === 1 && !$("notesTrashDialog").hidden ? [] : [`${notesData.trash.length} in the trash`]]);
+                [...rows()[0].querySelectorAll("button")].find(button => button.textContent === "Delete forever").click();
+                $("confirmDialogConfirm").click();
+                await tick();
+                checks.push(["confirming deletes it for good", notesData.trash.length === 0 && !notesData.notes.some(note => note.id === "t0") && $("notesTrashDialog").hidden ? [] : [`${notesData.trash.length} in the trash`]]);
+
+                $("newNoteButton").click();
+                $("toast").textContent = "";
+                $("deleteNoteButton").click();
+                checks.push(["an empty note is only removed, with nothing to undo", notesData.trash.length === 0 && !$("toast").textContent.includes("Deleted") ? [] : [$("toast").textContent]]);
+
+                notesData.activeId = "t1";
+                renderActiveNote();
+                $("deleteNoteButton").click();
+                notesData.activeId = "t2";
+                renderActiveNote();
+                $("deleteNoteButton").click();
+                $("notesTrashButton").click();
+                $("notesTrashEmpty").click();
+                checks.push(["Empty trash asks first, and says how many", !$("confirmDialog").hidden && $("confirmDialogMessage").textContent === "2 notes will be deleted for good." ? [] : [$("confirmDialogMessage").textContent]]);
+                $("confirmDialogConfirm").click();
+                await tick();
+                checks.push(["and then the trash is empty", notesData.trash.length === 0 && $("notesTrashDialog").hidden && $("notesTrashButton").hidden ? [] : [`${notesData.trash.length} left`]]);
+                checks.push(["no errors from the trash", errors.splice(0)]);
+                handleWebMessage({ data: { type: "notes", recovered: false, data: notesBefore } });
+                flushPendingNotes();
+                $("toast").textContent = "";
+                navigate("settings");
+            }
             checks.push(["no errors from Preferences", errors.splice(0)]);
 
             // 2.0.0: Ctrl + F's filter marks its words in the open note.

@@ -419,7 +419,9 @@ const PreviewScenes = (() => {
         "commands-custom": () => { commandsData(); commandsSections.show("custom"); },
         "commands-palette": () => { commandsData(); commandsSections.show("palette"); },
         "commands-quick": () => { commandsData(); commandsSections.show("quick"); },
-        settings: () => { commandsData(); navigate("settings"); },
+        settings: () => { commandsData(); say({ type: "backups", enabled: true, time: "1800", folder: "J:\\Maestro-Backups", running: false, off: false, lastTime: "20261110180004", lastResult: "ok", lastDetail: "4,190 files, 72.8 MB", goodTime: "20261110180004" }); navigate("settings"); },
+        "settings-backup-failed": () => { commandsData(); say({ ...{ type: "backups", enabled: true, time: "1800", folder: "J:\\Maestro-Backups", running: false, off: false, lastTime: "20261110180004", lastResult: "ok", lastDetail: "4,190 files, 72.8 MB", goodTime: "20261110180004" }, lastTime: "20261110180004", lastResult: "failed", lastDetail: "Drive J: isn't available.", goodTime: "20261109180003" }); navigate("settings"); },
+        "settings-no-backups": () => { commandsData(); say({ type: "backups", enabled: false, time: "1800", folder: "", running: false, off: false, lastTime: "", lastResult: "", lastDetail: "", goodTime: "" }); navigate("settings"); },
         "settings-loading": open("settings"),
         "games-setup": () => {
             baseData(); navigate("games"); gamesData(); live();
@@ -447,6 +449,7 @@ const PreviewScenes = (() => {
         "home-arrange-collapsed": () => { applySidebar(true); baseData(); homeData(); navigate("home"); homeLive(); $("arrangeButton").click(); },
         "focus-calendar-edit": () => { calendar("month")(); setTimeout(() => $("calCalendars").querySelector(".link-button")?.focus(), 80); },
         "focus-quick-actions": () => { commandsData(); commandsSections.show("quick"); setTimeout(() => $("quickActionEditor").querySelector(".drag-grip")?.focus(), 60); },
+        "notes-trash": open("notes", () => { const made = (id, title, days) => ({ id, title, type: "note", content: "text", pinned: false, created: "2026-11-01T00:00:00.000Z", updated: "2026-11-01T00:00:00.000Z", deletedAt: new Date(Date.now() - days * 86400000).toISOString() }); notesData.trash = [made("x1", "Shopping list", 0), made("x2", "Brave Fencer Musashi, an old walkthrough note with a long title that has to be cut short somewhere", 3), made("x3", "Meeting notes", 29.5)]; renderNotesList(); openNotesTrash(); }),
         "notes-find": open("notes", () => { $("notesFilter").value = "the"; $("notesFilter").dispatchEvent(new Event("input")); $("notesFilter").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); }),
         "notes-find-edit": open("notes", () => { $("noteEditButton").click(); $("notesFilter").value = "the"; $("notesFilter").dispatchEvent(new Event("input")); $("notesFilter").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); }),
         "settings-saved": () => { commandsData(); navigate("settings"); setPageSaveStatus("settingsStatus", savedAtNow()); },

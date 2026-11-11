@@ -59,7 +59,7 @@ let toastTimer = null;
 let launcherCommands = [];
 let launcherSelection = 0;
 let launcherPreviousFocus = null;
-let notesData = { version: 2, activeId: null, notes: [] };
+let notesData = { version: 2, activeId: null, notes: [], trash: [] };
 let notesLoaded = false;
 let lastHardwareSignature = null;
 let pendingNotices = [];
@@ -852,6 +852,40 @@ function saveSettingsAtOnce(source) {
 }
 SETTINGS_CONTROLS.forEach(id => $(id).addEventListener("change", () => saveSettingsAtOnce(id === "ascsSounds" ? "sounds" : "preferences")));
 
+// Backups (2.1.0): the daily backup, in Preferences. Its two settings save as
+// they change. The folder is never typed or sent from here: Maestro asks
+// Windows' folder picker for it and says what was chosen.
+let backupsState = null;
+
+function renderBackups() {
+    const backup = MaestroBackups.clean(backupsState);
+    const ready = backupsState !== null && !backup.off;
+    const time = $("backupsTime");
+    time.replaceChildren(...MaestroBackups.timeOptions(backup.time).map(option => new Option(option.label, option.value)));
+    time.value = backup.time;
+    time.disabled = !ready;
+    $("backupsEnabled").checked = backup.enabled;
+    $("backupsEnabled").disabled = !ready || !backup.folder;
+    $("backupsChoose").disabled = !ready;
+    $("backupsOpen").disabled = !ready || !backup.folder;
+    $("backupsNow").disabled = !ready || !backup.folder || backup.running;
+    $("backupsFolder").textContent = backup.folder || "No folder chosen";
+    const status = MaestroBackups.describe(backupsState);
+    $("backupsStatus").textContent = status.text;
+    $("backupsStatus").classList.toggle("is-failed", status.failed);
+}
+
+function saveBackups() {
+    if (backupsState === null) return;
+    setPageSaveStatus("settingsStatus", "Saving…");
+    if (!send("SaveBackups", `${$("backupsEnabled").checked ? "1" : "0"}|${$("backupsTime").value}`)) setPageSaveStatus("settingsStatus", "Unable to contact Maestro.");
+}
+$("backupsEnabled").addEventListener("change", saveBackups);
+$("backupsTime").addEventListener("change", saveBackups);
+$("backupsChoose").addEventListener("click", () => send("ChooseBackupsFolder"));
+$("backupsOpen").addEventListener("click", () => send("OpenBackupsFolder"));
+$("backupsNow").addEventListener("click", () => send("BackupNow"));
+
 // The other pages that keep a setting here.
 document.querySelectorAll("[data-pref-go]").forEach(button => button.addEventListener("click", () => {
     const [view, part] = button.dataset.prefGo.split(":");
@@ -890,6 +924,7 @@ function noteLabel(note) {
 }
 
 function renderNotesList() {
+    renderNotesTrash();
     const list = $("notesList");
     const query = $("notesFilter").value;
     const notes = [...notesData.notes]
@@ -1257,7 +1292,7 @@ function loadNotes(raw, recovered) {
 
     if (parsed && typeof parsed.content === "string" && !Array.isArray(parsed.notes)) {
         const migrated = makeNote(parsed.content, "Scratch");
-        notesData = { version: 2, activeId: migrated.id, notes: [migrated] };
+        notesData = { version: 2, activeId: migrated.id, notes: [migrated], trash: [] };
         notesLoaded = true;
         renderActiveNote();
         scheduleNoteSave();
@@ -1273,16 +1308,7 @@ function loadNotes(raw, recovered) {
         return;
     }
 
-    const validNotes = parsed.notes.every(note =>
-        note && typeof note.id === "string"
-        && typeof note.title === "string"
-        && ["note", "code", "snippet"].includes(note.type)
-        && (note.fill === undefined || typeof note.fill === "boolean")
-        && (note.group === undefined || typeof note.group === "string")
-        && typeof note.content === "string"
-        && typeof note.pinned === "boolean"
-        && typeof note.created === "string"
-        && typeof note.updated === "string");
+    const validNotes = parsed.notes.every(ASCSNotes.isNote);
     if (!validNotes) {
         showNotice("Saved notes contain an invalid note entry.");
         return;
@@ -1297,10 +1323,14 @@ function loadNotes(raw, recovered) {
         }
     });
     if (ASCSNotes.cleanGameLinks(parsed.notes)) migrated = true;
+    // 2.1.0: the trash, without what's had its 30 days or isn't a whole note.
+    const trash = ASCSNotes.cleanTrash(parsed.trash);
+    if (trash.changed) migrated = true;
     notesData = {
         version: 2,
         activeId: typeof parsed.activeId === "string" ? parsed.activeId : null,
-        notes: parsed.notes
+        notes: parsed.notes,
+        trash: trash.trash
     };
     if (migrated) scheduleNoteSave(false);
     if (!notesData.notes.some(note => note.id === notesData.activeId)) {
@@ -1345,20 +1375,120 @@ $("newNoteButton").addEventListener("click", () => {
     focusPrimaryInput("notes");
 });
 
-$("deleteNoteButton").addEventListener("click", async () => {
+// 2.1.0: Delete moves the note to the trash at once, with Undo on the toast, in
+// place of a dialog asking first. Only deleting from the trash is for good.
+function restoreTrashedNote(id) {
+    const note = ASCSNotes.restoreNote(notesData, id);
+    if (!note) return null;
+    notesData.activeId = note.id;
+    renderActiveNote();
+    scheduleNoteSave(false);
+    return note;
+}
+
+$("deleteNoteButton").addEventListener("click", () => {
     const note = activeNote();
     if (!note) return;
-    const confirmed = await confirmDialog({
-        title: `Delete "${noteLabel(note)}"?`,
-        message: "This permanently removes the note and its contents.",
-        confirmLabel: "Delete note",
-        danger: true
-    });
-    if (!confirmed || activeNote() !== note) return;
-    notesData.notes = notesData.notes.filter(item => item.id !== note.id);
+    const label = noteLabel(note);
+    const entry = ASCSNotes.trashNote(notesData, note.id);
     notesData.activeId = notesData.notes[0]?.id ?? null;
     renderActiveNote();
-    scheduleNoteSave();
+    scheduleNoteSave(false);
+    if (entry) showToast(`Deleted "${label}". It's in the trash for ${ASCSNotes.TRASH_DAYS} days.`, { label: "Undo", run: () => restoreTrashedNote(entry.id) });
+});
+
+function trashedWhen(entry) {
+    const days = ASCSNotes.trashDaysLeft(entry);
+    const date = new Date(entry.deletedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return `Deleted ${date} · ${days === 1 ? "1 day left" : `${days} days left`}`;
+}
+
+// The Trash button at the foot of the list shows only while there's something
+// in it; the open dialog follows the list, and closes when the last note leaves.
+function renderNotesTrash() {
+    const count = notesData.trash.length;
+    $("notesTrashButton").hidden = !count;
+    $("notesTrashButton").textContent = `Trash · ${count}`;
+    if ($("notesTrashDialog").hidden) return;
+    if (!count) {
+        closeNotesTrash();
+        return;
+    }
+    $("notesTrashList").replaceChildren(...notesData.trash.map(entry => {
+        const row = element("div", "settings-row notes-trash-row");
+        const text = element("span");
+        const title = element("strong", "", noteLabel(entry));
+        title.title = noteLabel(entry);      // a long one is cut short in the row
+        text.append(title, element("small", "", trashedWhen(entry)));
+        const restore = element("button", "secondary", "Restore");
+        restore.type = "button";
+        restore.addEventListener("click", () => {
+            const note = restoreTrashedNote(entry.id);
+            if (note) showToast(`Restored "${noteLabel(note)}".`);
+            if (!$("notesTrashDialog").hidden) $("notesTrashDone").focus();
+        });
+        const remove = element("button", "secondary danger", "Delete forever");
+        remove.type = "button";
+        remove.addEventListener("click", async () => {
+            const confirmed = await confirmDialog({
+                title: `Delete "${noteLabel(entry)}" forever?`,
+                message: "It can't be brought back.",
+                confirmLabel: "Delete forever",
+                danger: true
+            });
+            if (!confirmed || !ASCSNotes.removeTrashed(notesData, entry.id)) return;
+            scheduleNoteSave(false);
+            if (!$("notesTrashDialog").hidden) $("notesTrashDone").focus();
+        });
+        row.append(text, restore, remove);
+        return row;
+    }));
+}
+
+function openNotesTrash() {
+    if (!notesData.trash.length) return;
+    $("notesTrashDialog").hidden = false;
+    renderNotesTrash();
+    $("notesTrashDone").focus();
+}
+
+function closeNotesTrash() {
+    $("notesTrashDialog").hidden = true;
+    if ($("notes").classList.contains("active")) ($("notesTrashButton").hidden ? $("newNoteButton") : $("notesTrashButton")).focus();
+}
+
+$("notesTrashButton").addEventListener("click", openNotesTrash);
+$("notesTrashClose").addEventListener("click", closeNotesTrash);
+$("notesTrashDone").addEventListener("click", closeNotesTrash);
+$("notesTrashEmpty").addEventListener("click", async () => {
+    const count = notesData.trash.length;
+    const confirmed = await confirmDialog({
+        title: "Empty the trash?",
+        message: count === 1 ? "1 note will be deleted for good." : `${count} notes will be deleted for good.`,
+        confirmLabel: "Empty trash",
+        danger: true
+    });
+    if (!confirmed) return;
+    notesData.trash = [];
+    scheduleNoteSave(false);
+});
+let trashPressedBackdrop = false;
+$("notesTrashDialog").addEventListener("pointerdown", event => { trashPressedBackdrop = event.target === $("notesTrashDialog"); });
+$("notesTrashDialog").addEventListener("click", event => {
+    if (event.target === $("notesTrashDialog") && trashPressedBackdrop) closeNotesTrash();
+    trashPressedBackdrop = false;
+});
+$("notesTrashDialog").addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+        event.preventDefault();
+        closeNotesTrash();
+    } else if (event.key === "Tab") {
+        const focusable = [...$("notesTrashDialog").querySelectorAll("button:not(:disabled)")];
+        const step = event.shiftKey ? -1 : 1;
+        const index = Math.max(focusable.indexOf(document.activeElement), event.shiftKey ? 0 : -1);
+        event.preventDefault();
+        focusable[(index + step + focusable.length) % focusable.length].focus();
+    }
 });
 
 $("notesFilter").addEventListener("input", renderNotesList);
@@ -1855,6 +1985,18 @@ function handleWebMessage(event) {
             setAlmanacStatus(typeof data.message === "string" ? data.message : "Saved.");
             $("calCountdownDialog").hidden = true;
             break;
+        case "backups":
+            backupsState = data;
+            renderBackups();
+            renderTopStatus();
+            break;
+        case "backupsSaved":
+            if (data.ok === true) setPageSaveStatus("settingsStatus", savedAtNow());
+            else {
+                setPageSaveStatus("settingsStatus", "Not saved");
+                showToast(typeof data.message === "string" ? data.message : "That backup setting wasn't saved.");
+            }
+            break;
         case "settingsSaved":
             if (pendingKeySelection) keymapSelected = pendingKeySelection;
             pendingKeySelection = null;
@@ -2237,7 +2379,7 @@ function updateSystemStatus(data) {
 
 function attentionItems() {
     const page = unseenPageErrors ? [MaestroAttention.pageError(unseenPageErrors, lastPageError)] : [];
-    return [...page, ...resourceAttention];
+    return [...page, ...MaestroBackups.attention(backupsState), ...resourceAttention];
 }
 
 function renderTopStatus() {
@@ -2260,6 +2402,10 @@ const ATTENTION_ACTIONS = {
             navigate("dashboard");
             systemSections.show("live");
         }
+    },
+    backups: {
+        label: "Open Preferences",
+        run: () => navigate("settings")
     },
     log: {
         label: "View log",

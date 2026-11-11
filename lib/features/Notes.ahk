@@ -102,6 +102,7 @@ SaveNotes(content) {
         try {
             CheckNoteGroups(content)            ; 1.8.0: groups are checked here too
             CheckNoteGames(content)             ; 1.11.1: and links to games
+            CheckNoteTrash(content)             ; 2.1.0: and a trashed note's time
         } catch as err {
             WriteLog("Notes not saved: " err.Message)
             SendNotesError("Notes weren't saved: " err.Message " The previous file was kept.")

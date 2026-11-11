@@ -1,6 +1,7 @@
 # The Maestro command line, run through C:\Scripts\maestro.cmd: maestro <command> [options]
 # To add a command: write a function, then add it to $Commands below.
 # Keep this file ASCII. Only `try` starts or closes Maestro, and it never commits.
+# Only `restore-data` changes the data folder, and only with Maestro closed.
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)][string]$Command = 'help',
@@ -11,7 +12,7 @@ $Repo = if ($env:ASCS_REPO) { $env:ASCS_REPO } else { 'C:\ASCS' }
 $Repo = [IO.Path]::GetFullPath($Repo).TrimEnd('\')
 $Main = 'master'
 $AhkExe = Join-Path $env:ProgramFiles 'AutoHotkey\v2\AutoHotkey64.exe'
-$Backups = if ($env:ASCS_BACKUPS) { $env:ASCS_BACKUPS } else { Join-Path $env:LOCALAPPDATA 'Aeolionware\ASCS-Backups' }
+$StatusFile = 'backup-status.ini'
 $TestMarker = 'test-build.txt'
 # Rebuilt by WebView2, so never worth copying.
 $CacheFolders = @('Cache', 'Code Cache', 'GPUCache', 'DawnWebGPUCache', 'DawnGraphiteCache', 'GrShaderCache', 'ShaderCache', 'component_crx_cache')
@@ -91,9 +92,13 @@ function Start-Build([string]$folder) {
     Start-Process $AhkExe -ArgumentList "`"$(Join-Path $folder 'ASCS.ahk')`"" -WorkingDirectory $folder | Out-Null
 }
 
-# Copies a data folder without WebView2's caches. True when every file copied.
-function Copy-DataFolder([string]$from, [string]$to) {
-    $arguments = @($from, $to, '/E', '/R:1', '/W:1', '/NFL', '/NDL', '/NJH', '/NJS', '/NP', '/XD') + $CacheFolders
+# Copies a data folder without WebView2's caches, its network state (cookies it
+# keeps locked while Maestro runs, and nothing of yours) or the backup status
+# file. True when every file copied. -Mirror also removes what the copy lacks.
+function Copy-DataFolder([string]$from, [string]$to, [switch]$Mirror) {
+    $mode = if ($Mirror) { '/MIR' } else { '/E' }
+    $arguments = @($from, $to, $mode, '/R:1', '/W:1', '/NFL', '/NDL', '/NJH', '/NJS', '/NP', '/XF', $StatusFile, '/XD') +
+        $CacheFolders + @(Join-Path $from 'WebView2\EBWebView\Default\Network')
     & robocopy @arguments | Out-Null
     $code = $LASTEXITCODE
     $global:LASTEXITCODE = 0
@@ -465,25 +470,236 @@ function Invoke-Try([string[]]$options) {
     Write-Host 'To go back: maestro try --end'
 }
 
-# ---- backup-data
+# ---- backup-data and restore-data
+
+# One value from an .ini file, or ''. Maestro writes its settings as UTF-16,
+# which Get-Content reads by the file's mark.
+function Get-IniValue([string]$file, [string]$section, [string]$key) {
+    if (-not (Test-Path -LiteralPath $file)) { return '' }
+    $inside = $false
+    foreach ($line in (Get-Content -LiteralPath $file)) {
+        if ($line -match '^\s*\[(.*)\]\s*$') { $inside = $Matches[1] -ieq $section; continue }
+        if ($inside -and $line -match '^\s*([^=;]+?)\s*=(.*)$' -and $Matches[1] -ieq $key) { return $Matches[2].Trim() }
+    }
+    return ''
+}
+
+# Why a folder can't hold backups, or '' when it can. A backup holds the secrets
+# file, so only a drive inside this PC will do, and never a folder git watches.
+function Test-BackupsFolder([string]$folder) {
+    if ($folder -notmatch '^[A-Za-z]:\\') { return "$folder isn't a full path on a drive of this PC." }
+    try { $full = [IO.Path]::GetFullPath($folder).TrimEnd('\') } catch { return "$folder isn't a usable path." }
+    $drive = [IO.DriveInfo]::new($full.Substring(0, 2) + '\')
+    if (-not $drive.IsReady) { return "Drive $($full.Substring(0, 2)) isn't available." }
+    if ($drive.DriveType -ne 'Fixed') { return "$folder isn't on a drive inside this PC." }
+    # Second checkouts too, when git can say where they are: a backup must be
+    # made even where git can't run.
+    $folders = @($Repo)
+    try {
+        $folders += @(& git -C $Repo worktree list --porcelain 2>$null | Where-Object { $_ -like 'worktree *' } |
+            ForEach-Object { [IO.Path]::GetFullPath($_.Substring(9)).TrimEnd('\') })
+    } catch { }
+    $global:LASTEXITCODE = 0
+    foreach ($checkout in $folders) {
+        if ((Test-SamePath $full $checkout) -or $full.StartsWith("$checkout\", [StringComparison]::OrdinalIgnoreCase)) { return "$folder is inside Maestro's own folder." }
+    }
+    return ''
+}
+
+# Where backups go: the folder set in Maestro. Throws when none is set or it
+# can't be used, so a backup never lands anywhere you didn't choose.
+function Get-BackupsFolder {
+    if ($env:ASCS_BACKUPS) { return $env:ASCS_BACKUPS }
+    $set = Get-IniValue (Join-Path $Repo 'data\settings.ini') 'Backups' 'Folder'
+    if (-not $set) { throw 'No backups folder is set. Choose one in Maestro, under Preferences > Backups.' }
+    $problem = Test-BackupsFolder $set
+    if ($problem) { throw "The backups folder in your settings can't be used. $problem" }
+    return [IO.Path]::GetFullPath($set).TrimEnd('\')
+}
+
+# What Maestro reads to say when the last backup was, and whether it worked.
+# Times are yyyyMMddHHmmss, which AutoHotkey reads as they are.
+function Set-BackupStatus([string]$result, [string]$detail, [string]$folder = '') {
+    try {
+        $file = Join-Path $Repo "data\$StatusFile"
+        $now = Get-Date -Format 'yyyyMMddHHmmss'
+        $goodTime = if ($result -eq 'ok') { $now } else { Get-IniValue $file 'Backup' 'GoodTime' }
+        $goodFolder = if ($result -eq 'ok') { $folder } else { Get-IniValue $file 'Backup' 'GoodFolder' }
+        $lines = '[Backup]', "Time=$now", "Result=$result", "Detail=$($detail -replace '\s+', ' ')", "GoodTime=$goodTime", "GoodFolder=$goodFolder"
+        [IO.File]::WriteAllLines($file, [string[]]$lines, [Text.UnicodeEncoding]::new($false, $true))
+    } catch {
+        Write-Host "WARNING: couldn't record the result for Maestro: $($_.Exception.Message)"
+    }
+}
+
+# Copies a data folder into $backups as <prefix>-<date>-<time>. The folder only
+# gets that name once every file has copied, so a partial copy is never taken
+# for a backup. Returns the new folder, or throws.
+function New-Backup([string]$source, [string]$backups, [string]$prefix) {
+    [IO.Directory]::CreateDirectory($backups) | Out-Null
+    do {
+        $name = "$prefix-" + (Get-Date -Format 'yyyyMMdd-HHmmss')
+        $final = Join-Path $backups $name
+        $taken = (Test-Path -LiteralPath $final) -or (Test-Path -LiteralPath "$final.partial")
+        if ($taken) { Start-Sleep -Milliseconds 500 }
+    } while ($taken)
+    $partial = "$final.partial"
+    [IO.Directory]::CreateDirectory($partial) | Out-Null
+    if (-not (Copy-DataFolder $source $partial)) {
+        try { [IO.Directory]::Delete($partial, $true) } catch { }
+        throw "Some files couldn't be copied to $backups, so no backup was made."
+    }
+    [IO.Directory]::Move($partial, $final)
+    return $final
+}
+
+# Which of a backups folder's own folders have had their day. Kept: every backup
+# from the newest day, the newest from each of the 14 newest days, the first
+# from each of the 6 newest months, and the 3 newest copies made before a
+# restore. A partial copy left by an earlier day's run goes too.
+function Get-ExpiredBackups([string[]]$names, [string]$today) {
+    $keep = [Collections.Generic.HashSet[string]]::new()
+    $all = @($names | Where-Object { $_ -match '^data-\d{8}-\d{6}$' } | Sort-Object -Descending)
+    $days = [Collections.Generic.List[string]]::new()
+    $months = [Collections.Generic.List[string]]::new()
+    foreach ($name in $all) {
+        $day = $name.Substring(5, 8)
+        if ($day -eq $all[0].Substring(5, 8)) { [void]$keep.Add($name) }
+        if (-not $days.Contains($day)) {
+            $days.Add($day)
+            if ($days.Count -le 14) { [void]$keep.Add($name) }
+        }
+        if (-not $months.Contains($day.Substring(0, 6))) { $months.Add($day.Substring(0, 6)) }
+    }
+    foreach ($month in ($months | Select-Object -First 6)) {
+        [void]$keep.Add(($all | Where-Object { $_.Substring(5, 6) -eq $month } | Select-Object -Last 1))
+    }
+    $before = @($names | Where-Object { $_ -match '^before-restore-\d{8}-\d{6}$' } | Sort-Object -Descending)
+    foreach ($name in ($before | Select-Object -First 3)) { [void]$keep.Add($name) }
+    $partials = @($names | Where-Object { $_ -match '^(data|before-restore)-(\d{8})-\d{6}\.partial$' -and $Matches[2] -ne $today })
+    return @($all + $before | Where-Object { -not $keep.Contains($_) }) + $partials
+}
+
+# Only ever removes folders named like this command's own.
+function Remove-ExpiredBackups([string]$backups) {
+    $names = @(Get-ChildItem -LiteralPath $backups -Directory | ForEach-Object { $_.Name })
+    $expired = @(Get-ExpiredBackups $names (Get-Date -Format 'yyyyMMdd'))
+    foreach ($name in $expired) { [IO.Directory]::Delete((Join-Path $backups $name), $true) }
+    return $expired.Count
+}
 
 function Invoke-BackupData {
     $source = Join-Path $Repo 'data'
     if (-not (Test-Path -LiteralPath $source)) { Stop-WithError "There's no data folder at $source." }
-    $target = Join-Path $Backups ('data-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
-    New-Item -ItemType Directory -Force $target | Out-Null
-    Write-Host "Copying $source to $target"
-    $complete = Copy-DataFolder $source $target
-    $files = @(Get-ChildItem -LiteralPath $target -Recurse -File)
+    try {
+        $backups = Get-BackupsFolder
+        Write-Host "Copying $source to $backups"
+        $made = New-Backup $source $backups 'data'
+    } catch {
+        Set-BackupStatus 'failed' $_.Exception.Message
+        Stop-WithError $_.Exception.Message
+    }
+    $files = @(Get-ChildItem -LiteralPath $made -Recurse -File)
     $size = ($files | Measure-Object Length -Sum).Sum
-    Write-Host ('{0:N0} files, {1:N1} MB. It includes your secrets file, so keep it on this PC.' -f $files.Count, ($size / 1MB))
-    if (-not $complete) { Write-Host 'WARNING: some files were in use and were skipped. Exit Maestro from the tray for a complete copy.' }
+    Write-Host ('{0}: {1:N0} files, {2:N1} MB. It includes your secrets file, so keep it on this PC.' -f (Split-Path $made -Leaf), $files.Count, ($size / 1MB))
+    Set-BackupStatus 'ok' ('{0:N0} files, {1:N1} MB' -f $files.Count, ($size / 1MB)) $made
+    try {
+        $removed = Remove-ExpiredBackups $backups
+        if ($removed) { Write-Host "Removed $removed older backup(s)." }
+    } catch {
+        Write-Host "WARNING: an older backup couldn't be removed: $($_.Exception.Message)"
+    }
+}
 
-    # Keeps the newest ten, and only ever removes folders named like its own.
-    $old = @(Get-ChildItem -LiteralPath $Backups -Directory | Where-Object { $_.Name -match '^data-\d{8}-\d{6}$' } | Sort-Object Name -Descending | Select-Object -Skip 10)
-    foreach ($folder in $old) { [IO.Directory]::Delete($folder.FullName, $true) }
-    if ($old.Count) { Write-Host "Removed $($old.Count) older backup(s)." }
-    if (-not $complete) { exit 1 }
+# Second checkouts holding a test build's copy of the data. A backup or a restore
+# never touches one: both work on the real data.
+function Get-TestCopies {
+    return @(Get-Checkouts | Where-Object { -not (Test-SamePath $_.Path $Repo) } | ForEach-Object { Join-Path $_.Path 'data' } |
+        Where-Object { Test-Path -LiteralPath (Join-Path $_ $TestMarker) })
+}
+
+function Write-TestCopyNote {
+    foreach ($copy in (Get-TestCopies)) {
+        Write-Host "Note: $copy is a test build's copy of your data. It isn't touched: this is about your real data, in $(Join-Path $Repo 'data')."
+    }
+}
+
+# A backups folder's backups, newest first.
+function Get-Backups([string]$backups) {
+    if (-not (Test-Path -LiteralPath $backups)) { return @() }
+    $found = foreach ($folder in (Get-ChildItem -LiteralPath $backups -Directory)) {
+        if ($folder.Name -notmatch '^(data|before-restore)-(\d{8}-\d{6})$') { continue }
+        $when = [datetime]::ParseExact($Matches[2], 'yyyyMMdd-HHmmss', [cultureinfo]::InvariantCulture)
+        [pscustomobject]@{
+            Name = $folder.Name; Path = $folder.FullName; Stamp = $Matches[2]; BeforeRestore = $Matches[1] -ne 'data'
+            When = $when.ToString('ddd, MMM d, yyyy, h:mm tt', [cultureinfo]::InvariantCulture)
+        }
+    }
+    return @($found | Sort-Object Stamp -Descending)
+}
+
+function Invoke-RestoreData([string[]]$options) {
+    $yes = $false; $named = ''
+    foreach ($option in $options) {
+        switch -Regex ($option) {
+            '^(--yes|-y)$' { $yes = $true; break }
+            '^-' { Stop-WithError "restore-data doesn't know $option. See: maestro help" }
+            default { if ($named) { Stop-WithError 'Name one backup at most.' }; $named = $option }
+        }
+    }
+    try { $backups = Get-BackupsFolder } catch { Stop-WithError $_.Exception.Message }
+    $list = @(Get-Backups $backups)
+
+    if (-not $named) {
+        if (-not $list.Count) { Write-Host "There are no backups in $backups yet. Make one with: maestro backup-data"; return }
+        Write-Host "Backups in ${backups}, newest first:"
+        $number = 0
+        foreach ($backup in $list) {
+            $number++
+            $note = if ($backup.BeforeRestore) { '   (your data just before a restore)' } else { '' }
+            Write-Host ('  {0,2}  {1}{2}' -f $number, $backup.When, $note)
+        }
+        Write-Host 'To restore one, exit Maestro from its tray icon, then: maestro restore-data <number>'
+        Write-TestCopyNote
+        return
+    }
+
+    $chosen = if ($named -match '^\d{1,3}$') { if ([int]$named -ge 1 -and [int]$named -le $list.Count) { $list[[int]$named - 1] } }
+    else { $list | Where-Object { $_.Name -ieq $named } | Select-Object -First 1 }
+    if (-not $chosen) { Stop-WithError "There's no backup $named. List them with: maestro restore-data" }
+    if (-not ((Test-Path -LiteralPath (Join-Path $chosen.Path 'notes.json')) -or (Test-Path -LiteralPath (Join-Path $chosen.Path 'settings.ini')))) {
+        Stop-WithError "$($chosen.Path) has no notes or settings in it, so it was left alone."
+    }
+    $data = Join-Path $Repo 'data'
+    if (Test-Path -LiteralPath (Join-Path $data $TestMarker)) { Stop-WithError "$data is a test build's copy. End the test first: maestro try --end" }
+    # Maestro saves as it goes, so a restore under a running one wouldn't last.
+    if (@(Get-RunningBuilds).Count) { Stop-WithError 'Maestro is running, and nothing was changed. Exit it from its tray icon, then run this again.' }
+
+    Write-Host "This puts back your data from $($chosen.When):"
+    Write-Host "  everything in $data is replaced by that copy, secrets file included."
+    Write-Host "  Your data as it is now is copied to $backups first."
+    Write-TestCopyNote
+    if (-not $yes) {
+        Write-Host -NoNewline 'Go ahead? [y/N] '
+        $answer = [Console]::ReadLine()
+        if ($answer -notmatch '^(y|yes)$') {
+            Write-Host 'Stopped. Nothing was changed.'
+            return
+        }
+    }
+
+    $saved = ''
+    if (Test-Path -LiteralPath $data) {
+        try { $saved = New-Backup $data $backups 'before-restore' }
+        catch { Stop-WithError "Your data as it is now couldn't be copied first, so nothing was restored. $($_.Exception.Message)" }
+        Write-Host "Kept your data as it was in $saved"
+    }
+    if (-not (Copy-DataFolder $chosen.Path $data -Mirror)) {
+        $where = if ($saved) { " Your data from before is in $saved." } else { '' }
+        Stop-WithError "Some files couldn't be put back, so your data may be part old and part new.$where"
+    }
+    try { Remove-ExpiredBackups $backups | Out-Null } catch { }
+    Write-Host "Restored the data from $($chosen.When). Start Maestro again to use it."
 }
 
 # ---- help
@@ -508,8 +724,17 @@ maestro <command> [options]
       Closes the test build, deletes the copy, and starts your real Maestro.
 
   backup-data
-      Copies your data folder to your private app data folder, keeping the
-      newest ten copies. Each includes your secrets file.
+      Copies your data folder to the backups folder set in Maestro, under
+      Preferences > Backups. Keeps every copy from the newest day, one from
+      each of the 14 newest days and the first from each of the 6 newest
+      months. Each includes your secrets file.
+
+  restore-data
+      Lists your backups, newest first.
+  restore-data <number or name> [--yes]
+      Puts one back, replacing your data folder, after copying your data as it
+      is now to the backups folder. Maestro must be closed. Asks first.
+        --yes, -y       Don't ask
 
   cut-release [branch] [--dry-run] [--yes]
       Pushes the branch with the newest commit (or the one named), switches
@@ -530,6 +755,7 @@ $Commands = @{
     'check'       = { Invoke-Check $Rest }
     'try'         = { Invoke-Try $Rest }
     'backup-data' = { Invoke-BackupData }
+    'restore-data' = { Invoke-RestoreData $Rest }
     'cut-release' = { Invoke-CutRelease $Rest }
     'help'        = { Invoke-Help }
 }

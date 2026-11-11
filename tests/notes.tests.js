@@ -233,4 +233,80 @@
     equal("find: capped", N.findMatches("a".repeat(50), "a", 10).length, 10);
     equal("find: beyond the basic plane", spans("note 🎵 here 🎵", "🎵"), "🎵|🎵");
     equal("find: markup stays text", spans("<b>x</b>", "<b>"), "<b>");
+    // 2.1.0: the trash.
+    (function () {
+        const N = globalThis.ASCSNotes;
+        const now = new Date("2026-11-10T20:00:00.000Z");
+        const note = (id, extra = {}) => ({ id, title: `Note ${id}`, type: "note", content: "text", pinned: false, created: "2026-11-01T00:00:00.000Z", updated: "2026-11-02T00:00:00.000Z", ...extra });
+        const daysAgo = days => new Date(now.getTime() - days * 86400000).toISOString();
+
+        check("a whole note is a note", N.isNote(note("a")));
+        check("one without its content isn't", !N.isNote({ ...note("a"), content: undefined }));
+        check("nothing isn't", !N.isNote(null) && !N.isNote("note"));
+
+        let data = { notes: [note("a"), note("b", { pinned: true, group: "Work", game: "zelda" }), note("c")], trash: [] };
+        const entry = N.trashNote(data, "b", now);
+        equal("a deleted note leaves the notes", data.notes.map(item => item.id).join(), "a,c");
+        equal("and is in the trash, whole, with when", JSON.stringify(data.trash), JSON.stringify([{ ...note("b", { pinned: true, group: "Work", game: "zelda" }), deletedAt: "2026-11-10T20:00:00.000Z" }]));
+        check("which is what's handed back", entry === data.trash[0]);
+        equal("a note that isn't there changes nothing", N.trashNote(data, "nope", now), undefined);
+        equal("so the notes are as they were", data.notes.length + data.trash.length, 3);
+        N.trashNote(data, "a", new Date(now.getTime() + 1000));
+        equal("the newest deletion is first", data.trash.map(item => item.id).join(), "a,b");
+
+        data = { notes: [note("blank", { title: "  ", content: "\n " }), note("titled", { content: "" })], trash: [] };
+        equal("an empty note is only removed", N.trashNote(data, "blank", now), null);
+        equal("leaving nothing in the trash", data.notes.length + data.trash.length, 1);
+        check("a note with only a title is kept", N.trashNote(data, "titled", now) !== null && data.trash.length === 1);
+
+        data = { notes: [note("a")], trash: [{ ...note("b", { pinned: true, group: "Work" }), deletedAt: daysAgo(3) }] };
+        const back = N.restoreNote(data, "b");
+        equal("a restored note is among the notes again", data.notes.map(item => item.id).join(), "a,b");
+        equal("exactly as it was", JSON.stringify(back), JSON.stringify(note("b", { pinned: true, group: "Work" })));
+        equal("and out of the trash", data.trash.length, 0);
+        equal("restoring one that isn't there does nothing", N.restoreNote(data, "b"), null);
+
+        data = { notes: [note("new", { game: "zelda" })], trash: [{ ...note("old", { game: "zelda" }), deletedAt: daysAgo(1) }, { ...note("other", { game: "metroid" }), deletedAt: daysAgo(1) }] };
+        equal("a game's old note comes back unlinked when the game has a new one", N.restoreNote(data, "old").game, undefined);
+        equal("and linked when it doesn't", N.restoreNote(data, "other").game, "metroid");
+        data = { notes: [note("a")], trash: [{ ...note("a", { content: "older" }), deletedAt: daysAgo(1) }] };
+        const twin = N.restoreNote(data, "a");
+        check("a restored note never takes the id of a note that's there", twin.id !== "a" && new Set(data.notes.map(item => item.id)).size === 2);
+
+        data = { notes: [], trash: [{ ...note("a"), deletedAt: daysAgo(1) }, { ...note("b"), deletedAt: daysAgo(2) }] };
+        check("a trashed note can be deleted for good", N.removeTrashed(data, "a") && data.trash.map(item => item.id).join() === "b");
+        check("one that isn't there can't", !N.removeTrashed(data, "a") && data.trash.length === 1);
+
+        equal("30 days are left on the day it's deleted", N.trashDaysLeft({ deletedAt: now.toISOString() }, now), 30);
+        equal("29 and a bit is still 30", N.trashDaysLeft({ deletedAt: daysAgo(0.5) }, now), 30);
+        equal("1 on its last day", N.trashDaysLeft({ deletedAt: daysAgo(29.5) }, now), 1);
+        equal("never less than 1", N.trashDaysLeft({ deletedAt: daysAgo(40) }, now), 1);
+
+        const saved = [
+            { ...note("old"), deletedAt: daysAgo(31) },
+            { ...note("kept"), deletedAt: daysAgo(29.9) },
+            { ...note("newer"), deletedAt: daysAgo(1) },
+            { ...note("notime") },
+            { ...note("badtime"), deletedAt: "yesterday" },
+            { id: "broken", deletedAt: daysAgo(1) },
+            null,
+            "junk"
+        ];
+        let cleaned = N.cleanTrash(saved, now);
+        equal("after 30 days a trashed note is gone, and anything broken with it", cleaned.trash.map(item => item.id).join(), "newer,kept");
+        check("which needs saving", cleaned.changed);
+        cleaned = N.cleanTrash(cleaned.trash, now);
+        check("a clean trash doesn't", !cleaned.changed && cleaned.trash.length === 2);
+        check("a file from before the trash has an empty one, with nothing to save", N.cleanTrash(undefined, now).trash.length === 0 && !N.cleanTrash(undefined, now).changed);
+        check("a trash that isn't a list is emptied, and saved", N.cleanTrash({ a: 1 }, now).trash.length === 0 && N.cleanTrash({ a: 1 }, now).changed);
+        cleaned = N.cleanTrash([{ ...note("s", { type: "snippet", game: "not a key!" }), deletedAt: daysAgo(1) }], now);
+        check("an old snippet in the trash becomes code, and a bad game link is dropped", cleaned.trash[0].type === "code" && cleaned.trash[0].game === undefined && cleaned.changed);
+        const many = Array.from({ length: 205 }, (_, index) => ({ ...note(`n${index}`), deletedAt: new Date(now.getTime() - index * 60000).toISOString() }));
+        cleaned = N.cleanTrash(many, now);
+        check("the trash holds 200 at most, the newest", cleaned.trash.length === 200 && cleaned.trash[0].id === "n0" && cleaned.trash[199].id === "n199");
+        data = { notes: [note("x")], trash: cleaned.trash };
+        N.trashNote(data, "x", now);
+        check("and a 201st pushes the oldest out", data.trash.length === 200 && data.trash[0].id === "x" && data.trash[199].id === "n198");
+        check("hostile text in a trashed note is only ever data", N.cleanTrash([{ ...note("h", { title: "<img src=x onerror=alert(1)>", content: "<script>alert(1)</script>" }), deletedAt: daysAgo(1) }], now).trash[0].title === "<img src=x onerror=alert(1)>");
+    })();
 })();

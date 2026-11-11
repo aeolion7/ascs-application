@@ -206,21 +206,126 @@ Add-Check 'check: elsewhere it uses the main one' ($run.code -eq 0) $run.text
 
 # ---- backup-data
 $r = New-TestRepo backup
-[IO.Directory]::CreateDirectory("$($r.work)\data\WebView2\Default\Code Cache") | Out-Null
-[IO.Directory]::CreateDirectory("$($r.work)\data\WebView2\Default\Local Storage") | Out-Null
-Set-Content "$($r.work)\data\notes.json" '{}'
-Set-Content "$($r.work)\data\WebView2\Default\Code Cache\junk" 'x'
-Set-Content "$($r.work)\data\WebView2\Default\Local Storage\prefs" 'keep'
-$run = Invoke-Cli $r @('backup-data')
+$data = "$($r.work)\data"
+[IO.Directory]::CreateDirectory("$data\WebView2\Default\Code Cache") | Out-Null
+[IO.Directory]::CreateDirectory("$data\WebView2\Default\Local Storage") | Out-Null
+[IO.Directory]::CreateDirectory("$data\WebView2\EBWebView\Default\Network") | Out-Null
+Set-Content "$data\notes.json" '{}'
+Set-Content "$data\WebView2\Default\Code Cache\junk" 'x'
+Set-Content "$data\WebView2\Default\Local Storage\prefs" 'keep'
+Set-Content "$data\WebView2\EBWebView\Default\Network\Cookies" 'x'
+function Get-Status([string]$key) { ((Get-Content "$data\backup-status.ini") -match "^$key=") -replace "^$key=", '' }
+
+# WebView2 keeps its cookies locked while Maestro runs, which mustn't fail a backup.
+$lock = [IO.File]::Open("$data\WebView2\EBWebView\Default\Network\Cookies", 'Open', 'Read', 'None')
+try { $run = Invoke-Cli $r @('backup-data') } finally { $lock.Dispose() }
 $made = @(Get-ChildItem $env:ASCS_BACKUPS -Directory)
 Add-Check 'backup: makes a dated copy' ($run.code -eq 0 -and $made.Count -eq 1 -and $made[0].Name -match '^data-\d{8}-\d{6}$' -and (Test-Path "$($made[0].FullName)\notes.json")) $run.text
 Add-Check 'backup: keeps local storage and skips caches' ((Test-Path "$($made[0].FullName)\WebView2\Default\Local Storage\prefs") -and -not (Test-Path "$($made[0].FullName)\WebView2\Default\Code Cache"))
+Add-Check 'backup: skips the locked network state' (-not (Test-Path "$($made[0].FullName)\WebView2\EBWebView\Default\Network"))
 Add-Check 'backup: warns about the secrets file' ($run.text -match 'secrets') $run.text
-1..11 | ForEach-Object { [IO.Directory]::CreateDirectory("$env:ASCS_BACKUPS\data-2020010$($_ % 10)-00000$($_ % 10)") | Out-Null }
-[IO.Directory]::CreateDirectory("$env:ASCS_BACKUPS\keep-me") | Out-Null
+Add-Check 'backup: records a good result for Maestro' ((Get-Status Result) -eq 'ok' -and (Get-Status GoodTime) -match '^\d{14}$' -and (Get-Status GoodFolder) -eq $made[0].FullName) (Get-Content "$data\backup-status.ini" -Raw)
+Add-Check 'backup: the status file stays out of the copy' (-not (Test-Path "$($made[0].FullName)\backup-status.ini"))
+Add-Check 'backup: Maestro can read the status file' ([IO.File]::ReadAllBytes("$data\backup-status.ini")[0] -eq 0xFF)
+
+# A file of yours that can't be read: no backup is left half made.
+$goodTime = Get-Status GoodTime
+$lock = [IO.File]::Open("$data\notes.json", 'Open', 'Read', 'None')
+try { $run = Invoke-Cli $r @('backup-data') } finally { $lock.Dispose() }
+Add-Check 'backup: a file that cannot be copied fails it' ($run.code -ne 0 -and $run.text -match 'no backup was made') $run.text
+Add-Check 'backup: and leaves nothing half made' (@(Get-ChildItem $env:ASCS_BACKUPS -Directory).Count -eq 1)
+Add-Check 'backup: and records the failure, keeping the last good time' ((Get-Status Result) -eq 'failed' -and (Get-Status GoodTime) -eq $goodTime -and (Get-Status GoodFolder) -eq $made[0].FullName) (Get-Content "$data\backup-status.ini" -Raw)
+
+# What's kept: every copy from the newest day, the newest from each of the 14
+# newest days, the first from each of the 6 newest months.
+$kept = $env:ASCS_BACKUPS
+$env:ASCS_BACKUPS = Join-Path $scratch 'retention'
+$fakes = @(1..16 | ForEach-Object { 'data-202002{0:d2}-090000' -f $_ }) + 'data-20200216-080000' +
+    @('201906', '201907', '201908', '201909', '201910', '201911', '201912', '202001' | ForEach-Object { "data-${_}01-000000" }) +
+    @(1..5 | ForEach-Object { "before-restore-2020010$_-000000" }) + 'data-20200101-000000.partial' + 'keep-me' + 'data-old'
+$fakes | ForEach-Object { [IO.Directory]::CreateDirectory("$env:ASCS_BACKUPS\$_") | Out-Null }
 $run = Invoke-Cli $r @('backup-data')
-Add-Check 'backup: keeps the newest ten' (@(Get-ChildItem $env:ASCS_BACKUPS -Directory -Filter 'data-*').Count -eq 10) $run.text
-Add-Check 'backup: leaves other folders alone' (Test-Path "$env:ASCS_BACKUPS\keep-me")
+$left = @(Get-ChildItem $env:ASCS_BACKUPS -Directory | ForEach-Object { $_.Name })
+$today = @($left | Where-Object { $_ -like "data-$(Get-Date -Format 'yyyyMMdd')-*" })
+$expected = @($today) + @(4..16 | ForEach-Object { 'data-202002{0:d2}-090000' -f $_ }) + 'data-20200201-090000' +
+    @('201910', '201911', '201912', '202001' | ForEach-Object { "data-${_}01-000000" }) +
+    @(3..5 | ForEach-Object { "before-restore-2020010$_-000000" }) + 'keep-me' + 'data-old'
+Add-Check 'backup: keeps 14 days, 6 months and 3 before-restore copies' ($run.code -eq 0 -and $today.Count -eq 1 -and -not (Compare-Object ($left | Sort-Object) ($expected | Sort-Object))) (($left | Sort-Object) -join ' ')
+Add-Check 'backup: leaves other folders alone' ((Test-Path "$env:ASCS_BACKUPS\keep-me") -and (Test-Path "$env:ASCS_BACKUPS\data-old"))
+$run = Invoke-Cli $r @('backup-data')
+Add-Check 'backup: keeps every copy from the newest day' (@(Get-ChildItem $env:ASCS_BACKUPS -Directory -Filter "data-$(Get-Date -Format 'yyyyMMdd')-*").Count -eq 2) $run.text
+$env:ASCS_BACKUPS = $kept
+
+# The folder set in Maestro. LOCALAPPDATA is a stand-in here, so that nothing
+# can reach the real backups folder.
+$realAppData = $env:LOCALAPPDATA
+$utf16 = [Text.UnicodeEncoding]::new($false, $true)
+function Set-BackupsSetting([string]$folder) { [IO.File]::WriteAllText("$data\settings.ini", "[General]`r`nFolder=wrong`r`n[Backups]`r`nFolder=$folder`r`n[Other]`r`nFolder=wrong`r`n", $utf16) }
+try {
+    $env:LOCALAPPDATA = Join-Path $scratch 'appdata'
+    [IO.Directory]::CreateDirectory($env:LOCALAPPDATA) | Out-Null
+    Remove-Item Env:\ASCS_BACKUPS
+    $run = Invoke-Cli $r @('backup-data')
+    Add-Check 'backup: with no folder set, there is no backup' ($run.code -ne 0 -and $run.text -match 'No backups folder is set' -and (Get-Status Result) -eq 'failed') $run.text
+    $run = Invoke-Cli $r @('restore-data')
+    Add-Check 'restore: with no folder set, says so' ($run.code -ne 0 -and $run.text -match 'No backups folder is set') $run.text
+    Set-BackupsSetting "$scratch\chosen"
+    $run = Invoke-Cli $r @('backup-data')
+    Add-Check 'backup: goes to the folder set in Maestro' ($run.code -eq 0 -and @(Get-ChildItem "$scratch\chosen" -Directory -Filter 'data-*').Count -eq 1) $run.text
+    $run = Invoke-Cli $r @('restore-data')
+    Add-Check 'restore: lists from the folder set in Maestro' ($run.code -eq 0 -and $run.text -match [regex]::Escape("$scratch\chosen")) $run.text
+    foreach ($bad in @('\\server\share\backups', 'backups', "$($r.work)\backups", "$data\backups", 'Q:\backups')) {
+        Set-BackupsSetting $bad
+        $run = Invoke-Cli $r @('backup-data')
+        Add-Check "backup: refuses $($bad -replace [regex]::Escape($r.work), '<repo>')" ($run.code -ne 0 -and $run.text -match "can't be used" -and (Get-Status Result) -eq 'failed' -and -not (Test-Path "$($r.work)\backups") -and -not (Test-Path "$data\backups")) $run.text
+    }
+    Add-Check 'backup: nothing ever falls back to app data' (-not (Test-Path "$env:LOCALAPPDATA\Aeolionware"))
+} finally {
+    $env:LOCALAPPDATA = $realAppData
+    $env:ASCS_BACKUPS = $kept
+    [IO.File]::Delete("$data\settings.ini")
+}
+
+# ---- restore-data
+$run = Invoke-Cli $r @('restore-data')
+Add-Check 'restore: lists the backups, newest first' ($run.code -eq 0 -and $run.text -match '(?m)^\s+1  \w{3}, \w{3} \d' -and $run.text -match 'restore-data <number>') $run.text
+$empty = $env:ASCS_BACKUPS; $env:ASCS_BACKUPS = Join-Path $scratch 'none'
+$run = Invoke-Cli $r @('restore-data')
+Add-Check 'restore: says so when there are none' ($run.code -eq 0 -and $run.text -match 'no backups') $run.text
+$env:ASCS_BACKUPS = $empty
+
+Set-Content "$data\notes.json" 'changed'
+Set-Content "$data\added-later.txt" 'x'
+$status = Get-Content "$data\backup-status.ini" -Raw
+foreach ($bad in @('99', 'data-19990101-000000', '..')) {
+    $run = Invoke-Cli $r @('restore-data', $bad, '--yes')
+    Add-Check "restore: there is no backup $bad" ($run.code -ne 0 -and $run.text -match "no backup") $run.text
+}
+[IO.Directory]::CreateDirectory("$env:ASCS_BACKUPS\data-20200101-000000") | Out-Null
+$run = Invoke-Cli $r @('restore-data', 'data-20200101-000000', '--yes')
+Add-Check 'restore: refuses a folder with no data in it' ($run.code -ne 0 -and $run.text -match 'left alone') $run.text
+[IO.Directory]::Delete("$env:ASCS_BACKUPS\data-20200101-000000")
+$run = Invoke-Cli $r @('restore-data', '1', '--bogus')
+Add-Check 'restore: refuses an option it does not know' ($run.code -ne 0 -and $run.text -match "doesn't know") $run.text
+Set-Content "$data\test-build.txt" 'x'
+$run = Invoke-Cli $r @('restore-data', '1', '--yes')
+Add-Check "restore: refuses a test build's copy" ($run.code -ne 0 -and $run.text -match 'test build') $run.text
+[IO.File]::Delete("$data\test-build.txt")
+$run = Invoke-Cli $r @('restore-data', '1') 'n'
+Add-Check 'restore: asks first, and no changes nothing' ($run.code -eq 0 -and $run.text -match 'Go ahead' -and $run.text -match 'Nothing was changed' -and (Get-Content "$data\notes.json") -eq 'changed' -and (Test-Path "$data\added-later.txt")) $run.text
+Add-Check 'restore: and no copy is made before a refusal' (@(Get-ChildItem $env:ASCS_BACKUPS -Directory -Filter 'before-restore-*').Count -eq 0)
+
+$run = Invoke-Cli $r @('restore-data', '1', '--yes')
+$before = @(Get-ChildItem $env:ASCS_BACKUPS -Directory -Filter 'before-restore-*')
+Add-Check 'restore: runs' ($run.code -eq 0 -and $run.text -match 'Restored') $run.text
+Add-Check 'restore: your files are as they were' ((Get-Content "$data\notes.json") -eq '{}' -and (Get-Content "$data\WebView2\Default\Local Storage\prefs") -eq 'keep')
+Add-Check 'restore: what came later is gone' (-not (Test-Path "$data\added-later.txt"))
+Add-Check 'restore: your data from before was kept first' ($before.Count -eq 1 -and (Get-Content "$($before[0].FullName)\notes.json") -eq 'changed' -and (Test-Path "$($before[0].FullName)\added-later.txt")) $run.text
+Add-Check 'restore: caches and the backup status are left alone' ((Test-Path "$data\WebView2\Default\Code Cache\junk") -and (Get-Content "$data\backup-status.ini" -Raw) -eq $status)
+$run = Invoke-Cli $r @('restore-data')
+Add-Check 'restore: the list marks the copy from before' ($run.text -match '(?m)^\s+1  .*before a restore') $run.text
+$run = Invoke-Cli $r @('restore-data', $before[0].Name, '--yes')
+Add-Check 'restore: a restore can be undone, by name' ($run.code -eq 0 -and (Get-Content "$data\notes.json") -eq 'changed' -and (Test-Path "$data\added-later.txt")) $run.text
 
 # ---- try and status, with stand-ins for ASCS.ahk
 $standIn = @'
@@ -268,6 +373,15 @@ try {
     # Refusals, before anything closes.
     [IO.Directory]::CreateDirectory("$dev\data") | Out-Null
     [IO.File]::WriteAllText("$dev\data\mine.txt", 'not made by try')
+    # A test build's copy left behind: restore says it works on the real data.
+    $run = Invoke-Cli $r @('restore-data')
+    Add-Check 'restore: with no test copy about, says nothing of one' ($run.code -eq 0 -and $run.text -notmatch 'test build') $run.text
+    [IO.File]::WriteAllText("$dev\data\test-build.txt", 'x')
+    $run = Invoke-Cli $r @('restore-data')
+    Add-Check "restore: the list names a test build's copy, and says it isn't touched" ($run.code -eq 0 -and $run.text -match [regex]::Escape("$dev\data") -and $run.text -match 'your real data') $run.text
+    $run = Invoke-Cli $r @('restore-data', '1') 'n'
+    Add-Check 'restore: and says so again before asking' ($run.text -match "test build's copy" -and $run.text -match 'Nothing was changed' -and (Test-Path "$dev\data\mine.txt")) $run.text
+    [IO.File]::Delete("$dev\data\test-build.txt")
     Start-StandIn $main
     $run = Invoke-Cli $r @('try')
     Add-Check "try: won't touch a data folder it didn't make" ($run.code -ne 0 -and $run.text -match 'left alone' -and (Test-Path "$dev\data\mine.txt")) $run.text
@@ -307,6 +421,8 @@ try {
     Add-Check 'status: names the real Maestro' ($run.text -match 'your real Maestro') $run.text
     Add-Check 'status: up to date' ($run.text -match 'up to date') $run.text
     Add-Check 'status: the changelog' ($run.text -match 'Changelog: Version 1') $run.text
+    $run = Invoke-Cli $r @('restore-data', '1', '--yes')
+    Add-Check 'restore: refuses while Maestro is running' ($run.code -ne 0 -and $run.text -match 'is running' -and [IO.File]::ReadAllText("$main\data\notes.json") -eq $notes) $run.text
     Start-Sleep -Seconds 2
     [IO.File]::WriteAllText("$main\ASCS.ahk", $standIn + "`r`n")
     $run = Invoke-Cli $r @('status')

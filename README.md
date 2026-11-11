@@ -1,9 +1,9 @@
 # Aeolionware Maestro
 
 **Brand:** AEOLIONWARE MAESTRO (code name ASCS: the repo, folders and file names keep it)  
-**Version:** 2.0.0  
+**Version:** 2.1.0  
 **Platform:** Windows 10/11 (Windows 11 target verification)  
-**Status:** 2.0.0 is complete: ASCS became Aeolionware Maestro, with a new layout and navigation on every page. The manual pass (79 items) passed and its notes are fixed. Next is 2.1.0 (§14). Release history is in [CHANGELOG.md](CHANGELOG.md).
+**Status:** 2.1.0 is complete: Maestro backs up its data every day and can put a backup back, and deleted notes go to a trash. Of the 18 manual items that can be done before a release, 17 passed and the other is answered; the 8 that need the released build are open (§12). Next is 2.1.1, then 2.2.0 (§14). Release history is in [CHANGELOG.md](CHANGELOG.md).
 
 Maestro is a keyboard-driven Windows utility suite. It uses AutoHotkey v2 for hotkeys and Windows automation, WebView2 for its graphical interface, and a web frontend built with HTML, CSS, and JavaScript.
 
@@ -107,7 +107,7 @@ C:\ASCS\
 ├── frontend\
 │   ├── assets\ascs.ico
 │   ├── index.html
-│   ├── styles\               The stylesheet, in cascade order: 01-foundation.css … 38-2.0.0-polish.css; later files build on earlier ones
+│   ├── styles\               The stylesheet, in cascade order: 01-foundation.css … 40-2.1.0-notes-trash.css; later files build on earlier ones
 │   ├── palette.js            Pure palette logic (matching, ranking, calculator)
 │   ├── notes.js              Pure Quick Notes logic (#tags, filter queries, safe Markdown parser)
 │   ├── charts.js             Pure graph geometry for System
@@ -115,6 +115,7 @@ C:\ASCS\
 │   ├── quotes.js             Quote of the day: public-domain quotations with sources
 │   ├── composers.js          Composers born on each day, for the almanac's Born Today (2.0.0)
 │   ├── homemodules.js        The Command Center's added modules: Weather, Top Apps, Network, Audio, Controllers, Pinned Notes, Recent Unlocks, Timer (2.0.0)
+│   ├── backups.js            What Preferences and the attention list say about the daily backup (2.1.0)
 │   ├── logs.js               Pure log parsing for Logs (formats, levels, filters, day groups)
 │   ├── games.js              Pure Games logic (durations, sorting, titles, window titles, RetroAchievements parsing)
 │   ├── sounds.js             Pure Sounds logic (WAV reading and writing, RMS/peak levels, gain plans, search)
@@ -129,7 +130,7 @@ C:\ASCS\
 │   └── calendarview.js       The Calendar view
 ├── lib\
 │   ├── ASCS.Core.ahk         Pure helpers shared by ASCS.ahk and the tests
-│   ├── features\                One file per feature, included by ASCS.ahk where each section was: SuperKey, Launcher, Notes, Dashboard, ActivityLog, Tray, ActivityFeed, Almanac, Logs, Games, Sounds, Calendar, Power, Workspaces, Rules, Notices, Commands, QuickCapture, PaletteWindows, QuickActions
+│   ├── features\                One file per feature, included by ASCS.ahk where each section was: SuperKey, Launcher, Notes, Dashboard, ActivityLog, Tray, ActivityFeed, Almanac, Logs, Games, Sounds, Calendar, Power, Workspaces, Rules, Notices, Commands, QuickCapture, PaletteWindows, QuickActions, Backups
 │   └── VirtualDesktopAccessor.dll   (optional; desktop switching and cross-desktop focus)
 ├── tests\
 │   ├── run-tests.ps1         Runs the three suites
@@ -144,7 +145,7 @@ C:\ASCS\
 │   ├── games.tests.js        Game formatting, sorting, window titles, hostile RetroAchievements input
 │   └── logs.tests.js         Log formats, levels, filters, and day grouping
 ├── tools\
-│   ├── cli\                  The maestro command: status, check, try, backup-data, cut-release
+│   ├── cli\                  The maestro command: status, check, try, backup-data, restore-data, cut-release
 │   └── Install-Shortcut.ps1  Start Menu shortcut with the Ctrl+Alt+Shift+A hotkey (optional Startup entry)
 ├── webview\                  WebViewToo and WebView2 wrappers (vendored)
 └── data\                     Created at runtime
@@ -239,7 +240,7 @@ Matching ranks prefixes, word starts, and initials (`wt` finds Windows Terminal)
 
 ### Quick Notes
 
-Quick Notes (Super + Q by default) supports multiple notes, title editing, filtering, pinning, and deletion with an in-app confirmation dialog. Notes and snippets are one: every note can be pasted or copied from the palette (Super + Shift + P lists them all to paste), and each note has a style. **Text** is formatted in the Markdown viewer and spell-checked in the text editor; **Code** is monospace, with neither. Snippets from earlier versions became Code notes. **Copy** in the footer copies the text exactly as written.
+Quick Notes (Super + Q by default) supports multiple notes, title editing, filtering, pinning, and deletion to a trash. Notes and snippets are one: every note can be pasted or copied from the palette (Super + Shift + P lists them all to paste), and each note has a style. **Text** is formatted in the Markdown viewer and spell-checked in the text editor; **Code** is monospace, with neither. Snippets from earlier versions became Code notes. **Copy** in the footer copies the text exactly as written.
 
 **Placeholders** are filled in when a note is pasted or copied from the palette:
 
@@ -264,11 +265,13 @@ Anything else in braces is left as written. **{ } Placeholders** in the editor o
 
 **Markdown viewer and text editor** *(2.0.0; was Preview)*: a note opens in the **Markdown viewer**, formatted, with lines kept to a readable length. It reads most of GitHub's Markdown: headings to six levels (and text underlined with `===` or `---`), bold and italic with `*` or `_`, strikethrough `~~`, highlight `==`, inline code and fenced code (with ``` or ~~~, and its language shown), quotes that nest and hold lists, nested bulleted and numbered lists (a numbered list keeps its starting number), task lists, tables with alignment, links, bare web addresses, horizontal rules, `#tags` and backslash escapes. A line break is kept, as in most note apps; a blank line starts a new paragraph. Images show as a labeled box with their alt text and are never loaded. **Task boxes** can be ticked in the viewer, which changes `[ ]` to `[x]` in the note and saves it. A plain click on a link does nothing; **Ctrl + click** opens a web (http or https) link in your browser. **Markdown**, beside Placeholders, opens the **Markdown Reference**: every kind, as typed and as shown, each example drawn by the viewer itself. The **text editor** shows its plain text to change, on a darker field edged in indigo, so the two look different at a glance (the viewer reads on a lighter page); and the viewer is drawn again from the text each time it's chosen. Ctrl + M switches between them, from inside the text too, and a double-click in the viewer edits. Super + Q opens Quick Notes as it was left. A new or empty note opens in the editor, as does a code note, which has no viewer. A game's note opened from Games, or stamped with **Add timestamp**, opens in the editor, to write in during play. The viewer is built from plain text elements only and never interprets HTML, so nothing in a note can run as code. Links are shown (with their address on hover) but are never opened.
 
+**Trash** *(2.1.0)*: **Delete** moves the open note to the trash at once, with **Undo** on the toast for 10 seconds; nothing asks first. A note with no title and no text is just removed. While the trash holds anything, **Trash**, with its count, sits at the foot of the notes list and opens the list of deleted notes, newest first, each with the day it was deleted and the days it has left, **Restore** and **Delete forever**; **Empty trash** deletes them all. Those two are for good, so each asks first. A note stays 30 days, and the trash holds 200 at most (the oldest go first). A restored note comes back as it was, pinned or grouped as before; a game's note comes back linked to its game unless that game has another note by then. Trashed notes are in none of the list, the filter, the palette, Pinned Notes or Games.
+
 **Game notes**: a note written from Games shows **Notes for** *game* above its text, with **Add timestamp** and **Unlink**, which keeps the note but stops linking it to the game. Renaming or regrouping it keeps the link. See [Games](#games).
 
 **Quick capture:** Super + Shift + C copies the selected text in the active application into a new note titled “Captured · *window title*”, without showing Maestro. If nothing is selected, it captures the current clipboard text instead. The clipboard is restored afterwards, and captures over 200,000 characters are truncated.
 
-Data is stored as a version 2 JSON object in `data/notes.json`. Saves are debounced and atomically replaced, and the previous file is kept as `.bak`. Because nearly every save replaces `.bak`, the first save of each day also keeps a copy in `data\notes-history`, and the newest 14 stay. To go back to one, exit Maestro and copy it over `notes.json`. If `notes.json` is unreadable at startup, Maestro loads the backup and shows a notice the next time it is focused. When Maestro is shown, it reloads `notes.json` if the file was changed outside Maestro; unsaved edits in the editor take precedence. An old single-note file of the form `{"content":"..."}` is converted into a note named “Scratch”.
+Data is stored as a version 2 JSON object in `data/notes.json`, with the trash as a list of its own, `trash`, beside `notes`, where each entry is the whole note and `deletedAt`. Saves are debounced and atomically replaced, and the previous file is kept as `.bak`. Because nearly every save replaces `.bak`, the first save of each day also keeps a copy in `data\notes-history`, and the newest 14 stay. To go back to one, exit Maestro and copy it over `notes.json`. If `notes.json` is unreadable at startup, Maestro loads the backup and shows a notice the next time it is focused. When Maestro is shown, it reloads `notes.json` if the file was changed outside Maestro; unsaved edits in the editor take precedence. An old single-note file of the form `{"content":"..."}` is converted into a note named “Scratch”.
 
 Each note stores an `id`, `title`, `type` (`note` for Text or `code`; `snippet` from earlier versions is read as `code`), `content`, `pinned`, an optional `fill` (whether placeholders are filled, when set by hand), an optional `group`, an optional `game` (the link to a game, by its title key; older versions ignore it, and Maestro refuses a save where it isn't text, is too long or has control characters), and ISO-8601 `created`/`updated` timestamps. The collection stores `version`, `activeId`, and a `notes` array.
 
@@ -426,6 +429,7 @@ The sidebar opens with the brand: a 76 px indigo mark with a metallic gold edge 
 - **Appearance:** text size and the logo's swing (see Fonts).
 - **Windows:** snap gap (0–48 px), and **Keep size across monitors**.
 - **Power:** the delay before power actions.
+- **Backups** *(2.1.0)*: **Back up every day** copies `data\` (your notes, calendar, settings and arrangements, and the secrets file) to a folder you choose, at the time you set: 6:00 PM unless changed, offered on the hour. If the PC is off then, the backup is made within a minute of Maestro next starting, and one that fails is tried again each hour. **Choose…** opens Windows' folder picker; the folder must be on a drive inside this PC and outside Maestro's own folder, and the page never sends a path. **Open folder** shows it in Explorer, and **Back up now** makes a copy at once. The line beside that button says when the last backup was made, or why one failed. Maestro runs `maestro backup-data` as a hidden process of its own, so nothing waits on the drive, and the command decides what's kept (see [Developing and running apart](#developing-and-running-apart)). A test build never backs up. To put a backup back, exit Maestro and run `maestro restore-data`.
 - **On Their Own Pages:** where the rest went, each a button to it: Games › Setup (programs, the PSO session, RetroAchievements), Command Center › Today's Settings (the Wikipedia almanac and the weather), Quick Notes (spell-check), Sounds (Maestro sounds), Commands, System (monitored drives) and Calendar (countdowns).
 
 **Games › Setup** *(2.0.0; was Preferences › Games & Apps)*: **Programs** (RetroArch, Dolphin, PCSX2), **PSO Session** (the launcher, Discord, the voice channel, headphones and the SoundSwitch shortcut) and **RetroAchievements** (**Open secrets file**, and **Check now** for your picture). A field saves when you leave it, and the title bar says so beside the page's name ("Saved at 2:32 PM"); until the saved values arrive the fields are disabled. **Today's Settings**, on the Command Center's Today module, holds the Wikipedia almanac and weather switches, which save as they're switched, and the location used for sunrise, sunset and the weather.
@@ -459,7 +463,7 @@ Below that, a tab for each desktop (and **All desktops** in gold for windows pin
 
 ### Attention list
 
-*(2.0.0)* Nothing shows while all is well. When something needs you, a button appears beside the clock ("3 need attention") and opens a list. Each item says what's wrong and offers its next step: a page error is burgundy, with **View log**, which opens the logs and clears it; a monitored drive at 90% or more, or the processor or memory over 90% for three readings in a row, is gold, with **Open System**. **Dismiss all** hides what's listed until that problem clears; if it comes back, it shows again. During `maestro try`, a separate gold chip says it's a test build. Readings arrive only while the window is showing.
+*(2.0.0)* Nothing shows while all is well. When something needs you, a button appears beside the clock ("3 need attention") and opens a list. Each item says what's wrong and offers its next step: a page error is burgundy, with **View log**, which opens the logs and clears it; a monitored drive at 90% or more, or the processor or memory over 90% for three readings in a row, is gold, with **Open System**. While the daily backup is on *(2.1.0)*, a backup that failed is burgundy and three days or more without one is gold, each with **Open Preferences**. **Dismiss all** hides what's listed until that problem clears; if it comes back, it shows again. During `maestro try`, a separate gold chip says it's a test build. Readings arrive only while the window is showing.
 
 ### Tray Menu
 
@@ -563,6 +567,10 @@ JavaScript sends newline-separated text through `window.chrome.webview.postMessa
 | `GetCommands` / `SaveCommands` | None / one command per line: name, kind, target, key (tab-separated) | Custom Commands |
 | `RunCommand` | Command index (1–30) | Runs a saved custom command |
 | `BrowseCommandTarget` | `row\|app` or `row\|folder` | Opens a file or folder picker |
+| `SaveBackups` | `0\|HHmm` or `1\|HHmm` | *(2.1.0)* Turns the daily backup off or on and sets its time; on is refused until a folder is chosen |
+| `ChooseBackupsFolder` | None | *(2.1.0)* Opens Windows' folder picker for the backups folder, which AHK checks before keeping. The page never sends a path |
+| `BackupNow` | None | *(2.1.0)* Starts a backup, unless one is running |
+| `OpenBackupsFolder` | None | *(2.1.0)* Shows the backups folder in Explorer |
 | `GetWorkspaces` | None | Lists saved workspaces |
 | `SaveWorkspace` / `RestoreWorkspace` / `DeleteWorkspace` | Workspace name (`Default` or empty for the default) | Named workspaces |
 | `RenameWorkspace` | `old\|new` (both validated; Default keeps its name) | Renames a saved workspace; an existing name is refused |
@@ -604,6 +612,8 @@ AutoHotkey sends JSON with `PostWebMessageAsJson()`.
 | `launchRules` | `items: [{path, app, enabled, monitor, x, y, width, height, maximized, desktop, desktopName, pinned}]` |
 | `windows` | `[{id, title, app, minimized}]` |
 | `browseResult` | Picker result for a custom-command row |
+| `backups` | *(2.1.0)* The daily backup's settings, whether one is running, and the last result, for Preferences and the attention list |
+| `backupsSaved` | *(2.1.0)* Whether a backup setting was kept, with why when it wasn't |
 | `activity` / `activityAdded` | Activity list / one new entry (`{time, kind, text}`) |
 | `powerHeld` | A power action held for unsaved work: `action` and `apps` (names) |
 | `signInHistory` | `items: [{time, retrobar, taskbar, apps, keychron, sound}]`, newest first, up to 20; times in ms after `SignIn.ahk` starts |
@@ -625,7 +635,9 @@ AutoHotkey sends JSON with `PostWebMessageAsJson()`.
 - **Steam and controllers:** Steam's files are only read; games start only through `steam://rungameid/` with a numeric app id checked by Maestro. Renaming a controller writes one value, `OEMName`, under the current user's `Joystick\OEM\VID_xxxx&PID_yyyy` key (validated name, no administrator rights); Maestro never changes Bluetooth or device settings itself.
 - **Games:** the emulators' files are only read, with sizes capped and every parser reading only expected fields. The page receives titles and play time, never file paths; it sends back only a game id, which Maestro validates and looks up in its own index, and launches use the configured emulator with the indexed path quoted (paths containing quotes are refused). Program paths in Games › Setup must be existing `.exe` files. Cover art is read from local folders only, checked to be a PNG or JPEG of at most 1.5 MB, and passed as a data URI; nothing is downloaded.
 - **RetroAchievements images:** downloaded only from `media.retroachievements.org`, by an address Maestro builds from a validated number or, for a user's picture, a name of only letters, digits and underscores (never a URL from the response), with HTTPS, no redirects, a 256 KB cap and a PNG signature check, then cached on disk. The 20 MB cache cap deletes only files named like Maestro's own images (`b-<digits>.png`, `i-<digits>.png`, `u-<name>.png` and their partial writes).
-- **Running a test build:** `maestro try` copies `data\`, including `secrets.ini`, into a second checkout, where git ignores it, and `maestro try --end` deletes it. It only deletes a folder it marked itself. The copy's calendar config is rewritten and checked so it can't reach the real calendar. `maestro backup-data` keeps its copies in the user's private `%LOCALAPPDATA%\Aeolionware\ASCS-Backups`. Maestro exits on the `Aeolionware.ASCS.Exit` window message, which, like the existing reload message, any program running as the same user can send.
+- **Running a test build:** `maestro try` copies `data\`, including `secrets.ini`, into a second checkout, where git ignores it, and `maestro try --end` deletes it. It only deletes a folder it marked itself. The copy's calendar config is rewritten and checked so it can't reach the real calendar. `maestro backup-data` keeps its copies in the folder named by `Folder` under `[Backups]` in `data\settings.ini`, which must be a full path on a drive inside this PC and outside Maestro's own folders: each copy holds `secrets.ini`. With no folder set, or one that fails that check, there is no backup: it never falls back to another place. `maestro restore-data` replaces `data\` only with Maestro closed, only from a folder in the backups folder that the command itself named, and only after copying the data as it is now to the backups folder. Maestro exits on the `Aeolionware.ASCS.Exit` window message, which, like the existing reload message, any program running as the same user can send.
+- **Backups** *(2.1.0)*: no network use, listener or elevation. The page sends only on or off and a time. The folder comes from Windows' folder picker and is kept only if it's a full path to a folder on a fixed drive of this PC, outside Maestro's own folder; AHK checks that, and the command checks it again before every backup. Maestro starts one fixed command line (`pwsh` running `tools\cli\Maestro-Cli.ps1 backup-data`) with nothing from the page in it, and reads back only a time, `ok` or `failed`, and one line of text, which it tidies and caps. A backup holds `secrets.ini`. A test build can't start one, so a copy of your data never lands in the real backups folder.
+- **The notes trash** *(2.1.0)*: no network use, listener, timer or new message; it's saved through `SaveNotes` with the notes. AHK refuses a save whose `deletedAt` isn't a plain UTC time, and the page drops any trash entry that isn't a whole note with one, so one bad hand edit costs that entry and nothing else. A trashed note's title and text are only ever shown as text.
 - **Game notes:** no network use, listener or new message. Notes go through the existing `SaveNotes` route, which checks the new `game` field. A game's title can come from a window's title, so it's treated as untrusted: it's tidied of control characters, capped in length, and shown only as text.
 - **Site Badges:** one more request to retroachievements.org, with the same key and a fixed address, only while the Achievements section has been on screen, kept for 10 minutes (a refresh can't ask again within a minute). The page takes text and numbers from the reply, and art only as a numbered token, so no address ever comes from a response. A community award has no such number, so it's a text label.
 - **RetroAchievements:** opt-in by creating `data\secrets.ini`, which git ignores. The user name and key are validated, read only when a request is made, never sent to the page and never logged (request addresses are not logged either). Only two fixed retroachievements.org API addresses are requested, with the same HTTPS rules as the almanac; responses are parsed in the page as text and numbers only, with no images or links taken from them. The achievement browser adds two more on the same site with the same key, fetched only when asked for: one game's achievements (`API_GetGameInfoAndUserProgress`, by a game ID Maestro checks is 1 to 9 digits, `ValidateRaGameId`) and the last 30 days of unlocks (`API_GetUserRecentAchievements`); each is kept for 10 minutes, a refresh can't repeat it within a minute, and at most 30 are kept. Their values are checked one by one in the page (`parseRaGame`, `parseRaUnlocks`: text cleaned and capped, numbers non-negative, dates in their exact format, types from a fixed list, badges only as plain numbers), and tested with hostile input.
@@ -681,7 +693,7 @@ Maestro reads its code and data from the folder it runs in, so whatever is check
 git -C C:\ASCS worktree add C:\ASCS-2.0 -b feat/v2.0.0
 ```
 
-The `maestro` command (`tools\cli\Maestro-Cli.ps1`, run through `C:\Scripts\maestro.cmd`; `maestro help` lists it all). *(2.0.0)* It replaces the `ASCS` command entirely: `C:\Scripts\ASCS.cmd` and `maestro.cmd`'s fallback to `ASCS-Cli.ps1` are removed once 2.0.0 is on master.
+The `maestro` command (`tools\cli\Maestro-Cli.ps1`, run through `C:\Scripts\maestro.cmd`; `maestro help` lists it all). *(2.0.0)* It replaces the `ASCS` command entirely: `C:\Scripts\ASCS.cmd` and `maestro.cmd`'s fallback to `ASCS-Cli.ps1` were removed once 2.0.0 was on master.
 
 | Command | What it does |
 |---|---|
@@ -689,7 +701,9 @@ The `maestro` command (`tools\cli\Maestro-Cli.ps1`, run through `C:\Scripts\maes
 | `maestro check` | The tests, parse check and hidden-character scan for the checkout you're standing in, with one result (`--quick` skips the tests) |
 | `maestro try [folder]` | Closes Maestro, saving its notes, and runs a second checkout on a copy of your data, with its own calendar; the title bar says **TEST BUILD**. Windows sounds, controller names, power actions, audio switches, games and moved windows are still real |
 | `maestro try --end` | Closes the test build, deletes the copy, and starts your real Maestro |
-| `maestro backup-data` | Copies `data\` to `%LOCALAPPDATA%\Aeolionware\ASCS-Backups`, keeping the newest ten. Each includes `secrets.ini`, so keep them on this PC |
+| `maestro backup-data` | Copies `data\` to the backups folder, which is chosen in Preferences › Backups (kept as `Folder` under `[Backups]` in `data\settings.ini`); with none chosen, it stops. Maestro runs this once a day when **Back up every day** is on. It works while Maestro runs. Kept: every copy from the newest day, the newest from each of the 14 newest days, and the first from each of the 6 newest months. A copy that can't be finished is removed, and each run's result goes to `data\backup-status.ini`. Each copy includes `secrets.ini`, so keep them on this PC |
+| `maestro restore-data` | Lists the backups, newest first. Like `backup-data`, it's about your real data: with a test build's copy about, it names the copy and says it isn't touched |
+| `maestro restore-data <number or name>` | Puts that backup back, replacing `data\`. Maestro must be closed (exit it from its tray icon). It asks first (`--yes` doesn't), and copies your data as it is now to the backups folder as `before-restore-…`, so a restore can itself be undone; the newest three of those are kept |
 | `maestro cut-release` | Pushes the newest branch and fast-forwards `master` to it. It stops if there's uncommitted work in either folder or the CHANGELOG still says "in progress" |
 
 ## 11. Testing
@@ -700,13 +714,13 @@ The `maestro` command (`tools\cli\Maestro-Cli.ps1`, run through `C:\Scripts\maes
 pwsh -File C:\ASCS\tests\run-tests.ps1
 ```
 
-- `tests\core.tests.ahk` covers `lib\ASCS.Core.ahk` (727 checks): toast stacking and timing, every field of a workspace edit and what must be refused, launch rule paths, which desktop an added window belongs on, which game RetroArch is running, sign-in timings, the sign-in task warning, suspended system windows in workspaces, workspace count wording, unsaved-work titles and VS Code's backup folders before power actions, note group and game link checks on save, Select › Delete request lists, passed countdowns, reminder pop-up text, which files count as leveled copies, the notification level board's requests, note placeholders at paste time, calendar files, calendar request building (every operation's method, path and headers, escaping, and what must be refused), ids, versions, colors and iCalendar checks, reminder lists, sound library rules (version folders, WAV lengths, library folders that must be refused, leveled file names, the Windows sound allowlist), Steam's binary app cache (a synthetic file built byte by byte, including a decoy and a truncated copy), RetroAchievements image addresses and the image cache cap, the emulators' record parsers (including binary game lists built in memory), Steam's manifests, library folders and play-time file, controller IDs, modes and names, executable paths, audio device matching, RetroAchievements credentials and game ids, the Claude quick-entry key combination grammar, countdown dates, the almanac payload, Wikipedia titles and feed addresses, shortcut-letter validation, quick action ids, drive lists, Explorer names, workspace names and executables, workspace relaunch commands, workspace window matching, custom-command validation and payload parsing, search templates and encoding, activity lines, and the JSON helpers.
-- `tests\cli.tests.ps1` covers the `maestro` command (74 checks) against throwaway repositories, with stand-in Maestro scripts that only answer the exit message: every refusal in `cut-release`, `check` finding syntax errors and hidden characters, `backup-data`, and `try` and `try --end`, including that the copy's calendar points at the copy and that the real data doesn't change.
-- `tests\frontend.tests.html` covers `frontend\palette.js`, `keymap.js`, `notes.js`, `charts.js`, `almanac.js` (with `quotes.js`) `logs.js`, `games.js`, `sounds.js`, `calendar.js` and `workspaces.js` (1159 checks) in headless Edge, including game note keys and timestamps, the awards reply and its tabs, workspace places, percentages, the edit message, dragging and snapping, and note groups (sections, rename and merge, delete, palette matching) and US holiday dates. For the calendar: iCalendar reading (folding, escapes, all-day, UTC, floating and named time zones, including summer time), repeats (weekly days across the end of daylight saving, the 31st in short months, the 2nd Tuesday and last Friday, 29 February, counts, end dates, skipped dates, moved occurrences), reminders, writing that keeps a phone's own properties, and server replies. For sounds: WAV files built byte by byte in every supported format (8-, 16-, 24- and 32-bit, float, extensible, with extra chunks), levels against known values, gain plans with clipping limits, and gain applied in place. For the keymap, these include the Windows passthrough keys. For notes: tags, filter queries, Markdown structure, and hostile input (HTML and script markup must stay plain text). For charts: sparkline geometry, clamping, and bad data. For the palette: the calculator, query parsing, matching, ranking, usage history, and workspace-name rules. For the keymap: layout integrity (108 unique, non-overlapping keys of the customized Q6 Max, including the planned Code and macro keys), Super and Super + Shift bindings, Shift-layer precedence, Windows passthrough, and robustness with missing settings.
+- `tests\core.tests.ahk` covers `lib\ASCS.Core.ahk` (771 checks): toast stacking and timing, every field of a workspace edit and what must be refused, launch rule paths, which desktop an added window belongs on, which game RetroArch is running, sign-in timings, the sign-in task warning, suspended system windows in workspaces, workspace count wording, unsaved-work titles and VS Code's backup folders before power actions, note group and game link checks on save, Select › Delete request lists, passed countdowns, reminder pop-up text, which files count as leveled copies, the notification level board's requests, note placeholders at paste time, calendar files, calendar request building (every operation's method, path and headers, escaping, and what must be refused), ids, versions, colors and iCalendar checks, reminder lists, sound library rules (version folders, WAV lengths, library folders that must be refused, leveled file names, the Windows sound allowlist), Steam's binary app cache (a synthetic file built byte by byte, including a decoy and a truncated copy), RetroAchievements image addresses and the image cache cap, the emulators' record parsers (including binary game lists built in memory), Steam's manifests, library folders and play-time file, controller IDs, modes and names, executable paths, audio device matching, RetroAchievements credentials and game ids, the Claude quick-entry key combination grammar, countdown dates, the almanac payload, Wikipedia titles and feed addresses, shortcut-letter validation, quick action ids, drive lists, Explorer names, workspace names and executables, workspace relaunch commands, workspace window matching, custom-command validation and payload parsing, search templates and encoding, activity lines, and the JSON helpers.
+- `tests\cli.tests.ps1` covers the `maestro` command (113 checks) against throwaway repositories, with stand-in Maestro scripts that only answer the exit message: every refusal in `cut-release`, `check` finding syntax errors and hidden characters, `backup-data` (a file locked by WebView2, a copy that can't finish, what's kept, and every folder it must refuse), `restore-data` (each refusal, the copy made first, and undoing a restore), and `try` and `try --end`, including that the copy's calendar points at the copy and that the real data doesn't change.
+- `tests\frontend.tests.html` covers `frontend\palette.js`, `keymap.js`, `notes.js`, `charts.js`, `almanac.js` (with `quotes.js`) `logs.js`, `games.js`, `sounds.js`, `calendar.js`, `workspaces.js` and `backups.js` (1232 checks) in headless Edge, including game note keys and timestamps, the awards reply and its tabs, workspace places, percentages, the edit message, dragging and snapping, and note groups (sections, rename and merge, delete, palette matching) and US holiday dates. For the calendar: iCalendar reading (folding, escapes, all-day, UTC, floating and named time zones, including summer time), repeats (weekly days across the end of daylight saving, the 31st in short months, the 2nd Tuesday and last Friday, 29 February, counts, end dates, skipped dates, moved occurrences), reminders, writing that keeps a phone's own properties, and server replies. For sounds: WAV files built byte by byte in every supported format (8-, 16-, 24- and 32-bit, float, extensible, with extra chunks), levels against known values, gain plans with clipping limits, and gain applied in place. For the keymap, these include the Windows passthrough keys. For notes: tags, filter queries, Markdown structure, and hostile input (HTML and script markup must stay plain text). For charts: sparkline geometry, clamping, and bad data. For the palette: the calculator, query parsing, matching, ranking, usage history, and workspace-name rules. For the keymap: layout integrity (108 unique, non-overlapping keys of the customized Q6 Max, including the planned Code and macro keys), Super and Super + Shift bindings, Shift-layer precedence, Windows passthrough, and robustness with missing settings.
 
-- `tests\smoke.js` runs the real page (every module and stylesheet, from a copy of `index.html` whose base is the frontend folder) with a stand-in for WebView2: the page loads and every view opens without a script error or unhandled rejection, and every message the page sends is one `ASCS.ahk` accepts (the allowlist is read from `HandleWebMessage` each run). It reports the file, line and message of any error. It also checks what unit tests can't see: Continue Playing's room for a raised, focused tile, the mastered bar's paint, the sign-in task warning in Sounds › Startup, and the sign-in graph; the power tray, Maestro Logs, what was removed, and that Maestro accepts every item the quick action picker offers; the Workspaces page, including a drag with pointer events; the site badges; Arrange's dock and keys, drive bars as long as the processor's, the graphs' clock times, the title bar's save status, that no control's focus ring is cut off on any page or section, and finding text in a note in both modes, including that the editor's marks lie over its text (537 checks).
+- `tests\smoke.js` runs the real page (every module and stylesheet, from a copy of `index.html` whose base is the frontend folder) with a stand-in for WebView2: the page loads and every view opens without a script error or unhandled rejection, and every message the page sends is one `ASCS.ahk` accepts (the allowlist is read from `HandleWebMessage` each run). It reports the file, line and message of any error. It also checks what unit tests can't see: Continue Playing's room for a raised, focused tile, the mastered bar's paint, the sign-in task warning in Sounds › Startup, and the sign-in graph; the power tray, Maestro Logs, what was removed, and that Maestro accepts every item the quick action picker offers; the Workspaces page, including a drag with pointer events; the site badges; Arrange's dock and keys, drive bars as long as the processor's, the graphs' clock times, the title bar's save status, that no control's focus ring is cut off on any page or section, and finding text in a note in both modes, including that the editor's marks lie over its text (575 checks).
 
-The runner also checks the timers (31: none is set both as a repeating and a single run) and the startup scripts (10). The tests never touch the running Maestro instance or the `data` folder. The runner exits with code 0 when everything passes and reports each failure by name.
+The runner also checks the timers (34: none is set both as a repeating and a single run) and the startup scripts (10). The tests never touch the running Maestro instance or the `data` folder. The runner exits with code 0 when everything passes and reports each failure by name.
 
 ### Manual
 
@@ -714,7 +728,7 @@ Hotkeys, WebView behavior, and window management need the real desktop. Each rel
 
 ## 12. Development Status
 
-**2.0.0 (complete, 2026-11-10):** every page of the redesign is built. The manual pass on the target system passed all 79 items (A to P), and its 18 notes are fixed or answered, as listed in [CHANGELOG.md](CHANGELOG.md). Automated: core 727, timers 31, startup 10, frontend 1159, smoke 537, cli 74. Open: `C:\Scripts\ASCS.cmd` and `maestro.cmd`'s fallback to `ASCS-Cli.ps1` are removed once 2.0.0 is on master.
+**2.1.0 (complete, 2026-11-10):** the daily backup, `maestro restore-data` and the notes trash are built. The manual pass on the target system covered the 18 items that can be done before a release: the trash and Preferences in a test build, and the command line on the real data. 17 passed. The other, restoring a backup and then undoing it, looked for a note that had been made in the test build, while the command line works on the real data; the restore itself had completed, the data matched the backup, and `restore-data` now says whose data it means. Open, because a test build never backs up, are the 8 items that need the released build: the Backups module in Preferences, **Back up now**, **Open folder**, the folder picker, the switch and the time, the 6:00 PM backup, the trash on the real notes, and restoring a backup then undoing it. Automated: core 771, timers 34, startup 10, frontend 1232, smoke 575, cli 113.
 
 ### Verified on the Target System
 
@@ -740,7 +754,7 @@ Each release's manual pass and automated verification are recorded with it in [C
 - Super + C/D/F/P passthrough when unassigned (Super + Shift + C, P and S have passed).
 - The keyboard map (both layers, the Shift-hold preview, hover and focus details) and the new title bar (command bar, status pill, clock, and the maximize/restore glyph).
 - The burgundy theme across all views at the target window sizes.
-- Not yet confirmed individually: the missing-desktop tooltip, the workspace restore reuse matrix, the delete-note dialog, notes reload after an outside change, and the Preferences reset after a rejected save.
+- Not yet confirmed individually: the missing-desktop tooltip, the workspace restore reuse matrix, notes reload after an outside change, and the Preferences reset after a rejected save.
 - Carried over: mixed-DPI and multi-monitor layouts; network-drive offline behavior and probe timeout; additional Windows builds, DLL versions, and Terminal configurations; hardware inventory on other machines; untrusted-origin rejection (requires a deliberately modified page).
 
 ## 13. Known Limitations
@@ -770,6 +784,8 @@ Each release's manual pass and automated verification are recorded with it in [C
 - Everything must be installed for Super + F and file search.
 - Desktop switching and cross-desktop focus require `VirtualDesktopAccessor.dll`; monitor frame calculations depend on Windows DPI behavior.
 - Metrics depend on Windows APIs, WMI, and drive reporting; drive probes time out after eight seconds and are cached for 30 seconds.
+- The daily backup needs PowerShell 7 (`pwsh`), and is made only while Maestro is running; with the PC off at the set time, it's made after Maestro next starts. Backups aren't compressed or encrypted, each holds `secrets.ini`, and putting one back is done from the command line, with Maestro closed.
+- The notes trash is known only to 2.1.0 and later: an older Maestro run on the same data keeps the notes but drops the trash at its first save.
 - The diagnostic log rotates at 1 MiB to one backup; the activity feed keeps the newest 50 entries.
 
 ## 14. Development Roadmap
@@ -783,13 +799,20 @@ Not yet built:
 
 Planned, after the redesign:
 
-- **More of the `maestro` command line:** `new-release` and `bump` (`status`, `check`, `try` and `backup-data` are built). It would never start or message the running app, or commit.
+- **More of the `maestro` command line:** `new-release` and `bump` (`status`, `check`, `try`, `backup-data` and `restore-data` are built). It would never start or message the running app, or commit.
 - **More in the achievement viewer:** softcore and hardcore shown together, with a filter and progress for each, and no size limit on the image cache, since the images never change.
 
-Next, 2.1.0, in this order:
+Next, 2.1.1: **the folders become Maestro.** `C:\ASCS` becomes `C:\Maestro`, and a version being worked on lives inside it (`C:\Maestro\_2.2`, for example), so the editor's git tools show it without adding a folder. Folders only: the files and the repository keep the name ASCS.
 
-- **A trash for notes:** deleted notes kept for a while, with Undo.
-- **Scheduled backups:** `maestro backup-data` on a schedule, not only by hand.
+Then, 2.2.0: **iPhone calendar sync**, as described above.
+
+After that, in this order:
+
+- **The pages used most:** Command Center modules in three sizes, with saved layouts to switch between; a small notes window for writing a game's note over the game; a metronome module.
+- **Routines,** as described above.
+- **A Switch payload command:** one command to push the chosen payload when the Switch is in RCM, ahead of the rest of the console hub.
+- **Tasks on the calendar server:** reminders that aren't events, which iPhone sync could carry to Reminders.
+- **3D print status:** what the printer is doing, on the Command Center. It needs a connection on the home network and the printer's access code, so it's decided like iPhone sync.
 - **Media controls:** play, pause and what's playing, from Windows' media session.
 
 Missing, suggested in 2.0.0:

@@ -14,7 +14,7 @@ Suspend(true)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 2.0.0
+; Version 2.1.0
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -24,7 +24,7 @@ Suspend(true)
 ; GLOBAL VARIABLES
 ; ==========================================
 
-global ASCS_Version := "2.0.0"
+global ASCS_Version := "2.1.0"
 global ASCS_App := ""
 global ASCS_WindowIcon := 0
 global ASCS_IconPath := A_ScriptDir "\frontend\assets\ascs.ico"
@@ -137,6 +137,12 @@ global ASCS_DashboardErrorShown := false
 global ASCS_DriveCache := Map()
 global ASCS_DriveProbes := Map()
 global ASCS_HardwareProbe := 0          ; the inventory worker while it runs
+global ASCS_BackupsEnabled := false     ; 2.1.0: the daily backup
+global ASCS_BackupsTime := "1800"
+global ASCS_BackupsFolder := ""
+global ASCS_BackupRun := 0              ; the backup worker while it runs
+global ASCS_BackupAttempt := ""         ; when this run of Maestro last tried one
+global ASCS_BackupFailure := ""         ; why that failed, when the command left no record
 global ASCS_NotesRecovered := false
 global ASCS_DesktopAccessorWarningShown := false
 global ASCS_PendingWindowDirection := ""
@@ -177,7 +183,9 @@ LoadAlmanacSettings()
 LoadWeatherSettings()
 LoadGameSettings()
 LoadSoundSettings()
+LoadBackupSettings()
 StartLaunchRules()      ; 1.10.0: the shell hook for launch rules
+StartBackupSchedule()   ; 2.1.0: the daily backup, never in a test build
 LoadCustomCommands()
 LoadActivity()
 
@@ -644,6 +652,7 @@ HandleWebMessage(sender, args) {
                 SendWorkspaces()
                 SendActivity()
                 SendQuickActions()
+                SendBackups()
                 if FileExist(ASCS_DataDir "\test-build.txt")   ; made by the Maestro command's `try`
                     SendToFrontend('{"type":"testBuild"}')
                 if ASCS_PendingLauncher {
@@ -1012,6 +1021,32 @@ HandleWebMessage(sender, args) {
                 else
                     WriteLog("Rejected invalid browse request.")
 
+            ; Backups (2.1.0). The folder is never sent by the page: it comes
+            ; from Windows' folder picker.
+            case "SaveBackups":
+                if RegExMatch(content, "^[01]\|\d{4}$")
+                    SaveBackupSettings(content)
+                else
+                    WriteLog("Rejected invalid backup settings.")
+
+            case "ChooseBackupsFolder":
+                if (content = "")
+                    SetTimer(ChooseBackupsFolder, -1)
+                else
+                    WriteLog("Rejected ChooseBackupsFolder payload.")
+
+            case "BackupNow":
+                if (content = "")
+                    BackupNow()
+                else
+                    WriteLog("Rejected BackupNow payload.")
+
+            case "OpenBackupsFolder":
+                if (content = "")
+                    OpenBackupsFolder()
+                else
+                    WriteLog("Rejected OpenBackupsFolder payload.")
+
             case "GetWorkspaces":
                 SendWorkspaces()
 
@@ -1213,3 +1248,4 @@ SendToFrontend(json) {
 #Include lib\features\QuickCapture.ahk
 #Include lib\features\PaletteWindows.ahk
 #Include lib\features\QuickActions.ahk
+#Include lib\features\Backups.ahk

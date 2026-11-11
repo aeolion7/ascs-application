@@ -38,6 +38,8 @@
     <link rel="stylesheet" href="styles/36-2.0.0-notes.css">
     <link rel="stylesheet" href="styles/37-2.0.0-preferences.css">
   <link rel="stylesheet" href="styles/38-2.0.0-polish.css">
+  <link rel="stylesheet" href="styles/39-2.1.0-backups.css">
+  <link rel="stylesheet" href="styles/40-2.1.0-notes-trash.css">
 </head>
 <body>
   <div class="app-shell">
@@ -48,7 +50,7 @@
           <span>Aeolionware</span>
           <strong>Maestro</strong>
         </span>
-        <span id="sidebarVersion" hidden>Maestro <span>2.0.0</span></span>
+        <span id="sidebarVersion" hidden>Maestro <span>2.1.0</span></span>
       </div>
 
       <nav class="primary-nav" aria-label="Pages">
@@ -348,6 +350,7 @@
             <div id="notesList" class="notes-list" aria-label="Notes"></div>
             <div class="note-group-menu" id="noteGroupMenu" role="menu" aria-label="Group" hidden></div>
             <p id="notesEmpty" class="notes-empty">Nothing captured yet. Start a note, or press Super + Shift + C in any app.</p>
+            <button class="secondary notes-trash-button" type="button" id="notesTrashButton" aria-haspopup="dialog" hidden>Trash</button>
           </aside>
           <section class="module editor-card" aria-label="The open note">
             <div class="note-head">
@@ -906,14 +909,24 @@
             <label class="settings-field" for="textSize"><span>Text size</span><select id="textSize"><option value="100">Default</option><option value="110">Larger</option><option value="120">Largest</option></select><small>The text on every page. The keyboard map on Commands keeps its size.</small></label>
             <label class="settings-field" for="logoSwing"><span>Logo swing</span><select id="logoSwing"><option value="first">First time after Maestro starts</option><option value="every">Every time the window opens</option><option value="never">Never</option></select><small>The metronome's arm swings when the window opens. Windows' reduced motion setting turns it off.</small></label>
           </section>
-          <section class="module" aria-labelledby="prefWindowsTitle">
-            <div class="module-head"><h2 id="prefWindowsTitle">Windows</h2></div>
-            <label class="settings-field" for="snapGap"><span>Snap gap <output id="snapGapValue">0 px</output></span><input id="snapGap" name="snapGap" type="range" min="0" max="48" step="2" value="0" disabled><small>Space around snapped windows and between tiles.</small></label>
-            <label class="settings-toggle" for="preserveWindowSize"><input id="preserveWindowSize" name="preserveSize" type="checkbox" checked disabled><span><strong>Keep size across monitors</strong><small>A window moved to another display keeps its size and relative position.</small></span></label>
-          </section>
-          <section class="module" aria-labelledby="prefPowerTitle">
-            <div class="module-head"><h2 id="prefPowerTitle">Power</h2></div>
-            <label class="settings-field" for="powerDelay"><span>Delay before power actions</span><select id="powerDelay" disabled><option value="0">None</option><option value="5">5 seconds</option><option value="30">30 seconds</option></select><small>For Restart, Shut down, Sign out and Sleep: a countdown with Cancel on the banner. Apps with unsaved work can still stop a restart or shutdown.</small></label>
+          <div class="pref-stack">
+            <section class="module" aria-labelledby="prefWindowsTitle">
+              <div class="module-head"><h2 id="prefWindowsTitle">Windows</h2></div>
+              <label class="settings-field" for="snapGap"><span>Snap gap <output id="snapGapValue">0 px</output></span><input id="snapGap" name="snapGap" type="range" min="0" max="48" step="2" value="0" disabled><small>Space around snapped windows and between tiles.</small></label>
+              <label class="settings-toggle" for="preserveWindowSize"><input id="preserveWindowSize" name="preserveSize" type="checkbox" checked disabled><span><strong>Keep size across monitors</strong><small>A window moved to another display keeps its size and relative position.</small></span></label>
+            </section>
+            <section class="module" aria-labelledby="prefPowerTitle">
+              <div class="module-head"><h2 id="prefPowerTitle">Power</h2></div>
+              <label class="settings-field" for="powerDelay"><span>Delay before power actions</span><select id="powerDelay" disabled><option value="0">None</option><option value="5">5 seconds</option><option value="30">30 seconds</option></select><small>For Restart, Shut down, Sign out and Sleep: a countdown with Cancel on the banner. Apps with unsaved work can still stop a restart or shutdown.</small></label>
+            </section>
+          </div>
+          <section class="module" aria-labelledby="prefBackupsTitle">
+            <div class="module-head"><h2 id="prefBackupsTitle">Backups</h2></div>
+            <label class="settings-toggle" for="backupsEnabled"><input id="backupsEnabled" type="checkbox" disabled><span><strong>Back up every day</strong><small>Your notes, calendar, settings and arrangements, copied to the folder below. Each copy includes your secrets file.</small></span></label>
+            <label class="settings-field" for="backupsTime"><span>Time</span><select id="backupsTime" disabled></select><small>If the PC is off then, the backup is made when Maestro next starts.</small></label>
+            <div class="settings-row backup-row"><span><strong>Folder</strong><small id="backupsFolder">No folder chosen</small></span><button class="secondary" type="button" id="backupsChoose" disabled>Choose…</button><button class="secondary" type="button" id="backupsOpen" disabled>Open folder</button></div>
+            <div class="settings-row backup-row"><span><small id="backupsStatus" role="status">Loading</small></span><button class="secondary" type="button" id="backupsNow" disabled>Back up now</button></div>
+            <p class="pref-note">To put a backup back, exit Maestro and run <code>maestro restore-data</code>.</p>
           </section>
           <section class="module" aria-labelledby="prefElsewhereTitle">
             <div class="module-head"><h2 id="prefElsewhereTitle">On Their Own Pages</h2></div>
@@ -943,6 +956,23 @@
           <div class="launcher-foot">
             <p class="launcher-hint" id="launcherHint"></p>
             <p class="launcher-anywhere"><kbd>Super</kbd> + <kbd>Space</kbd> opens it from anywhere</p>
+          </div>
+        </section>
+      </div>
+
+      <div class="confirm-backdrop help-backdrop" id="notesTrashDialog" hidden>
+        <section class="help-dialog notes-trash" role="dialog" aria-modal="true" aria-labelledby="notesTrashTitle" tabindex="-1">
+          <header class="help-header">
+            <div><h2 id="notesTrashTitle">Trash</h2></div>
+            <button class="help-close" type="button" id="notesTrashClose" aria-label="Close the trash" title="Close (Esc)">
+              <svg viewBox="0 0 10 10" aria-hidden="true"><path d="m1.5 1.5 7 7m0-7-7 7"/></svg>
+            </button>
+          </header>
+          <p class="pref-note">A deleted note is kept here for 30 days.</p>
+          <div class="notes-trash-list" id="notesTrashList" aria-label="Deleted notes"></div>
+          <div class="arrange-actions">
+            <button class="secondary danger" type="button" id="notesTrashEmpty">Empty trash</button>
+            <button class="primary" type="button" id="notesTrashDone">Done</button>
           </div>
         </section>
       </div>
@@ -1203,6 +1233,7 @@
     </main>
   </div>
   <script src="attention.js"></script>
+  <script src="backups.js"></script>
   <script src="hardware.js"></script>
   <script src="powerkeys.js"></script>
   <script src="appearance.js"></script>

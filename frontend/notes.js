@@ -686,10 +686,97 @@
         return typeof note?.fill === "boolean" ? note.fill : note?.type !== "code";
     }
 
+    // ---------------------------------------------------------------- trash
+    // 2.1.0: a deleted note is kept for 30 days in a list of its own, `trash`,
+    // beside `notes` in notes.json, so nothing that reads notes ever sees it.
+    // Each entry is the whole note plus `deletedAt`.
+    const TRASH_DAYS = 30;
+    const TRASH_LIMIT = 200;
+    const DAY_MS = 86400000;
+
+    // A whole note, as notes.json holds one.
+    function isNote(note) {
+        return Boolean(note) && typeof note.id === "string"
+            && typeof note.title === "string"
+            && ["note", "code", "snippet"].includes(note.type)
+            && (note.fill === undefined || typeof note.fill === "boolean")
+            && (note.group === undefined || typeof note.group === "string")
+            && typeof note.content === "string"
+            && typeof note.pinned === "boolean"
+            && typeof note.created === "string"
+            && typeof note.updated === "string";
+    }
+
+    const isTime = value => typeof value === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d{1,3})?Z$/.test(value) && !Number.isNaN(Date.parse(value));
+    const isBlankNote = note => !note.title.trim() && !note.content.trim();
+    const trashedAt = entry => Date.parse(entry.deletedAt);
+
+    // A saved trash list as it should be: only whole notes with a time, none
+    // past its 30 days, 200 at most. One bad entry is dropped, so it can't
+    // cost the rest. `changed` says the saved list needs saving again.
+    function cleanTrash(list, now = new Date()) {
+        const saved = Array.isArray(list) ? list : [];
+        const trash = saved
+            .filter(entry => isNote(entry) && isTime(entry.deletedAt) && now.getTime() - trashedAt(entry) < TRASH_DAYS * DAY_MS)
+            .sort((left, right) => trashedAt(right) - trashedAt(left))
+            .slice(0, TRASH_LIMIT);
+        let changed = trash.length !== saved.length || (list !== undefined && !Array.isArray(list));
+        trash.forEach(entry => {
+            if (entry.type === "snippet") {
+                entry.type = "code";
+                changed = true;
+            }
+        });
+        if (cleanGameLinks(trash)) changed = true;
+        return { trash, changed };
+    }
+
+    // Takes a note out of data.notes and puts it at the front of data.trash.
+    // A note with nothing in it is only removed. Returns the trash entry, null
+    // for an empty note, or undefined when there's no such note.
+    function trashNote(data, id, now = new Date()) {
+        const index = data.notes.findIndex(note => note.id === id);
+        if (index < 0) return undefined;
+        const [note] = data.notes.splice(index, 1);
+        if (isBlankNote(note)) return null;
+        const entry = { ...note, deletedAt: now.toISOString() };
+        data.trash.unshift(entry);
+        if (data.trash.length > TRASH_LIMIT) data.trash.length = TRASH_LIMIT;
+        return entry;
+    }
+
+    // Puts a trashed note back among the notes, as it was. Its link to a game is
+    // dropped if that game has another note by now. Returns the note, or null.
+    function restoreNote(data, id) {
+        const index = data.trash.findIndex(entry => entry.id === id);
+        if (index < 0) return null;
+        const note = { ...data.trash[index] };
+        data.trash.splice(index, 1);
+        delete note.deletedAt;
+        if (data.notes.some(other => other.id === note.id)) note.id = `${note.id}_restored_${Date.now().toString(36)}`;
+        if (note.game !== undefined && data.notes.some(other => other.game === note.game)) delete note.game;
+        data.notes.push(note);
+        return note;
+    }
+
+    // Deletes a trashed note for good. True when there was one.
+    function removeTrashed(data, id) {
+        const index = data.trash.findIndex(entry => entry.id === id);
+        if (index < 0) return false;
+        data.trash.splice(index, 1);
+        return true;
+    }
+
+    // Whole days until a trashed note is removed: 30 on the day it's deleted, 1 on its last.
+    function trashDaysLeft(entry, now = new Date()) {
+        return Math.max(1, Math.ceil((trashedAt(entry) + TRASH_DAYS * DAY_MS - now.getTime()) / DAY_MS));
+    }
+
     global.ASCSNotes = {
         extractTags, matchesNoteQuery, findMatches, tagCounts, parseMarkdown, parseInline, toggleTask, MARKDOWN_REFERENCE, wordCount, openingMode,
         MARK_CLIPBOARD, MARK_CURSOR, PLACEHOLDER_MENU, askLabel, placeholderAsks,
         normalizeGroup, groupKey, groupNames, groupNotes, renameGroup, deleteGroup, groupedLabel, hasPlaceholders, fillPlaceholders, fillsPlaceholders,
-        GAME_NOTE_GROUP, isGameKey, cleanGameLinks, findGameNote, gameNoteTitle, appendStamp
+        GAME_NOTE_GROUP, isGameKey, cleanGameLinks, findGameNote, gameNoteTitle, appendStamp,
+        TRASH_DAYS, isNote, cleanTrash, trashNote, restoreNote, removeTrashed, trashDaysLeft
     };
 })(globalThis);
