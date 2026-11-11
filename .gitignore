@@ -7,6 +7,10 @@ tests/manual/
 # Local Claude Code instructions
 CLAUDE.md
 
+# A version being worked on: its own checkout, made by maestro new-release.
+# No slash at the end: maestro asks git about the folder before it exists.
+/_*
+
 # Copy made by the AHK parse check; left behind only if a check is interrupted
 _syntaxcheck.ahk
 # Windows Explorer files (frontend/assets/windows holds images)

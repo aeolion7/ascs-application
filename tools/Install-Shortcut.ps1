@@ -16,9 +16,9 @@
     -Remove  deletes everything this script creates and stops the launcher.
 
 .EXAMPLE
-    pwsh -File C:\ASCS\tools\Install-Shortcut.ps1
-    pwsh -File C:\ASCS\tools\Install-Shortcut.ps1 -Startup
-    pwsh -File C:\ASCS\tools\Install-Shortcut.ps1 -Remove
+    pwsh -File C:\Maestro\tools\Install-Shortcut.ps1
+    pwsh -File C:\Maestro\tools\Install-Shortcut.ps1 -Startup
+    pwsh -File C:\Maestro\tools\Install-Shortcut.ps1 -Remove
 #>
 param(
     [switch]$Startup,

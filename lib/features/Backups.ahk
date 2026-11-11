@@ -104,8 +104,8 @@ RunBackup() {
     ASCS_BackupAttempt := A_Now
     ASCS_BackupFailure := ""
     try {
-        ; The command works on C:\ASCS unless told where it is; only this child
-        ; process is told.
+        ; The command is told which folder's data to copy, the one this Maestro
+        ; runs from; only this child process is told.
         Critical("On")
         EnvSet("ASCS_REPO", A_ScriptDir)
         try {

@@ -127,7 +127,7 @@ const PreviewScenes = (() => {
         navigate("commands");
         say({ type: "settings", drives: ["C:", "J:"], snapGap: 0, preserveSize: true, hotkeys: { notes: "q", everything: "f", dashboard: "i", terminal: "t", explorer: "e", claude: "c", taskmanager: "h" }, claudeShortcut: "Ctrl+Alt+Space", powerDelay: 0, ascsSounds: "show", searchTemplate: "https://duckduckgo.com/?q=%s" });
         say({ type: "commands", items: [
-            { id: 1, name: "ASCS repo", kind: "folder", target: "C:\\ASCS", key: "a" },
+            { id: 1, name: "ASCS repo", kind: "folder", target: "C:\\Maestro", key: "a" },
             { id: 2, name: "Bambu Studio", kind: "app", target: "C:\\Program Files\\Bambu Studio\\bambu-studio.exe", key: "" },
             { id: 3, name: "RetroAchievements", kind: "url", target: "https://retroachievements.org", key: "" }
         ] });
@@ -138,7 +138,7 @@ const PreviewScenes = (() => {
         say({ type: "workspaces", monitors: 1, items: [
             { name: "Default", windows: 5, saved: "2026-11-08T14:14:00", desktopNames: ["", ""], aspects: { 1: 2.4571 }, layout: [
                 w(1, "msedge", "ASCS README - GitHub", 0, 0, 0, 0.3, 1), w(2, "Code", "workspacesview.js - ASCS", 0, 0.3, 0, 0.45, 1),
-                w(3, "WindowsTerminal", "pwsh: C:\\ASCS", 0, 0.75, 0, 0.25, 0.55), w(4, "explorer", "C:\\ASCS\\frontend", 0, 0.75, 0.55, 0.25, 0.45),
+                w(3, "WindowsTerminal", "pwsh: C:\\Maestro", 0, 0.75, 0, 0.25, 0.55), w(4, "explorer", "C:\\Maestro\\frontend", 0, 0.75, 0.55, 0.25, 0.45),
                 w(5, "Discord", "#general", 1, 0, 0, 0.34, 1)] },
             { name: "Coding", windows: 1, saved: "2026-11-07T09:30:00", desktopNames: [""], aspects: { 1: 2.4571 }, layout: [w(1, "Code", "ascs", 0, 0, 0, 1, 1)] }
         ] });
@@ -153,8 +153,8 @@ const PreviewScenes = (() => {
         say({ type: "windows", items: [
             { id: "101", app: "Code", title: "workspacesview.js - ASCS", minimized: false },
             { id: "102", app: "msedge", title: "ASCS README - GitHub", minimized: false },
-            { id: "103", app: "WindowsTerminal", title: "pwsh: C:\\ASCS", minimized: false },
-            { id: "104", app: "explorer", title: "C:\\ASCS\\frontend", minimized: false }] });
+            { id: "103", app: "WindowsTerminal", title: "pwsh: C:\\Maestro", minimized: false },
+            { id: "104", app: "explorer", title: "C:\\Maestro\\frontend", minimized: false }] });
     }
 
     // A workspace with many windows, and many workspaces.

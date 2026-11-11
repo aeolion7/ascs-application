@@ -29,7 +29,7 @@ function New-TestRepo([string]$name) {
     Invoke-QuietGit -C $work config user.name Test
     Invoke-QuietGit -C $work switch -c master
     Set-Content "$work\a.txt" one
-    Set-Content "$work\.gitignore" '/data/*'
+    Set-Content "$work\.gitignore" "/data/*`n/_*"
     Invoke-QuietGit -C $work add -A; Invoke-QuietGit -C $work commit -m first
     Invoke-QuietGit -C $work push -u origin master
     return @{ base = $base; origin = $origin; work = $work }
@@ -39,7 +39,7 @@ function New-TestBranch($repo, [string]$branch, [string]$file = 'b.txt') {
     Set-Content "$($repo.work)\$file" two; Invoke-QuietGit -C $repo.work add -A; Invoke-QuietGit -C $repo.work commit -m "on $branch"
 }
 function Invoke-Cli($repo, [string[]]$arguments, [string]$stdin = '', [string]$from = '') {
-    if ((Resolve-Path $repo.work).Path -ieq 'C:\ASCS') { throw 'These tests must never run against the real repo.' }
+    if (-not (Resolve-Path $repo.work).Path.StartsWith($scratch, [StringComparison]::OrdinalIgnoreCase)) { throw 'These tests must never run against the real repo.' }
     $env:ASCS_REPO = $repo.work
     $place = if ($from) { $from } else { $scratch }
     Push-Location $place
@@ -326,6 +326,140 @@ $run = Invoke-Cli $r @('restore-data')
 Add-Check 'restore: the list marks the copy from before' ($run.text -match '(?m)^\s+1  .*before a restore') $run.text
 $run = Invoke-Cli $r @('restore-data', $before[0].Name, '--yes')
 Add-Check 'restore: a restore can be undone, by name' ($run.code -eq 0 -and (Get-Content "$data\notes.json") -eq 'changed' -and (Test-Path "$data\added-later.txt")) $run.text
+
+# ---- new-release, bump, check --release and clean
+# A repository with the version in its five places, and a stand-in test runner
+# that reports whatever counts.txt holds.
+function New-VersionedRepo([string]$name) {
+    $repo = New-TestRepo $name
+    $work = $repo.work
+    [IO.Directory]::CreateDirectory("$work\frontend") | Out-Null
+    [IO.Directory]::CreateDirectory("$work\tests") | Out-Null
+    [IO.File]::WriteAllText("$work\ASCS.ahk", "; A stand-in`r`n; Version 1.2.3`r`n#Requires AutoHotkey v2.0 64-bit`r`n#SingleInstance Force`r`nglobal ASCS_Version := `"1.2.3`"`r`n")
+    [IO.File]::WriteAllText("$work\frontend\index.html", "<span id=`"sidebarVersion`" hidden>Maestro <span>1.2.3</span></span>`r`n")
+    [IO.File]::WriteAllText("$work\frontend\calendar.js", "a = `"-//Aeolionware//ASCS 1.2.3//EN`";`r`nb = { name: `"VERSION`", value: `"2.0`" };`r`nc = `"-//Aeolionware//ASCS 1.2.3//EN`";`r`n")
+    [IO.File]::WriteAllText("$work\README.md", "# App`r`n`r`n**Version:** 1.2.3  `r`n**Status:** 1.2.3 is complete.`r`n`r`n- ``tests\core.tests.ahk`` covers the core (5 checks).`r`n`r`nAutomated: core 5, cli 7.`r`n")
+    [IO.File]::WriteAllText("$work\CHANGELOG.md", "# Log`r`n`r`nThe newest release is first.`r`n`r`n## Version 1.2.3`r`n`r`nChecks at release: core 5, cli 7.`r`n")
+    [IO.File]::WriteAllText("$work\tests\counts.txt", "core       PASS 5 FAIL 0`r`ncli        PASS 7 FAIL 0`r`n")
+    [IO.File]::WriteAllText("$work\tests\run-tests.ps1", "Get-Content (Join-Path `$PSScriptRoot 'counts.txt') | ForEach-Object { Write-Host `$_ }`r`nif ((Get-Content (Join-Path `$PSScriptRoot 'counts.txt') -Raw) -match 'FAIL [1-9]') { exit 1 }`r`n")
+    Invoke-QuietGit -C $work add -A; Invoke-QuietGit -C $work commit -m 'versioned'; Invoke-QuietGit -C $work push origin master
+    return $repo
+}
+function Get-Changes([string]$folder) { @(& git -C $folder status --porcelain) }
+
+$r = New-VersionedRepo release
+$dev = "$($r.work)\_1.3"
+$run = Invoke-Cli $r @('new-release', '1.3.0')
+$log = if (Test-Path "$dev\CHANGELOG.md") { [IO.File]::ReadAllText("$dev\CHANGELOG.md") } else { '' }
+Add-Check 'new-release: a checkout inside the main folder, on its branch' ($run.code -eq 0 -and (Test-Path "$dev\ASCS.ahk") -and (& git -C $dev branch --show-current) -eq 'feat/v1.3.0') $run.text
+Add-Check 'new-release: the heading goes above the last release, in the file''s line endings' ($log.Contains("first.`r`n`r`n## Version 1.3.0 (in progress)`r`n`r`n## Version 1.2.3`r`n") -and -not ($log -replace "`r`n", '').Contains("`n")) $log
+Add-Check 'new-release: nothing is committed, and only the CHANGELOG changed' ((Get-Rev $r feat/v1.3.0) -eq (Get-Rev $r master) -and ((Get-Changes $dev) -join '|') -eq ' M CHANGELOG.md') ((Get-Changes $dev) -join '|')
+Add-Check 'new-release: the main folder is untouched' ((Get-Changes $r.work).Count -eq 0 -and (& git -C $r.work branch --show-current) -eq 'master')
+Add-Check 'new-release: the version waits for bump' ([IO.File]::ReadAllText("$dev\README.md").Contains('**Version:** 1.2.3'))
+$run = Invoke-Cli $r @('new-release', '1.3.0')
+Add-Check 'new-release: a version that has a branch is refused' ($run.code -ne 0 -and $run.text -match 'already a branch') $run.text
+$run = Invoke-Cli $r @('new-release', '1.2.3')
+Add-Check 'new-release: a version master already has is refused' ($run.code -ne 0 -and $run.text -match 'already has Version 1\.2\.3') $run.text
+$run = Invoke-Cli $r @('new-release', '1.2.0')
+Add-Check 'new-release: an older version is refused' ($run.code -ne 0 -and $run.text -match "isn't newer" -and -not (Test-Path "$($r.work)\_1.2")) $run.text
+$run = Invoke-Cli $r @('new-release', '1.3')
+Add-Check 'new-release: a version needs three numbers' ($run.code -ne 0 -and $run.text -match 'three numbers') $run.text
+$run = Invoke-Cli $r @('new-release', '1.4.0', 'master')
+Add-Check 'new-release: master as the branch is refused' ($run.code -ne 0 -and -not (Test-Path "$($r.work)\_1.4")) $run.text
+[IO.Directory]::CreateDirectory("$($r.work)\_1.5") | Out-Null
+$run = Invoke-Cli $r @('new-release', '1.5.0')
+Add-Check 'new-release: a folder already there is refused' ($run.code -ne 0 -and $run.text -match 'already exists' -and (Get-OriginRev $r feat/v1.5.0) -eq '' -and -not (& git -C $r.work branch --list feat/v1.5.0)) $run.text
+$run = Invoke-Cli $r @('new-release', '1.2.4', 'fix/v1.2.4')
+Add-Check 'new-release: a named branch, and a patch version keeps its last number' ($run.code -eq 0 -and (& git -C "$($r.work)\_1.2.4" branch --show-current) -eq 'fix/v1.2.4') $run.text
+
+$run = Invoke-Cli $r @('bump', '1.3.0')
+Add-Check 'bump: refused on master' ($run.code -ne 0 -and $run.text -match 'never on master' -and (Get-Changes $r.work).Count -eq 0) $run.text
+$run = Invoke-Cli $r @('bump', '1.3') '' $dev
+Add-Check 'bump: a version needs three numbers' ($run.code -ne 0 -and $run.text -match 'three numbers') $run.text
+$sidebar = [IO.File]::ReadAllText("$dev\frontend\index.html")
+[IO.File]::WriteAllText("$dev\frontend\index.html", "<span>nothing here</span>`r`n")
+$run = Invoke-Cli $r @('bump', '1.3.0') '' $dev
+Add-Check 'bump: a missing place is named, and nothing changes' ($run.code -ne 0 -and $run.text -match 'sidebar' -and [IO.File]::ReadAllText("$dev\ASCS.ahk").Contains('ASCS_Version := "1.2.3"') -and [IO.File]::ReadAllText("$dev\README.md").Contains('1.2.3')) $run.text
+[IO.File]::WriteAllText("$dev\frontend\index.html", $sidebar)
+$run = Invoke-Cli $r @('bump', '1.3.0') '' $dev
+$ahkText = [IO.File]::ReadAllText("$dev\ASCS.ahk"); $calendar = [IO.File]::ReadAllText("$dev\frontend\calendar.js")
+Add-Check 'bump: all five places' ($run.code -eq 0 -and $ahkText.Contains("; Version 1.3.0`r`n") -and $ahkText.Contains('ASCS_Version := "1.3.0"') -and [IO.File]::ReadAllText("$dev\frontend\index.html").Contains('Maestro <span>1.3.0</span>') -and [IO.File]::ReadAllText("$dev\README.md").Contains("**Version:** 1.3.0  `r`n")) $run.text
+Add-Check 'bump: both calendar ids, and not the iCalendar version' ([regex]::Matches($calendar, 'ASCS 1\.3\.0//EN').Count -eq 2 -and $calendar.Contains('value: "2.0"')) $calendar
+Add-Check 'bump: no byte order mark, and the rest of each file as it was' ([IO.File]::ReadAllBytes("$dev\ASCS.ahk")[0] -eq 0x3B -and $ahkText.Replace('1.3.0', '1.2.3') -ceq [IO.File]::ReadAllText("$($r.work)\ASCS.ahk"))
+Add-Check 'bump: commits nothing' ((Get-Rev $r feat/v1.3.0) -eq (Get-Rev $r master))
+$run = Invoke-Cli $r @('status')
+Add-Check 'bump: status reads what it wrote' ($run.text -match 'Version:\s+1\.3\.0, the same everywhere' -and $run.text -match 'Version:\s+1\.2\.3, the same everywhere') $run.text
+
+# check: the counts, and what a release still needs.
+$run = Invoke-Cli $r @('check') '' $dev
+Add-Check 'check: ends with the counts' ($run.code -eq 0 -and $run.text -match 'Counts:\s+core 5, cli 7') $run.text
+$run = Invoke-Cli $r @('check', '--release', '--quick') '' $dev
+Add-Check 'check --release: needs the tests' ($run.code -ne 0 -and $run.text -match 'Leave out --quick') $run.text
+$run = Invoke-Cli $r @('check', '--release') '' $dev
+Add-Check 'check --release: an "in progress" heading and an old Status line fail' ($run.code -ne 0 -and $run.text -match 'NOT READY' -and $run.text -match 'in progress' -and $run.text -match "Status line doesn't name 1\.3\.0" -and $run.text -match "newest entry doesn't have this run's counts") $run.text
+$readme = [IO.File]::ReadAllText("$dev\README.md").Replace('**Status:** 1.2.3', '**Status:** 1.3.0')
+[IO.File]::WriteAllText("$dev\README.md", $readme)
+[IO.File]::WriteAllText("$dev\CHANGELOG.md", $log.Replace('1.3.0 (in progress)', "1.3.0`r`n`r`nChecks at release: core 5, cli 7."))
+Set-Content "$dev\added.txt" new
+$run = Invoke-Cli $r @('check', '--release') '' $dev
+Add-Check 'check --release: passes once the docs agree' ($run.code -eq 0 -and $run.text -match 'Release:\s+the version' -and $run.text -match 'All good') $run.text
+Add-Check 'check --release: says a new file is not staged' ($run.text -match '1 new file\(s\)') $run.text
+[IO.File]::WriteAllText("$dev\tests\counts.txt", "core       PASS 6 FAIL 0`r`ncli        PASS 7 FAIL 0`r`n")
+$run = Invoke-Cli $r @('check', '--release') '' $dev
+Add-Check 'check --release: counts from an older run fail, in both files and by suite' ($run.code -ne 0 -and $run.text -match "README doesn't have this run's counts: core 6, cli 7" -and $run.text -match 'CHANGELOG' -and $run.text -match 'says 5 checks for core') $run.text
+[IO.File]::WriteAllText("$dev\tests\counts.txt", "core       PASS 5 FAIL 0`r`ncli        PASS 7 FAIL 0`r`n")
+[IO.File]::WriteAllText("$dev\frontend\index.html", $sidebar)
+$run = Invoke-Cli $r @('check', '--release') '' $dev
+Add-Check 'check --release: a version that disagrees fails' ($run.code -ne 0 -and $run.text -match "isn't the same everywhere" -and $run.text -match 'sidebar 1\.2\.3') $run.text
+$run = Invoke-Cli $r @('bump', '1.3.0') '' $dev
+
+# clean: only what's merged and pushed, with nothing left in it.
+Invoke-QuietGit -C "$($r.work)\_1.2.4" checkout -- CHANGELOG.md
+$run = Invoke-Cli $r @('clean', '--yes')
+Add-Check 'clean: uncommitted work is kept' ($run.code -eq 0 -and $run.text -match 'uncommitted work' -and (Test-Path "$dev\added.txt")) $run.text
+Add-Check 'clean: a new checkout nobody pushed is kept' ($run.text -match "fix/v1\.2\.4\], because its branch isn't pushed" -and (Test-Path "$($r.work)\_1.2.4")) $run.text
+Invoke-QuietGit -C $dev add -A; Invoke-QuietGit -C $dev commit -m 'v1.3.0'
+$run = Invoke-Cli $r @('clean', '--yes')
+Add-Check 'clean: a branch not merged is kept' ($run.text -match "feat/v1\.3\.0\], because its branch isn't merged" -and (Test-Path $dev)) $run.text
+$run = Invoke-Cli $r @('cut-release', 'feat/v1.3.0', '--yes')
+Add-Check 'clean: (the release is cut)' ($run.code -eq 0) $run.text
+[IO.Directory]::CreateDirectory("$dev\data") | Out-Null
+$run = Invoke-Cli $r @('clean', '--yes')
+Add-Check 'clean: a copy of your data is kept' ($run.text -match 'copy of your data' -and (Test-Path "$dev\data")) $run.text
+[IO.Directory]::Delete("$dev\data")
+$run = Invoke-Cli $r @('clean', '--yes') '' $dev
+Add-Check 'clean: the checkout you stand in is kept' ($run.text -match "standing in it" -and (Test-Path $dev)) $run.text
+$run = Invoke-Cli $r @('clean', '--dry-run')
+Add-Check 'clean: a dry run lists it and changes nothing' ($run.code -eq 0 -and $run.text -match 'Removing:.*_1\.3' -and $run.text -match 'Dry run' -and (Test-Path $dev)) $run.text
+$run = Invoke-Cli $r @('clean') 'n'
+Add-Check 'clean: asks, and no means no' ($run.text -match 'Stopped' -and (Test-Path $dev)) $run.text
+$run = Invoke-Cli $r @('clean') 'y'
+Add-Check 'clean: removes the folder and the local branch' ($run.code -eq 0 -and -not (Test-Path $dev) -and -not (& git -C $r.work branch --list feat/v1.3.0)) $run.text
+Add-Check 'clean: the branch stays on the remote, and the others stay' ((Get-OriginRev $r feat/v1.3.0) -ne '' -and (Test-Path "$($r.work)\_1.2.4") -and (& git -C $r.work branch --list fix/v1.2.4)) $run.text
+Add-Check 'clean: the main folder is never touched' ((Test-Path "$($r.work)\ASCS.ahk") -and (Get-Changes $r.work).Count -eq 0)
+$run = Invoke-Cli $r @('clean', '--force')
+Add-Check 'clean: an unknown option is refused' ($run.code -ne 0) $run.text
+
+# A main folder that doesn't ignore the checkout would list it as a new file.
+$r = New-VersionedRepo unignored
+Set-Content "$($r.work)\.gitignore" '/data/*'
+Invoke-QuietGit -C $r.work add -A; Invoke-QuietGit -C $r.work commit -m 'no underscore rule'
+$run = Invoke-Cli $r @('new-release', '1.3.0')
+Add-Check 'new-release: refused when git would not ignore the checkout' ($run.code -ne 0 -and $run.text -match '\.gitignore' -and -not (Test-Path "$($r.work)\_1.3") -and -not (& git -C $r.work branch --list feat/v1.3.0)) $run.text
+
+# With no folder named, the command works on the repository its own file is in,
+# and a checkout's copy of it finds the main folder.
+$r = New-VersionedRepo where
+[IO.Directory]::CreateDirectory("$($r.work)\tools\cli") | Out-Null
+Copy-Item $cli "$($r.work)\tools\cli\Maestro-Cli.ps1"
+Invoke-QuietGit -C $r.work add -A; Invoke-QuietGit -C $r.work commit -m 'the command line'
+$run = Invoke-Cli $r @('new-release', '1.3.0')
+Remove-Item Env:\ASCS_REPO
+foreach ($copy in "$($r.work)\tools\cli\Maestro-Cli.ps1", "$($r.work)\_1.3\tools\cli\Maestro-Cli.ps1") {
+    $own = (& pwsh -NoProfile -File $copy clean --dry-run 2>&1 | ForEach-Object { "$_" }) -join "`n"
+    $from = if ($copy -like '*\_1.3\*') { "a checkout's copy" } else { "the main folder's copy" }
+    Add-Check "no folder named: $from works on the main folder" ($own -match ('Keeping:\s+' + [regex]::Escape("$($r.work)\_1.3 ")) -and $own -notmatch ('Keeping:\s+' + [regex]::Escape("$($r.work) "))) $own
+}
 
 # ---- try and status, with stand-ins for ASCS.ahk
 $standIn = @'

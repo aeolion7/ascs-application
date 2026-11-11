@@ -76,7 +76,7 @@
 
     // Bindings with the default letters
     const defaults = { notes: "q", everything: "f", dashboard: "i", terminal: "t", explorer: "e", claude: "c", taskmanager: "h" };
-    let b = K.buildBindings(defaults, [{ id: 1, name: "ASCS repo", kind: "folder", target: "C:\ASCS", key: "a" }]);
+    let b = K.buildBindings(defaults, [{ id: 1, name: "ASCS repo", kind: "folder", target: "C:\Maestro", key: "a" }]);
     equal("Q opens notes", b.super.q.title, "Quick Notes");
     equal("C asks Claude without Shift", b.super.c.title, "Claude");
     equal("Shift+C captures", b.shift.c.title, "Quick capture");

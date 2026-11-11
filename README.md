@@ -1,9 +1,9 @@
 # Aeolionware Maestro
 
 **Brand:** AEOLIONWARE MAESTRO (code name ASCS: the repo, folders and file names keep it)  
-**Version:** 2.1.0  
+**Version:** 2.1.1  
 **Platform:** Windows 10/11 (Windows 11 target verification)  
-**Status:** 2.1.0 is complete: Maestro backs up its data every day and can put a backup back, and deleted notes go to a trash. The manual pass passed in full: 25 items, the last 8 of them on the released build (§12). Next is 2.1.1, then 2.2.0 (§14). Release history is in [CHANGELOG.md](CHANGELOG.md).
+**Status:** 2.1.1 is complete: the command line starts a version, writes its number, checks a release's docs and clears away finished checkouts, and Maestro's folder becomes `C:\Maestro`, renamed once by a script after this release is on `master`. Its manual pass comes after that rename, which every item needs (§12). Next is 2.1.2, then a finish for the design (§14). Release history is in [CHANGELOG.md](CHANGELOG.md).
 
 Maestro is a keyboard-driven Windows utility suite. It uses AutoHotkey v2 for hotkeys and Windows automation, WebView2 for its graphical interface, and a web frontend built with HTML, CSS, and JavaScript.
 
@@ -97,7 +97,7 @@ The layout adapts to narrower WebView windows, provides visible keyboard focus, 
 ## 4. Application Structure
 
 ```text
-C:\ASCS\
+C:\Maestro\
 ├── ASCS.ahk                  Main script: globals, WebView, navigation and the message allowlist; includes each feature from lib\features
 ├── ASCS.DriveProbe.ahk       Isolated per-drive metrics worker
 ├── ASCS.HardwareProbe.ahk    Isolated hardware inventory worker (2.0.0)
@@ -658,11 +658,11 @@ AutoHotkey sends JSON with `PostWebMessageAsJson()`.
 - **Editing workspaces:** the page sends only places and switches for a saved window, each range-checked in AHK (`ParseWorkspaceWindowEdit`). It can never set an app's path or command, because Restore launches what the file holds: a path is only ever captured by AHK from a real window, and checked again at restore. Each edit works on a copy of the file and swaps it in, so a failure leaves the workspace as it was. Editing never touches an open window.
 - **Launch rules:** no listener, no elevation, and nothing is launched. `RegisterShellHookWindow` only tells Maestro when top-level windows are created; Maestro then looks at a window for up to about 3 seconds and moves it only if its app has a rule that's on, its process is under 15 seconds old, and it's that process's first main window. App paths are validated when saved and when read from `data\rules.ini` (a drive-rooted `.exe`, up to 260 characters, no `..`).
 - The sign-in task check only reads Task Scheduler, unelevated, through its local COM service. Maestro never registers, changes or removes a task, and never asks for elevation; only you run `Configure-Startup.ps1`.
-- Restrict write access to `C:\ASCS` (including `data`) to the installing account, Administrators, and SYSTEM, and do not run Maestro elevated.
+- Restrict write access to `C:\Maestro` (including `data`) to the installing account, Administrators, and SYSTEM, and do not run Maestro elevated.
 
 ## 9. Dependencies
 
-**Required:** Windows 10 or 11 (Windows 11 is the verification target); AutoHotkey v2 64-bit; the Microsoft Edge WebView2 Runtime (Evergreen preferred); WebViewToo under `C:\ASCS\webview`; and Keychron Launcher configured to emit F24 for the Super key.
+**Required:** Windows 10 or 11 (Windows 11 is the verification target); AutoHotkey v2 64-bit; the Microsoft Edge WebView2 Runtime (Evergreen preferred); WebViewToo under `C:\Maestro\webview`; and Keychron Launcher configured to emit F24 for the Super key.
 
 **Optional:**
 
@@ -676,10 +676,10 @@ AutoHotkey sends JSON with `PostWebMessageAsJson()`.
 
 1. Install AutoHotkey v2 (64-bit) and the WebView2 Runtime.
 2. Configure the Keychron Super key to emit F24.
-3. Place the repository at `C:\ASCS`, with WebViewToo under `webview` and (optionally) the virtual-desktop DLL under `lib`.
+3. Place the repository at `C:\Maestro`, with WebViewToo under `webview` and (optionally) the virtual-desktop DLL under `lib`.
 4. Restrict write access as described in [Security](#8-security).
-5. Run `pwsh -File C:\ASCS\tools\Install-Shortcut.ps1`. It creates a **Maestro** Start Menu shortcut (to pin), registers **Maestro Launcher** in your Startup folder, and starts the launcher, which enables **Ctrl + Alt + Shift + A**. Add `-Startup` to also start Maestro itself at sign-in, or `-Remove` to delete everything it created and stop the launcher.
-6. Press Ctrl + Alt + Shift + A (or run `C:\ASCS\ASCS.ahk`). Maestro starts hidden. Tap Super, or click the tray icon, to show it.
+5. Run `pwsh -File C:\Maestro\tools\Install-Shortcut.ps1`. It creates a **Maestro** Start Menu shortcut (to pin), registers **Maestro Launcher** in your Startup folder, and starts the launcher, which enables **Ctrl + Alt + Shift + A**. Add `-Startup` to also start Maestro itself at sign-in, or `-Remove` to delete everything it created and stop the launcher.
+6. Press Ctrl + Alt + Shift + A (or run `C:\Maestro\ASCS.ahk`). Maestro starts hidden. Tap Super, or click the tray icon, to show it.
 
 **Start or reload with one hotkey:** `ASCS.Launcher.ahk` is a tiny resident script (no tray icon) that owns Ctrl + Alt + Shift + A. When Maestro is not running, it starts Maestro. When Maestro is running, it sends Maestro a reload message; Maestro saves pending note edits and reloads. If an older Maestro does not acknowledge the message within two seconds, the launcher relaunches it, and `#SingleInstance Force` replaces the old instance. Maestro also handles the same keys itself, so reloading works even without the launcher; only starting a stopped Maestro needs it. `ASCS.Launcher.ahk --trigger` performs the action once and exits.
 
@@ -687,18 +687,24 @@ The hotkey lives in a launcher rather than on the Start Menu shortcut because Wi
 
 ### Developing and running apart
 
-Maestro reads its code and data from the folder it runs in, so whatever is checked out in `C:\ASCS` is what starts. Keep `C:\ASCS` on `master`, as the copy you use, and do branch work in a second checkout:
+Maestro reads its code and data from the folder it runs in, so whatever is checked out in `C:\Maestro` is what starts. Keep `C:\Maestro` on `master`, as the copy you use, and do branch work in a second checkout:
 
 ```powershell
-git -C C:\ASCS worktree add C:\ASCS-2.0 -b feat/v2.0.0
+maestro new-release 2.2.0
 ```
+
+*(2.1.1)* That makes `C:\Maestro\_2.2` on the branch `feat/v2.2.0` and starts its CHANGELOG entry. A version's checkout sits inside the main folder, where the editor's git tools show it, and git ignores whatever starts with an underscore there. The command finds the main folder through git, so it doesn't depend on what the folders are called. Before 2.1.1 the main folder was `C:\ASCS` and a version's checkout sat beside it (`C:\ASCS-2.0`).
 
 The `maestro` command (`tools\cli\Maestro-Cli.ps1`, run through `C:\Scripts\maestro.cmd`; `maestro help` lists it all). *(2.0.0)* It replaces the `ASCS` command entirely: `C:\Scripts\ASCS.cmd` and `maestro.cmd`'s fallback to `ASCS-Cli.ps1` were removed once 2.0.0 was on master.
 
 | Command | What it does |
 |---|---|
 | `maestro status` | Each checkout's branch and version, whether the version agrees everywhere, what's running and from where, whether that code is older than what's on disk, and errors logged since it started |
-| `maestro check` | The tests, parse check and hidden-character scan for the checkout you're standing in, with one result (`--quick` skips the tests) |
+| `maestro check` | The tests, parse check and hidden-character scan for the checkout you're standing in, with one result (`--quick` skips the tests). *(2.1.1)* It ends with the check counts in the form this file and the CHANGELOG use |
+| `maestro check --release` | *(2.1.1)* The same, and what marking a release complete asks of the docs: the version is the same everywhere, the CHANGELOG's newest heading is that version and not "in progress", the Status line above names it, and both files have this run's counts. It also says when new files aren't staged yet |
+| `maestro new-release <version> [branch]` | *(2.1.1)* Makes the second checkout for a version inside the main folder (`C:\Maestro\_2.2` for 2.2.0) on a new branch off `master`, `feat/v<version>` unless one is named, and adds the version's "(in progress)" heading to its CHANGELOG. It refuses a version that isn't newer, and a branch or folder that exists |
+| `maestro bump <version>` | *(2.1.1)* Writes the version in the five places `status` reads, in the checkout you're standing in, and never on `master`. If one of them can't be found, it changes nothing and names it |
+| `maestro clean` | *(2.1.1)* Removes each second checkout whose branch is merged into `master` and pushed, with its local branch; the branch stays on the remote. It keeps any with uncommitted work, a copy of your data or a build running, says why, and asks first (`--dry-run` only lists) |
 | `maestro try [folder]` | Closes Maestro, saving its notes, and runs a second checkout on a copy of your data, with its own calendar; the title bar says **TEST BUILD**. Windows sounds, controller names, power actions, audio switches, games and moved windows are still real |
 | `maestro try --end` | Closes the test build, deletes the copy, and starts your real Maestro |
 | `maestro backup-data` | Copies `data\` to the backups folder, which is chosen in Preferences › Backups (kept as `Folder` under `[Backups]` in `data\settings.ini`); with none chosen, it stops. Maestro runs this once a day when **Back up every day** is on. It works while Maestro runs. Kept: every copy from the newest day, the newest from each of the 14 newest days, and the first from each of the 6 newest months. A copy that can't be finished is removed, and each run's result goes to `data\backup-status.ini`. Each copy includes `secrets.ini`, so keep them on this PC |
@@ -711,11 +717,11 @@ The `maestro` command (`tools\cli\Maestro-Cli.ps1`, run through `C:\Scripts\maes
 ### Automated
 
 ```powershell
-pwsh -File C:\ASCS\tests\run-tests.ps1
+pwsh -File C:\Maestro\tests\run-tests.ps1
 ```
 
 - `tests\core.tests.ahk` covers `lib\ASCS.Core.ahk` (771 checks): toast stacking and timing, every field of a workspace edit and what must be refused, launch rule paths, which desktop an added window belongs on, which game RetroArch is running, sign-in timings, the sign-in task warning, suspended system windows in workspaces, workspace count wording, unsaved-work titles and VS Code's backup folders before power actions, note group and game link checks on save, Select › Delete request lists, passed countdowns, reminder pop-up text, which files count as leveled copies, the notification level board's requests, note placeholders at paste time, calendar files, calendar request building (every operation's method, path and headers, escaping, and what must be refused), ids, versions, colors and iCalendar checks, reminder lists, sound library rules (version folders, WAV lengths, library folders that must be refused, leveled file names, the Windows sound allowlist), Steam's binary app cache (a synthetic file built byte by byte, including a decoy and a truncated copy), RetroAchievements image addresses and the image cache cap, the emulators' record parsers (including binary game lists built in memory), Steam's manifests, library folders and play-time file, controller IDs, modes and names, executable paths, audio device matching, RetroAchievements credentials and game ids, the Claude quick-entry key combination grammar, countdown dates, the almanac payload, Wikipedia titles and feed addresses, shortcut-letter validation, quick action ids, drive lists, Explorer names, workspace names and executables, workspace relaunch commands, workspace window matching, custom-command validation and payload parsing, search templates and encoding, activity lines, and the JSON helpers.
-- `tests\cli.tests.ps1` covers the `maestro` command (113 checks) against throwaway repositories, with stand-in Maestro scripts that only answer the exit message: every refusal in `cut-release`, `check` finding syntax errors and hidden characters, `backup-data` (a file locked by WebView2, a copy that can't finish, what's kept, and every folder it must refuse), `restore-data` (each refusal, the copy made first, and undoing a restore), and `try` and `try --end`, including that the copy's calendar points at the copy and that the real data doesn't change.
+- `tests\cli.tests.ps1` covers the `maestro` command (155 checks) against throwaway repositories, with stand-in Maestro scripts that only answer the exit message: every refusal in `cut-release`, `check` finding syntax errors and hidden characters, `backup-data` (a file locked by WebView2, a copy that can't finish, what's kept, and every folder it must refuse), `restore-data` (each refusal, the copy made first, and undoing a restore), `new-release` (the checkout, the heading in the file's own line endings, and each refusal), `bump` (all five places, nothing else in a file, and nothing changed when a place is missing), `check --release` (each thing it asks of the docs, with a stand-in test runner), `clean` (every reason a checkout is kept, and that the remote and the main folder are untouched), and `try` and `try --end`, including that the copy's calendar points at the copy and that the real data doesn't change.
 - `tests\frontend.tests.html` covers `frontend\palette.js`, `keymap.js`, `notes.js`, `charts.js`, `almanac.js` (with `quotes.js`) `logs.js`, `games.js`, `sounds.js`, `calendar.js`, `workspaces.js` and `backups.js` (1232 checks) in headless Edge, including game note keys and timestamps, the awards reply and its tabs, workspace places, percentages, the edit message, dragging and snapping, and note groups (sections, rename and merge, delete, palette matching) and US holiday dates. For the calendar: iCalendar reading (folding, escapes, all-day, UTC, floating and named time zones, including summer time), repeats (weekly days across the end of daylight saving, the 31st in short months, the 2nd Tuesday and last Friday, 29 February, counts, end dates, skipped dates, moved occurrences), reminders, writing that keeps a phone's own properties, and server replies. For sounds: WAV files built byte by byte in every supported format (8-, 16-, 24- and 32-bit, float, extensible, with extra chunks), levels against known values, gain plans with clipping limits, and gain applied in place. For the keymap, these include the Windows passthrough keys. For notes: tags, filter queries, Markdown structure, and hostile input (HTML and script markup must stay plain text). For charts: sparkline geometry, clamping, and bad data. For the palette: the calculator, query parsing, matching, ranking, usage history, and workspace-name rules. For the keymap: layout integrity (108 unique, non-overlapping keys of the customized Q6 Max, including the planned Code and macro keys), Super and Super + Shift bindings, Shift-layer precedence, Windows passthrough, and robustness with missing settings.
 
 - `tests\smoke.js` runs the real page (every module and stylesheet, from a copy of `index.html` whose base is the frontend folder) with a stand-in for WebView2: the page loads and every view opens without a script error or unhandled rejection, and every message the page sends is one `ASCS.ahk` accepts (the allowlist is read from `HandleWebMessage` each run). It reports the file, line and message of any error. It also checks what unit tests can't see: Continue Playing's room for a raised, focused tile, the mastered bar's paint, the sign-in task warning in Sounds › Startup, and the sign-in graph; the power tray, Maestro Logs, what was removed, and that Maestro accepts every item the quick action picker offers; the Workspaces page, including a drag with pointer events; the site badges; Arrange's dock and keys, drive bars as long as the processor's, the graphs' clock times, the title bar's save status, that no control's focus ring is cut off on any page or section, and finding text in a note in both modes, including that the editor's marks lie over its text (575 checks).
@@ -728,7 +734,7 @@ Hotkeys, WebView behavior, and window management need the real desktop. Each rel
 
 ## 12. Development Status
 
-**2.1.0 (complete, 2026-11-10):** the daily backup, `maestro restore-data` and the notes trash are built. The manual pass on the target system covered the 18 items that can be done before a release: the trash and Preferences in a test build, and the command line on the real data. 17 passed. The other, restoring a backup and then undoing it, looked for a note that had been made in the test build, while the command line works on the real data; the restore itself had completed, the data matched the backup, and `restore-data` now says whose data it means. The 8 items that need the released build, because a test build never backs up, passed on it after the release: the Backups module in Preferences, **Back up now**, **Open folder**, the folder picker, the switch and the time, the 6:00 PM backup, the trash on the real notes, and restoring a backup then undoing it. With those, all 25 items have passed and none is open. Automated: core 771, timers 34, startup 10, frontend 1232, smoke 575, cli 113.
+**2.1.1 (complete, 2026-11-11):** `maestro new-release`, `bump`, `check --release` and `clean` are built; the command line finds the main folder through git; and a version's checkout goes inside the main folder. `bump` and `check --release` were used on this release itself. The rename to `C:\Maestro` is done once, by a script kept outside the repository, after the release is on `master`. That script was tested on a copy, there and back (23 checks: the folder, a checkout holding uncommitted work, each file byte for byte, the shortcuts, and undoing all of it), and had not been run on the real folder when this was written. The manual pass (19 items) follows the release, because all but one of its items need the released build or the renamed folder: the cut, the rename and what must still work after it (starting Maestro, the calendar, sounds, a backup, the shortcut, sign-in and shutdown sounds), and the new commands in the renamed folder. No results had been reported when this was written. Automated: core 771, timers 34, startup 10, frontend 1232, smoke 575, cli 155.
 
 ### Verified on the Target System
 
@@ -797,18 +803,19 @@ Not yet built:
 - **A console hub:** Luma3DS (3DS), hekate and Atmosphère (Switch, booted through an RCM jig, so pushing payloads matters) and Aroma (Wii U).
 - **Moving `C:\Scripts` into Maestro,** with its own migration and rollback plan, since it touches the sign-in tasks.
 
-Planned, after the redesign:
+Also planned:
 
-- **More of the `maestro` command line:** `new-release` and `bump` (`status`, `check`, `try`, `backup-data` and `restore-data` are built). It would never start or message the running app, or commit.
 - **More in the achievement viewer:** softcore and hardcore shown together, with a filter and progress for each, and no size limit on the image cache, since the images never change.
 
-Next, 2.1.1: **the folders become Maestro.** `C:\ASCS` becomes `C:\Maestro`, and a version being worked on lives inside it (`C:\Maestro\_2.2`, for example), so the editor's git tools show it without adding a folder. Folders only: the files and the repository keep the name ASCS.
-
-Then, 2.2.0: **iPhone calendar sync**, as described above.
+Next, 2.1.2: **more of the `maestro` command line,** for upkeep: `doctor` (what Maestro depends on, the sign-in task and the Startup-folder copy, read only), `isolate` (the copy that code is tested in, with the Super key swapped and power actions, audio switches and game launches stubbed, and checked to be), `preview` (a page's screenshot with stand-in data) and `checklist` (a release's manual checklist from a list of items). None starts or messages the running app, or commits.
 
 After that, in this order:
 
-- **The pages used most:** Command Center modules in three sizes, with saved layouts to switch between; a small notes window for writing a game's note over the game; a metronome module.
+- **A finish for the design:** one set of colors, corner sizes, depth, motion, icons and control states on every page, with loading and empty states that match. The layout stays. The polish list below belongs to it.
+- **Conservatory,** a page for playing music, in two releases. First: a metronome with a tempo trainer (and a Command Center module of it); tunings and reference tones for guitar, bass, mandolin, ukulele and tunings of your own; scales and keys on the neck and on a keyboard; and a chord library, where a shape is built by clicking a neck that shows five or six frets, named by Maestro or by you, with chord symbols set properly (a 6 over a 9) and the chord on a staff. Then: ear training, slowing a track without changing its pitch, and a practice log. A tuner waits for a microphone. Nothing here uses a third-party library.
+- **iPhone calendar sync,** as described above, after its setup guide is written and reviewed: each step, why it's needed, its risk, and how to undo it.
+- **A lead sheet and tablature,** if still wanted: one melody line with chord symbols, entered as text. Full engraving is not planned.
+- **The pages used most:** Command Center modules in three sizes, with saved layouts to switch between; a small notes window for writing a game's note over the game.
 - **Routines,** as described above.
 - **A Switch payload command:** one command to push the chosen payload when the Switch is in RCM, ahead of the rest of the console hub.
 - **Tasks on the calendar server:** reminders that aren't events, which iPhone sync could carry to Reminders.

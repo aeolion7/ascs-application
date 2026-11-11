@@ -1,14 +1,32 @@
 # The Maestro command line, run through C:\Scripts\maestro.cmd: maestro <command> [options]
 # To add a command: write a function, then add it to $Commands below.
-# Keep this file ASCII. Only `try` starts or closes Maestro, and it never commits.
+# Keep this file ASCII. Only `try` starts or closes Maestro, and nothing here commits.
 # Only `restore-data` changes the data folder, and only with Maestro closed.
+# `new-release` and `bump` change files in a second checkout, never the main
+# folder; `clean` removes a second checkout once its branch is merged and pushed.
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)][string]$Command = 'help',
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest = @()
 )
 $ErrorActionPreference = 'Stop'
-$Repo = if ($env:ASCS_REPO) { $env:ASCS_REPO } else { 'C:\ASCS' }
+
+function Stop-WithError([string]$message) {
+    [Console]::Error.WriteLine("maestro: $message")
+    exit 1
+}
+
+# The main folder is wherever git keeps this repository, so this file works from
+# the main folder and from a version's checkout, whatever the folders are called.
+function Get-MainFolder {
+    $common = "$(& git -C $PSScriptRoot rev-parse --git-common-dir 2>$null)".Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $common) { $global:LASTEXITCODE = 0; return '' }
+    if (-not [IO.Path]::IsPathRooted($common)) { $common = Join-Path $PSScriptRoot $common }
+    return Split-Path ([IO.Path]::GetFullPath($common)) -Parent
+}
+
+$Repo = if ($env:ASCS_REPO) { $env:ASCS_REPO } else { Get-MainFolder }
+if (-not $Repo) { Stop-WithError "This file isn't in a git checkout of Maestro, so it can't tell where Maestro is." }
 $Repo = [IO.Path]::GetFullPath($Repo).TrimEnd('\')
 $Main = 'master'
 $AhkExe = Join-Path $env:ProgramFiles 'AutoHotkey\v2\AutoHotkey64.exe'
@@ -16,11 +34,15 @@ $StatusFile = 'backup-status.ini'
 $TestMarker = 'test-build.txt'
 # Rebuilt by WebView2, so never worth copying.
 $CacheFolders = @('Cache', 'Code Cache', 'GPUCache', 'DawnWebGPUCache', 'DawnGraphiteCache', 'GrShaderCache', 'ShaderCache', 'component_crx_cache')
-
-function Stop-WithError([string]$message) {
-    [Console]::Error.WriteLine("maestro: $message")
-    exit 1
-}
+# Every place the version is written. Each pattern matches the number alone, so
+# `status` reads these and `bump` writes them.
+$VersionSpots = @(
+    @{ Name = 'ASCS.ahk header'; File = 'ASCS.ahk'; Pattern = '(?m)(?<=^; Version )[\d.]+' }
+    @{ Name = 'ASCS_Version'; File = 'ASCS.ahk'; Pattern = '(?<=ASCS_Version := ")[\d.]+(?=")' }
+    @{ Name = 'sidebar'; File = 'frontend\index.html'; Pattern = '(?<=Maestro <span>)[\d.]+(?=</span>)' }
+    @{ Name = 'README'; File = 'README.md'; Pattern = '(?<=\*\*Version:\*\* )[\d.]+' }
+    @{ Name = 'calendar'; File = 'frontend\calendar.js'; Pattern = '(?<=//ASCS )[\d.]+(?=//EN)' }
+)
 
 # Runs git in the repo; stops on failure and returns its output. Not named Git:
 # names ignore case, so it would call itself instead of the program.
@@ -53,10 +75,11 @@ function Get-Checkouts {
     return $found
 }
 
-# The checkout you're standing in, or the main one.
+# The checkout you're standing in, or the main one. The deepest match wins: a
+# version's checkout sits inside the main folder.
 function Get-HereCheckout {
     $here = (Get-Location).ProviderPath.TrimEnd('\')
-    foreach ($checkout in (Get-Checkouts)) {
+    foreach ($checkout in (Get-Checkouts | Sort-Object { $_.Path.Length } -Descending)) {
         if ($here -ieq $checkout.Path -or $here.StartsWith("$($checkout.Path)\", [StringComparison]::OrdinalIgnoreCase)) { return $checkout.Path }
     }
     return $Repo
@@ -246,21 +269,79 @@ function Find-HiddenCharacters([string]$folder) {
     return $hits
 }
 
+# The runner's "suite PASS n FAIL m" lines as the README and CHANGELOG write
+# them: core 771, timers 34, ...
+function Get-CheckCounts([string[]]$lines) {
+    $counts = foreach ($line in $lines) {
+        if ($line -match '^(\w+)\s+PASS (\d+) FAIL \d+') { "$($Matches[1]) $($Matches[2])" }
+    }
+    return @($counts) -join ', '
+}
+
+# What marking a release complete asks of the docs. Returns what's still wrong.
+function Test-Release([string]$folder, [string]$counts) {
+    $spots = Get-VersionSpots $folder
+    $values = @($spots.Values | Sort-Object -Unique)
+    if ($values.Count -ne 1 -or $values[0] -notmatch '^\d+\.\d+\.\d+$') {
+        return @("The version isn't the same everywhere: " + (($spots.GetEnumerator() | ForEach-Object { "$($_.Key) $($_.Value)" }) -join ', '))
+    }
+    $version = $values[0]
+    $read = { param($file) $path = Join-Path $folder $file; if (Test-Path -LiteralPath $path) { [IO.File]::ReadAllText($path) } else { '' } }
+    $readme = & $read 'README.md'
+    $changelog = & $read 'CHANGELOG.md'
+    $problems = @()
+
+    $headings = [regex]::Matches($changelog, '(?m)^## .*$')
+    $first = if ($headings.Count) { $headings[0].Value.Trim() } else { '(none)' }
+    if ($first -ne "## Version $version") { $problems += "CHANGELOG's newest heading is `"$first`", not `"## Version $version`"." }
+    $entry = ''
+    if ($headings.Count) {
+        $end = if ($headings.Count -gt 1) { $headings[1].Index } else { $changelog.Length }
+        $entry = $changelog.Substring($headings[0].Index, $end - $headings[0].Index)
+    }
+    $status = [regex]::Match($readme, '(?m)^\*\*Status:\*\*.*$').Value
+    if (-not $status.Contains($version)) { $problems += "The README Status line doesn't name $version." }
+
+    if (-not $readme.Contains($counts)) { $problems += "The README doesn't have this run's counts: $counts" }
+    if (-not $entry.Contains($counts)) { $problems += "The CHANGELOG's newest entry doesn't have this run's counts: $counts" }
+    # The README also gives each suite's count where it describes the suite.
+    foreach ($pair in ($counts -split ', ')) {
+        $suite, $count = $pair -split ' '
+        $line = @($readme -split "`n" | Where-Object { $_.StartsWith('- `tests\' + $suite + '.') })[0]
+        if ($line -and $line -match '\((\d+) checks\)' -and $Matches[1] -ne $count) {
+            $problems += "The README says $($Matches[1]) checks for $suite where it describes the tests; this run has $count."
+        }
+    }
+    return $problems
+}
+
 function Invoke-Check([string[]]$options) {
-    $quick = $false
+    $quick = $false; $release = $false
     foreach ($option in $options) {
         if ($option -in '--quick', '-q') { $quick = $true }
+        elseif ($option -eq '--release') { $release = $true }
         else { Stop-WithError "check doesn't know $option. See: maestro help" }
     }
+    if ($quick -and $release) { Stop-WithError '--release needs the tests, for their counts. Leave out --quick.' }
     $folder = Get-HereCheckout
     Write-Host "Checking $folder"
     $problems = 0
+    $counts = ''
 
     if ($quick) {
         Write-Host 'Tests:      skipped (--quick)'
     } else {
-        & pwsh -NoProfile -File (Join-Path $folder 'tests\run-tests.ps1')
+        # Shown as it arrives, and kept for the counts.
+        $lines = @(& pwsh -NoProfile -File (Join-Path $folder 'tests\run-tests.ps1') 2>&1 | ForEach-Object {
+            $line = "$_"
+            if ($line -match 'PASS \d+ FAIL 0\b|^All tests passed') { Write-Host $line -ForegroundColor Green }
+            elseif ($line -match 'FAIL|did not report|timed out') { Write-Host $line -ForegroundColor Red }
+            else { Write-Host $line }
+            $line
+        })
         if ($LASTEXITCODE -ne 0) { $problems++; Write-Host 'Tests:      FAILED' } else { Write-Host 'Tests:      passed' }
+        $counts = Get-CheckCounts $lines
+        if ($counts) { Write-Host "Counts:     $counts" }
     }
 
     $parse = Test-AhkParse $folder
@@ -268,6 +349,19 @@ function Invoke-Check([string[]]$options) {
 
     $hidden = @(Find-HiddenCharacters $folder)
     if ($hidden.Count) { $problems++; Write-Host "Hidden:     FOUND in $($hidden -join ', ')" } else { Write-Host 'Hidden:     none' }
+
+    if ($release) {
+        $wrong = @(Test-Release $folder $counts)
+        if ($wrong.Count) {
+            $problems++
+            Write-Host 'Release:    NOT READY'
+            $wrong | ForEach-Object { Write-Host "            $_" }
+        } else {
+            Write-Host "Release:    the version, CHANGELOG and README agree with this run"
+        }
+        $new = @(& git -C $folder status --porcelain | Where-Object { $_ -like '`?`? *' })
+        if ($new.Count) { Write-Host "Git:        $($new.Count) new file(s) aren't staged yet. Run git add -A before the release commit." }
+    }
 
     Write-Host ''
     if ($problems) {
@@ -282,16 +376,12 @@ function Invoke-Check([string[]]$options) {
 
 # Every place the version is written.
 function Get-VersionSpots([string]$folder) {
-    $read = { param($file) $path = Join-Path $folder $file; if (Test-Path -LiteralPath $path) { [IO.File]::ReadAllText($path) } else { '' } }
-    $ahk = & $read 'ASCS.ahk'
-    $spots = [ordered]@{
-        'ASCS.ahk header'  = [regex]::Match($ahk, '(?m)^; Version ([\d.]+)').Groups[1].Value
-        'ASCS_Version'     = [regex]::Match($ahk, 'ASCS_Version := "([\d.]+)"').Groups[1].Value
-        'sidebar'          = [regex]::Match((& $read 'frontend\index.html'), 'Maestro <span>([\d.]+)</span>').Groups[1].Value
-        'README'           = [regex]::Match((& $read 'README.md'), '\*\*Version:\*\* ([\d.]+)').Groups[1].Value
+    $spots = [ordered]@{}
+    foreach ($spot in $VersionSpots) {
+        $path = Join-Path $folder $spot.File
+        $text = if (Test-Path -LiteralPath $path) { [IO.File]::ReadAllText($path) } else { '' }
+        $spots[$spot.Name] = @([regex]::Matches($text, $spot.Pattern) | ForEach-Object { $_.Value } | Sort-Object -Unique) -join '/'
     }
-    $prodIds = @([regex]::Matches((& $read 'frontend\calendar.js'), '//ASCS ([\d.]+)//EN') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
-    $spots['calendar'] = $prodIds -join '/'
     return $spots
 }
 
@@ -702,6 +792,176 @@ function Invoke-RestoreData([string[]]$options) {
     Write-Host "Restored the data from $($chosen.When). Start Maestro again to use it."
 }
 
+# ---- new-release and bump
+
+function Test-VersionText([string]$text) {
+    return $text -match '^\d+\.\d+\.\d+$'
+}
+
+# Where a version's checkout goes: inside the main folder, named for the version
+# without a last .0 (_2.2 for 2.2.0), where the editor's git tools find it. git
+# ignores whatever starts with an underscore there.
+function Get-ReleaseFolder([string]$version) {
+    return Join-Path $Repo "_$($version -replace '\.0$', '')"
+}
+
+function Invoke-NewRelease([string[]]$options) {
+    $version = ''; $branch = ''
+    foreach ($option in $options) {
+        if ($option -like '-*') { Stop-WithError "new-release doesn't know $option. See: maestro help" }
+        elseif (-not $version) { $version = $option }
+        elseif (-not $branch) { $branch = $option }
+        else { Stop-WithError 'Give a version and, at most, a branch name.' }
+    }
+    if (-not (Test-VersionText $version)) { Stop-WithError 'Give the version as three numbers: maestro new-release 2.2.0' }
+    if (-not $branch) { $branch = "feat/v$version" }
+    if ($branch -eq $Main) { Stop-WithError "A release gets a branch of its own, not $Main." }
+    & git -C $Repo check-ref-format --branch $branch *> $null
+    if ($LASTEXITCODE -ne 0) { $global:LASTEXITCODE = 0; Stop-WithError "$branch isn't a name git accepts for a branch." }
+    & git -C $Repo show-ref --verify --quiet "refs/heads/$branch"
+    if ($LASTEXITCODE -eq 0) { Stop-WithError "There's already a branch called $branch." }
+    $global:LASTEXITCODE = 0
+    $folder = Get-ReleaseFolder $version
+    if (Test-Path -LiteralPath $folder) { Stop-WithError "$folder already exists." }
+
+    # Read from the main branch itself, whatever is checked out.
+    $changelog = (& git -C $Repo show "${Main}:CHANGELOG.md" 2>$null) -join "`n"
+    $readme = (& git -C $Repo show "${Main}:README.md" 2>$null) -join "`n"
+    $global:LASTEXITCODE = 0
+    if ($changelog -match "(?m)^## Version $([regex]::Escape($version))\b") { Stop-WithError "The CHANGELOG on $Main already has Version $version." }
+    $current = [regex]::Match($readme, ($VersionSpots | Where-Object { $_.Name -eq 'README' }).Pattern).Value
+    if ((Test-VersionText $current) -and [version]$version -le [version]$current) { Stop-WithError "$version isn't newer than $current, the version on $Main." }
+
+    # Unless git ignores it, the main folder would list the checkout as a new file.
+    $name = Split-Path $folder -Leaf
+    # Asked without a last slash: with one, git 2.56 answers yes for any name.
+    & git -C $Repo check-ignore -q $name
+    if ($LASTEXITCODE -ne 0) { $global:LASTEXITCODE = 0; Stop-WithError "git doesn't ignore $name in $Repo. Add /_* to .gitignore on $Main first." }
+
+    Invoke-Git worktree add $folder -b $branch $Main | Out-Null
+    $path = Join-Path $folder 'CHANGELOG.md'
+    $heading = "## Version $version (in progress)"
+    $added = $false
+    if (Test-Path -LiteralPath $path) {
+        $text = [IO.File]::ReadAllText($path)
+        $at = [regex]::Match($text, '(?m)^## ')
+        if ($at.Success) {
+            $newline = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
+            [IO.File]::WriteAllText($path, $text.Insert($at.Index, "$heading$newline$newline"), [Text.UTF8Encoding]::new($false))
+            $added = $true
+        }
+    }
+
+    Write-Host "Made $folder on $branch, from $Main."
+    if ($added) { Write-Host "CHANGELOG: added `"$heading`". Nothing was committed." }
+    else { Write-Host "CHANGELOG: no place was found for `"$heading`", so add it by hand." }
+    Write-Host "The version number isn't changed until the release is done: maestro bump $version"
+    Write-Host "To run it on a copy of your data: maestro try $folder"
+}
+
+# The checkout you're standing in, for a command that changes files: never the
+# main branch, which is the Maestro you run.
+function Get-BranchCheckout([string]$command) {
+    $folder = Get-HereCheckout
+    $branch = (Get-Checkouts | Where-Object { Test-SamePath $_.Path $folder } | Select-Object -First 1).Branch
+    if (-not $branch -or $branch -eq $Main) {
+        Stop-WithError "$command changes files, so it works on a release's branch, never on $Main. Stand in that checkout and run it again (see: maestro status)."
+    }
+    return $folder
+}
+
+function Invoke-Bump([string[]]$options) {
+    if ($options.Count -ne 1 -or -not (Test-VersionText $options[0])) { Stop-WithError 'Give the new version as three numbers: maestro bump 2.2.0' }
+    $version = $options[0]
+    $folder = Get-BranchCheckout 'bump'
+    $before = Get-VersionSpots $folder
+
+    # Worked out for every file before any is written, so a missing spot changes nothing.
+    $texts = [ordered]@{}
+    $originals = @{}
+    $missing = @()
+    foreach ($spot in $VersionSpots) {
+        $path = Join-Path $folder $spot.File
+        if (-not $texts.Contains($path)) {
+            $texts[$path] = if (Test-Path -LiteralPath $path) { [IO.File]::ReadAllText($path) } else { '' }
+            $originals[$path] = $texts[$path]
+        }
+        if (-not [regex]::IsMatch($texts[$path], $spot.Pattern)) { $missing += "$($spot.Name) ($($spot.File))"; continue }
+        $texts[$path] = [regex]::Replace($texts[$path], $spot.Pattern, $version)
+    }
+    if ($missing.Count) { Stop-WithError "The version wasn't found in: $($missing -join ', '). Nothing was changed." }
+    foreach ($path in $texts.Keys) {
+        if ($texts[$path] -cne $originals[$path]) { [IO.File]::WriteAllText($path, $texts[$path], [Text.UTF8Encoding]::new($false)) }
+    }
+
+    Write-Host "The version in ${folder}:"
+    foreach ($name in $before.Keys) { Write-Host ("  {0,-16} {1} -> {2}" -f $name, $before[$name], $version) }
+    Write-Host ''
+    Write-Host 'Still by hand: the README Status line and its status, testing and roadmap sections, and the CHANGELOG.'
+    Write-Host 'Nothing was committed. Then: maestro check --release'
+}
+
+# ---- clean
+
+function Invoke-Clean([string[]]$options) {
+    $yes = $false; $dryRun = $false
+    foreach ($option in $options) {
+        switch -Regex ($option) {
+            '^(--yes|-y)$' { $yes = $true; break }
+            '^(--dry-run|-n)$' { $dryRun = $true; break }
+            default { Stop-WithError "clean doesn't know $option. See: maestro help" }
+        }
+    }
+    $others = @(Get-Checkouts | Where-Object { -not (Test-SamePath $_.Path $Repo) })
+    if (-not $others.Count) { Write-Host 'Nothing to clean: there is no second checkout.'; return }
+    $running = @(Get-RunningBuilds)
+    $here = (Get-Location).ProviderPath.TrimEnd('\')
+    $finished = @()
+    foreach ($checkout in $others) {
+        # A checkout goes only when nothing in it could be lost: its branch is
+        # all in the main branch, and on the remote as it is here.
+        $why = ''
+        if (-not (Test-Path -LiteralPath $checkout.Path)) { $why = 'its folder is missing (see: git worktree prune)' }
+        elseif (-not $checkout.Branch) { $why = "it isn't on a branch" }
+        elseif (@(& git -C $checkout.Path status --porcelain).Count) { $why = 'it has uncommitted work' }
+        elseif (Measure-Commits "$Main..$($checkout.Branch)") { $why = "its branch isn't merged into $Main" }
+        else {
+            $tip = "$(Invoke-Git rev-parse $checkout.Branch)".Trim()
+            $pushed = "$(& git -C $Repo rev-parse --verify --quiet "refs/remotes/origin/$($checkout.Branch)")".Trim()
+            $global:LASTEXITCODE = 0
+            if ($pushed -ne $tip) { $why = "its branch isn't pushed as it is here" }
+            elseif ($running | Where-Object { Test-SamePath $_.Folder $checkout.Path }) { $why = "it's running. End it with: maestro try --end" }
+            elseif (Test-Path -LiteralPath (Join-Path $checkout.Path 'data')) { $why = 'it holds a copy of your data. End it with: maestro try --end' }
+            elseif ($here -ieq $checkout.Path -or $here.StartsWith("$($checkout.Path)\", [StringComparison]::OrdinalIgnoreCase)) { $why = "you're standing in it" }
+        }
+        if ($why) { Write-Host "Keeping:  $($checkout.Path) [$($checkout.Branch)], because $why." }
+        else { $finished += $checkout }
+    }
+    if (-not $finished.Count) { Write-Host 'Nothing to clean.'; return }
+
+    Write-Host ''
+    foreach ($checkout in $finished) { Write-Host "Removing: $($checkout.Path), and the local branch $($checkout.Branch) (merged into $Main; it stays on the remote)" }
+    Write-Host ''
+    if ($dryRun) {
+        Write-Host 'Dry run: nothing was changed.'
+        return
+    }
+    if (-not $yes) {
+        Write-Host -NoNewline 'Go ahead? [y/N] '
+        $answer = [Console]::ReadLine()
+        if ($answer -notmatch '^(y|yes)$') {
+            Write-Host 'Stopped. Nothing was changed.'
+            return
+        }
+    }
+    foreach ($checkout in $finished) {
+        # Without --force: git refuses if anything there is new or changed.
+        Invoke-Git worktree remove $checkout.Path | Out-Null
+        Invoke-Git branch -d $checkout.Branch | Out-Null
+        Write-Host "Removed $($checkout.Path) and $($checkout.Branch)."
+    }
+}
+
 # ---- help
 
 function Invoke-Help {
@@ -713,9 +973,33 @@ maestro <command> [options]
       whether that code is older than what's on disk, and any errors logged
       since it started.
 
-  check [--quick]
+  check [--quick] [--release]
       The tests, the AutoHotkey parse check and the hidden-character scan, with
-      one result, for the checkout you're standing in. --quick skips the tests.
+      one result, for the checkout you're standing in. It ends with the check
+      counts as the README and CHANGELOG write them.
+        --quick, -q     Skip the tests
+        --release       Also: the version is the same everywhere, the CHANGELOG's
+                        newest heading is that version and not "in progress",
+                        the README Status line names it, and both files have
+                        this run's counts. Says if new files aren't staged.
+
+  new-release <version> [branch]
+      Makes a second checkout for a version inside the main folder (2.2.0 goes
+      in <main folder>\_2.2) on a new branch off master, feat/v<version>
+      unless you name one, and adds the version's "(in progress)" heading to
+      its CHANGELOG. Commits nothing.
+
+  bump <version>
+      Writes the version everywhere it's kept (the five places status reads),
+      in the checkout you're standing in. Never on master. Commits nothing.
+
+  clean [--dry-run] [--yes]
+      Removes each second checkout whose branch is merged into master and
+      pushed, with its local branch; the branch stays on the remote. Keeps any
+      with uncommitted work, a copy of your data, or a build running, and says
+      why. Asks first.
+        --dry-run, -n   Show what would happen, and change nothing
+        --yes, -y       Don't ask
 
   try [folder]
       Closes Maestro and runs a second checkout (from git worktree) on a copy of
@@ -757,6 +1041,9 @@ $Commands = @{
     'backup-data' = { Invoke-BackupData }
     'restore-data' = { Invoke-RestoreData $Rest }
     'cut-release' = { Invoke-CutRelease $Rest }
+    'new-release' = { Invoke-NewRelease $Rest }
+    'bump'        = { Invoke-Bump $Rest }
+    'clean'       = { Invoke-Clean $Rest }
     'help'        = { Invoke-Help }
 }
 

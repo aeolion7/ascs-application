@@ -2,6 +2,21 @@
 
 All notable changes to Aeolionware Maestro (code name ASCS; before 2.0.0, the Aeolionware Super Command System). The newest release is first. For current behavior, see [README.md](README.md).
 
+## Version 2.1.1
+
+The command line does what was done by hand at every release, and Maestro's folder takes its name.
+
+**Summary.** Four commands take over the routine of a release: `maestro new-release` starts a version, `maestro bump` writes its number, `maestro check --release` says whether the docs are ready, and `maestro clean` clears away checkouts that are finished. The command line no longer has a folder written into it, a version being worked on lives inside the main folder, and that folder becomes `C:\Maestro`: a script kept outside the repository renames it once, after this release is on `master`. `bump` and `check --release` were used on this release itself. The rename script was tested on a copy, there and back (23 checks: the folder, a checkout holding uncommitted work, each file byte for byte, the shortcuts, and undoing all of it); it had not been run on the real folder when this was written. The manual pass (19 items) follows the release, because all but one of its items need the released build or the renamed folder; no results had been reported when this was written. Checks at release: core 771, timers 34, startup 10, frontend 1232, smoke 575, cli 155. Moved out to 2.1.2 (README §14): `doctor`, `isolate`, `preview` and `checklist`.
+
+- **The folders become Maestro.** The main folder is `C:\Maestro` (it was `C:\ASCS`), and a version being worked on lives inside it, as `C:\Maestro\_2.2`, where the editor's git tools show it; it used to sit beside it, as `C:\ASCS-2.2`. git ignores whatever starts with an underscore in the main folder. Folders only: the files and the repository keep the name ASCS. The rename itself is done once, by a script outside the repository, after this release is on `master`.
+- **The command line finds the main folder through git** rather than by a path written into it, so it works whatever the folders are called, and from a checkout's own copy. Standing in a version's checkout now means that checkout, though it's inside the main folder.
+- **`maestro new-release <version>`** makes the second checkout for a version inside the main folder (`C:\Maestro\_2.2` for 2.2.0) on a new branch off `master`, and adds the version's "(in progress)" heading to its CHANGELOG. The branch is `feat/v<version>` unless you name one. It refuses a version that isn't newer than the one on `master`, a branch or folder that already exists, and a main folder where git wouldn't ignore the checkout.
+- **`maestro bump <version>`** writes the version in the five places it's kept, which are the ones `maestro status` reads: both commands now work from one list, so they can't disagree. It works on the checkout you're standing in and never on `master`; if a place can't be found, nothing is changed and the place is named. Each file keeps its line endings and everything else in it.
+- **`maestro check` ends with the check counts** in the form the README and CHANGELOG use (`core 771, timers 34` and so on), so they're copied rather than read off six lines.
+- **`maestro check --release`** adds what marking a release complete asks of the docs: the version is the same everywhere, the CHANGELOG's newest heading is that version and not "in progress", the README Status line names it, both files have this run's counts, and the README's count for each suite matches. It says when new files aren't staged yet.
+- **`maestro clean`** removes each second checkout whose branch is merged into `master` and pushed, with its local branch. The branch stays on the remote. A checkout with uncommitted work, a copy of your data, a build running, or you standing in it is kept, with the reason. It asks first, and `--dry-run` only lists.
+- **Performance and security:** the command line only. Nothing new runs in Maestro, and none of these starts or messages the running app, commits, pushes, or touches `data\`. `clean` deletes only through git, without `--force`, so git itself refuses a checkout holding anything new or changed.
+
 ## Version 2.1.0
 
 Backups that run by themselves and can be put back, and a trash for notes.
