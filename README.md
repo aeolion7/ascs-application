@@ -3,7 +3,7 @@
 **Brand:** AEOLIONWARE MAESTRO (code name ASCS: the repo, folders and file names keep it)  
 **Version:** 2.1.0  
 **Platform:** Windows 10/11 (Windows 11 target verification)  
-**Status:** 2.1.0 is complete: Maestro backs up its data every day and can put a backup back, and deleted notes go to a trash. Of the 18 manual items that can be done before a release, 17 passed and the other is answered; the 8 that need the released build are open (§12). Next is 2.1.1, then 2.2.0 (§14). Release history is in [CHANGELOG.md](CHANGELOG.md).
+**Status:** 2.1.0 is complete: Maestro backs up its data every day and can put a backup back, and deleted notes go to a trash. The manual pass passed in full: 25 items, the last 8 of them on the released build (§12). Next is 2.1.1, then 2.2.0 (§14). Release history is in [CHANGELOG.md](CHANGELOG.md).
 
 Maestro is a keyboard-driven Windows utility suite. It uses AutoHotkey v2 for hotkeys and Windows automation, WebView2 for its graphical interface, and a web frontend built with HTML, CSS, and JavaScript.
 
@@ -728,7 +728,7 @@ Hotkeys, WebView behavior, and window management need the real desktop. Each rel
 
 ## 12. Development Status
 
-**2.1.0 (complete, 2026-11-10):** the daily backup, `maestro restore-data` and the notes trash are built. The manual pass on the target system covered the 18 items that can be done before a release: the trash and Preferences in a test build, and the command line on the real data. 17 passed. The other, restoring a backup and then undoing it, looked for a note that had been made in the test build, while the command line works on the real data; the restore itself had completed, the data matched the backup, and `restore-data` now says whose data it means. Open, because a test build never backs up, are the 8 items that need the released build: the Backups module in Preferences, **Back up now**, **Open folder**, the folder picker, the switch and the time, the 6:00 PM backup, the trash on the real notes, and restoring a backup then undoing it. Automated: core 771, timers 34, startup 10, frontend 1232, smoke 575, cli 113.
+**2.1.0 (complete, 2026-11-10):** the daily backup, `maestro restore-data` and the notes trash are built. The manual pass on the target system covered the 18 items that can be done before a release: the trash and Preferences in a test build, and the command line on the real data. 17 passed. The other, restoring a backup and then undoing it, looked for a note that had been made in the test build, while the command line works on the real data; the restore itself had completed, the data matched the backup, and `restore-data` now says whose data it means. The 8 items that need the released build, because a test build never backs up, passed on it after the release: the Backups module in Preferences, **Back up now**, **Open folder**, the folder picker, the switch and the time, the 6:00 PM backup, the trash on the real notes, and restoring a backup then undoing it. With those, all 25 items have passed and none is open. Automated: core 771, timers 34, startup 10, frontend 1232, smoke 575, cli 113.
 
 ### Verified on the Target System
 
