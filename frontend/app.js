@@ -40,7 +40,7 @@ function notePageError(message) {
 }
 
 const $ = id => document.getElementById(id);
-const validViews = new Set(["home", "notes", "calendar", "workspaces", "games", "sounds", "dashboard", "commands", "settings"]);
+const validViews = new Set(["home", "notes", "calendar", "workspaces", "games", "sounds", "dashboard", "commands", "conservatory", "settings"]);
 const viewLabels = {
     home: "Command Center",
     notes: "Quick Notes",
@@ -50,6 +50,7 @@ const viewLabels = {
     sounds: "Sounds",
     dashboard: "System",
     commands: "Commands",
+    conservatory: "Conservatory",
     settings: "Preferences"
 };
 
@@ -220,6 +221,7 @@ function navigate(view, fromHistory = false) {
     if (view === "dashboard" || view === "home") send("GetMetrics", view);
     if (view === "dashboard") send("GetSignInHistory");
     globalThis.syncSystemView?.();
+    globalThis.syncMetronomeView?.();
     if (view === "settings") send("GetSettings");
     if (view === "workspaces") {
         send("GetWorkspaces");
@@ -286,6 +288,8 @@ const builtInCommands = [
     { id: "view:commands", label: "Shortcut Reference", description: "Browse the complete Super shortcut list", keywords: "commands shortcuts help", view: "commands" },
     { id: "view:games", label: "Games", description: "Play time, recent games, and achievements", keywords: "play emulator retroarch dolphin pcsx2 pso achievements", view: "games" },
     { id: "view:logs", label: "Logs", description: "Maestro, activity and Code key logs, newest first", keywords: "log diagnostics errors journal history", run: () => showLogs() },
+    { id: "view:conservatory", label: "Conservatory", description: "Your instrument's neck or keys, scales, tuning and the metronome", keywords: "music guitar bass ukulele mandolin piano keyboard scales chords tuning tuner", view: "conservatory" },
+    { id: "metronome:toggle", label: "Start or stop the metronome", description: "It keeps playing on every page until it's stopped", keywords: "metronome tempo click beat bpm music practice", shortcut: "Ctrl+Shift+M", run: () => toggleMetronome() },
     { id: "view:settings", label: "Preferences", description: "Text size, the logo's swing, window snapping and the power delay", keywords: "settings options configure appearance", view: "settings" },
     { id: "mode:snippets", label: "Paste a note…", description: "Paste a note into the window you were using", keywords: "snippet paste insert text note", mode: "snippets", shortcut: "Super+Shift+P" },
     { id: "mode:workspaces", label: "Restore an arrangement…", description: "Choose a saved window layout", keywords: "arrangement workspace layout restore", mode: "workspaces", shortcut: "Super+Shift+R" },
@@ -1653,6 +1657,7 @@ $("notesSpellcheck").addEventListener("change", () => {
 document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") flushPendingNotes();
     globalThis.syncSystemView?.();
+    globalThis.syncMetronomeView?.();
 });
 window.addEventListener("blur", flushPendingNotes);
 
@@ -1759,6 +1764,7 @@ function handleWebMessage(event) {
                 prepareGames();
             } else openingMotion();
             globalThis.syncSystemView?.();
+            globalThis.syncMetronomeView?.();
             break;
         case "startScreenDone":
             if (startScreenWait !== null && !windowIsHidden) openingMotion(false);
@@ -1770,6 +1776,7 @@ function handleWebMessage(event) {
             globalThis.MaestroMotion?.hidden();
             prepareMark();
             globalThis.syncSystemView?.();
+            globalThis.syncMetronomeView?.();
             break;
         case "testBuild":
             isTestBuild = true;
@@ -1786,6 +1793,7 @@ function handleWebMessage(event) {
                 startHomePolling();
             }
             globalThis.syncSystemView?.();
+            globalThis.syncMetronomeView?.();
             if (!$("powerTray").hidden) refreshPowerTray();
             if (view === "sounds") openSoundsView();
             if (view === "calendar") openCalendarView();
@@ -1863,6 +1871,9 @@ function handleWebMessage(event) {
         case "browseResult":
             applyBrowseResult(data.row, data.path);
             break;
+        case "chords":
+            receiveChords(data.items);
+            break;
         case "quickActions":
             quickActionIds = Array.isArray(data.items) ? data.items.filter(id => typeof id === "string") : null;
             renderQuickActions();
@@ -1873,6 +1884,7 @@ function handleWebMessage(event) {
         case "windowMinimized":
             windowIsMinimized = data.minimized === true;
             globalThis.syncSystemView?.();
+            globalThis.syncMetronomeView?.();
             break;
         case "windowState": {
             const maximized = data.maximized === true;
@@ -1888,7 +1900,10 @@ function handleWebMessage(event) {
             weatherState.enabled = data.enabled === true;
             $("weatherEnabled").checked = weatherState.enabled;
             $("weatherEnabled").disabled = false;
-            if (!weatherState.enabled) weatherState.data = null;
+            if (!weatherState.enabled) {
+                weatherState.data = null;
+                try { localStorage.removeItem(WEATHER_ZONE_KEY); } catch { /* nothing kept */ }
+            }
             weatherState.error = typeof data.message === "string" ? data.message.slice(0, 200) : "";
             renderHomeWeather();
             break;
@@ -4525,10 +4540,10 @@ function raTypeTag(type) {
     return type ? element("span", `ra-type is-${type.replace("_", "-")}`, RA_TYPE_LABELS[type]) : null;
 }
 
-const raDateText = text => {
-    const date = Games.parseLocal(text.replace(" ", "T"));
-    return date ? date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
-};
+// RetroAchievements gives times in UTC; they're shown in the weather
+// location's time zone, or this PC's when the weather is off (2.3.0).
+const raDateText = text => Games.formatRaTime(text, weatherZone());
+const raZoneNote = () => weatherZone() ? `Times in ${weatherZone().replace(/_/g, " ")}, the weather's location` : "Times in this PC's time zone";
 
 function raAchievementItem(item) {
     const earned = Boolean(item.earned || item.earnedHardcore);
@@ -4544,9 +4559,11 @@ function raAchievementItem(item) {
     body.append(head);
     if (item.description) body.append(element("p", "", item.description));
     const rarity = item.rarity === null ? "" : `${item.rarity < 1 ? "<1" : Math.round(item.rarity)}% of players`;
-    body.append(element("small", "", earned
+    const when = element("small", "", earned
         ? [`Unlocked ${raDateText(item.earnedHardcore || item.earned)}`, item.earnedHardcore ? "hardcore" : "softcore", rarity].filter(Boolean).join(" · ")
-        : ["Locked", rarity].filter(Boolean).join(" · ")));
+        : ["Locked", rarity].filter(Boolean).join(" · "));
+    if (earned) when.title = raZoneNote();
+    body.append(when);
     row.append(raImage(item.badge, `ra-badge${item.earnedHardcore ? " is-hardcore" : ""}${earned ? "" : " is-locked"}`), body);
     return row;
 }
@@ -4601,7 +4618,7 @@ function renderRaBrowser(box) {
     });
     const sort = element("select", "ra-sort");
     sort.setAttribute("aria-label", "Sort");
-    [["order", "Game order"], ["points", "Most points"], ["rarest", "Rarest first"]].forEach(([value, label]) => {
+    [["order", "Game order"], ["unlocked", "Unlocked first"], ["points", "Most points"], ["rarest", "Rarest first"]].forEach(([value, label]) => {
         const option = element("option", "", label);
         option.value = value;
         sort.append(option);
@@ -4809,7 +4826,9 @@ function renderAchievements() {
         head.append(points);
         body.append(head);
         if (achievement.description) body.append(element("p", "", achievement.description));
-        body.append(element("small", "", [achievement.game, Games.formatLastPlayed(achievement.date.replace(" ", "T"))].filter(Boolean).join(" · ")));
+        const when = element("small", "", [achievement.game, Games.raWhen(achievement.date, weatherZone())].filter(Boolean).join(" · "));
+        when.title = raZoneNote();
+        body.append(when);
         item.append(raImage(achievement.badge, `ra-badge${achievement.hardcore ? " is-hardcore" : ""}`), body);
         if (achievement.gameId) {
             item.classList.add("is-openable");
@@ -5497,12 +5516,12 @@ send("GetAudioDevices");
 
 // ---- help and shortcuts inside ASCS (1.8.0)
 // The shortcuts work only while Maestro has focus. Ctrl + 1, 2... follow the
-// sidebar's order, so new pages take the next number; 9 and 0 are free for them.
+// sidebar's order, so new pages take the next number; 0 is free for one.
 // Ctrl + - is Preferences and Ctrl + = is Power, the last keys on the number row
 // for the last items in the sidebar. F1 (or the ? button in the title bar)
 // toggles the help.
 const HELP_INSIDE = [
-    [["Ctrl", "1–8"], "Go to a page"],
+    [["Ctrl", "1–9"], "Go to a page"],
     [["Ctrl", "-"], "Preferences"],
     [["Ctrl", "="], "Power"],
     [["/"], "Search or run a command"],
@@ -5514,6 +5533,7 @@ const HELP_INSIDE = [
     [["Ctrl", "M"], "Quick Notes: Markdown viewer or text editor"],
     [["Ctrl", "E"], "New calendar event"],
     [["Ctrl", "F"], "Search this page"],
+    [["Ctrl", "Shift", "M"], "Start or stop the metronome, from any page"],
     [["Enter"], "In Quick Notes' filter: the next match in the open note (Shift + Enter, the one before)"],
     [["F1"], "Open or close this help"],
     [["Esc"], "Close a dialog or the palette"]
@@ -5598,6 +5618,12 @@ document.addEventListener("keydown", event => {
     // The palette and any dialog (confirm, event, calendar) handle their own keys.
     if (!$("launcher").hidden || [...document.querySelectorAll(".confirm-backdrop")].some(dialog => !dialog.hidden)) return;
     const ctrlOnly = event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey;
+    // The metronome keeps playing on every page, so it stops from every page (2.3.0).
+    if (event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey && event.key.toLowerCase() === "m") {
+        event.preventDefault();
+        toggleMetronome();
+        return;
+    }
 
     if (ctrlOnly && /^[0-9]$/.test(event.key)) {
         // In the sidebar's order; a number with no page does nothing.

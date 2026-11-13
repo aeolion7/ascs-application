@@ -5,7 +5,7 @@
     const { equal } = globalThis.TestHarness;
     const ids = () => L.MODULES.map(module => module.id).join();
 
-    const ADDED = "weather,processes,network,audio,controllers,pinned,unlocks,timer";
+    const ADDED = "weather,processes,network,audio,controllers,pinned,unlocks,timer,metronome";
     equal("the first seven show by default, the added ones start hidden", L.defaults().hidden.join(), ADDED);
     equal("in the planned order", L.defaults().order.join(), ids());
 
@@ -24,7 +24,7 @@
     equal("moving up", L.move(layout, "today", -1).order.slice(0, 2).join(), "today,now");
     equal("moving down", L.move(layout, "now", 1).order.slice(0, 2).join(), "today,now");
     equal("the first can't move up", L.move(layout, "now", -1), layout);
-    equal("the last can't move down", L.move(layout, "timer", 1), layout);
+    equal("the last can't move down", L.move(layout, "metronome", 1), layout);
     equal("an unknown module doesn't move", L.move(layout, "gone", 1), layout);
     equal("moving leaves the original alone", layout.order[0], "now");
 
@@ -36,7 +36,7 @@
     equal("showing an added module", L.setShown(layout, "weather", true).hidden.includes("weather"), false);
 
     // Widths: one to three squares of a grid three wide and three high.
-    equal("the default widths", L.defaults().order.map(id => L.defaults().widths[id]).join(), "2,1,1,1,1,2,1,1,1,1,1,1,1,1,1");
+    equal("the default widths", L.defaults().order.map(id => L.defaults().widths[id]).join(), "2,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1");
     equal("the default fills the nine squares in three rows", JSON.stringify(L.fit(L.defaults())), JSON.stringify({ squares: 9, rows: 3, empty: 0, fits: true }));
     equal("the default rows", L.rows(L.defaults()).map(row => row.join("+")).join(" / "), "now+today / next+system+stack / continue+note");
     equal("setting a width", L.setWidth(layout, "today", 3).widths.today, 3);

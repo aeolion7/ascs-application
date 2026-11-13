@@ -190,6 +190,19 @@
     equal("ra filter: progression includes the win", G.filterRaAchievements(raGame.achievements, "progression").map(a => a.id).join(), "1,3");
     equal("ra sort: points", G.filterRaAchievements(raGame.achievements, "all", "points").map(a => a.id).join(), "3,2,1,4");
     equal("ra sort: rarest", G.filterRaAchievements(raGame.achievements, "all", "rarest").map(a => a.id).join(), "2,3,1,4");
+    {
+        const list = [
+            { id: 1, order: 1, earned: "", earnedHardcore: "" },
+            { id: 2, order: 2, earned: "2026-03-01 10:00:00", earnedHardcore: "" },
+            { id: 3, order: 3, earned: "", earnedHardcore: "" },
+            { id: 4, order: 4, earned: "2026-01-01 09:00:00", earnedHardcore: "2026-05-02 08:00:00" },
+            { id: 5, order: 5, earned: "2026-03-01T10:00:00", earnedHardcore: "" }
+        ];
+        equal("ra sort: unlocked first, newest first, then locked in game order",
+            G.filterRaAchievements(list, "all", "unlocked").map(a => a.id).join(), "4,2,5,1,3");
+        equal("ra sort: unlocked first keeps the filter",
+            G.filterRaAchievements(list, "locked", "unlocked").map(a => a.id).join(), "1,3");
+    }
     equal("ra counts", JSON.stringify(G.raCounts(raGame.achievements)), JSON.stringify({ all: 4, locked: 3, earned: 1, missable: 1, progression: 2 }));
     const next = G.nextUp(raGame);
     equal("next up: the next progression or win", next.achievement.title, "Boss");
@@ -212,6 +225,23 @@
     equal("unlocks: newest first, undated dropped", unlocks.map(u => u.title).join(), "Newer,Older");
     equal("unlocks: hardcore and game", `${unlocks[1].hardcore} ${unlocks[1].gameId} ${unlocks[1].type}`, "true 7 missable");
     equal("unlocks: not a list", G.parseRaUnlocks("{}").length, 0);
+    // 2.3.0: RetroAchievements' times are UTC, shown in a time zone.
+    equal("ra time: read as UTC", G.parseRaTime("2026-11-02 01:15:00").toISOString(), "2026-11-02T01:15:00.000Z");
+    equal("ra time: malformed", G.parseRaTime("yesterday"), null);
+    equal("ra time: in New York it's the evening before", G.formatRaTime("2026-11-02 01:15:00", "America/New_York"), "Nov 1, 2026, 8:15 PM");
+    equal("ra time: in UTC itself", G.formatRaTime("2026-11-02 01:15:00", "UTC"), "Nov 2, 2026, 1:15 AM");
+    equal("ra time: summer time is kept", G.formatRaTime("2026-07-04 16:00:00", "America/New_York"), "Jul 4, 2026, 12:00 PM");
+    equal("ra time: Tokyo", G.formatRaTime("2026-11-02 01:15:00", "Asia/Tokyo"), "Nov 2, 2026, 10:15 AM");
+    equal("zones: a real one", G.cleanZone("America/Argentina/Buenos_Aires"), "America/Argentina/Buenos_Aires");
+    equal("zones: one Intl doesn't know", G.cleanZone("Mars/Olympus_Mons"), "");
+    equal("zones: not a zone", G.cleanZone("../../etc"), "");
+    equal("zones: nothing", G.cleanZone(undefined), "");
+    const evening = new Date(Date.UTC(2026, 10, 13, 3, 0));     // Nov 12, 10 PM in New York
+    equal("recent: today, in the zone's day", G.raWhen("2026-11-13 01:30:00", "America/New_York", evening), "Today, 8:30 PM");
+    equal("recent: yesterday", G.raWhen("2026-11-11 23:00:00", "America/New_York", evening), "Yesterday, 6:00 PM");
+    equal("recent: this week", G.raWhen("2026-11-09 18:00:00", "America/New_York", evening), "Mon, 1:00 PM");
+    equal("recent: earlier this year", G.raWhen("2026-10-01 18:00:00", "America/New_York", evening), "Oct 1, 2:00 PM");
+    equal("recent: another year", G.raWhen("2025-10-01 18:00:00", "America/New_York", evening), "Oct 1, 2025, 2:00 PM");
     const summaryIds = G.parseRetroAchievements(JSON.stringify({ User: "x", LastGameID: 14402 }), JSON.stringify([{ Title: "Galaxy", GameID: 14402 }]));
     equal("ra: the last game's ID", summaryIds.lastGameId, 14402);
     equal("ra: a recent game's ID", summaryIds.games[0].id, 14402);

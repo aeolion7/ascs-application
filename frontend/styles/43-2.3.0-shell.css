@@ -1,0 +1,171 @@
+/* ==========================================================================
+   2.3.0: the shell. The sidebar opening and closing, and the metronome's
+   chip in the title bar.
+   ========================================================================== */
+
+/* ---- The sidebar opening and closing ----
+   The rail and the open sidebar share one alignment: the logo stays at the
+   brand's start, and only the brand's padding changes, on the sidebar's own
+   200 ms, so the logo glides the 8 px between its two places both ways
+   (centering it instead snapped it to the middle of the still-wide sidebar).
+   The words keep their size and place: the name is sized from the open
+   sidebar's width, not the brand's current one, so closing cuts the words
+   off from the right as they fade, and opening fades them in once there's
+   room. Nothing resizes and nothing jumps. */
+
+:root body.sidebar-collapsed .brand {
+  justify-content: flex-start;
+  padding: 0 0 0 .5px;
+}
+
+:root .brand {
+  overflow: clip;
+}
+
+/* The room beside the logo when the sidebar is open: its width, less its
+   border (1), padding (32), the brand's padding (12), the logo (56) and the
+   gap (14). */
+:root body.sidebar-collapsed .brand-copy,
+:root body:not(.sidebar-collapsed) .brand-copy {
+  display: flex;
+  flex: 0 0 calc(var(--width-sidebar) - 115px);
+  align-items: flex-start;
+  gap: 3px;
+  container-type: inline-size;
+}
+
+/* Closed, the name is drawn as it is open, so it doesn't change as it fades. */
+:root body.sidebar-collapsed .brand-copy > span {
+  margin-top: -.172em;
+  padding: 0;
+  color: var(--text-soft);
+  font: 400 calc((100cqi - 10px) / 9.133)/1.2 var(--font-body);
+  letter-spacing: .19em;
+  text-transform: uppercase;
+}
+
+:root body.sidebar-collapsed .brand-copy strong {
+  margin: -.21em 0 -.19em -.07em;
+  padding: 0;
+  background-image:
+    linear-gradient(105deg, transparent 42%, rgba(255, 250, 230, .9) 50%, transparent 58%),
+    linear-gradient(135deg, #f8e8ac 0%, #c9a24a 42%, #f3dd92 68%, #b08b36 100%);
+  background-repeat: no-repeat;
+  background-size: 300% 100%, 100% 100%;
+  background-position: 0% 0, 0 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font: 600 calc((100cqi - 10px) / 9.133 * 2.36)/1 var(--font-display);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+/* Each page's name and key are cut off by its button, not shortened, and
+   the button keeps the rail's width (a grid item grows to fit its words). */
+:root .nav {
+  min-width: 0;
+  overflow: clip;
+}
+
+:root body.sidebar-collapsed .nav > span {
+  display: inline;
+  flex-shrink: 0;
+}
+
+:root body.sidebar-collapsed .nav > .nav-key {
+  display: inline-flex;
+}
+
+/* Opening: the words fade in once the sidebar is most of the way open. */
+:root body:not(.sidebar-collapsed) .brand-copy,
+:root body:not(.sidebar-collapsed) .nav > span,
+:root body:not(.sidebar-collapsed) .nav > .nav-key {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 160ms var(--ease-out) 100ms, visibility 0s;
+}
+
+/* Closing: they fade at once, and are hidden from then on (and from screen
+   readers, as before: the buttons keep their titles). */
+:root body.sidebar-collapsed .brand-copy,
+:root body.sidebar-collapsed .nav > span,
+:root body.sidebar-collapsed .nav > .nav-key {
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 100ms ease, visibility 0s 100ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root body:not(.sidebar-collapsed) .brand-copy,
+  :root body:not(.sidebar-collapsed) .nav > span,
+  :root body:not(.sidebar-collapsed) .nav > .nav-key,
+  :root body.sidebar-collapsed .brand-copy,
+  :root body.sidebar-collapsed .nav > span,
+  :root body.sidebar-collapsed .nav > .nav-key {
+    transition: none;
+  }
+}
+
+/* ---- The metronome's chip ----
+   While the metronome plays and its page isn't showing: a dot that pulses with
+   the beat, the tempo and time signature (which open Conservatory), and Stop.
+   Indigo, as the metronome's own controls are; gold is for things needing
+   attention. */
+
+.metro-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: stretch;
+  height: var(--height-field);
+  border: 1px solid var(--brand-tint);
+  border-radius: var(--radius-control);
+  background: #1d0f4a;
+  -webkit-app-region: no-drag;
+}
+
+.metro-chip[hidden] {
+  display: none;
+}
+
+.metro-chip > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 0;
+  margin: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--brand-tint-text);
+  font: 600 var(--t-button) var(--font-display);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.metro-chip > .metro-chip-open {
+  padding: 0 14px 0 16px;
+  border-radius: var(--radius-control) 0 0 var(--radius-control);
+}
+
+.metro-chip > .metro-chip-stop {
+  padding: 0 14px;
+  border-left: 1px solid rgba(123, 92, 240, .45);
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+}
+
+.metro-chip > button:hover,
+.metro-chip > button:focus-visible {
+  background: rgba(123, 92, 240, .22);
+  color: #fff;
+}
+
+.metro-chip-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--brand-tint-text);
+  box-shadow: 0 0 10px rgba(123, 92, 240, .9);
+  opacity: .5;
+}

@@ -14,7 +14,7 @@ Suspend(true)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 2.2.0
+; Version 2.3.0
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -24,7 +24,7 @@ Suspend(true)
 ; GLOBAL VARIABLES
 ; ==========================================
 
-global ASCS_Version := "2.2.0"
+global ASCS_Version := "2.3.0"
 global ASCS_App := ""
 global ASCS_WindowIcon := 0
 global ASCS_IconPath := A_ScriptDir "\frontend\assets\ascs.ico"
@@ -42,8 +42,10 @@ global ASCS_LaunchRules := Map()
 global ASCS_RuleAppliedPids := Map()
 global ASCS_Notices := []          ; 1.11.0: toasts at the top of the screen
 global ASCS_NoticeWindow := 0
-global ASCS_StartedAt := A_TickCount   ; 2.0.0: Super waits for the page until 30 s after this
+global ASCS_StartedAt := A_TickCount   ; 2.0.0: Super waits for the page until 30 s after this; 2.3.0: the daily backup, 5 min
 global ASCS_CommandsFile := ASCS_DataDir "\commands.ini"
+global ASCS_ChordsFile := ASCS_DataDir "\chords.ini"     ; 2.3.0: the Conservatory's saved chords
+global ASCS_Chords := 0                                  ; 0 = not read yet
 global ASCS_ActivityFile := ASCS_DataDir "\activity.log"
 
 ; Default window size (2.0.0; 10% shorter since 2.2.0, at the user's request):
@@ -1271,6 +1273,18 @@ HandleWebMessage(sender, args) {
                 else
                     WriteLog("Rejected oversized quick actions payload.")
 
+            case "GetChords":
+                if (content = "")
+                    SendChords()
+                else
+                    WriteLog("Rejected GetChords payload.")
+
+            case "SaveChords":
+                if (StrLen(content) <= 32768)
+                    SaveChords(content)
+                else
+                    WriteLog("Rejected oversized chords payload.")
+
             case "GetCommands":
                 SendCustomCommands()
 
@@ -1519,4 +1533,5 @@ SendToFrontend(json) {
 #Include lib\features\QuickCapture.ahk
 #Include lib\features\PaletteWindows.ahk
 #Include lib\features\QuickActions.ahk
+#Include lib\features\Chords.ahk
 #Include lib\features\Backups.ahk

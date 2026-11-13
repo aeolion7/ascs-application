@@ -80,11 +80,20 @@ function renderHomeWeather() {
     box.title = `From Open-Meteo, ${new Date(data.fetched).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
 }
 
+// The weather location's time zone, kept for RetroAchievements' times (2.3.0).
+const WEATHER_ZONE_KEY = "maestro.weatherZone";
+
+function weatherZone() {
+    try { return Games.cleanZone(localStorage.getItem(WEATHER_ZONE_KEY) || ""); } catch { return ""; }
+}
+
 function handleWeather(text) {
     const data = Almanac.parseWeather(text);
     if (data) {
         weatherState.data = { ...data, fetched: Date.now() };
         weatherState.error = "";
+        const zone = Games.cleanZone(data.zone);
+        if (zone) try { localStorage.setItem(WEATHER_ZONE_KEY, zone); } catch { /* not kept */ }
     } else if (!weatherState.data) {
         weatherState.error = "The weather couldn't be read.";
     }

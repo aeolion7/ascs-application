@@ -2,7 +2,7 @@
     Runs Maestro's automated checks:
       * core     tests\core.tests.ahk — lib\ASCS.Core.ahk (validators, workspace matching, search, activity)
       * timers   no timer is set both repeating and one-shot
-      * startup  hotkeys wait for the window, and the start notices
+      * startup  hotkeys wait for the window, the start notices, and the daily backup waits for start-up
       * frontend tests\frontend.tests.html — the frontend modules' pure logic, in headless Edge
       * smoke    tests\smoke.js (1.9.0) — the real page, every module and stylesheet, with a stand-in
                  for WebView2: every view opens without script errors, every message it sends is
@@ -78,6 +78,7 @@ $checks = [ordered]@{
     "or open blank while the page loads" = ($main -match '(?s)ToggleCommandCenter\(\) \{.*?!ASCS_PageReady.*?ASCS_App\.Hwnd')
     "every start says it's tuning up, before WebView2" = ($main.IndexOf('ShowNotice("Maestro is tuning up') -ge 0 -and $main.IndexOf('ShowNotice("Maestro is tuning up') -lt $main.IndexOf("ASCS_App := WebViewGui(") -and $main -notmatch 'A_Args\[1\] = "--starting"')
     "Maestro says when it's ready" = ($main -match 'ShowNotice\("Maestro is ready\."\)')
+    "the daily backup waits for start-up to finish" = ((Get-Content (Join-Path $root "lib\features\Backups.ahk") -Raw -Encoding utf8) -match '(?s)CheckBackupDue\(\*\) \{.*?BackupWaitsForStart\(A_TickCount - ASCS_StartedAt\).*?RunBackup\(\)')
     "the launcher uses the toast, not a tooltip" = ((Get-Content (Join-Path $root "ASCS.Launcher.ahk") -Raw -Encoding utf8) -notmatch 'ToolTip\(')
 }
 $bad = @($checks.Keys | Where-Object { -not $checks[$_] })

@@ -180,12 +180,12 @@ ValidateNoteLink(url) {
 ; ------------------------------------------
 
 ; A quick action is a palette item id such as "view:notes", "calendar:new", "launch:terminal",
-; "cmd:My tool", "ws:coding", "snippet:n_123", or "note:n_123". ASCS stores
+; "metronome:toggle" (2.3.0), "cmd:My tool", "ws:coding", "snippet:n_123", or "note:n_123". ASCS stores
 ; these strings only; the frontend resolves them to items, and running one
 ; goes through the same validated messages the palette uses.
 ValidateQuickActionId(id) {
     id := Trim(id)
-    if !RegExMatch(id, "^(view|calendar|launch|mode|cmd|ws|snippet|note):[^\x00-\x1F|]{1,80}$")
+    if !RegExMatch(id, "^(view|calendar|metronome|launch|mode|cmd|ws|snippet|note):[^\x00-\x1F|]{1,80}$")
         throw Error("A quick action is not valid.")
     return id
 }
@@ -206,6 +206,103 @@ ParseQuickActionsPayload(content, maxActions := 6) {
             throw Error("At most " maxActions " quick actions are supported.")
     }
     return ids
+}
+
+; ------------------------------------------
+; Chord library (2.3.0)
+; ------------------------------------------
+
+; A saved chord: a name of 1 to 32 characters (no control characters or double
+; quotes), an instrument, and its notes. A stringed instrument's chord has its
+; tuning, 4 to 7 open strings as MIDI numbers from 16 to 96, and for each string
+; a fret from 0 to 24 or "x" (not played), at least one played. A keyboard chord
+; has no tuning, and 1 to 10 keys from 21 to 108, low to high. Returns a Map of
+; the fields, numbers written plainly.
+ValidateChord(name, instrument, tuning, shape) {
+    name := Trim(name)
+    if (name = "" || StrLen(name) > 32 || RegExMatch(name, '[\x00-\x1F\x7F"]'))
+        throw Error("A chord's name must be 1 to 32 characters.")
+    if !RegExMatch(instrument, "^(guitar|bass|mandolin|ukulele|keyboard)$")
+        throw Error("A chord's instrument isn't one Maestro knows.")
+    tuning := Trim(tuning)
+    shape := Trim(shape)
+    if (instrument = "keyboard") {
+        if (tuning != "")
+            throw Error("A keyboard chord has no tuning.")
+        if !RegExMatch(shape, "^\d{1,3}( \d{1,3}){0,9}$")
+            throw Error("A keyboard chord needs 1 to 10 keys.")
+        keys := []
+        for key in StrSplit(shape, " ") {
+            key := Integer(key)
+            if (key < 21 || key > 108 || (keys.Length && key <= keys[keys.Length]))
+                throw Error("A keyboard chord's keys must rise, from 21 to 108.")
+            keys.Push(key)
+        }
+        return Map("name", name, "instrument", instrument, "tuning", "", "shape", JoinArray(keys, " "))
+    }
+    if !RegExMatch(tuning, "^\d{1,3}( \d{1,3}){3,6}$")
+        throw Error("A chord's tuning needs 4 to 7 strings.")
+    pitches := []
+    for pitch in StrSplit(tuning, " ") {
+        pitch := Integer(pitch)
+        if (pitch < 16 || pitch > 96)
+            throw Error("A chord's tuning is out of range.")
+        pitches.Push(pitch)
+    }
+    if !RegExMatch(shape, "^(x|\d{1,2})( (x|\d{1,2})){3,6}$") || StrSplit(shape, " ").Length != pitches.Length
+        throw Error("A chord needs a fret, or x, for each string.")
+    frets := []
+    played := 0
+    for fret in StrSplit(shape, " ") {
+        if (fret == "x") {
+            frets.Push("x")
+            continue
+        }
+        fret := Integer(fret)
+        if (fret > 24)
+            throw Error("A chord's frets go up to 24.")
+        frets.Push(fret)
+        played++
+    }
+    if !played
+        throw Error("A chord needs at least one string played.")
+    return Map("name", name, "instrument", instrument, "tuning", JoinArray(pitches, " "), "shape", JoinArray(frets, " "))
+}
+
+; One chord a line: name, instrument, tuning and shape, separated by tabs. At
+; most `maxChords`; an empty payload clears the library. Returns an Array.
+ParseChordsPayload(content, maxChords := 200) {
+    chords := []
+    for line in StrSplit(content, "`n", "`r") {
+        if (Trim(line) = "")
+            continue
+        fields := StrSplit(line, "`t")
+        if (fields.Length != 4)
+            throw Error("A saved chord is malformed.")
+        chords.Push(ValidateChord(fields[1], fields[2], fields[3], fields[4]))
+        if (chords.Length > maxChords)
+            throw Error("At most " maxChords " chords can be saved.")
+    }
+    return chords
+}
+
+; The chords as JSON for the page: tuning and shape as arrays of numbers, an
+; unplayed string as null.
+ChordsJson(chords) {
+    json := "["
+    for index, chord in chords {
+        shape := ""
+        if (chord["shape"] != "") {
+            for at, fret in StrSplit(chord["shape"], " ")
+                shape .= (at > 1 ? "," : "") (fret == "x" ? "null" : fret)
+        }
+        json .= (index > 1 ? "," : "")
+            . '{"name":' JsonQuote(chord["name"])
+            . ',"instrument":' JsonQuote(chord["instrument"])
+            . ',"tuning":[' StrReplace(chord["tuning"], " ", ",") ']'
+            . ',"shape":[' shape ']}'
+    }
+    return json "]"
 }
 
 ; ------------------------------------------
@@ -2762,6 +2859,13 @@ BackupDue(now, time, lastAttempt, lastResult) {
     if (lastResult = "failed")
         return DateDiff(now, lastAttempt, "Minutes") >= 60
     return false
+}
+
+; Whether the daily backup still waits for Maestro's start (2.3.0). The first
+; 5 minutes after a start are start-up's: a catch-up backup a minute in
+; collided with it and failed.
+BackupWaitsForStart(msSinceStart) {
+    return msSinceStart < 300000
 }
 
 ; The logo's swing as the page draws it (mark-swing, 2.2.0), for the start

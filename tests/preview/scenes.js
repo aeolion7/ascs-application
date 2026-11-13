@@ -229,6 +229,30 @@ const PreviewScenes = (() => {
     }
 
     const open = (view, setup) => () => { baseData(); navigate(view); setup?.(); };
+    // 2.3.0: the Conservatory with these settings.
+    const consScene = (changes, after) => () => {
+        baseData();
+        navigate("conservatory");
+        cons.settings = { ...MaestroMusic.parseSettings(null), ...changes };
+        consSections.show(cons.settings.tab);
+        renderConservatory();
+        after?.();
+    };
+    // 2.3.0: the Chords tab with a shape on the neck and a library.
+    const SAVED_CHORDS = [
+        ["C", [null, 3, 2, 0, 1, 0]], ["Am7", [null, 0, 2, 0, 1, 0]], ["Dm9", [null, 5, 3, 5, 5, null]], ["G13", [3, null, 3, 4, 5, null]],
+        ["G7(\u266F5,\u266D9)", [3, null, 3, 4, 4, 4]], ["C6/9", [null, 3, 2, 2, 3, 3]], ["F\u266Fm7\u266D5", [2, null, 2, 2, 1, null]],
+        ["B\u266Dmaj7\u266F11", [null, 1, 2, 2, 2, 0]], ["E7\u266F9", [null, 7, 6, 7, 8, null]], ["C/E", [0, 3, 2, 0, 1, 0]]
+    ].map(([name, shape]) => ({ name, instrument: "guitar", tuning: [40, 45, 50, 55, 59, 64], shape }))
+        .concat([{ name: "D", instrument: "guitar", tuning: [38, 45, 50, 55, 59, 64], shape: [0, null, 0, 2, 3, 2] }]);
+    const chordScene = (changes, shape, start, then, library = SAVED_CHORDS) => () => {
+        consScene({ tab: "chords", ...changes })();
+        receiveChords(library);
+        chords.shape = consKeyboard() ? [] : [...shape];
+        chords.start = start;
+        then?.();
+        renderChords();
+    };
     const calendar = mode => () => { baseData(); calendarData(mode); navigate("calendar"); calState.server = { state: "running", message: "" }; renderCalendar(); };
     // Layout shift: what's on screen before its data arrives, against after. Any
     // module that moved or changed width is listed in the audit's "shift".
@@ -409,13 +433,77 @@ const PreviewScenes = (() => {
             almanacState.step = 0;
             renderAlmanac();
         },
+        // 2.3.0: the Conservatory's metronome: stopped, playing with the trainer on, the trainer's panel, and 6/8.
+        conservatory: open("conservatory"),
+        "conservatory-playing": open("conservatory", () => {
+            Object.assign(metro.settings, { tempo: 96, meter: "4/4", trainer: { on: true, from: 80, to: 120, step: 4, every: 8 } });
+            metro.running = true;
+            metro.bars = 13;
+            renderMetro();
+            lightMetroBeat(1);
+        }),
+        "conservatory-trainer": open("conservatory", () => $("metroTrainerButton").click()),
+        "conservatory-six-eight": open("conservatory", () => { setMetroMeter("6/8"); $("metroCount").value = "triplet"; $("metroSound").value = "click"; }),
+        "conservatory-practice": open("conservatory", () => {
+            Object.assign(metro.settings, { countIn: 1, gap: { on: true, play: 2, mute: 2 }, trainer: { on: true, from: 80, to: 120, step: 4, every: 8 } });
+            metro.practice = { [MaestroMetronome.dayKey(new Date())]: 1500, "2026-11-10": 3900 };
+            renderMetroTrainer();
+            renderMetroPractice();
+            $("metroTrainerButton").click();
+        }),
+        "conservatory-twelve-eight": open("conservatory", () => setMetroMeter("12/8")),
+        // The title bar's chip while the metronome plays on another page.
+        "metronome-chip": open("notes", () => { metro.running = true; setMetroMeter("7/8"); renderMetroChip(); }),
+        "metronome-chip-collapsed": open("games", () => { applySidebar(true); metro.running = true; renderMetroChip(); }),
+        // 2.3.0: the instruments, Scales and Tuning.
+        "conservatory-chord": consScene({}, () => $("consKeyChords").children[4].dispatchEvent(new MouseEvent("click", { bubbles: true }))),
+        "conservatory-intervals": consScene({ root: "D", scale: "dorian", labels: "degrees", degreeStyle: "interval" }),
+        "conservatory-every-note": consScene({ show: "all", root: "A", scale: "minorPentatonic" }),
+        "conservatory-every-note-degrees": consScene({ show: "all", labels: "degrees", root: "E", scale: "phrygianDominant" }),
+        "conservatory-hirajoshi": consScene({ root: "A", scale: "hirajoshi" }),
+        "conservatory-sevenths-capo": consScene({ root: "A", scale: "major", sevenths: true, capo: 2 }),
+        "conservatory-lefty": consScene({ root: "E", scale: "minorPentatonic", lefty: true, capo: 5 }),
+        "conservatory-position": consScene({ root: "A", scale: "minorPentatonic", position: 5 }),
+        "conservatory-finder": consScene({ tab: "finder" }, () => { finder.picked = [[1, 3, 48], [2, 2, 52], [3, 0, 55], [4, 0, 59], [5, 0, 64]].map(([string, fret, midi]) => ({ string, fret, midi })); renderFinder(); renderConsNeck(); }),
+        // 2.3.0: the Chords tab, with a library of saved chords.
+        "conservatory-chords": chordScene({}, [null, 3, 2, 0, 1, 0], 1),
+        "conservatory-chords-altered": chordScene({}, [3, null, 3, 4, 4, 4], 2, () => { chords.editing = 4; chords.typed = "G7(\u266F5,\u266D9)"; }),
+        "conservatory-chords-signs": chordScene({ chordStyle: "signs" }, [null, 5, 3, 5, 5, null], 3),
+        "conservatory-chords-typed": chordScene({}, [null, 3, 2, 2, 3, 3], 1, () => { chords.typed = "C6/9"; }),
+        "conservatory-chords-high": chordScene({ lefty: true }, [null, 7, 6, 7, 8, null], 5),
+        "conservatory-chords-empty": chordScene({}, [null, null, null, null, null, null], 1, null, []),
+        "conservatory-chords-keyboard": chordScene({ instrument: "keyboard" }, [], 1, () => { chords.keys = [48, 52, 55, 59, 62, 66]; }),
+        "conservatory-chords-bass": chordScene({ instrument: "bass" }, [null, 3, 2, 0], 1),
+        "conservatory-finder-empty": consScene({ tab: "finder" }, () => { finder.picked = []; renderFinder(); renderConsNeck(); }),
+        "conservatory-quiz": consScene({ tab: "quiz", quizKind: "note", position: 5 }, () => { resetQuizScore(); Object.assign(quiz, { right: 6, asked: 8, streak: 3 }); quiz.question = { string: 3, fret: 7, midi: 62 }; renderQuiz(); renderConsNeck(); }),
+        "conservatory-quiz-wrong": consScene({ tab: "quiz", quizKind: "note" }, () => { resetQuizScore(); quiz.question = { string: 1, fret: 4, midi: 49 }; quiz.answered = 0; Object.assign(quiz, { right: 2, asked: 3 }); renderQuiz(); renderConsNeck(); }),
+        "conservatory-quiz-interval": consScene({ tab: "quiz", quizKind: "interval", quizDirection: "up" }, () => { resetQuizScore(); quiz.question = { low: 52, high: 59, semis: 7 }; quiz.answered = 7; Object.assign(quiz, { right: 4, asked: 4, streak: 4 }); renderQuiz(); renderConsNeck(); }),
+        "conservatory-drone": consScene({ root: "D", scale: "dorian" }, () => { cons.drone = { midi: 38 }; cons.scalePlay = { voices: [], timer: null }; renderConsHear(); }),
+        "conservatory-bass": consScene({ instrument: "bass", tunings: { bass: "five" }, root: "E", scale: "minorPentatonic" }),
+        "conservatory-mandolin": consScene({ instrument: "mandolin", root: "A", scale: "major", labels: "degrees" }),
+        "conservatory-ukulele": consScene({ instrument: "ukulele", root: "C", scale: "major" }),
+        "conservatory-keyboard": consScene({ instrument: "keyboard", root: "E♭", scale: "harmonic" }),
+        "conservatory-tuning": consScene({ tab: "tuning", tone: "steady", own: [{ id: "own-p1", name: "Open C", instrument: "guitar", pitches: [36, 43, 48, 55, 60, 64], own: true }] }, () => { cons.steady = { midi: 55 }; renderConsStrings(); }),
+        "conservatory-tuning-new": consScene({ tab: "tuning", tunings: { guitar: "own-p1" }, own: [{ id: "own-p1", name: "Open C", instrument: "guitar", pitches: [36, 43, 48, 55, 60, 64], own: true }] }, () => openConsTuningForm()),
+        "conservatory-tuning-keyboard": consScene({ instrument: "keyboard", tab: "tuning" }),
+        "home-metronome": () => {
+            PreviewScenes["home-full"]();
+            showHomeLayout({ ...MaestroHomeLayout.defaults(), hidden: ["weather", "processes", "network", "audio", "controllers", "pinned", "unlocks", "timer", "note"], order: ["now", "today", "next", "system", "stack", "continue", "metronome", "note"] });
+            Object.assign(metro.settings, { tempo: 96, trainer: { on: true, from: 80, to: 120, step: 4, every: 8 } });
+            metro.running = true;
+            metro.bars = 13;
+            metro.practice = { [MaestroMetronome.dayKey(new Date())]: 1500 };
+            renderMetro();
+            renderMetroPractice();
+            lightMetroBeat(2);
+        },
         "home-idle": () => { baseData(); homeData(); navigate("home"); live([]); },
         "home-empty": open("home"),
         "home-arrange": () => { baseData(); homeData(); navigate("home"); homeLive(); $("arrangeButton").click(); },
         // The added modules, each with sample data.
         "home-added": () => {
             PreviewScenes["home-full"]();
-            showHomeLayout({ ...MaestroHomeLayout.defaults(), order: ["weather", "processes", "network", "audio", "controllers", "pinned", "unlocks", "timer", "now", "today", "next", "system", "stack", "continue", "note"], hidden: ["now", "today", "next", "system", "stack", "continue", "note"] });
+            showHomeLayout({ ...MaestroHomeLayout.defaults(), order: ["weather", "processes", "network", "audio", "controllers", "pinned", "unlocks", "timer", "metronome", "now", "today", "next", "system", "stack", "continue", "note"], hidden: ["now", "today", "next", "system", "stack", "continue", "note"] });
             say({ type: "weatherSettings", enabled: true });
             handleWeather(JSON.stringify({ current: { temperature_2m: 48.3, apparent_temperature: 44.1, relative_humidity_2m: 61, weather_code: 3, wind_speed_10m: 9.4 }, daily: { time: ["2026-11-09", "2026-11-10", "2026-11-11"], temperature_2m_max: [52, 55, 49], temperature_2m_min: [40, 43, 38], weather_code: [3, 61, 0], precipitation_probability_max: [10, 80, 0] } }));
             say({ type: "homeStats", network: { name: "Wi-Fi", down: 2500000, up: 125000 }, processes: { cpu: [{ name: "vivaldi", value: 12.4 }, { name: "Code", value: 6.1 }, { name: "pcsx2-qt", value: 4.4 }, { name: "Discord", value: 1.2 }], memory: [{ name: "vivaldi", value: 3480 }, { name: "Code", value: 2048 }, { name: "Discord", value: 610 }, { name: "Maestro", value: 240 }] } });

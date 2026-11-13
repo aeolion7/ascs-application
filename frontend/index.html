@@ -23,6 +23,9 @@
   <link rel="stylesheet" href="styles/37-2.0.0-preferences.css">
   <link rel="stylesheet" href="styles/38-2.0.0-polish.css">
   <link rel="stylesheet" href="styles/41-2.2.0-finish.css">
+  <link rel="stylesheet" href="styles/42-2.3.0-conservatory.css">
+  <link rel="stylesheet" href="styles/43-2.3.0-shell.css">
+  <link rel="stylesheet" href="styles/44-2.3.0-chords.css">
 </head>
 <body>
   <div class="app-shell">
@@ -33,7 +36,7 @@
           <span>Aeolionware</span>
           <strong>Maestro</strong>
         </span>
-        <span id="sidebarVersion" hidden>Maestro <span>2.2.0</span></span>
+        <span id="sidebarVersion" hidden>Maestro <span>2.3.0</span></span>
       </div>
 
       <nav class="primary-nav" aria-label="Pages">
@@ -68,6 +71,10 @@
         <button class="nav" type="button" data-view="commands" aria-controls="commands" title="Commands">
           <svg data-icon="commands" data-size="24"></svg>
           <span>Commands</span>
+        </button>
+        <button class="nav" type="button" data-view="conservatory" aria-controls="conservatory" title="Conservatory">
+          <svg data-icon="conservatory" data-size="24"></svg>
+          <span>Conservatory</span>
         </button>
       </nav>
 
@@ -118,6 +125,10 @@
         <div class="titlebar-actions">
           <button class="titlebar-help" type="button" id="titlebarHelp" aria-label="Help" title="Help (F1)">?</button>
           <span class="test-build-chip" id="testBuildChip" role="status" title="Running on a copy of your data. Go back with: maestro try --end" hidden>Test build, changes are discarded</span>
+          <div class="metro-chip" id="metroChip" role="group" aria-label="Metronome" hidden>
+            <button class="metro-chip-open" type="button" id="metroChipOpen" title="The metronome is playing. Open Conservatory"><span class="metro-chip-dot" id="metroChipDot" aria-hidden="true"></span><span id="metroChipText">96 BPM</span></button>
+            <button class="metro-chip-stop" type="button" id="metroChipStop" title="Stop the metronome (Ctrl + Shift + M)" aria-label="Stop the metronome"><svg data-icon="stop"></svg></button>
+          </div>
           <button class="attention-button" type="button" id="attentionButton" aria-haspopup="dialog" aria-expanded="false" hidden>
             <svg data-icon="attention"></svg>
             <span id="attentionLabel"></span>
@@ -289,6 +300,22 @@
             <div class="module-foot">
               <button class="primary" type="button" id="timerStart">Start</button>
               <button class="secondary" type="button" id="timerReset" hidden>Reset</button>
+            </div>
+          </section>
+          <section class="module" data-module="metronome" aria-labelledby="homeMetroTitle">
+            <div class="module-head">
+              <h2 id="homeMetroTitle"><button class="module-link" type="button" data-view="conservatory" title="Open Conservatory">Metronome</button></h2>
+            </div>
+            <div class="metro-tempo home-metro-tempo">
+              <button class="secondary metro-step" type="button" id="homeMetroSlower" title="Slower by 1 BPM" aria-label="Slower by 1 BPM"><svg data-icon="minus"></svg></button>
+              <div class="metro-bpm"><strong id="homeMetroTempo">96</strong><span id="homeMetroName">BPM</span></div>
+              <button class="secondary metro-step" type="button" id="homeMetroFaster" title="Faster by 1 BPM" aria-label="Faster by 1 BPM"><svg data-icon="plus"></svg></button>
+            </div>
+            <div class="metro-beats" aria-hidden="true"></div>
+            <p class="home-metro-trainer" id="homeMetroTrainer" hidden></p>
+            <p class="home-metro-trainer" id="homeMetroPractice" hidden></p>
+            <div class="module-foot">
+              <button class="primary" type="button" id="homeMetroPlay" aria-pressed="false">Start</button>
             </div>
           </section>
         </div>
@@ -886,6 +913,249 @@
         </div>
       </section>
 
+<section class="view" id="conservatory" aria-labelledby="conservatoryTitle">
+        <h1 class="sr-only" id="conservatoryTitle">Conservatory</h1>
+        <div class="cons-stage">
+          <div class="cons-body" id="consBody">
+            <div class="cons-toolbar">
+              <div class="cal-modes cons-instruments" id="consInstruments" role="group" aria-label="Instrument">
+                <button type="button" data-instrument="guitar">Guitar</button>
+                <button type="button" data-instrument="bass">Bass</button>
+                <button type="button" data-instrument="mandolin">Mandolin</button>
+                <button type="button" data-instrument="ukulele">Ukulele</button>
+                <button type="button" data-instrument="keyboard">Keyboard</button>
+              </div>
+              <label class="metro-field" for="consTuning" id="consTuningField"><span>Tuning</span><select id="consTuning"></select></label>
+              <div class="cons-neck-options" id="consNeckOptions">
+                <label class="metro-field cons-capo" for="consCapo" title="The neck from the capo up, and each chord's shape"><span>Capo</span><select id="consCapo"></select></label>
+                <button class="secondary cons-toggle" type="button" id="consLefty" aria-pressed="false" title="The nut on the right, as a left-handed player sees the neck">Left-handed</button>
+              </div>
+              <div class="section-tabs cons-tabs" id="consTabs" role="tablist" aria-label="Conservatory sections">
+                <button type="button" role="tab" id="consTabScales" data-section-tab="scales" aria-controls="consScales" aria-selected="true">Scales</button>
+                <button type="button" role="tab" id="consTabChords" data-section-tab="chords" aria-controls="consChordsPanel" aria-selected="false">Chords</button>
+                <button type="button" role="tab" id="consTabFinder" data-section-tab="finder" aria-controls="consFinderPanel" aria-selected="false">Finder</button>
+                <button type="button" role="tab" id="consTabQuiz" data-section-tab="quiz" aria-controls="consQuizPanel" aria-selected="false">Quiz</button>
+                <button type="button" role="tab" id="consTabTuning" data-section-tab="tuning" aria-controls="consTuningPanel" aria-selected="false">Tuning</button>
+              </div>
+            </div>
+            <section class="module cons-neck-module" id="consNeckModule" aria-label="Neck">
+              <div class="cons-neck-holder" id="consNeck"></div>
+            </section>
+            <div class="cons-panel" id="consScales" role="tabpanel" aria-labelledby="consTabScales">
+              <div class="cons-scalebar">
+                <label class="metro-field" for="consRoot"><span>Root</span><select id="consRoot"></select></label>
+                <label class="metro-field" for="consScale"><span>Scale</span><select id="consScale"></select></label>
+                <label class="metro-field" for="consPosition" id="consPositionField" title="Mark one position of five frets, or the whole neck"><span>Position</span><select id="consPosition"></select></label>
+                <div class="cons-choice">
+                  <span class="cons-choice-label" id="consShowLabel">Notes</span>
+                  <div class="cal-modes cons-labels" id="consShow" role="group" aria-labelledby="consShowLabel">
+                    <button type="button" data-show="scale" title="Only the scale's notes, or the chord's">Diatonic</button>
+                    <button type="button" data-show="all" title="All twelve notes, with those outside the scale or chord dimmed">Chromatic</button>
+                  </div>
+                </div>
+                <div class="cons-choice">
+                  <span class="cons-choice-label" id="consLabelsLabel">Labels</span>
+                  <div class="cal-modes cons-labels" id="consLabels" role="group" aria-labelledby="consLabelsLabel">
+                    <button type="button" data-labels="names" title="Note names, spelled for the key: F♯ in G major">Names</button>
+                    <button type="button" data-labels="degrees" title="Each note's degree from the root">Degrees</button>
+                  </div>
+                  <div class="cal-modes cons-labels" id="consDegreeStyle" role="group" aria-label="Write degrees as" hidden>
+                    <button type="button" data-degree-style="flat" title="From the major scale: 1, ♭3, 5, ♭7">♭7</button>
+                    <button type="button" data-degree-style="interval" title="As intervals from the root: R, m3, P5, m7">m7</button>
+                  </div>
+                </div>
+                <div class="cons-hear" role="group" aria-label="Hear">
+                  <button class="secondary cons-toggle" type="button" id="consDrone" aria-pressed="false">Drone</button>
+                  <button class="secondary" type="button" id="consPlayScale" aria-pressed="false">Play scale</button>
+                </div>
+                <p class="cons-notes"><span class="sr-only" id="consNotesWhat"></span><span class="cons-notes-list" id="consNotes"></span></p>
+              </div>
+              <div class="cons-grid-2" id="consScaleGrid">
+                <section class="module" id="consKeyboardModule" aria-labelledby="consKeyboardTitle">
+                  <div class="module-head"><h2 id="consKeyboardTitle">On a Keyboard</h2></div>
+                  <div class="cons-keys-holder" id="consKeyboard"></div>
+                </section>
+                <section class="module" aria-labelledby="consChordsTitle">
+                  <div class="module-head">
+                    <h2 id="consChordsTitle">Chords</h2>
+                    <div class="cal-modes cons-chord-size" id="consChordSize" role="group" aria-label="Chords of">
+                      <button type="button" data-sevenths="false" title="Three notes: root, third and fifth">Triads</button>
+                      <button type="button" data-sevenths="true" title="Four notes: the triad and its seventh">Sevenths</button>
+                    </div>
+                  </div>
+                  <div class="key-chords" id="consKeyChords"></div>
+                  <p class="cons-note" id="consChordsNote"></p>
+                </section>
+              </div>
+            </div>
+            <div class="cons-panel" id="consChordsPanel" role="tabpanel" aria-labelledby="consTabChords" hidden>
+              <div class="cons-scalebar">
+                <label class="metro-field cons-chord-name" for="consChordName"><span>Name</span><input id="consChordName" type="text" maxlength="40" autocomplete="off" spellcheck="false"></label>
+                <button class="primary" type="button" id="consChordSave">Save chord</button>
+                <button class="link-button" type="button" id="consChordSaveNew" hidden>Save as new</button>
+                <button class="secondary" type="button" id="consChordStrum">Strum</button>
+                <button class="secondary" type="button" id="consChordClear">Clear</button>
+                <div class="cons-choice cons-chord-style">
+                  <span class="cons-choice-label" id="consChordStyleLabel">Write chords as</span>
+                  <div class="cal-modes" id="consChordStyle" role="group" aria-labelledby="consChordStyleLabel">
+                    <button type="button" data-chord-style="letters" aria-label="Letters" title="Letters: Cm7, Cmaj7, Cm7♭5">Letters</button>
+                    <button type="button" data-chord-style="signs" aria-label="Signs" title="Signs: C–7, C△7, Cø7">Signs</button>
+                  </div>
+                </div>
+              </div>
+              <div class="cons-grid-2 cons-chords-grid">
+                <section class="module" aria-labelledby="consChordTitle">
+                  <div class="module-head"><h2 id="consChordTitle">Chord</h2></div>
+                  <div class="cons-chord-facts" id="consChordFacts"></div>
+                  <div class="cons-chord-readings" id="consChordReadings"></div>
+                  <p class="cons-note" id="consChordNote"></p>
+                </section>
+                <section class="module cons-saved-module" aria-labelledby="consSavedTitle">
+                  <div class="module-head">
+                    <h2 id="consSavedTitle">Saved Chords</h2>
+                    <span class="cons-saved-count" id="consSavedCount"></span>
+                    <label class="metro-field" for="consSavedRoot"><span>Root</span><select id="consSavedRoot"></select></label>
+                    <label class="metro-field cons-saved-search" for="consSavedSearch"><span class="sr-only">Search saved chords</span><input id="consSavedSearch" type="search" placeholder="Search" autocomplete="off" spellcheck="false"></label>
+                  </div>
+                  <ul class="cons-saved" id="consSaved"></ul>
+                  <p class="cons-note" id="consSavedNote"></p>
+                </section>
+              </div>
+            </div>
+            <div class="cons-panel" id="consFinderPanel" role="tabpanel" aria-labelledby="consTabFinder" hidden>
+              <div class="cons-scalebar">
+                <div class="cons-choice">
+                  <span class="cons-choice-label">Picked</span>
+                  <p class="cons-notes"><span class="cons-notes-list" id="consPicked"></span></p>
+                </div>
+                <button class="secondary" type="button" id="consPickStrum">Strum</button>
+                <button class="secondary" type="button" id="consPickClear">Clear</button>
+                <p class="cons-note" id="consFinderHint"></p>
+              </div>
+              <div class="cons-grid-2">
+                <section class="module" aria-labelledby="consFoundChordsTitle">
+                  <div class="module-head"><h2 id="consFoundChordsTitle">Chords</h2></div>
+                  <div class="cons-found" id="consFoundChords"></div>
+                  <p class="cons-note" id="consFoundChordsNote"></p>
+                </section>
+                <section class="module" aria-labelledby="consFoundScalesTitle">
+                  <div class="module-head"><h2 id="consFoundScalesTitle">Scales</h2></div>
+                  <div class="cons-found" id="consFoundScales"></div>
+                  <p class="cons-note" id="consFoundScalesNote"></p>
+                </section>
+              </div>
+            </div>
+            <div class="cons-panel" id="consQuizPanel" role="tabpanel" aria-labelledby="consTabQuiz" hidden>
+              <div class="cons-scalebar">
+                <div class="cal-modes" id="consQuizKind" role="group" aria-label="Quiz">
+                  <button type="button" data-quiz="note" title="A place on the neck is marked: name its note">Name the note</button>
+                  <button type="button" data-quiz="interval" title="Two notes are played: name the interval between them">Intervals by ear</button>
+                </div>
+                <label class="metro-check" for="consQuizNaturals" id="consQuizNaturalsField"><input id="consQuizNaturals" type="checkbox"><span>Natural notes only</span></label>
+                <div class="cons-choice" id="consQuizDirectionField">
+                  <span class="cons-choice-label" id="consQuizDirectionLabel">Played</span>
+                  <div class="cal-modes" id="consQuizDirection" role="group" aria-labelledby="consQuizDirectionLabel">
+                    <button type="button" data-direction="up">Up</button>
+                    <button type="button" data-direction="down">Down</button>
+                    <button type="button" data-direction="together">Together</button>
+                  </div>
+                </div>
+                <p class="cons-quiz-score" id="consQuizScore" role="status"></p>
+              </div>
+              <section class="module cons-quiz-module" aria-labelledby="consQuizTitle">
+                <div class="module-head">
+                  <h2 id="consQuizTitle">Name the Note</h2>
+                  <div class="cons-quiz-actions">
+                    <button class="secondary" type="button" id="consQuizHear">Hear it</button>
+                    <button class="secondary" type="button" id="consQuizNext">Next</button>
+                  </div>
+                </div>
+                <p class="cons-quiz-prompt" id="consQuizPrompt">Which note is marked?</p>
+                <div class="cons-quiz-answers" id="consQuizAnswers"></div>
+                <p class="cons-quiz-result" id="consQuizResult"></p>
+              </section>
+            </div>
+            <div class="cons-panel" id="consTuningPanel" role="tabpanel" aria-labelledby="consTabTuning" hidden>
+              <div class="cons-grid-2">
+                <section class="module" aria-labelledby="consTonesTitle">
+                  <div class="module-head">
+                    <h2 id="consTonesTitle">Reference Tones</h2>
+                    <label class="metro-field" for="consTone"><span>Sound</span><select id="consTone"><option value="pluck">Plucked string</option><option value="steady">Steady tone</option></select></label>
+                  </div>
+                  <div class="tuning-strings" id="consStrings"></div>
+                  <div class="cons-tone-row">
+                    <label class="metro-field" for="consA4"><span>Concert pitch A4 =</span><input id="consA4" type="number" min="415" max="466" step="1" inputmode="numeric"><span>Hz</span></label>
+                    <button class="secondary" type="button" id="consToneStop" hidden>Stop the tone</button>
+                  </div>
+                </section>
+                <section class="module" id="consTuningsModule" aria-labelledby="consTuningsTitle">
+                  <div class="module-head">
+                    <h2 id="consTuningsTitle">Tunings</h2>
+                    <button class="link-button" type="button" id="consNewTuning">New tuning</button>
+                  </div>
+                  <form class="cons-tuning-form" id="consTuningForm" hidden>
+                    <label class="metro-field" for="consTuningName"><span>Name</span><input id="consTuningName" type="text" maxlength="40" autocomplete="off" spellcheck="false"></label>
+                    <div class="cons-pitches" id="consTuningPitches"></div>
+                    <p class="metro-trainer-problem" id="consTuningProblem" role="alert" hidden></p>
+                    <div class="cons-form-actions">
+                      <button class="primary" type="submit">Save tuning</button>
+                      <button class="link-button" type="button" id="consTuningCancel">Cancel</button>
+                    </div>
+                  </form>
+                  <ul class="cons-tunings" id="consTunings"></ul>
+                </section>
+              </div>
+            </div>
+          </div>
+          <div class="metro-bar" id="metroBar" role="group" aria-label="Metronome">
+            <button class="primary metro-play" type="button" id="metroPlay" aria-pressed="false" title="Start the metronome" aria-label="Start the metronome"><svg data-icon="play" data-size="24"></svg></button>
+            <div class="metro-tempo" id="metroTempoBox">
+              <button class="secondary metro-step" type="button" id="metroSlower" title="Slower by 1 BPM" aria-label="Slower by 1 BPM"><svg data-icon="minus"></svg></button>
+              <label class="metro-bpm" for="metroTempo"><input id="metroTempo" type="number" min="30" max="300" step="1" value="96" inputmode="numeric" autocomplete="off"><span id="metroTempoName">BPM</span></label>
+              <button class="secondary metro-step" type="button" id="metroFaster" title="Faster by 1 BPM" aria-label="Faster by 1 BPM"><svg data-icon="plus"></svg></button>
+            </div>
+            <div class="metro-beats" aria-hidden="true"></div>
+            <label class="metro-field" for="metroMeter" title="The tempo counts the lower number's note: quarters in 4/4, eighths in 7/8"><span>Time signature</span><select id="metroMeter"></select></label>
+            <label class="metro-field" for="metroCount" title="Quieter clicks between the beats"><span>Subdivision</span><select id="metroCount"></select></label>
+            <div class="metro-trainer">
+              <button class="secondary" type="button" id="metroTrainerButton" aria-expanded="false" aria-controls="metroTrainerPanel"><span>Practice</span><span class="metro-trainer-status" id="metroTrainerStatus">Off</span></button>
+              <div class="metro-trainer-panel" id="metroTrainerPanel" role="dialog" aria-labelledby="metroTrainerTitle" hidden>
+                <div class="module-head">
+                  <h2 id="metroTrainerTitle">Practice</h2>
+                  <label class="metro-field" for="metroCountIn" title="Bars of plain beats before the count begins"><span>Count-in</span><select id="metroCountIn"><option value="0">None</option><option value="1">1 bar</option><option value="2">2 bars</option></select></label>
+                </div>
+                <div class="metro-practice-head">
+                  <h3>Muted Bars</h3>
+                  <label class="metro-check" for="metroGapOn"><input id="metroGapOn" type="checkbox"><span>On</span></label>
+                </div>
+                <div class="metro-trainer-fields is-two">
+                  <label for="metroGapPlay"><span>Play</span><input id="metroGapPlay" type="number" min="1" max="8" step="1" inputmode="numeric"><small>bars</small></label>
+                  <label for="metroGapMute"><span>Then mute</span><input id="metroGapMute" type="number" min="1" max="8" step="1" inputmode="numeric"><small>bars</small></label>
+                </div>
+                <div class="metro-practice-head">
+                  <h3>Tempo Trainer</h3>
+                  <label class="metro-check" for="metroTrainerOn"><input id="metroTrainerOn" type="checkbox"><span>On</span></label>
+                </div>
+                <div class="metro-trainer-fields">
+                  <label for="metroTrainerFrom"><span>From</span><input id="metroTrainerFrom" type="number" min="30" max="300" step="1" inputmode="numeric"><small>BPM</small></label>
+                  <label for="metroTrainerTo"><span>To</span><input id="metroTrainerTo" type="number" min="30" max="300" step="1" inputmode="numeric"><small>BPM</small></label>
+                  <label for="metroTrainerStep"><span>Step</span><input id="metroTrainerStep" type="number" min="1" max="40" step="1" inputmode="numeric"><small>BPM</small></label>
+                  <label for="metroTrainerEvery"><span>Every</span><input id="metroTrainerEvery" type="number" min="1" max="64" step="1" inputmode="numeric"><small>bars</small></label>
+                </div>
+                <p class="metro-trainer-note" id="metroTrainerNote"></p>
+                <p class="metro-trainer-problem" id="metroTrainerProblem" role="alert" hidden></p>
+                <p class="metro-trainer-note metro-practice-time" id="metroPracticeTime"></p>
+              </div>
+            </div>
+            <button class="link-button" type="button" id="metroTap" title="Click in time, four times or more">Tap tempo</button>
+            <div class="metro-output">
+              <label class="metro-field" for="metroSound"><span>Sound</span><select id="metroSound"></select></label>
+              <label class="metro-field metro-volume" for="metroVolume"><svg data-icon="speaker"></svg><span class="sr-only">Metronome volume</span><input id="metroVolume" type="range" min="0" max="100" step="1"></label>
+            </div>
+          </div>
+        </div>
+      </section>
+
 <section class="view" id="settings" aria-labelledby="settingsTitle">
         <h1 class="sr-only" id="settingsTitle">Preferences</h1>
         <div class="pref-grid">
@@ -1250,6 +1520,12 @@
   <script src="workspacesview.js"></script>
   <script src="homeview.js"></script>
   <script src="homemodules.js"></script>
+  <script src="metronome.js"></script>
+  <script src="conservatoryview.js"></script>
+  <script src="music.js"></script>
+  <script src="neckview.js"></script>
+  <script src="practiceview.js"></script>
+  <script src="chordsview.js"></script>
   <script src="segmented.js"></script>
   <script src="motion.js"></script>
 </body>

@@ -346,6 +346,7 @@ function applyHomeLayout() {
     });
     if (arranging) renderArrangeChrome();
     globalThis.askHomeExtras?.(true);
+    globalThis.syncMetronomeView?.();
 }
 
 function keepHomeLayout() {

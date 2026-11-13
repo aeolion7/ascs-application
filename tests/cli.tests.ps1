@@ -233,6 +233,8 @@ $goodTime = Get-Status GoodTime
 $lock = [IO.File]::Open("$data\notes.json", 'Open', 'Read', 'None')
 try { $run = Invoke-Cli $r @('backup-data') } finally { $lock.Dispose() }
 Add-Check 'backup: a file that cannot be copied fails it' ($run.code -ne 0 -and $run.text -match 'no backup was made') $run.text
+Add-Check 'backup: and names the file and why, once' ($run.text -match 'Copying File notes\.json: The process cannot access' -and [regex]::Matches($run.text, 'notes\.json').Count -eq 1) $run.text
+Add-Check 'backup: and Maestro is told which file' ((Get-Status Detail) -match '^No backup was made.*Copying File notes\.json: ' -and (Get-Status Detail).Length -le 200) (Get-Status Detail)
 Add-Check 'backup: and leaves nothing half made' (@(Get-ChildItem $env:ASCS_BACKUPS -Directory).Count -eq 1)
 Add-Check 'backup: and records the failure, keeping the last good time' ((Get-Status Result) -eq 'failed' -and (Get-Status GoodTime) -eq $goodTime -and (Get-Status GoodFolder) -eq $made[0].FullName) (Get-Content "$data\backup-status.ini" -Raw)
 

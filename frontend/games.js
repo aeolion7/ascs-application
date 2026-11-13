@@ -248,7 +248,8 @@
 
     // The browser's filters: all, locked, earned, missable (earned or not),
     // and progression (including the win condition); sorted in the game's
-    // own order, by points, or rarest first.
+    // own order, by points, rarest first, or unlocked first (the newest
+    // unlock first, then the locked ones in the game's order; 2.3.0).
     function filterRaAchievements(list, filter = "all", sort = "order") {
         const kept = list.filter(item => filter === "locked" ? !isEarned(item)
             : filter === "earned" ? isEarned(item)
@@ -257,6 +258,10 @@
             : true);
         if (sort === "points") return [...kept].sort((a, b) => b.points - a.points || a.order - b.order);
         if (sort === "rarest") return [...kept].sort((a, b) => (a.rarity ?? 101) - (b.rarity ?? 101) || a.order - b.order);
+        if (sort === "unlocked") {
+            const when = item => (item.earnedHardcore || item.earned || "").replace("T", " ");
+            return [...kept].sort((a, b) => when(b).localeCompare(when(a)) || a.order - b.order);
+        }
         return kept;
     }
 
@@ -438,6 +443,68 @@
         return `${label} on ${new Date(item.time).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
     }
 
+    // ---- RetroAchievements' times (2.3.0): given in UTC, shown in a time zone.
+
+    // "YYYY-MM-DD HH:MM:SS", in UTC, to a Date; null if malformed.
+    function parseRaTime(text) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(typeof text === "string" ? text : "");
+        if (!m) return null;
+        const date = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6] || 0)));
+        return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    // A time zone's name ("America/New_York") if it's one Windows' browser
+    // knows, or "" (meaning this PC's own).
+    function cleanZone(zone) {
+        if (typeof zone !== "string" || zone.length > 64 || !/^[A-Za-z][A-Za-z0-9_+-]*(\/[A-Za-z0-9_+-]+){0,2}$/.test(zone)) return "";
+        try {
+            new Intl.DateTimeFormat("en-US", { timeZone: zone });
+            return zone;
+        } catch {
+            return "";
+        }
+    }
+
+    // A moment's parts in a zone (this PC's when ""): year, month, day,
+    // weekday, "3:15 PM", and its day as a number, for counting days.
+    function zoneParts(date, zone) {
+        const parts = {};
+        new Intl.DateTimeFormat("en-US", {
+            ...(zone ? { timeZone: zone } : {}),
+            year: "numeric", month: "short", day: "numeric", weekday: "short", hour: "numeric", minute: "2-digit", hour12: true
+        }).formatToParts(date).forEach(part => { parts[part.type] = part.value; });
+        const number = new Intl.DateTimeFormat("en-US", { ...(zone ? { timeZone: zone } : {}), year: "numeric", month: "numeric", day: "numeric" })
+            .formatToParts(date).reduce((all, part) => ({ ...all, [part.type]: Number(part.value) }), {});
+        return {
+            ...parts,
+            time: `${parts.hour}:${parts.minute} ${parts.dayPeriod}`,
+            dayNumber: Math.round(Date.UTC(number.year, number.month - 1, number.day) / 86400000)
+        };
+    }
+
+    // "Nov 1, 2026, 3:15 PM" in the zone; "" if malformed.
+    function formatRaTime(text, zone = "") {
+        const date = parseRaTime(text);
+        if (!date) return "";
+        const at = zoneParts(date, cleanZone(zone));
+        return `${at.month} ${at.day}, ${at.year}, ${at.time}`;
+    }
+
+    // A recent time: "Today, 3:15 PM", "Yesterday, 9:02 PM", "Mon, 9:02 PM"
+    // within the week, then "Nov 1, 9:02 PM", with the year if not this one.
+    function raWhen(text, zone = "", now = new Date()) {
+        const date = parseRaTime(text);
+        if (!date) return "";
+        const clean = cleanZone(zone);
+        const at = zoneParts(date, clean);
+        const today = zoneParts(now, clean);
+        const days = today.dayNumber - at.dayNumber;
+        if (days <= 0) return `Today, ${at.time}`;
+        if (days === 1) return `Yesterday, ${at.time}`;
+        if (days < 7) return `${at.weekday}, ${at.time}`;
+        return `${at.month} ${at.day}${at.year === today.year ? "" : `, ${at.year}`}, ${at.time}`;
+    }
+
     // A progress bar's classes: mastered games get the gold one (1.9.1).
     const raBarClass = mastered => (mastered ? "ra-bar is-mastered" : "ra-bar");
 
@@ -446,6 +513,7 @@
         filterGames, totalsByEmulator, gameFromWindowTitle, parseRetroAchievements, rankPercentile, titleKey, imageToken,
         matchPlayingGame, formatClock, parseRaGame, filterRaAchievements, raCounts, nextUp, raHighlights, parseRaUnlocks,
         AWARD_TABS, parseRaAwards, awardsInTab, awardText,
-        gameNoteKey, playingTitle, sessionSince, sessionStamp
+        gameNoteKey, playingTitle, sessionSince, sessionStamp,
+        parseRaTime, cleanZone, formatRaTime, raWhen
     };
 })(globalThis);

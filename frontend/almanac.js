@@ -284,7 +284,9 @@
             };
             if (day.date && day.high !== null && day.low !== null && day.code !== null) days.push(day);
         });
-        return { current, days };
+        // The location's time zone, when Open-Meteo names it (2.3.0).
+        const zone = typeof raw.timezone === "string" ? raw.timezone.slice(0, 64) : "";
+        return { current, days, zone };
     }
 
     // ------------------------------------------------------------- feeds

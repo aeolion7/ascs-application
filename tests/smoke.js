@@ -122,6 +122,575 @@
                 navigate("home");
             }
 
+            // 2.3.0: the Conservatory and its metronome, with a stand-in for the
+            // audio, so nothing sounds. Clicks are counted as they're booked.
+            {
+                const heard = { clicks: 0, suspended: 0, resumed: 0, sources: [] };
+                class FakeParam { setValueAtTime() {} exponentialRampToValueAtTime() {} setTargetAtTime(value) { this.target = value; } cancelScheduledValues() {} }
+                class FakeNode {
+                    constructor() { this.gain = new FakeParam(); this.frequency = new FakeParam(); this.frequency.value = 0; this.playbackRate = { value: 1 }; }
+                    connect(node) { return node; }
+                    disconnect() {}
+                    addEventListener(type, listener) { (this.listeners ??= {})[type] = listener; }
+                    setPeriodicWave() {}
+                    start() { heard.clicks += 1; }
+                    stop() { this.stopped = true; }
+                }
+                class FakeAudio {
+                    constructor() { this.began = performance.now(); this.sampleRate = 48000; this.destination = new FakeNode(); }
+                    get currentTime() { return (performance.now() - this.began) / 1000; }
+                    createGain() { return new FakeNode(); }
+                    createOscillator() { return new FakeNode(); }
+                    createBufferSource() { const source = new FakeNode(); heard.sources.push(source); return source; }
+                    createDynamicsCompressor() { const node = new FakeNode(); ["threshold", "knee", "ratio", "attack", "release"].forEach(name => { node[name] = new FakeParam(); }); return node; }
+                    createBiquadFilter() { return new FakeNode(); }
+                    createBuffer(channels, length) { return { getChannelData: () => new Float32Array(length), copyToChannel() {} }; }
+                    createPeriodicWave() { return {}; }
+                    resume() { heard.resumed += 1; return Promise.resolve(); }
+                    suspend() { heard.suspended += 1; return Promise.resolve(); }
+                }
+                const realAudio = window.AudioContext;
+                const savedMetro = localStorage.getItem(METRO_KEY);
+                const pause = time => new Promise(resolve => setTimeout(resolve, time));
+                const ctrl = key => document.dispatchEvent(new KeyboardEvent("keydown", { key, ctrlKey: true, bubbles: true, cancelable: true }));
+                const wasHidden = windowIsHidden;
+                windowIsHidden = false;
+                window.AudioContext = FakeAudio;
+                try {
+                    navigate("home");
+                    ctrl("9");
+                    checks.push(["Ctrl+9 opens the Conservatory", $("conservatory").classList.contains("active") && $("breadcrumb").textContent === "Conservatory" ? [] : [document.querySelector(".view.active")?.id]]);
+                    checks.push(["it's ninth in the sidebar", sidebarViews()[8] === "conservatory" ? [] : [sidebarViews().join()]]);
+                    checks.push(["nothing plays or runs before Start", metro.context === null && metro.timer === null && metro.frame === null ? [] : ["running"]]);
+                    setMetroTempo(120);
+                    setMetroMeter("4/4");
+                    $("metroPlay").click();
+                    await pause(320);
+                    checks.push(["Start books clicks on the audio clock", metro.running && metro.timer !== null && heard.resumed === 1 && heard.clicks >= 1 ? [] : [metro.running, heard.clicks]]);
+                    checks.push(["and books only a little ahead while seen", metro.nextAt - metro.context.currentTime < 0.7 ? [] : [metro.nextAt - metro.context.currentTime]]);
+                    checks.push(["the beat lights run while the page shows", metro.frame !== null ? [] : ["no frame"]]);
+                    // Headless Edge may draw no frames, so the frame's work is done here.
+                    lightDueMetroBeat();
+                    const litBeats = document.querySelectorAll("#metroBar .metro-beats > .is-on").length;
+                    checks.push(["the beat of the click just sounded is lit", litBeats === 1 ? [] : [litBeats]]);
+                    checks.push(["both buttons say it's playing", $("metroPlay").getAttribute("aria-pressed") === "true" && $("metroPlay").title === "Stop the metronome" && $("homeMetroPlay").textContent === "Stop" ? [] : [$("metroPlay").title, $("homeMetroPlay").textContent]]);
+                    navigate("notes");
+                    checks.push(["on another page it keeps playing, its beat in the title bar", metro.running && metro.timer !== null && !$("metroChip").hidden && metro.frame !== null ? [] : [metro.running, metro.frame]]);
+                    const hiddenBefore = windowIsHidden;
+                    windowIsHidden = true;
+                    syncMetronomeView();
+                    checks.push(["with Maestro hidden it plays on, and nothing is lit", metro.running && metro.timer !== null && metro.frame === null ? [] : [metro.running, metro.frame]]);
+                    windowIsHidden = hiddenBefore;
+                    syncMetronomeView();
+                    const before = heard.clicks;
+                    await pause(320);
+                    checks.push(["and keeps booking clicks", heard.clicks > before ? [] : [heard.clicks]]);
+                    handleWebMessage({ data: { type: "windowHidden" } });
+                    navigate("conservatory");
+                    await pause(80);
+                    checks.push(["hidden, it lights nothing and books further ahead", metro.frame === null && metro.nextAt - metro.context.currentTime > 0.6 ? [] : [metro.frame, metro.nextAt - metro.context.currentTime]]);
+                    handleWebMessage({ data: { type: "windowShown" } });
+                    await pause(160);
+                    checks.push(["shown again, the lights come back", metro.frame !== null ? [] : ["no frame"]]);
+                    // The Command Center's module plays the same metronome.
+                    const layoutBefore = localStorage.getItem(HOME_LAYOUT_KEY);
+                    changeHomeLayout({ ...MaestroHomeLayout.defaults(), hidden: [] });
+                    navigate("home");
+                    checks.push(["the module shows the same tempo and its lights run", $("homeMetroTempo").textContent === "120" && $("homeMetroName").textContent === "BPM · Allegro" && metro.frame !== null ? [] : [$("homeMetroTempo").textContent, $("homeMetroName").textContent, metro.frame]]);
+                    $("homeMetroFaster").click();
+                    checks.push(["its + changes the bar's tempo too", metro.settings.tempo === 121 && $("metroTempo").value === "121" ? [] : [metro.settings.tempo, $("metroTempo").value]]);
+                    changeHomeLayout(MaestroHomeLayout.defaults());
+                    await pause(60);
+                    checks.push(["hidden from the Command Center, the title bar keeps the beat", !$("metroChip").hidden && metro.frame !== null ? [] : ["no chip"]]);
+                    if (layoutBefore === null) localStorage.removeItem(HOME_LAYOUT_KEY); else localStorage.setItem(HOME_LAYOUT_KEY, layoutBefore);
+                    navigate("conservatory");
+                    // The tempo box.
+                    $("metroTempo").value = "500";
+                    $("metroTempo").dispatchEvent(new Event("change", { bubbles: true }));
+                    checks.push(["a tempo over the top is held at 300", metro.settings.tempo === 300 && $("metroFaster").disabled ? [] : [metro.settings.tempo]]);
+                    $("metroTempo").value = "";
+                    $("metroTempo").dispatchEvent(new Event("change", { bubbles: true }));
+                    checks.push(["an emptied box changes nothing", metro.settings.tempo === 300 ? [] : [metro.settings.tempo]]);
+                    $("metroTempoBox").dispatchEvent(new WheelEvent("wheel", { deltaY: 100, bubbles: true, cancelable: true }));
+                    checks.push(["the wheel nudges it down by one", metro.settings.tempo === 299 ? [] : [metro.settings.tempo]]);
+                    $("metroMeter").value = "6/8";
+                    $("metroMeter").dispatchEvent(new Event("change", { bubbles: true }));
+                    checks.push(["6/8 shows six beats, the fourth a lesser accent, in both places", [...document.querySelectorAll(".metro-beats")].every(row => row.children.length === 6 && row.children[0].classList.contains("is-first") && row.children[3].classList.contains("is-lesser")) ? [] : ["wrong beats"]]);
+                    $("metroMeter").value = "7/8";
+                    $("metroMeter").dispatchEvent(new Event("change", { bubbles: true }));
+                    checks.push(["7/8 as 2+2+3 accents each group", $("metroMeter").selectedOptions[0]?.textContent === "7/8 (2+2+3)" && [...document.querySelector("#metroBar .metro-beats").children].map(dot => dot.className || "-").join() === "is-first,-,is-lesser,-,is-lesser,-,-" ? [] : [$("metroMeter").selectedOptions[0]?.textContent]]);
+                    checks.push(["the time signatures are listed in three groups", $("metroMeter").querySelectorAll("optgroup").length === 3 && $("metroMeter").options.length === Object.keys(MaestroMetronome.METERS).length ? [] : [$("metroMeter").options.length]]);
+                    $("metroMeter").value = "6/8";
+                    $("metroMeter").dispatchEvent(new Event("change", { bubbles: true }));
+                    // The trainer.
+                    $("metroTrainerButton").click();
+                    checks.push(["the trainer's panel opens", !$("metroTrainerPanel").hidden && $("metroTrainerButton").getAttribute("aria-expanded") === "true" ? [] : ["closed"]]);
+                    const field = (id, value) => { $(id).value = value; };
+                    $("metroTrainerOn").checked = true;
+                    field("metroTrainerFrom", "60"); field("metroTrainerTo", "70"); field("metroTrainerStep", "5"); field("metroTrainerEvery", "1");
+                    $("metroTrainerEvery").dispatchEvent(new Event("change", { bubbles: true }));
+                    checks.push(["its fields are kept", JSON.stringify(metro.settings.trainer) === JSON.stringify({ on: true, from: 60, to: 70, step: 5, every: 1 }) && $("metroTrainerProblem").hidden ? [] : [JSON.stringify(metro.settings.trainer)]]);
+                    stopMetronome();
+                    $("metroPlay").click();
+                    await pause(60);
+                    checks.push(["Start begins at From", metro.settings.tempo === 60 && /^60 of 70, next in 1 bar$/.test($("metroTrainerStatus").textContent) ? [] : [metro.settings.tempo, $("metroTrainerStatus").textContent]]);
+                    metroBarEnded();
+                    checks.push(["a step after its bars", metro.settings.tempo === 65 && $("metroTempo").value === "65" ? [] : [metro.settings.tempo]]);
+                    metroBarEnded();
+                    metroBarEnded();
+                    checks.push(["then it holds at To", metro.settings.tempo === 70 && $("metroTrainerStatus").textContent === "At 70, the top" ? [] : [metro.settings.tempo, $("metroTrainerStatus").textContent]]);
+                    checks.push(["the module says so too", !$("homeMetroTrainer").hidden && $("homeMetroTrainer").textContent === "Tempo trainer: At 70, the top" ? [] : [$("homeMetroTrainer").textContent]]);
+                    field("metroTrainerFrom", "200");
+                    $("metroTrainerFrom").dispatchEvent(new Event("change", { bubbles: true }));
+                    checks.push(["From above To is refused, saying why", !$("metroTrainerProblem").hidden && metro.settings.trainer.from === 80 && metro.settings.trainer.to === 120 ? [] : [JSON.stringify(metro.settings.trainer)]]);
+                    $("metroTrainerFrom").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+                    checks.push(["Escape closes the panel, back on its button", $("metroTrainerPanel").hidden && document.activeElement === $("metroTrainerButton") ? [] : ["open"]]);
+                    $("metroTrainerButton").click();
+                    navigate("notes");
+                    checks.push(["leaving the page closes the panel", $("metroTrainerPanel").hidden ? [] : ["open"]]);
+                    // 2.3.0: the title bar shows it's playing, and Ctrl + Shift + M works anywhere.
+                    checks.push(["on another page, the title bar shows it's playing", !$("metroChip").hidden && $("metroChipText").textContent === `${metro.settings.tempo} BPM · 6/8` ? [] : [$("metroChip").hidden, $("metroChipText").textContent]]);
+                    checks.push(["and its dot keeps the beat", metroLightsShown() ? [] : ["no lights"]]);
+                    const ctrlShiftM = () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "M", ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+                    ctrlShiftM();
+                    checks.push(["Ctrl + Shift + M stops it from any page, and the chip goes", !metro.running && $("metroChip").hidden ? [] : [metro.running]]);
+                    ctrlShiftM();
+                    await pause(60);
+                    checks.push(["and starts it again", metro.running && !$("metroChip").hidden ? [] : [metro.running]]);
+                    $("metroChipStop").click();
+                    checks.push(["the chip's Stop stops it", !metro.running && $("metroChip").hidden ? [] : [metro.running]]);
+                    $("metroPlay").click();
+                    await pause(60);
+                    navigate("conservatory");
+                    checks.push(["on its own page, the chip stays hidden", metro.running && $("metroChip").hidden ? [] : ["shown"]]);
+                    $("metroPlay").click();
+                    checks.push(["Stop ends the booking and the lights, and the audio rests after a quiet spell", !metro.running && metro.timer === null && metro.frame === null && metro.restTimer !== null ? [] : [metro.running, metro.timer, metro.frame, metro.restTimer]]);
+                    checks.push(["no beat stays lit", document.querySelectorAll(".metro-beats > .is-on").length === 0 ? [] : ["lit"]]);
+                    checks.push(["the settings are kept on this PC", MaestroMetronome.parseSettings(localStorage.getItem(METRO_KEY)).meter === "6/8" ? [] : [localStorage.getItem(METRO_KEY)]]);
+                    // 2.3.0: Practice: a count-in, muted bars and practice time.
+                    const savedPractice = localStorage.getItem(PRACTICE_KEY);
+                    try {
+                        $("metroTrainerButton").click();
+                        checks.push(["the Practice panel opens on the count-in", !$("metroTrainerPanel").hidden && $("metroCountIn") && $("metroTrainerTitle").textContent === "Practice" ? [] : ["closed"]]);
+                        $("metroCountIn").value = "1";
+                        $("metroTrainerOn").checked = false;
+                        $("metroGapOn").checked = true;
+                        $("metroGapPlay").value = "1";
+                        $("metroGapMute").value = "1";
+                        $("metroGapMute").dispatchEvent(new Event("change", { bubbles: true }));
+                        checks.push(["its choices are kept", metro.settings.countIn === 1 && JSON.stringify(metro.settings.gap) === JSON.stringify({ on: true, play: 1, mute: 1 }) && $("metroTrainerStatus").textContent === "Count-in · Muted bars" ? [] : [$("metroTrainerStatus").textContent]]);
+                        $("metroGapMute").value = "20";
+                        $("metroGapMute").dispatchEvent(new Event("change", { bubbles: true }));
+                        checks.push(["too many muted bars is refused, saying why", metro.settings.gap.mute === 2 && /muted bars/.test($("metroTrainerProblem").textContent) ? [] : [metro.settings.gap.mute]]);
+                        $("metroGapMute").value = "1";
+                        $("metroGapMute").dispatchEvent(new Event("change", { bubbles: true }));
+                        toggleMetroTrainer(false);
+                        await startMetronome();
+                        checks.push(["Start counts in first, its beats alike", metro.countLeft === 1 && metro.booked.length > 0 && metro.booked.every(click => click.weight === 2 || click.weight === 0) && $("metroTrainerStatus").textContent.startsWith("Counting in") ? [] : [metro.countLeft, metro.booked.map(click => click.weight).join()]]);
+                        metroBarEnded();
+                        checks.push(["the count-in isn't counted as a bar", metro.countLeft === 0 && metro.bars === 0 ? [] : [metro.countLeft, metro.bars]]);
+                        metroBarEnded();
+                        const clicksBefore = heard.clicks;
+                        const bookedBefore = metro.booked.length;
+                        metro.nextAt = metro.context.currentTime;
+                        clearTimeout(metro.timer);
+                        bookMetroClicks();
+                        checks.push(["a muted bar is lit but silent", metro.bars === 1 && metro.booked.length > bookedBefore && heard.clicks === clicksBefore && $("metroTrainerStatus").textContent.includes("Muted bar") ? [] : [heard.clicks - clicksBefore, metro.booked.length - bookedBefore]]);
+                        metro.practiceFrom = performance.now() - 90000;
+                        stopMetronome();
+                        checks.push(["the time played is kept by day", MaestroMetronome.practiceSummary(MaestroMetronome.parsePractice(localStorage.getItem(PRACTICE_KEY)), new Date()).today >= 90 ? [] : [localStorage.getItem(PRACTICE_KEY)]]);
+                        checks.push(["and shown on the Command Center's module", !$("homeMetroPractice").hidden && /^Played today: \d+ min$/.test($("homeMetroPractice").textContent) ? [] : [$("homeMetroPractice").textContent]]);
+                    } finally {
+                        if (metro.running) stopMetronome();
+                        Object.assign(metro.settings, { countIn: 0, gap: { on: false, play: 2, mute: 2 } });
+                        saveMetroSettings();
+                        if (savedPractice === null) localStorage.removeItem(PRACTICE_KEY); else localStorage.setItem(PRACTICE_KEY, savedPractice);
+                        metro.practice = MaestroMetronome.parsePractice(savedPractice);
+                        renderMetroPractice();
+                        renderMetroTrainer();
+                    }
+                    // The instruments: the neck, Scales and Tuning.
+                    const savedCons = localStorage.getItem(CONS_KEY);
+                    try {
+                        cons.settings = MaestroMusic.parseSettings(null);
+                        cons.chord = -1;
+                        consSections.show("scales");
+                        renderConservatory();
+                        const sharp = String.fromCodePoint(0x266F), flat = String.fromCodePoint(0x266D);
+                        const dots = () => [...$("consNeck").querySelectorAll(".cons-dot")];
+                        const pcs = list => new Set(list.map(dot => Number(dot.dataset.midi) % 12));
+                        checks.push(["the guitar's neck: six strings and 15 frets", $("consNeck").querySelectorAll(".cons-string").length === 6 && $("consNeck").querySelectorAll(".cons-fret-number").length === 15 ? [] : [$("consNeck").querySelectorAll(".cons-string").length]]);
+                        checks.push(["G major is marked, G as its root", [...pcs(dots())].sort((a, b) => a - b).join() === "0,2,4,6,7,9,11" && dots().filter(dot => dot.classList.contains("is-root")).every(dot => Number(dot.dataset.midi) % 12 === 7 && dot.textContent.endsWith("G")) ? [] : [[...pcs(dots())].join()]]);
+                        checks.push(["its notes are spelled for the key", $("consNotes").textContent === `GABCDEF${sharp}` ? [] : [$("consNotes").textContent]]);
+                        checks.push(["and its chords listed", $("consKeyChords").children.length === 7 && $("consChordsTitle").textContent === "Diatonic Chords in G Major" ? [] : [$("consChordsTitle").textContent]]);
+                        document.querySelector('#consLabels [data-labels="degrees"]').click();
+                        checks.push(["Degrees labels the root 1, written as flats", dots().filter(dot => dot.classList.contains("is-root")).every(dot => dot.querySelector("text").textContent === "1") && !$("consDegreeStyle").hidden && $("consDegreeStyle").querySelector('[aria-pressed="true"]')?.dataset.degreeStyle === "flat" ? [] : ["not 1"]]);
+                        document.querySelector('#consDegreeStyle [data-degree-style="interval"]').click();
+                        checks.push(["or as intervals: the root R, the seventh M7", dots().filter(dot => dot.classList.contains("is-root")).every(dot => dot.querySelector("text").textContent === "R") && dots().some(dot => Number(dot.dataset.midi) % 12 === 6 && dot.querySelector("text").textContent === "M7") ? [] : ["not R"]]);
+                        document.querySelector('#consDegreeStyle [data-degree-style="flat"]').click();
+                        document.querySelector('#consLabels [data-labels="names"]').click();
+                        checks.push(["names hide the degree style", $("consDegreeStyle").hidden ? [] : ["shown"]]);
+                        $("consRoot").value = "F";
+                        $("consRoot").dispatchEvent(new Event("change", { bubbles: true }));
+                        checks.push(["F major has its B flat", $("consNotes").textContent === `FGAB${flat}CDE` ? [] : [$("consNotes").textContent]]);
+                        // A note's tooltip names it as its label does, not always in sharps.
+                        const tip = node => node?.querySelector("title")?.textContent || "";
+                        const bFlat = dots().find(dot => Number(dot.dataset.midi) % 12 === 10);
+                        checks.push(["hovering B flat on the neck says B flat", tip(bFlat).startsWith(`B${flat}`) && !tip(bFlat).includes(sharp) ? [] : [tip(bFlat)]]);
+                        const blackKey = $("consKeyboard").querySelector('.cons-key[data-midi="58"]');
+                        checks.push(["and on the keyboard, with its octave", tip(blackKey) === `B${flat}3` ? [] : [tip(blackKey)]]);
+                        const unmarkedKey = $("consKeyboard").querySelector('.cons-key[data-midi="49"]');
+                        checks.push(["a key outside the scale leans the key's way", tip(unmarkedKey) === `D${flat}3` ? [] : [tip(unmarkedKey)]]);
+                        const plucksBefore = heard.clicks;
+                        $("consKeyChords").children[4].click();
+                        await pause(40);
+                        checks.push(["a chord shows only its notes, C E G", [...pcs(dots())].sort((a, b) => a - b).join() === "0,4,7" && $("consKeyChords").children[4].getAttribute("aria-pressed") === "true" ? [] : [[...pcs(dots())].join()]]);
+                        checks.push(["and sounds its three notes", heard.clicks - plucksBefore === 3 ? [] : [heard.clicks - plucksBefore]]);
+                        $("consKeyChords").children[4].click();
+                        checks.push(["clicked again, the scale comes back", pcs(dots()).size === 7 ? [] : [pcs(dots()).size]]);
+                        // 2.3.0 fix: chords pressed while the last was dying away froze the
+                        // audio, and Start then played them all at once.
+                        const ended = sources => sources.forEach(source => source.listeners?.ended?.());
+                        const suspendedBefore = heard.suspended;
+                        $("consKeyChords").children[0].click();
+                        await pause(40);
+                        const firstChord = heard.sources.slice(-3);
+                        ended(firstChord);
+                        checks.push(["a chord's notes ending doesn't rest the audio at once", heard.suspended === suspendedBefore && metro.restTimer !== null ? [] : [heard.suspended - suspendedBefore]]);
+                        const startsBefore = heard.clicks;
+                        $("consKeyChords").children[1].click();
+                        await pause(40);
+                        checks.push(["the next chord sounds at once, all three notes", heard.clicks - startsBefore === 3 && heard.suspended === suspendedBefore && metro.restTimer === null ? [] : [heard.clicks - startsBefore, heard.suspended - suspendedBefore]]);
+                        const secondChord = heard.sources.slice(-3);
+                        $("consKeyChords").children[3].click();
+                        await pause(40);
+                        checks.push(["a new chord damps the one still ringing", secondChord.every(source => source.stopped) ? [] : ["still ringing"]]);
+                        $("consKeyChords").children[3].click();
+                        metro.restAfter = 30;
+                        cons.starting = 1;
+                        restConsAudio();
+                        await pause(90);
+                        checks.push(["it never rests while a sound is on its way", heard.suspended === suspendedBefore ? [] : ["rested"]]);
+                        cons.starting = 0;
+                        cons.voices.clear();
+                        restConsAudio();
+                        await pause(90);
+                        checks.push(["it rests after a quiet spell", heard.suspended === suspendedBefore + 1 ? [] : [heard.suspended - suspendedBefore]]);
+                        metro.restAfter = 8000;
+                        await pluckConsNotes(Array.from({ length: 30 }, (_, index) => 40 + index));
+                        checks.push(["no more than 24 notes ring at once", cons.voices.size === 24 ? [] : [cons.voices.size]]);
+                        checks.push(["the tones go through a limiter", cons.tonesOut !== null && heard.sources.length > 0 ? [] : ["no output"]]);
+                        cons.voices.clear();
+                        // Chromatic.
+                        document.querySelector('#consShow [data-show="all"]').click();
+                        checks.push(["Chromatic marks all twelve, the scale's stronger", pcs(dots()).size === 12 && dots().filter(dot => dot.classList.contains("is-other")).every(dot => ![0, 2, 4, 5, 7, 9, 10].includes(Number(dot.dataset.midi) % 12)) ? [] : [pcs(dots()).size]]);
+                        document.querySelector('#consLabels [data-labels="degrees"]').click();
+                        const outside = dots().find(dot => Number(dot.dataset.midi) % 12 === 6);
+                        checks.push(["a note outside the key is labeled from its root", outside?.querySelector("text").textContent === `${flat}2` && outside.classList.contains("is-other") ? [] : [outside?.textContent]]);
+                        document.querySelector('#consLabels [data-labels="names"]').click();
+                        checks.push(["and named the way the key leans", dots().some(dot => Number(dot.dataset.midi) % 12 === 1 && dot.querySelector("text").textContent === `D${flat}`) ? [] : ["not flat"]]);
+                        checks.push(["its tooltip too", dots().filter(dot => Number(dot.dataset.midi) % 12 === 1).every(dot => dot.querySelector("title").textContent.startsWith(`D${flat}`)) ? [] : ["sharp"]]);
+                        document.querySelector('#consShow [data-show="scale"]').click();
+                        checks.push(["Diatonic goes back to the scale", pcs(dots()).size === 7 ? [] : [pcs(dots()).size]]);
+                        // The scale library.
+                        checks.push(["scales are listed in their families", $("consScale").querySelectorAll("optgroup").length === MaestroMusic.FAMILIES.length && $("consScale").options.length === Object.keys(MaestroMusic.SCALES).length ? [] : [$("consScale").options.length]]);
+                        $("consRoot").value = "A";
+                        $("consRoot").dispatchEvent(new Event("change", { bubbles: true }));
+                        $("consScale").value = "hirajoshi";
+                        $("consScale").dispatchEvent(new Event("change", { bubbles: true }));
+                        checks.push(["A Hirajoshi", $("consNotes").textContent === "ABCEF" && pcs(dots()).size === 5 ? [] : [$("consNotes").textContent]]);
+                        $("consScale").value = "phrygianDominant";
+                        $("consScale").dispatchEvent(new Event("change", { bubbles: true }));
+                        checks.push(["A Phrygian dominant, with its chords", $("consNotes").textContent === `AB${flat}C${sharp}DEFG` && $("consKeyChords").children.length === 7 ? [] : [$("consNotes").textContent]]);
+                        $("consRoot").value = "F";
+                        $("consRoot").dispatchEvent(new Event("change", { bubbles: true }));
+                        $("consScale").value = "major";
+                        $("consScale").dispatchEvent(new Event("change", { bubbles: true }));
+                        // 2.3.0: sevenths, the capo, left-handed, the drone and the scale played.
+                        document.querySelector('#consChordSize [data-sevenths="true"]').click();
+                        checks.push(["Sevenths lists four-note chords", $("consKeyChords").children[4].querySelector(".key-name .csym").getAttribute("aria-label") === "C7" && $("consKeyChords").classList.contains("is-sevenths") ? [] : [$("consKeyChords").children[4].textContent]]);
+                        $("consKeyChords").children[4].click();
+                        checks.push(["and shows a seventh chord's four notes", [...pcs(dots())].sort((a, b) => a - b).join() === "0,4,7,10" ? [] : [[...pcs(dots())].join()]]);
+                        $("consKeyChords").children[4].click();
+                        document.querySelector('#consChordSize [data-sevenths="false"]').click();
+                        $("consCapo").value = "3";
+                        $("consCapo").dispatchEvent(new Event("change", { bubbles: true }));
+                        checks.push(["a capo draws its bar, and nothing below it is marked", $("consNeck").querySelector(".cons-capo") && dots().length > 0 && dots().every(dot => Number(dot.dataset.fret) >= 3) ? [] : ["below the capo"]]);
+                        checks.push(["each chord names its shape", $("consKeyChords").children[0].querySelector(".key-shape")?.textContent === "D shape" ? [] : [$("consKeyChords").children[0].textContent]]);
+                        $("consCapo").value = "0";
+                        $("consCapo").dispatchEvent(new Event("change", { bubbles: true }));
+                        checks.push(["no capo, no shapes", !$("consKeyChords").querySelector(".key-shape") && !$("consNeck").querySelector(".cons-capo") ? [] : ["still there"]]);
+                        const nutX = () => Number($("consNeck").querySelector(".cons-nut").getAttribute("x1"));
+                        const rightNut = nutX();
+                        $("consLefty").click();
+                        checks.push(["left-handed puts the nut on the right", nutX() > 1000 && rightNut < 1000 && $("consLefty").getAttribute("aria-pressed") === "true" ? [] : [rightNut, nutX()]]);
+                        $("consLefty").click();
+                        const droneBefore = heard.clicks;
+                        $("consDrone").click();
+                        await pause(40);
+                        checks.push(["the drone holds the root", cons.drone?.midi === 41 && $("consDrone").getAttribute("aria-pressed") === "true" && heard.clicks > droneBefore ? [] : [cons.drone?.midi]]);
+                        $("consRoot").value = "G";
+                        $("consRoot").dispatchEvent(new Event("change", { bubbles: true }));
+                        checks.push(["a new root moves it", cons.drone?.midi === 43 ? [] : [cons.drone?.midi]]);
+                        $("consRoot").value = "F";
+                        $("consRoot").dispatchEvent(new Event("change", { bubbles: true }));
+                        const scaleBefore = heard.clicks;
+                        $("consPlayScale").click();
+                        await pause(40);
+                        checks.push(["Play scale plays it up an octave and back", heard.clicks - scaleBefore === 15 && $("consPlayScale").textContent === "Stop" ? [] : [heard.clicks - scaleBefore]]);
+                        $("consPlayScale").click();
+                        checks.push(["and Stop stops it", cons.scalePlay === null && $("consPlayScale").textContent === "Play scale" ? [] : ["playing"]]);
+                        navigate("notes");
+                        checks.push(["leaving the page ends the drone", cons.drone === null ? [] : ["droning"]]);
+                        navigate("conservatory");
+                        $("consScale").value = "minorPentatonic";
+                        $("consScale").dispatchEvent(new Event("change", { bubbles: true }));
+                        checks.push(["a pentatonic lists no chords and says why", $("consKeyChords").hidden && /seven notes/.test($("consChordsNote").textContent) ? [] : [$("consChordsNote").textContent]]);
+                        const notePluck = heard.clicks;
+                        dots()[0].dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                        await pause(40);
+                        checks.push(["a note on the neck sounds when clicked", heard.clicks === notePluck + 1 ? [] : [heard.clicks - notePluck]]);
+                        document.querySelector('#consInstruments [data-instrument="bass"]').click();
+                        checks.push(["the bass: four strings and its tunings", $("consNeck").querySelectorAll(".cons-string").length === 4 && [...$("consTuning").options].map(option => option.value).join() === "standard,dropD,five" ? [] : [[...$("consTuning").options].map(option => option.value).join()]]);
+                        $("consTuning").value = "five";
+                        $("consTuning").dispatchEvent(new Event("change", { bubbles: true }));
+                        checks.push(["a five-string tuning draws five strings", $("consNeck").querySelectorAll(".cons-string").length === 5 ? [] : [$("consNeck").querySelectorAll(".cons-string").length]]);
+                        document.querySelector('#consInstruments [data-instrument="keyboard"]').click();
+                        checks.push(["the keyboard: a keyboard across the top, and no tuning", $("consNeck").querySelector(".cons-keys") && $("consTuningField").hidden && $("consKeyboardModule").hidden ? [] : ["wrong"]]);
+                        consSections.show("tuning");
+                        checks.push(["its Tuning gives A4 alone", $("consStrings").children.length === 1 && $("consTuningsModule").hidden ? [] : [$("consStrings").children.length]]);
+                        document.querySelector('#consInstruments [data-instrument="guitar"]').click();
+                        checks.push(["the guitar's reference tones, low to high", [...$("consStrings").children].map(button => button.querySelector("strong").textContent).join(" ") === "E2 A2 D3 G3 B3 E4" ? [] : [$("consStrings").textContent]]);
+                        checks.push(["with their frequencies", $("consStrings").children[0].textContent.endsWith("82.4 Hz") ? [] : [$("consStrings").children[0].textContent]]);
+                        checks.push(["the neck names the open strings", [...$("consNeck").querySelectorAll(".cons-dot")].length === 6 ? [] : [$("consNeck").querySelectorAll(".cons-dot").length]]);
+                        checks.push(["their tooltips name them as their labels do", [...$("consNeck").querySelectorAll(".cons-dot")].every(dot => dot.querySelector("title").textContent.startsWith(dot.querySelector("text").textContent)) ? [] : ["differ"]]);
+                        $("consA4").value = "442";
+                        $("consA4").dispatchEvent(new Event("change", { bubbles: true }));
+                        checks.push(["A4 at 442 moves every tone", $("consStrings").children[1].textContent.endsWith("110.5 Hz") ? [] : [$("consStrings").children[1].textContent]]);
+                        $("consA4").value = "900";
+                        $("consA4").dispatchEvent(new Event("change", { bubbles: true }));
+                        checks.push(["an A4 out of range is refused", cons.settings.a4 === 442 && $("consA4").value === "442" ? [] : [cons.settings.a4]]);
+                        $("consTone").value = "steady";
+                        $("consTone").dispatchEvent(new Event("change", { bubbles: true }));
+                        $("consStrings").children[0].click();
+                        await pause(40);
+                        checks.push(["a steady tone holds until stopped", cons.steady?.midi === 40 && $("consStrings").children[0].getAttribute("aria-pressed") === "true" && !$("consToneStop").hidden ? [] : [cons.steady?.midi]]);
+                        navigate("notes");
+                        checks.push(["leaving the page stops it", cons.steady === null ? [] : ["still sounding"]]);
+                        navigate("conservatory");
+                        // Tunings of your own.
+                        $("consNewTuning").click();
+                        checks.push(["New tuning offers each string", !$("consTuningForm").hidden && $("consTuningPitches").querySelectorAll("select").length === 6 ? [] : ["no form"]]);
+                        $("consTuningForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+                        checks.push(["a tuning needs a name", !$("consTuningProblem").hidden && cons.settings.own.length === 0 ? [] : ["saved"]]);
+                        $("consTuningName").value = "Open C";
+                        const pitches = $("consTuningPitches").querySelectorAll("select");
+                        [36, 43, 48, 55, 60, 64].forEach((midi, index) => { pitches[index].value = String(midi); });
+                        $("consTuningForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+                        checks.push(["it's saved and chosen", cons.settings.own.length === 1 && MaestroMusic.currentTuning(cons.settings).name === "Open C" && $("consTuningForm").hidden ? [] : [cons.settings.own.length]]);
+                        checks.push(["and listed as yours", $("consTuning").querySelector('optgroup[label="Yours"]') && $("consTunings").textContent.includes("Yours") && $("consStrings").children[0].querySelector("strong").textContent === "C2" ? [] : [$("consTunings").textContent]]);
+                        $("consTunings").querySelector("[data-delete-tuning]").click();
+                        checks.push(["deleting it goes back to Standard, with Undo", cons.settings.own.length === 0 && MaestroMusic.currentTuning(cons.settings).id === "standard" && $("toast").querySelector(".toast-action")?.textContent === "Undo" ? [] : [cons.settings.own.length]]);
+                        $("toast").querySelector(".toast-action").click();
+                        checks.push(["Undo puts it back", cons.settings.own.length === 1 && MaestroMusic.currentTuning(cons.settings).name === "Open C" ? [] : [cons.settings.own.length]]);
+                        checks.push(["the page's settings are kept on this PC", MaestroMusic.parseSettings(localStorage.getItem(CONS_KEY)).own[0]?.name === "Open C" ? [] : [localStorage.getItem(CONS_KEY)]]);
+                        // 2.3.0: a position, and the Finder.
+                        chooseConsTuning("standard");
+                        consSections.show("scales");
+                        setConsScale({ root: "G", scale: "major" });
+                        $("consPosition").value = "5";
+                        $("consPosition").dispatchEvent(new Event("change", { bubbles: true }));
+                        checks.push(["a position marks its five frets and is lit", dots().length > 0 && dots().every(dot => Number(dot.dataset.fret) >= 5 && Number(dot.dataset.fret) <= 9) && $("consNeck").querySelector(".cons-window") ? [] : [dots().map(dot => dot.dataset.fret).join()]]);
+                        $("consPosition").value = "-1";
+                        $("consPosition").dispatchEvent(new Event("change", { bubbles: true }));
+                        checks.push(["the whole neck again", dots().some(dot => Number(dot.dataset.fret) > 9) && !$("consNeck").querySelector(".cons-window") ? [] : ["still a position"]]);
+                        consSections.show("finder");
+                        checks.push(["Finder offers every place on the neck to pick", dots().length === 96 && dots().every(dot => dot.classList.contains("is-spot")) && /Pick two/.test($("consFoundChordsNote").textContent) ? [] : [dots().length]]);
+                        // The user's report: fingering a chord string by string found nothing,
+                        // because picks were by note, so a second C or E dropped the first.
+                        // Clicked as a pointer would: whatever is drawn at the place's center.
+                        const press = (string, fret) => {
+                            const place = $("consNeck").querySelector(`.cons-dot[data-string="${string}"][data-fret="${fret}"]`);
+                            place.scrollIntoView({ block: "center" });
+                            const box = place.querySelector("circle").getBoundingClientRect();
+                            document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                        };
+                        const marked = () => dots().filter(dot => !dot.classList.contains("is-spot"));
+                        const pickedBefore = heard.clicks;
+                        [[1, 3], [2, 2], [3, 0], [4, 1], [5, 0]].forEach(([string, fret]) => press(string, fret));
+                        await pause(40);
+                        checks.push(["an open C, fingered string by string, keeps all five notes", finder.picked.length === 5 && marked().length === 5 && heard.clicks - pickedBefore === 5 && $("consPicked").textContent === "CEGCE" ? [] : [finder.picked.length, marked().length, $("consPicked").textContent]]);
+                        checks.push(["the lowest is the bass", marked().filter(dot => dot.classList.contains("is-root")).map(dot => dot.dataset.midi).join() === "48" ? [] : ["wrong bass"]]);
+                        checks.push(["the Finder names the chord", $("consFoundChords").children[0]?.querySelector(".csym").getAttribute("aria-label") === "C" ? [] : [$("consFoundChords").textContent]]);
+                        checks.push(["and lists the scales that hold it, C major first", $("consFoundScales").children[0]?.dataset.root === "C" && $("consFoundScales").children[0]?.dataset.scale === "major" && $("consFoundScales").children.length === 24 ? [] : [$("consFoundScales").children.length]]);
+                        press(1, 0);
+                        checks.push(["another fret on a string moves its pick: the open A makes it Am7, or C6 over A", finder.picked.length === 5 && [...$("consFoundChords").children].map(item => item.querySelector(".csym").getAttribute("aria-label")).join(" ") === "Am7 C6/A" ? [] : [$("consFoundChords").textContent]]);
+                        press(1, 0);
+                        checks.push(["the same fret again clears the string: C over E", finder.picked.length === 4 && $("consFoundChords").children[0]?.querySelector(".csym").getAttribute("aria-label") === "C/E" ? [] : [finder.picked.length, $("consFoundChords").textContent]]);
+                        await pause(40);
+                        const strumBefore = heard.clicks;
+                        $("consPickStrum").click();
+                        await pause(40);
+                        checks.push(["Strum plays the shape", heard.clicks - strumBefore === 4 ? [] : [heard.clicks - strumBefore]]);
+                        $("consFoundScales").querySelector('[data-root="C"][data-scale="major"]').click();
+                        checks.push(["a scale found opens in Scales", consSections.current() === "scales" && cons.settings.root === "C" && cons.settings.scale === "major" ? [] : [consSections.current(), cons.settings.root]]);
+                        consSections.show("finder");
+                        $("consPickClear").click();
+                        // 2.3.0: Chords. A shape fingered on five frets, named, written on a
+                        // staff, and kept in a library that AHK saves.
+                        const chordMessagesFrom = messages.length;
+                        consSections.show("chords");
+                        const chordDots = () => [...$("consNeck").querySelectorAll(".cons-chord-neck .cons-dot")];
+                        const fretNumbers = () => [...$("consNeck").querySelectorAll(".cons-fret-number")].map(number => number.textContent).join();
+                        checks.push(["Chords asks AHK for the saved chords", sent.has("GetChords") ? [] : ["not asked"]]);
+                        checks.push(["Chords shows five frets, every string left out, and sets the capo aside", fretNumbers() === "1,2,3,4,5" && chordDots().filter(dot => dot.classList.contains("is-muted")).length === 6 && $("consCapo").closest("label").hidden ? [] : [fretNumbers()]]);
+                        checks.push(["with nothing to save yet", $("consChordSave").disabled && /Pick notes/.test($("consNeck").querySelector(".cons-chord-card").textContent) ? [] : ["save offered"]]);
+                        handleWebMessage({ data: { type: "chords", items: [
+                            { name: "Am", instrument: "guitar", tuning: [40, 45, 50, 55, 59, 64], shape: [null, 0, 2, 2, 1, 0] },
+                            { name: "bad", instrument: "guitar", tuning: [40], shape: [1] },
+                            { name: "C", instrument: "keyboard", tuning: [], shape: [48, 52, 55] }
+                        ] } });
+                        checks.push(["the library shows the guitar's chords, and drops a malformed one", chords.library.length === 2 && $("consSaved").children.length === 1 && $("consSavedCount").textContent === "1 for guitar" ? [] : [$("consSavedCount").textContent]]);
+                        const fingerChord = (string, fret) => {
+                            const place = $("consNeck").querySelector(`.cons-chord-neck .cons-dot[data-string="${string}"][data-fret="${fret}"]`);
+                            place.scrollIntoView({ block: "center" });
+                            const box = place.querySelector("circle").getBoundingClientRect();
+                            document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                        };
+                        $("consNeck").querySelector('[data-chord-move="1"]').click();
+                        checks.push(["the arrow moves the five frets along", fretNumbers() === "2,3,4,5,6" ? [] : [fretNumbers()]]);
+                        await pause(40);
+                        const chordBefore = heard.clicks;
+                        [[0, 3], [2, 3], [3, 4], [4, 4], [5, 4]].forEach(([string, fret]) => fingerChord(string, fret));
+                        await pause(40);
+                        const cardName = () => $("consNeck").querySelector(".cons-chord-card .csym")?.getAttribute("aria-label");
+                        checks.push(["3 x 3 4 4 4 sounds each note, and is named G7(\u266F5,\u266D9)", heard.clicks - chordBefore === 5 && cardName() === "G7(\u266F5,\u266D9)" ? [] : [heard.clicks - chordBefore, cardName()]]);
+                        checks.push(["its frets and notes, spelled as the chord spells them", $("consChordFacts").textContent.includes("3 \u00D7 3 4 4 4") && $("consChordFacts").textContent.includes("GFBD\u266FA\u266D") ? [] : [$("consChordFacts").textContent]]);
+                        const staff = $("consNeck").querySelector(".cons-staff");
+                        const glyphs = character => [...staff.querySelectorAll(".staff-glyph")].filter(glyph => glyph.textContent === character).length;
+                        checks.push(["on a staff: five notes, a sharp and a flat, under a treble clef with its 8", glyphs("\uE0A2") === 5 && glyphs("\uE262") === 1 && glyphs("\uE260") === 1 && glyphs("\uE052") === 1 ? [] : [glyphs("\uE0A2"), glyphs("\uE262"), glyphs("\uE260")]]);
+                        checks.push(["its staff says its notes", staff.getAttribute("aria-label") === "On a staff: G2, F3, B3, D\u266F4, A\u266D4" ? [] : [staff.getAttribute("aria-label")]]);
+                        checks.push(["the reading found is chosen, and the note says so", $("consChordReadings").querySelector('[aria-pressed="true"]')?.dataset.reading === "G7(\u266F5,\u266D9)" && /Named from its notes/.test($("consChordNote").textContent) ? [] : [$("consChordNote").textContent]]);
+                        const title = $("consNeck").querySelector('.cons-chord-neck .cons-dot[data-string="4"][data-fret="4"] title').textContent;
+                        checks.push(["a note's tooltip spells it as the chord does", /^D\u266F4, string 2, fret 4/.test(title) ? [] : [title]]);
+                        $("consChordName").value = "G7 alt";
+                        $("consChordName").dispatchEvent(new Event("input", { bubbles: true }));
+                        checks.push(["a typed name is kept, set as typed", cardName() === "G7 alt" && /Your name is kept/.test($("consChordNote").textContent) ? [] : [cardName()]]);
+                        $("consChordSave").click();
+                        const savedLines = () => (messages.slice(chordMessagesFrom).filter(message => message.startsWith("SaveChords\n")).at(-1) ?? "").split("\n").slice(1);
+                        checks.push(["Save sends the whole library to AHK, every instrument's", savedLines().length === 3 && savedLines()[2] === "G7 alt\u0009guitar\u000940 45 50 55 59 64\u00093 x 3 4 4 4" && savedLines()[1] === "C\u0009keyboard\u0009\u000948 52 55" ? [] : savedLines()]);
+                        checks.push(["and it's open, to save changes or as new", $("consChordSave").textContent === "Save changes" && !$("consChordSaveNew").hidden && $("consSaved").querySelector(".is-open") ? [] : [$("consChordSave").textContent]]);
+                        $("consChordClear").click();
+                        checks.push(["Clear starts again", chords.shape.every(fret => fret === null) && chords.editing === -1 && $("consChordName").value === "" && $("consChordSave").disabled ? [] : [chords.shape.join()]]);
+                        await pause(40);
+                        const openBefore = heard.clicks;
+                        $("consSaved").querySelector('[data-saved-open="0"]').click();
+                        await pause(40);
+                        checks.push(["a saved chord opens on the neck, and is heard", chords.shape.join() === ",0,2,2,1,0" && $("consChordName").value === "Am" && heard.clicks - openBefore === 5 && fretNumbers() === "1,2,3,4,5" ? [] : [chords.shape.join(), heard.clicks - openBefore]]);
+                        $("consSavedSearch").value = "g7";
+                        $("consSavedSearch").dispatchEvent(new Event("input", { bubbles: true }));
+                        checks.push(["search finds by name", $("consSaved").children.length === 1 && $("consSaved").textContent.includes("G7 alt") && $("consSavedCount").textContent === "1 of 2" ? [] : [$("consSavedCount").textContent]]);
+                        $("consSavedSearch").value = "";
+                        $("consSavedSearch").dispatchEvent(new Event("input", { bubbles: true }));
+                        $("consSavedRoot").value = "9";
+                        $("consSavedRoot").dispatchEvent(new Event("change", { bubbles: true }));
+                        checks.push(["the root filter keeps A's", $("consSaved").children.length === 1 && $("consSaved").querySelector(".csym").getAttribute("aria-label") === "Am" ? [] : [$("consSaved").children.length]]);
+                        $("consSavedRoot").value = "-1";
+                        $("consSavedRoot").dispatchEvent(new Event("change", { bubbles: true }));
+                        // Moved away, the open chord's fretted strings are marked at the edge.
+                        for (let step = 0; step < 6; step++) $("consNeck").querySelector('[data-chord-move="1"]').click();
+                        checks.push(["frets out of view are marked at the edge", fretNumbers() === "7,8,9,10,11" && $("consNeck").querySelectorAll("[data-chord-jump]").length === 3 ? [] : [fretNumbers()]]);
+                        $("consNeck").querySelector("[data-chord-jump]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                        checks.push(["a marker brings its fret back into view", fretNumbers() === "1,2,3,4,5" ? [] : [fretNumbers()]]);
+                        $("consNeck").dispatchEvent(new WheelEvent("wheel", { deltaX: 130, bubbles: true, cancelable: true }));
+                        checks.push(["scrolling sideways moves the frets", fretNumbers() === "3,4,5,6,7" ? [] : [fretNumbers()]]);
+                        const neckWidth = Number($("consNeck").querySelector(".cons-chord-neck").getAttribute("viewBox").split(" ")[2]);
+                        setConsNeck({ lefty: true });
+                        const openX = Number($("consNeck").querySelector('.cons-chord-neck .cons-dot[data-fret="0"] circle').getAttribute("cx"));
+                        checks.push(["left-handed, the nut's strings are on the right", openX > neckWidth / 2 ? [] : [openX]]);
+                        setConsNeck({ lefty: false });
+                        document.querySelector('#consChordStyle [data-chord-style="signs"]').click();
+                        checks.push(["Signs writes Am with the minor sign, here and in Scales", cons.settings.chordStyle === "signs" && $("consNeck").querySelector(".cons-chord-card .csym-sign")?.textContent === "\uE874" && $("consKeyChords").querySelector(".csym-sign") ? [] : [cons.settings.chordStyle]]);
+                        document.querySelector('#consChordStyle [data-chord-style="letters"]').click();
+                        $("consSaved").querySelector('[data-saved-delete="0"]').click();
+                        checks.push(["Delete saves the library without it, with Undo", savedLines().length === 2 && !savedLines().some(line => line.startsWith("Am\u0009")) && chords.editing === -1 && $("toast").querySelector(".toast-action")?.textContent === "Undo" ? [] : savedLines()]);
+                        $("toast").querySelector(".toast-action").click();
+                        checks.push(["Undo puts it back where it was", savedLines()[0]?.startsWith("Am\u0009") && savedLines().length === 3 ? [] : savedLines()]);
+                        handleWebMessage({ data: { type: "error", scope: "chords", message: "A chord needs a fret, or x, for each string." } });
+                        checks.push(["a save AHK refuses says why", $("toast").textContent.includes("for each string") ? [] : [$("toast").textContent]]);
+                        chooseConsInstrument("keyboard");
+                        [60, 64, 67, 43].forEach(midi => $("consNeck").querySelector(`.cons-key[data-midi="${midi}"]`)?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+                        const keyStaff = $("consNeck").querySelector(".cons-staff");
+                        checks.push(["on a keyboard, keys build a chord, on two staves", chords.keys.join() === "60,64,67" && cardName() === "C" && [...keyStaff.querySelectorAll(".staff-glyph")].some(glyph => glyph.textContent === "\uE062") && $("consSavedCount").textContent === "1 for keyboard" ? [] : [chords.keys.join(), cardName()]]);
+                        chooseConsInstrument("guitar");
+                        checks.push(["back on guitar, a new chord", chords.shape.length === 6 && chords.shape.every(fret => fret === null) ? [] : [chords.shape.join()]]);
+                        // 2.3.0: the quiz.
+                        consSections.show("quiz");
+                        setConsQuiz({ quizKind: "note", quizNaturals: false });
+                        const asked = () => dots().filter(dot => dot.classList.contains("is-quiz"));
+                        checks.push(["Quiz marks one place with a question mark, and its tooltip doesn't say", asked().length === 1 && asked()[0].querySelector("text").textContent === "?" && asked()[0].querySelector("title").textContent.startsWith("?") && $("consQuizAnswers").children.length === 12 ? [] : [asked().length, $("consQuizAnswers").children.length]]);
+                        let truth = quiz.question.midi % 12;
+                        $("consQuizAnswers").querySelector(`[data-answer="${(truth + 1) % 12}"]`).click();
+                        checks.push(["a wrong answer shows the right one, and keeps the question", $("consQuizAnswers").querySelector(".is-right")?.dataset.answer === String(truth) && $("consQuizAnswers").querySelector(".is-wrong") && dots().some(dot => dot.classList.contains("is-missed")) && $("consQuizResult").classList.contains("is-wrong") && quiz.timer === null && $("consQuizScore").textContent === "0 of 1 right" ? [] : [$("consQuizScore").textContent]]);
+                        $("consQuizNext").click();
+                        truth = quiz.question.midi % 12;
+                        $("consQuizAnswers").querySelector(`[data-answer="${truth}"]`).click();
+                        checks.push(["a right answer is scored, and the next question comes by itself", $("consQuizScore").textContent === "1 of 2 right" && quiz.timer !== null && /^Right/.test($("consQuizResult").textContent) ? [] : [$("consQuizScore").textContent, quiz.timer]]);
+                        $("consQuizNaturals").click();
+                        checks.push(["natural notes only: seven answers, a natural asked, the score begun again", $("consQuizAnswers").children.length === 7 && MaestroMusic.PLAIN_NAMES[quiz.question.midi % 12].length === 1 && $("consQuizScore").textContent === "" ? [] : [$("consQuizAnswers").children.length]]);
+                        $("consQuizNaturals").click();
+                        document.querySelector('#consQuizKind [data-quiz="interval"]').click();
+                        checks.push(["Intervals by ear offers twelve, a second to an octave, and marks nothing yet", $("consQuizAnswers").children.length === 12 && $("consQuizAnswers").children[5].textContent === "TT" && dots().length === 0 && !$("consQuizHear").hidden ? [] : [$("consQuizAnswers").children.length, dots().length]]);
+                        await pause(40);
+                        const hearBefore = heard.clicks;
+                        $("consQuizHear").click();
+                        await pause(40);
+                        checks.push(["Hear it plays its two notes", heard.clicks - hearBefore === 2 ? [] : [heard.clicks - hearBefore]]);
+                        $("consQuizAnswers").querySelector(`[data-answer="${quiz.question.semis}"]`).click();
+                        checks.push(["once answered, both notes are shown on the neck", pcs(dots()).size === (quiz.question.semis === 12 ? 1 : 2) && /^Right/.test($("consQuizResult").textContent) ? [] : [pcs(dots()).size]]);
+                        consSections.show("scales");
+                        await pause(QUIZ_NEXT_AFTER + 100);
+                        checks.push(["leaving Quiz, the next question waits", quiz.answered !== null ? [] : ["moved on"]]);
+                        resetQuizScore();
+                        consSections.show("finder");
+                        checks.push(["Clear empties the picks", finder.picked.length === 0 && $("consPickClear").disabled ? [] : [finder.picked.join()]]);
+                    } finally {
+                        stopSteadyTone();
+                        stopConsDrone();
+                        stopConsScale();
+                        finder.picked = [];
+                        resetQuizScore();
+                        cons.voices.clear();
+                        cons.chordVoices = [];
+                        cons.starting = 0;
+                        metro.restAfter = 8000;
+                        if (savedCons === null) localStorage.removeItem(CONS_KEY); else localStorage.setItem(CONS_KEY, savedCons);
+                        cons.settings = MaestroMusic.parseSettings(savedCons);
+                        cons.chord = -1;
+                        cons.tonesOut = null;
+                        cons.wave = null;
+                        cons.plucks.clear();
+                        closeConsTuningForm();
+                        consSections.show(cons.settings.tab);
+                        renderConservatory();
+                    }
+                    checks.push(["the metronome sends nothing to Maestro", messages.some(message => /metro/i.test(message)) ? ["sent"] : []]);
+                    checks.push(["no errors from the metronome", errors.splice(0)]);
+                } finally {
+                    stopMetronome();
+                    toggleMetroTrainer(false);
+                    window.AudioContext = realAudio;
+                    windowIsHidden = wasHidden;
+                    metro.context = null;
+                    metro.output = null;
+                    metro.noise = null;
+                    if (savedMetro === null) localStorage.removeItem(METRO_KEY); else localStorage.setItem(METRO_KEY, savedMetro);
+                    metro.settings = MaestroMetronome.parseSettings(savedMetro);
+                    renderMetro();
+                    navigate("home");
+                }
+            }
+
             // 2.2.0: pages, sections, the sidebar's marker and numbers move.
             {
                 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -556,7 +1125,7 @@
             checks.push(["the chosen tab's own fill gives way to the marker", getComputedStyle(libraryTab).backgroundColor === "rgba(0, 0, 0, 0)" ? [] : [getComputedStyle(libraryTab).backgroundColor]]);
             gamesSections.show("playing");
             navigate("home");
-            checks.push(["Ctrl numbers cover the eight pages", sidebarViews().length === 8 && sidebarViews()[7] === "commands" ? [] : [sidebarViews().join()]]);
+            checks.push(["Ctrl numbers cover the nine pages", sidebarViews().length === 9 && sidebarViews()[7] === "commands" && sidebarViews()[8] === "conservatory" ? [] : [sidebarViews().join()]]);
             checks.push(["no errors from the 1.9.1 and 1.9.2 checks", errors.splice(0)]);
 
             // 1.10.0: the Workspaces page.
@@ -936,7 +1505,8 @@
 
             gamesState.ra.games.set(77, JSON.stringify({ ID: 77, Title: "Newer Game", ConsoleName: "PC", ImageIcon: "/Images/77.png", NumDistinctPlayers: 100, Achievements: {
                 1: { ID: 1, Title: "Got It", Points: 5, BadgeName: "1", DisplayOrder: 1, NumAwarded: 10, DateEarned: "2026-11-01 10:00:00" },
-                2: { ID: 2, Title: "Next Step", Description: "Do the thing", Points: 10, BadgeName: "2", DisplayOrder: 2, NumAwarded: 5, type: "progression" }
+                2: { ID: 2, Title: "Next Step", Description: "Do the thing", Points: 10, BadgeName: "2", DisplayOrder: 2, NumAwarded: 5, type: "progression" },
+                3: { ID: 3, Title: "Early One", Points: 1, BadgeName: "3", DisplayOrder: 0, NumAwarded: 50 }
             } }));
             messages.length = 0;
             handleWebMessage({ data: "RA\nsummary\n" + JSON.stringify({ User: "Player", TotalPoints: 10, LastGameID: 77, LastGame: { Title: "Newer Game", ConsoleName: "PC" } }) });
@@ -947,6 +1517,17 @@
             checks.push(["Achievements draws nothing while it's closed", !$("gamesAchievements").querySelector(".ra-stats") && !messages.some(message => message.startsWith("GetRaAwards")) ? [] : ["asked"]]);
             [...$("gamesNextUp").querySelectorAll("button")].find(button => button.textContent === "All achievements").click();
             checks.push(["All achievements opens that game there", gamesSections.current() === "achievements" && gamesState.ra.openGame === 77 && $("gamesAchievements").querySelector(".ra-browser") ? [] : [gamesSections.current()]]);
+            // 2.3.0: an unlock shows its time, read as UTC, in a named time zone.
+            const gotIt = [...$("gamesAchievements").querySelectorAll(".ra-achievement")].find(row => row.textContent.includes("Got It"))?.querySelector("small");
+            // 2.3.0: sorted unlocked first.
+            const firstRow = () => $("gamesAchievements").querySelector(".ra-achievement strong")?.textContent;
+            const gameOrderFirst = firstRow();
+            const raSort = $("gamesAchievements").querySelector(".ra-sort");
+            raSort.value = "unlocked";
+            raSort.dispatchEvent(new Event("change"));
+            checks.push(["Unlocked first puts the unlocked one at the top", gameOrderFirst === "Early One" && firstRow() === "Got It" && gamesState.ra.sort === "unlocked" ? [] : [gameOrderFirst, firstRow()]]);
+            gamesState.ra.sort = "order";
+            checks.push(["an unlock shows its date and time, saying which zone", /Unlocked \w{3} \d{1,2}, 2026, \d{1,2}:\d{2} [AP]M/.test(gotIt?.textContent || "") && /^Times in /.test(gotIt?.title || "") ? [] : [gotIt?.textContent, gotIt?.title]]);
             gamesState.ra.openGame = 0;
             gamesState.ra.games.delete(77);
             gamesState.items = [];
@@ -1073,8 +1654,8 @@
             navigate("home");
             ctrl("-");
             checks.push(["Ctrl + - opens Preferences", $("settings").classList.contains("active") ? [] : ["not open"]]);
-            ctrl("9");
-            checks.push(["Ctrl + 9 is free", $("settings").classList.contains("active") ? [] : ["it moved"]]);
+            ctrl("0");
+            checks.push(["Ctrl + 0 is free", $("settings").classList.contains("active") ? [] : ["it moved"]]);
             ctrl("8");
             checks.push(["Ctrl + 8 is Commands", $("commands").classList.contains("active") ? [] : ["not open"]]);
             ctrl("=");
@@ -1390,7 +1971,7 @@
             checks.push(["and its button becomes Done", $("arrangeButton").textContent === "Done" && $("arrangeButton").getAttribute("aria-pressed") === "true" ? [] : [$("arrangeButton").textContent]]);
             checks.push(["a module's own controls are out of reach", $("todayOpen").closest("[inert]") && $("homeNoteInput").closest("[inert]") ? [] : ["reachable"]]);
             checks.push(["the dock says how it fits", $("arrangeFit").textContent === "This fills the window." ? [] : [$("arrangeFit").textContent]]);
-            checks.push(["and holds the modules that start hidden", ["weather", "processes", "network", "audio", "controllers", "pinned", "unlocks", "timer"].every(id => document.querySelector(`[data-arrange="${id}-show"]`)) ? [] : [$("arrangeTray").textContent]]);
+            checks.push(["and holds the modules that start hidden", ["weather", "processes", "network", "audio", "controllers", "pinned", "unlocks", "timer", "metronome"].every(id => document.querySelector(`[data-arrange="${id}-show"]`)) ? [] : [$("arrangeTray").textContent]]);
             checks.push(["focus starts on the first tile's grip", document.activeElement === arrangeGrip("now") ? [] : [document.activeElement?.dataset.arrange]]);
             // 2.0.0 manual pass: the dock takes the sidebar's place, in one shape.
             // Measured on screen, with every animation at its end: a transform the
@@ -1501,9 +2082,55 @@
             $("arrangeDone").click();
             checks.push(["a collapsed sidebar opens for the dock, then closes again", openedForDock && document.body.classList.contains("sidebar-collapsed") && localStorage.getItem(SIDEBAR_KEY) === sidebarChoice ? [] : [openedForDock]]);
             applySidebar(false);
+            // 2.3.0: closing and opening the sidebar. The logo glides, never
+            // jumps, and the name keeps its size while it fades.
+            if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+                const settle = () => document.getAnimations().forEach(motion => { if (motion instanceof CSSTransition) motion.finish(); });
+                const logo = document.querySelector(".brand-mark");
+                const name = document.querySelector(".brand-copy strong");
+                const small = document.querySelector(".brand-copy > span");
+                const sidebarLeft = () => document.querySelector(".sidebar").getBoundingClientRect().left;
+                const logoAt = () => Math.round((logo.getBoundingClientRect().left - sidebarLeft()) * 10) / 10;
+                const look = node => ["font-size", "font-weight", "line-height", "letter-spacing", "margin-top", "text-transform", "color", "background-image"].map(prop => getComputedStyle(node).getPropertyValue(prop)).join(" | ");
+                // Steps through the sidebar's own transitions, paused, every 25 ms.
+                const steps = () => {
+                    const moving = document.getAnimations().filter(motion => motion instanceof CSSTransition);
+                    moving.forEach(motion => motion.pause());
+                    const seen = [];
+                    for (let at = 0; at <= 275; at += 25) {
+                        moving.forEach(motion => { motion.currentTime = at; });
+                        seen.push({ left: logoAt(), name: look(name), small: look(small), copy: Number(getComputedStyle(document.querySelector(".brand-copy")).opacity) });
+                    }
+                    moving.forEach(motion => motion.finish());
+                    return seen;
+                };
+                settle();
+                const openLeft = logoAt(), openName = look(name), openSmall = look(small);
+                const copyRight = document.querySelector(".brand-copy").getBoundingClientRect().right;
+                const brandBox = document.querySelector(".brand");
+                const roomRight = brandBox.getBoundingClientRect().right - parseFloat(getComputedStyle(brandBox).paddingRight);
+                checks.push(["open, the name fills the room beside the logo", Math.abs(copyRight - roomRight) <= .5 ? [] : [copyRight, roomRight]]);
+                applySidebar(true);
+                const closing = steps();
+                const railLeft = logoAt();
+                const glides = seen => seen.every((step, at) => at === 0 || Math.abs(step.left - seen[at - 1].left) <= 3);
+                checks.push(["closing, the logo glides to the rail's middle without a jump", glides(closing) && closing[0].left === openLeft && Math.abs(railLeft - (84 - 56) / 2) <= 1 ? [] : [closing.map(step => step.left).join(), railLeft]]);
+                checks.push(["closing, the name keeps its size while it fades", closing.every(step => step.name === openName && step.small === openSmall) && closing[2].copy < 1 && closing.at(-1).copy === 0 ? [] : [closing.map(step => step.copy).join()]]);
+                checks.push(["closed, the words are hidden from view and screen readers", getComputedStyle(document.querySelector(".brand-copy")).visibility === "hidden" && [...document.querySelectorAll(".nav > span")].every(span => getComputedStyle(span).visibility === "hidden") ? [] : ["visible"]]);
+                const icon = document.querySelector('.nav[data-view="home"] svg').getBoundingClientRect();
+                const mark = logo.getBoundingClientRect();
+                const railRoom = document.querySelector(".sidebar").clientWidth - 2 * 13;
+                checks.push(["closed, each page's button keeps the rail's width", [...document.querySelectorAll(".sidebar .nav")].every(button => Math.round(button.getBoundingClientRect().width) <= railRoom) ? [] : [[...document.querySelectorAll(".sidebar .nav")].map(button => Math.round(button.getBoundingClientRect().width)).join(), railRoom]]);
+                checks.push(["closed, the logo is centered over the icons", Math.abs((icon.left + icon.right) / 2 - (mark.left + mark.right) / 2) <= 1.5 ? [] : [(icon.left + icon.right) / 2, (mark.left + mark.right) / 2]]);
+                applySidebar(false);
+                const opening = steps();
+                checks.push(["opening, the logo glides back", glides(opening) && opening.at(-1).left === openLeft ? [] : [opening.map(step => step.left).join()]]);
+                checks.push(["opening, the words fade in once there's room, at their size", opening[0].copy === 0 && opening.at(-1).copy === 1 && opening.every(step => step.name === openName) ? [] : [opening.map(step => step.copy).join()]]);
+                settle();
+            }
             // 2.0.0: the added modules.
             changeHomeLayout({ ...MaestroHomeLayout.defaults(), hidden: [] });
-            checks.push(["every added module can show", ["weather", "processes", "network", "audio", "controllers", "pinned", "unlocks", "timer"].every(id => !document.querySelector(`#homeFace [data-module="${id}"]`).hidden) ? [] : ["hidden"]]);
+            checks.push(["every added module can show", ["weather", "processes", "network", "audio", "controllers", "pinned", "unlocks", "timer", "metronome"].every(id => !document.querySelector(`#homeFace [data-module="${id}"]`).hidden) ? [] : ["hidden"]]);
             const wasHidden = windowIsHidden;
             windowIsHidden = false;
             messages.length = 0;
@@ -2051,9 +2678,10 @@
             };
             // One icon set (2.2.0): every drawing that's an icon comes from icons.js,
             // isn't empty, and is drawn at 20 or 24 px. The logo, the window
-            // controls (Windows' own caption glyphs), charts, the keyboard map and
-            // the almanac's sun and moon are drawings, not icons.
-            const NOT_ICONS = ".brand-mark, .window-control, .chart-plot, .keymap, .alm-moon, .alm-sun";
+            // controls (Windows' own caption glyphs), charts, the keyboard map, the
+            // almanac's sun and moon, and the Conservatory's neck, keys, staff and
+            // chord diagrams are drawings, not icons.
+            const NOT_ICONS = ".brand-mark, .window-control, .chart-plot, .keymap, .alm-moon, .alm-sun, .cons-neck, .cons-keys, .cons-map, .cons-staff, .cons-mini";
             const iconProblems = new Set();
             const iconCheck = place => {
                 [document.querySelector(".view.active"), document.querySelector(".sidebar"), document.querySelector(".topbar")].forEach((area, index) => {
@@ -2075,7 +2703,7 @@
                         if (/^[‹›⋯×✕♥♡◆→↗↻]|[‹›⋯×✕♥♡◆→↗↻]$/.test(words)) iconProblems.add(`${where}: a glyph for an icon in "${words.slice(0, 30)}"`);
                     });
                 });
-            };            const sectioned = { games: gamesSections, dashboard: systemSections, sounds: soundSections, commands: commandsSections, workspaces: workspaceSections };
+            };            const sectioned = { games: gamesSections, dashboard: systemSections, sounds: soundSections, commands: commandsSections, workspaces: workspaceSections, conservatory: consSections };
             // The Calendars list with a calendar in it, where the cut-off Edit was found.
             const calendarsBefore = { loaded: calState.loaded, calendars: calState.calendars };
             calState.loaded = true;

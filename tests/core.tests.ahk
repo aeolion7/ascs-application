@@ -95,6 +95,7 @@ Equal("Explorer missing folder falls back",
     "explorer.exe")
 ; 1.9.2: a new calendar event can be a quick action.
 Equal("quick action: new calendar event", ValidateQuickActionId("calendar:new"), "calendar:new")
+Equal("quick action: start or stop the metronome", ValidateQuickActionId("metronome:toggle"), "metronome:toggle")
 Throws("quick action: an unknown kind", () => ValidateQuickActionId("calc:1"))
 
 ; 1.9.1: Super+E and Super+Shift+E both follow "Open File Explorer to"; /n opens Documents.
@@ -1198,8 +1199,40 @@ Check("a failed backup isn't retried within the hour", !BackupDue("2026111018590
 Check("a failed backup is retried after an hour", BackupDue("20261110190004", "1800", "20261110180004", "failed"))
 Check("a midnight backup is due just after midnight", BackupDue("20261111000001", "0000", "20261110000005", "ok"))
 
+Check("backup waits through the first 5 minutes after a start", BackupWaitsForStart(0) && BackupWaitsForStart(60000) && BackupWaitsForStart(299999))
+Check("backup no longer waits once 5 minutes have passed", !BackupWaitsForStart(300000) && !BackupWaitsForStart(86400000))
 Equal("backup detail loses its line breaks", TidyBackupDetail("  one`r`ntwo`tthree  "), "one two three")
 Equal("backup detail is capped", StrLen(TidyBackupDetail(Format("{:0300}", 0))), 200)
+
+; Saved chords (2.3.0)
+chord := ValidateChord("  G7(♯5,♭9) ", "guitar", "40 45 50 55 59 64", "3 x 3 4 4 4")
+Equal("chord name trimmed, kept with its signs", chord["name"], "G7(♯5,♭9)")
+Equal("chord shape kept", chord["shape"], "3 x 3 4 4 4")
+Equal("chord numbers written plainly", ValidateChord("C", "guitar", "40 045 50 55 59 64", "x 03 2 0 1 0")["shape"], "x 3 2 0 1 0")
+Equal("keyboard chord", ValidateChord("C", "keyboard", "", "48 52 55")["shape"], "48 52 55")
+Throws("chord without a name rejected", () => ValidateChord("  ", "guitar", "40 45 50 55 59 64", "x 3 2 0 1 0"), "name")
+Throws("chord name too long rejected", () => ValidateChord(Format("{:033}", 0), "guitar", "40 45 50 55 59 64", "x 3 2 0 1 0"), "name")
+Throws("chord name with a quote rejected", () => ValidateChord('C"', "guitar", "40 45 50 55 59 64", "x 3 2 0 1 0"), "name")
+Throws("chord name with a tab rejected", () => ValidateChord("C`tD", "guitar", "40 45 50 55 59 64", "x 3 2 0 1 0"), "name")
+Throws("unknown instrument rejected", () => ValidateChord("C", "banjo", "40 45 50 55 59 64", "x 3 2 0 1 0"), "instrument")
+Throws("three strings rejected", () => ValidateChord("C", "guitar", "40 45 50", "x 3 2"), "4 to 7")
+Throws("eight strings rejected", () => ValidateChord("C", "guitar", "40 45 50 55 59 64 69 74", "x 3 2 0 1 0 0 0"), "4 to 7")
+Throws("tuning out of range rejected", () => ValidateChord("C", "guitar", "40 45 50 55 59 120", "x 3 2 0 1 0"), "range")
+Throws("a fret missing rejected", () => ValidateChord("C", "guitar", "40 45 50 55 59 64", "x 3 2 0 1"), "each string")
+Throws("fret 25 rejected", () => ValidateChord("C", "guitar", "40 45 50 55 59 64", "x 25 2 0 1 0"), "24")
+Throws("capital X rejected", () => ValidateChord("C", "guitar", "40 45 50 55 59 64", "X 3 2 0 1 0"), "each string")
+Throws("a negative fret rejected", () => ValidateChord("C", "guitar", "40 45 50 55 59 64", "x -3 2 0 1 0"), "each string")
+Throws("no string played rejected", () => ValidateChord("C", "guitar", "40 45 50 55 59 64", "x x x x x x"), "played")
+Throws("keyboard with a tuning rejected", () => ValidateChord("C", "keyboard", "40 45 50 55", "48 52 55"), "tuning")
+Throws("keyboard keys out of order rejected", () => ValidateChord("C", "keyboard", "", "55 52 48"), "rise")
+Throws("keyboard key out of range rejected", () => ValidateChord("C", "keyboard", "", "12 52"), "rise")
+Throws("eleven keys rejected", () => ValidateChord("C", "keyboard", "", "40 41 42 43 44 45 46 47 48 49 50"), "1 to 10")
+Equal("chords payload parsed", ParseChordsPayload("C`tguitar`t40 45 50 55 59 64`tx 3 2 0 1 0`r`n`nC`tkeyboard`t`t48 52 55`n").Length, 2)
+Equal("empty chords payload clears the library", ParseChordsPayload("").Length, 0)
+Throws("chords payload with a missing field rejected", () => ParseChordsPayload("C`tguitar`tx 3 2 0 1 0"), "malformed")
+Throws("too many chords rejected", () => ParseChordsPayload("C`tkeyboard`t`t48`nD`tkeyboard`t`t50`nE`tkeyboard`t`t52", 2), "At most 2")
+Equal("chords as JSON", ChordsJson([ValidateChord("G7(♯5,♭9)", "guitar", "40 45 50 55 59 64", "3 x 3 4 4 4"), ValidateChord('C', "keyboard", "", "48 52 55")]),
+    '[{"name":"G7(♯5,♭9)","instrument":"guitar","tuning":[40,45,50,55,59,64],"shape":[3,null,3,4,4,4]},{"name":"C","instrument":"keyboard","tuning":[],"shape":[48,52,55]}]')
 
 report := "PASS " Passed " FAIL " Failures.Length "`n"
 for failure in Failures

@@ -118,15 +118,39 @@ function Start-Build([string]$folder) {
 
 # Copies a data folder without WebView2's caches, its network state (cookies it
 # keeps locked while Maestro runs, and nothing of yours) or the backup status
-# file. True when every file copied. -Mirror also removes what the copy lacks.
+# file. Says whether every file copied (Ok) and, from robocopy's error lines,
+# which didn't and why (Problems). -Mirror also removes what the copy lacks.
 function Copy-DataFolder([string]$from, [string]$to, [switch]$Mirror) {
     $mode = if ($Mirror) { '/MIR' } else { '/E' }
     $arguments = @($from, $to, $mode, '/R:1', '/W:1', '/NFL', '/NDL', '/NJH', '/NJS', '/NP', '/XF', $StatusFile, '/XD') +
         $CacheFolders + @(Join-Path $from 'WebView2\EBWebView\Default\Network')
-    & robocopy @arguments | Out-Null
+    $output = @(& robocopy @arguments)
     $code = $LASTEXITCODE
     $global:LASTEXITCODE = 0
-    return $code -lt 8
+    return [pscustomobject]@{ Ok = $code -lt 8; Problems = @(Get-CopyProblems $output $from $to) }
+}
+
+# robocopy's errors as "<what it did> <file>: <why>", once each however often
+# it retried, with the two folders left off the paths so the file shows first.
+function Get-CopyProblems([string[]]$output, [string]$from, [string]$to) {
+    $problems = [Collections.Generic.List[string]]::new()
+    for ($i = 0; $i -lt $output.Count; $i++) {
+        if ($output[$i] -notmatch 'ERROR \d+ \(0x[0-9A-Fa-f]+\) (.+?)\s*$') { continue }
+        $what = $Matches[1]
+        foreach ($folder in @($from, $to)) { $what = $what -replace [regex]::Escape($folder.TrimEnd('\') + '\'), '' }
+        $why = if ($i + 1 -lt $output.Count) { $output[$i + 1].Trim() } else { '' }
+        $problem = if ($why) { "${what}: $why" } else { $what }
+        if (-not $problems.Contains($problem)) { $problems.Add($problem) }
+    }
+    return $problems
+}
+
+# A failed copy's message: what it means, then the first file robocopy named
+# and how many more. Maestro shows 200 characters of it, so the file comes early.
+function Get-CopyFailure([string]$meaning, $copy) {
+    if (-not $copy.Problems.Count) { return $meaning }
+    $more = if ($copy.Problems.Count -gt 1) { " And $($copy.Problems.Count - 1) more." } else { '' }
+    return "$meaning $($copy.Problems[0])$more"
 }
 
 # ---- cut-release
@@ -543,7 +567,8 @@ function Invoke-Try([string[]]$options) {
     try {
         if (-not (Remove-TestData $target)) { throw "Couldn't clear the last test's copy in $targetData." }
         Write-Host 'Copying your data...'
-        if (-not (Copy-DataFolder $realData $targetData)) { throw 'Some of your data could not be copied.' }
+        $copy = Copy-DataFolder $realData $targetData
+        if (-not $copy.Ok) { throw (Get-CopyFailure 'Some of your data could not be copied.' $copy) }
         Set-CalendarConfigPaths $realData $targetData
         [IO.File]::WriteAllText((Join-Path $targetData $TestMarker), "Made by maestro try. Everything in this folder is deleted by maestro try --end.`r`n")
     } catch {
@@ -636,9 +661,10 @@ function New-Backup([string]$source, [string]$backups, [string]$prefix) {
     } while ($taken)
     $partial = "$final.partial"
     [IO.Directory]::CreateDirectory($partial) | Out-Null
-    if (-not (Copy-DataFolder $source $partial)) {
+    $copy = Copy-DataFolder $source $partial
+    if (-not $copy.Ok) {
         try { [IO.Directory]::Delete($partial, $true) } catch { }
-        throw "Some files couldn't be copied to $backups, so no backup was made."
+        throw (Get-CopyFailure "No backup was made, because some files couldn't be copied." $copy)
     }
     [IO.Directory]::Move($partial, $final)
     return $final
@@ -785,9 +811,10 @@ function Invoke-RestoreData([string[]]$options) {
         catch { Stop-WithError "Your data as it is now couldn't be copied first, so nothing was restored. $($_.Exception.Message)" }
         Write-Host "Kept your data as it was in $saved"
     }
-    if (-not (Copy-DataFolder $chosen.Path $data -Mirror)) {
+    $copy = Copy-DataFolder $chosen.Path $data -Mirror
+    if (-not $copy.Ok) {
         $where = if ($saved) { " Your data from before is in $saved." } else { '' }
-        Stop-WithError "Some files couldn't be put back, so your data may be part old and part new.$where"
+        Stop-WithError ((Get-CopyFailure "Some files couldn't be put back, so your data may be part old and part new." $copy) + $where)
     }
     try { Remove-ExpiredBackups $backups | Out-Null } catch { }
     Write-Host "Restored the data from $($chosen.When). Start Maestro again to use it."

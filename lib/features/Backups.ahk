@@ -47,9 +47,9 @@ StartBackupSchedule() {
 }
 
 CheckBackupDue(*) {
-    global ASCS_BackupsEnabled, ASCS_BackupsTime, ASCS_BackupRun, ASCS_BackupAttempt
+    global ASCS_BackupsEnabled, ASCS_BackupsTime, ASCS_BackupRun, ASCS_BackupAttempt, ASCS_StartedAt
 
-    if (!ASCS_BackupsEnabled || IsObject(ASCS_BackupRun))
+    if (!ASCS_BackupsEnabled || IsObject(ASCS_BackupRun) || BackupWaitsForStart(A_TickCount - ASCS_StartedAt))
         return
     status := ReadBackupStatus()
     last := status["time"]

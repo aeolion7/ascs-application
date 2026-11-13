@@ -1,0 +1,1057 @@
+/* ==========================================================================
+   2.3.0: the Conservatory. The page holds its body above (the neck and its
+   sections, from stage 4) and the metronome's bar along the bottom. The
+   Command Center's Metronome module shares the bar's parts.
+   ========================================================================== */
+
+:root #conservatory.active {
+  display: flex;
+  flex-direction: column;
+}
+
+.cons-stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-between);
+  height: var(--page-fit);
+  min-height: 0;
+}
+
+.cons-body {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---- The metronome's bar ---- */
+
+.metro-bar {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 26px;
+  padding: 14px 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-module);
+  background: linear-gradient(180deg, var(--surface-module-top), var(--surface-module));
+  box-shadow: var(--highlight), var(--elevation-1);
+}
+
+:root .metro-play {
+  display: inline-grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.metro-tempo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+:root .metro-step {
+  display: inline-grid;
+  place-items: center;
+  width: var(--height-control);
+  height: var(--height-control);
+  padding: 0;
+  border-radius: 50%;
+}
+
+.metro-bpm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 150px;
+}
+
+.metro-bpm span {
+  color: var(--text-muted);
+  font-size: var(--t-sub);
+  white-space: nowrap;
+}
+
+.metro-bpm strong,
+:root .metro-bpm input {
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-number-large);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* The tempo reads as a number and is typed over in place. */
+:root .metro-bpm input {
+  width: 4ch;
+  min-height: 0;
+  height: 64px;
+  padding: 0 6px;
+  border-color: transparent;
+  background: transparent;
+  text-align: center;
+  appearance: textfield;
+}
+
+:root .metro-bpm input:focus-visible {
+  border-color: var(--brand-tint);
+  background: var(--surface-field);
+}
+
+.metro-bpm input::-webkit-inner-spin-button,
+.metro-bpm input::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.metro-beats {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 30px;
+}
+
+.metro-beats > span {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--line-control);
+  border-radius: 50%;
+  background: var(--surface-raised);
+  transition: background var(--dur-quick) var(--ease-out), border-color var(--dur-quick) var(--ease-out), box-shadow var(--dur-quick) var(--ease-out);
+}
+
+.metro-beats > span.is-first {
+  width: 30px;
+  height: 30px;
+}
+
+.metro-beats > span.is-lesser {
+  width: 26px;
+  height: 26px;
+}
+
+.metro-beats > span.is-on {
+  border-color: var(--brand-tint-text);
+  background: var(--brand-tint);
+  box-shadow: 0 0 18px rgba(123, 92, 240, .65);
+}
+
+.metro-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: var(--t-sub);
+}
+
+:root .metro-field select {
+  min-width: 160px;
+  padding: 0 34px 0 12px;
+}
+
+.metro-volume input {
+  width: 150px;
+}
+
+/* Sound and volume stay together, at the bar's end. */
+.metro-output {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  margin-left: auto;
+}
+
+/* ---- The tempo trainer: a button in the bar and its panel above it ---- */
+
+.metro-trainer {
+  position: relative;
+}
+
+:root #metroTrainerButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.metro-trainer-status {
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-weight: 400;
+}
+
+#metroTrainerButton.is-on .metro-trainer-status {
+  color: var(--brand-tint-text);
+}
+
+.metro-trainer-panel {
+  position: absolute;
+  bottom: calc(100% + 36px);
+  left: 0;
+  z-index: 30;
+  width: 600px;
+  padding: var(--space-module);
+  border: 1px solid var(--line-button);
+  border-radius: var(--radius-module);
+  background: linear-gradient(180deg, var(--surface-overlay), var(--surface-module) 180px);
+  box-shadow: var(--highlight), var(--elevation-2);
+}
+
+.metro-trainer-panel .module-head {
+  margin-bottom: 18px;
+}
+
+.metro-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-soft);
+  font-size: var(--t-body);
+}
+
+.metro-check input {
+  width: 20px;
+  height: 20px;
+}
+
+.metro-trainer-fields {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.metro-trainer-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: var(--t-sub);
+}
+
+:root .metro-trainer-fields input {
+  width: 100%;
+  padding: 0 12px;
+  font-family: var(--font-display);
+  font-size: var(--t-module);
+  font-variant-numeric: tabular-nums;
+}
+
+.metro-trainer-fields small {
+  font-size: var(--t-floor);
+}
+
+.metro-trainer-note,
+.metro-trainer-problem {
+  margin: 16px 0 0;
+  color: var(--text-soft);
+  font-size: var(--t-body);
+  line-height: 1.45;
+}
+
+.metro-trainer-problem {
+  color: var(--brand-burgundy-text);
+}
+
+/* ---- The Command Center's Metronome module ---- */
+
+.home-metro-tempo {
+  justify-content: center;
+  gap: 22px;
+  margin: 2px 0 12px;
+}
+
+.home-metro-tempo .metro-bpm {
+  min-width: 0;
+}
+
+[data-module="metronome"] .metro-beats {
+  justify-content: center;
+}
+
+.home-metro-trainer {
+  margin: 12px 0 0;
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+  text-align: center;
+}
+
+/* ---- The page's body: the instrument, the neck, then Scales or Tuning ---- */
+
+.cons-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-between);
+}
+
+.cons-toolbar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 22px;
+}
+
+:root .cons-instruments,
+:root .cons-labels {
+  margin-left: 0;
+}
+
+:root .cons-tabs {
+  margin-left: auto;
+}
+
+.cons-neck-module {
+  flex: none;
+}
+
+:root .cons-neck-module {
+  padding: 16px 24px 12px;
+}
+
+.cons-neck,
+.cons-keys {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.cons-neck-module.is-keyboard .cons-keys {
+  max-height: 320px;
+}
+
+.cons-keys-holder .cons-keys {
+  max-height: 224px;
+}
+
+/* The neck's drawing */
+/* The 1.x rule that strokes every svg (for icons) mustn't reach these drawings. */
+.cons-neck,
+.cons-keys {
+  stroke: none;
+}
+
+.cons-board {
+  fill: #191b2b;
+}
+
+.cons-inlay {
+  fill: #2a2d43;
+}
+
+.cons-nut {
+  stroke: #d9d4c4;
+  stroke-width: 8;
+  stroke-linecap: round;
+}
+
+.cons-fret {
+  stroke: #4b4f6a;
+  stroke-width: 3;
+}
+
+.cons-string {
+  stroke: #b9b6cb;
+}
+
+.cons-fret-number {
+  fill: var(--text-muted);
+  font-family: var(--font-display);
+  font-size: 19px;
+  text-anchor: middle;
+}
+
+.cons-dot {
+  cursor: pointer;
+}
+
+.cons-dot circle {
+  fill: var(--surface-raised);
+  stroke: var(--brand-tint);
+  stroke-width: 2.5;
+}
+
+.cons-dot.is-root circle {
+  fill: var(--brand-tint);
+  stroke: var(--brand-tint-text);
+}
+
+.cons-dot:hover circle {
+  stroke: var(--text-strong);
+}
+
+.cons-dot text,
+.cons-key-label {
+  fill: var(--text-strong);
+  font-family: var(--font-body);
+  font-size: 19px;
+  font-weight: 700;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.cons-dot.is-root text {
+  fill: #ffffff;
+}
+
+/* With Every note, the notes outside the scale or chord, quieter. */
+.cons-dot.is-other circle {
+  fill: var(--surface-field);
+  stroke: var(--line-control);
+  stroke-width: 1.5;
+}
+
+.cons-dot.is-other text {
+  fill: var(--text-muted);
+  font-weight: 400;
+}
+
+/* A keyboard */
+.cons-key {
+  cursor: pointer;
+}
+
+.cons-key rect {
+  fill: #e9e6f2;
+}
+
+.cons-key.is-black rect {
+  fill: #15161f;
+}
+
+.cons-key:hover rect {
+  fill: #d6d0ec;
+}
+
+.cons-key.is-black:hover rect {
+  fill: #2b2e45;
+}
+
+.cons-key-dot {
+  fill: var(--surface-raised);
+}
+
+.cons-key-dot.is-root {
+  fill: var(--brand-tint);
+}
+
+/* Notes outside the scale: an outline, and quieter text, on either key. */
+.cons-key-dot.is-other {
+  fill: none;
+  stroke: #8d8ba3;
+  stroke-width: 1.5;
+}
+
+.cons-key-label.is-other {
+  fill: #5a5e7c;
+  font-weight: 400;
+}
+
+.cons-key.is-black .cons-key-label.is-other {
+  fill: #b5b4c8;
+}
+
+.cons-key-label {
+  fill: #ffffff;
+}
+
+/* Scales and Tuning */
+.cons-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.cons-panel[hidden] {
+  display: none;
+}
+
+.cons-scalebar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 22px;
+}
+
+.cons-notes {
+  margin: 0 0 0 auto;
+}
+
+.cons-notes-list {
+  display: inline-flex;
+  gap: 14px;
+  color: var(--text-soft);
+  font-family: var(--font-display);
+  font-size: var(--t-module);
+}
+
+.cons-notes-list .is-root {
+  color: var(--brand-tint-text);
+}
+
+.cons-grid-2 {
+  display: grid;
+  flex: none;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-between);
+}
+
+.cons-grid-2.is-single {
+  grid-template-columns: 1fr;
+}
+
+.cons-note {
+  margin: 14px 0 0;
+  color: var(--text-muted);
+  font-size: var(--t-sub);
+}
+
+.key-chords {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 12px;
+}
+
+.key-chords[hidden] {
+  display: none;
+}
+
+:root .key-chord {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-height: 0;
+  padding: 14px 6px 16px;
+  border: 1px solid var(--line-button);
+  border-radius: var(--radius-control);
+  background: var(--fill-secondary);
+  box-shadow: var(--highlight);
+  color: var(--text-strong);
+}
+
+:root .key-chord:hover {
+  border-color: var(--brand-tint);
+}
+
+:root .key-chord[aria-pressed="true"] {
+  border-color: var(--brand-tint-text);
+  background: var(--fill-primary);
+}
+
+.key-numeral {
+  color: var(--text-muted);
+  font-size: var(--t-sub);
+}
+
+.key-chord[aria-pressed="true"] .key-numeral {
+  color: var(--text-soft);
+}
+
+.key-name {
+  font-family: var(--font-display);
+  font-size: var(--t-name);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.tuning-strings {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.tuning-strings[data-count="4"] {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.tuning-strings[data-count="5"] {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.tuning-strings[data-count="1"] {
+  grid-template-columns: minmax(0, 200px);
+}
+
+:root .tuning-string {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-height: 0;
+  padding: 16px 2px;
+  border: 1px solid var(--line-button);
+  border-radius: var(--radius-control);
+  background: var(--fill-secondary);
+  box-shadow: var(--highlight);
+}
+
+:root .tuning-string:hover {
+  border-color: var(--brand-tint);
+}
+
+:root .tuning-string.is-playing {
+  border-color: var(--brand-tint-text);
+  background: var(--fill-primary);
+}
+
+.tuning-string strong {
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-number);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.tuning-string sub {
+  color: var(--text-muted);
+  font-size: var(--t-sub);
+}
+
+.tuning-string span {
+  color: var(--text-muted);
+  font-size: var(--t-floor);
+  white-space: nowrap;
+}
+
+.tuning-string.is-playing sub,
+.tuning-string.is-playing span {
+  color: var(--text-soft);
+}
+
+.cons-tone-row {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin-top: 16px;
+}
+
+:root .cons-tone-row input {
+  width: 96px;
+  padding: 0 12px;
+}
+
+/* In Tuning, the list scrolls inside its module, and the tones stay put. */
+#consTuningPanel > .cons-grid-2 {
+  flex: 1;
+  min-height: 0;
+}
+
+#consTuningsModule {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.cons-tunings {
+  flex: 1;
+  min-height: 0;
+  /* Room inside the scroll for a focus ring. */
+  margin: -6px;
+  padding: 6px;
+  overflow: auto;
+  list-style: none;
+}
+
+.cons-tunings li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+:root .cons-tuning-choose {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+  min-height: var(--height-control);
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-key);
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-soft);
+  font-size: var(--t-body);
+  text-align: left;
+}
+
+:root .cons-tuning-choose:hover {
+  background: var(--surface-raised);
+}
+
+.cons-tuning-choose strong {
+  min-width: 220px;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-tab);
+  font-weight: 500;
+}
+
+.cons-tunings li.is-current strong {
+  color: var(--brand-tint-text);
+}
+
+.cons-tunings em {
+  color: var(--brand-gold-text);
+  font-size: var(--t-floor);
+  font-style: normal;
+}
+
+:root .cons-tuning-delete {
+  display: inline-grid;
+  place-items: center;
+  width: var(--height-control-small);
+  height: var(--height-control-small);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+}
+
+:root .cons-tuning-delete:hover {
+  color: var(--brand-burgundy-text);
+}
+
+.cons-tuning-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.cons-tuning-form[hidden] {
+  display: none;
+}
+
+:root .cons-tuning-form input[type="text"] {
+  width: 360px;
+  padding: 0 12px;
+}
+
+.cons-pitches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.cons-pitch {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: var(--t-floor);
+}
+
+:root .cons-pitch select {
+  min-width: 110px;
+  padding: 0 34px 0 12px;
+}
+
+.cons-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+/* A long bar (9/8, 12/8) draws its beats closer and smaller, to keep its room. */
+.metro-beats:has(> span:nth-child(9)) {
+  gap: 6px;
+}
+
+.metro-beats:has(> span:nth-child(9)) > span {
+  width: 14px;
+  height: 14px;
+}
+
+.metro-beats:has(> span:nth-child(9)) > span.is-lesser {
+  width: 18px;
+  height: 18px;
+}
+
+.metro-beats:has(> span:nth-child(9)) > span.is-first {
+  width: 22px;
+  height: 22px;
+}
+
+/* A choice with its name beside it: Notes, Labels. */
+.cons-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cons-choice-label {
+  color: var(--text-muted);
+  font-size: var(--t-sub);
+}
+
+:root .cons-labels[hidden] {
+  display: none;
+}
+
+/* ---- Practice (2.3.0): the capo, left-handed, the drone, sevenths ---- */
+
+.cons-neck-options,
+.cons-hear {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cons-neck-options[hidden] {
+  display: none;
+}
+
+:root .cons-capo select {
+  min-width: 130px;
+}
+
+:root .cons-toggle[aria-pressed="true"] {
+  border-color: var(--brand-tint);
+  background: var(--fill-primary);
+  color: #fff;
+}
+
+.cons-capo {
+  fill: #e6dcc0;
+  stroke: #7d6a3a;
+  stroke-width: 2;
+}
+
+.cons-chord-size {
+  margin-left: auto;
+}
+
+.cons-chord-size[hidden] {
+  display: none;
+}
+
+/* Sevenths' names are longer: two rows of four, a size down. */
+.key-chords:has(.key-shape),
+.key-chords.is-sevenths {
+  row-gap: 12px;
+}
+
+.key-chords.is-sevenths {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.key-chords.is-sevenths .key-name {
+  font-size: var(--t-module);
+}
+
+/* With a capo: the shape the chord is fingered as. */
+.key-shape {
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+  white-space: nowrap;
+}
+
+/* ---- Positions and the Finder (2.3.0) ---- */
+
+/* A position, lit behind its frets. */
+.cons-window {
+  fill: rgba(123, 92, 240, .07);
+  stroke: rgba(123, 92, 240, .45);
+  stroke-width: 1.5;
+}
+
+/* In Finder, every place on the neck can be picked. */
+.cons-dot.is-spot circle {
+  fill: transparent;
+  stroke: rgba(255, 255, 255, .1);
+  stroke-width: 1.5;
+}
+
+.cons-dot.is-spot:hover circle {
+  fill: rgba(123, 92, 240, .25);
+  stroke: var(--brand-tint);
+}
+
+.cons-neck .cons-dot {
+  cursor: pointer;
+}
+
+#consPicked .is-none {
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: var(--t-sub);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.cons-found {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 4px;
+  margin: -4px;
+}
+
+.cons-found:empty {
+  display: none;
+}
+
+:root .cons-found-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  min-height: 0;
+  padding: 10px 16px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-strong);
+  cursor: pointer;
+}
+
+:root .cons-found-item:hover {
+  border-color: var(--brand-tint);
+}
+
+.cons-found-item strong {
+  font: 600 var(--t-button) var(--font-display);
+  white-space: nowrap;
+}
+
+.cons-found-item span {
+  color: var(--text-muted);
+  font-size: var(--t-sub);
+  white-space: nowrap;
+}
+
+/* ---- The metronome's Practice panel (2.3.0): count-in, muted bars, the trainer ---- */
+
+.metro-practice-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 22px 0 12px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.metro-practice-head h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font: 600 var(--t-tab) var(--font-display);
+}
+
+.metro-trainer-fields.is-two {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* ---- Quiz (2.3.0) ---- */
+
+/* The place asked about, and a place named wrong. */
+.cons-dot.is-quiz circle,
+.cons-key-dot.is-quiz {
+  fill: var(--brand-gold);
+}
+
+.cons-dot.is-quiz text,
+.cons-key-label.is-quiz {
+  fill: #1d1606;
+}
+
+.cons-dot.is-missed circle,
+.cons-key-dot.is-missed {
+  fill: var(--brand-burgundy);
+}
+
+.cons-dot.is-missed text,
+.cons-key-label.is-missed {
+  fill: #ffffff;
+}
+
+.cons-quiz-actions {
+  display: inline-flex;
+  gap: 12px;
+}
+
+.cons-quiz-actions [hidden],
+#consQuizNaturalsField[hidden],
+#consQuizDirectionField[hidden] {
+  display: none;
+}
+
+.cons-quiz-answers {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+:root .cons-quiz-answer {
+  min-height: 0;
+  padding: 14px 8px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-strong);
+  font: 600 var(--t-button) var(--font-display);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+:root .cons-quiz-answer:hover:not(:disabled) {
+  border-color: var(--brand-tint);
+}
+
+:root .cons-quiz-answer:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+:root .cons-quiz-answer.is-right {
+  border-color: var(--brand-tint-text);
+  background: var(--fill-primary);
+  color: #fff;
+  opacity: 1;
+}
+
+:root .cons-quiz-answer.is-wrong {
+  border-color: var(--brand-burgundy);
+  background: #2c1420;
+  color: var(--brand-burgundy-text);
+  opacity: 1;
+}
+
+.cons-quiz-result {
+  margin: 16px 0 0;
+  color: var(--text-soft);
+  font-size: var(--t-body);
+}
+
+.cons-quiz-result.is-wrong {
+  color: var(--brand-burgundy-text);
+}
+
+.cons-quiz-score {
+  margin: 0 0 0 auto;
+  color: var(--text-soft);
+  font: 600 var(--t-button) var(--font-display);
+}
+
+.cons-quiz-prompt {
+  margin: 0 0 16px;
+  color: var(--text-soft);
+  font-size: var(--t-body);
+}
+
+/* The calendar's view switch sits at its row's end; the quiz's don't. */
+:root #consQuizKind,
+:root #consQuizDirection {
+  margin-left: 0;
+}

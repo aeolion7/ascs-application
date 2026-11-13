@@ -189,6 +189,8 @@
     equal("weather: the temperature now", weather.current.temperature, 48.3);
     equal("weather: three days", weather.days.map(day => `${day.date} ${day.high}/${day.low} ${A.weatherName(day.code)} ${day.rain}%`).join("; "), "2026-11-09 52/40 Cloudy 10%; 2026-11-10 55/43 Light rain 80%; 2026-11-11 49/38 Clear 0%");
     equal("weather: not JSON", A.parseWeather("<html>"), null);
+    equal("weather: the location's time zone (2.3.0)", A.parseWeather(JSON.stringify({ ...reply, timezone: "America/New_York" })).zone, "America/New_York");
+    equal("weather: no time zone named", A.parseWeather(JSON.stringify(reply)).zone, "");
     equal("weather: a missing reading", A.parseWeather(JSON.stringify({ current: { ...reply.current, temperature_2m: "48" }, daily: reply.daily })), null);
     equal("weather: a reading out of range", A.parseWeather(JSON.stringify({ current: { ...reply.current, relative_humidity_2m: 400 }, daily: reply.daily })), null);
     equal("weather: an unknown code", A.parseWeather(JSON.stringify({ current: { ...reply.current, weather_code: 3.5 }, daily: reply.daily })), null);
