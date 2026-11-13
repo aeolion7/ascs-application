@@ -291,6 +291,7 @@ LoadUserSettings() {
     global ASCS_ActionHotkeys
     global ASCS_ClaudeShortcut          ; 1.8.0: was missing, so a saved shortcut was dropped at start-up
     global ASCS_PowerDelay, ASCS_AscsSoundMode
+    global ASCS_StartScreenOn
 
     try {
         ASCS_Drives := ParseDriveList(
@@ -365,6 +366,8 @@ LoadUserSettings() {
     try ASCS_AscsSoundMode := ValidateAscsSoundMode(IniRead(ASCS_SettingsFile, "Sounds", "AscsSounds", "show"))
     catch as err
         WriteLog("Invalid Maestro sounds preference; using on show. " err.Message)
+    ; 2.2.0: the start screen, as the page last said (on unless it said off).
+    try ASCS_StartScreenOn := IniRead(ASCS_SettingsFile, "Appearance", "StartScreen", "on") != "off"
 
     ; Quick actions are only stored once customized; until then the frontend
     ; shows its defaults.

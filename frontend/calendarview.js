@@ -261,11 +261,11 @@ function renderCalendar() {
         : calState.error;
     // In the toolbar, so it doesn't move the page when it comes and goes.
     const starting = calState.server.state === "starting";
-    const loading = starting || (running && !calState.loaded && !calState.error);
-    status.hidden = !message && !loading;
-    status.textContent = message || (loading ? "Loading" : "");
+    // Starting says so; loading what's on the server shows in the lists' shapes.
+    status.hidden = !message;
+    status.textContent = message || "";
     status.title = message || "";
-    status.classList.toggle("loading-note", loading);
+    status.classList.toggle("loading-note", starting);
     status.dataset.state = running && !calState.error ? "" : starting ? "starting" : "problem";
     $("calNewEvent").disabled = !running || !calState.calendars.length;
     $("calNewCalendar").disabled = !running;
@@ -284,9 +284,7 @@ function renderCalendar() {
 function renderCalendarList() {
     const list = $("calCalendars");
     if (!calState.loaded && ["starting", "running"].includes(calState.server.state)) {
-        const waiting = element("li");
-        waiting.append(loadingNote());
-        list.replaceChildren(waiting);
+        list.replaceChildren(placeholderItem("marked", 3));
         return;
     }
     list.replaceChildren(...calState.calendars.map(calendar => {
@@ -320,9 +318,7 @@ function renderCountdownList() {
     const settings = almanacState.settings;
     $("calEditCountdowns").disabled = !settings;
     if (!settings) {
-        const waiting = element("li");
-        waiting.append(loadingNote());
-        list.replaceChildren(waiting);
+        list.replaceChildren(placeholderItem("pills", 3));
         return;
     }
     const now = new Date();
@@ -392,12 +388,7 @@ function chip(occ, { showTime = true } = {}) {
 function countdownMark() {
     const mark = element("span", "cal-countdown-mark");
     mark.setAttribute("aria-hidden", "true");
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("viewBox", "0 0 12 12");
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", "M2.5 1h7M2.5 11h7M3.5 1c0 3 5 3 5 5s-5 2-5 5M8.5 1c0 3-5 3-5 5s5 2 5 5");
-    svg.append(path);
-    mark.append(svg);
+    mark.append(MaestroIcons.create("hourglass"));
     return mark;
 }
 
@@ -884,6 +875,7 @@ function renderHours(main, start, count) {
         renderHours(main, start, count);
         return;
     }
+    fitBlockTitles(wrap);
     // Open at 7:00 (or an hour before now when today is shown) when the hours
     // first appear; after that the hours stay where they were scrolled to,
     // whether the same days are redrawn or ‹ › steps to other days (1.9.0:
@@ -895,6 +887,21 @@ function renderHours(main, start, count) {
     } else {
         scroller.scrollTop = previous;
     }
+}
+
+// An event's title gets as many whole lines as its block has room for and ends
+// in an ellipsis, so its last line is never cut through (2.2.0). All blocks are
+// measured before any is changed: one layout pass.
+function fitBlockTitles(wrap) {
+    [...wrap.querySelectorAll(".cal-block:not(.is-short)")].map(block => {
+        const title = block.querySelector(":scope > span:not([class])");
+        if (!title) return null;
+        const style = getComputedStyle(block);
+        const above = [...block.children].filter(child => child !== title && child.matches("small, .cal-countdown-mark"))
+            .reduce((sum, child) => sum + child.offsetHeight, 0);
+        const room = block.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom) - above;
+        return [title, Math.max(1, Math.floor(room / parseFloat(getComputedStyle(title).lineHeight)))];
+    }).forEach(fit => fit && fit[0].style.setProperty("-webkit-line-clamp", String(fit[1])));
 }
 
 // A taller or shorter window changes how many lines fit in a day, and how tall
@@ -934,7 +941,7 @@ function renderAgenda(main) {
         });
         list.append(group);
     }
-    if (!list.children.length) list.append(calState.loaded ? element("p", "settings-note", "Nothing in the next 60 days.") : loadingNote());
+    if (!list.children.length) list.append(calState.loaded ? element("p", "settings-note", "Nothing in the next 60 days.") : placeholder("rows", 6));
     main.replaceChildren(list);
 }
 
@@ -1112,7 +1119,7 @@ function makeWheelPicker(input, spec) {
         open.type = "button";
         open.title = "Choose from a calendar";
         open.setAttribute("aria-label", `${label}: choose from a calendar`);
-        open.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3"/></svg>';
+        open.append(MaestroIcons.create("calendar"));
         open.addEventListener("click", () => {
             try { input.showPicker(); } catch { /* not available: the parts still work */ }
         });
@@ -1761,13 +1768,17 @@ function nextUpWhen(occ, now, today) {
 function renderHomeToday() {
     const list = $("todayList");
     if (!list) return;
+    if (!calState.loaded && ["starting", "running"].includes(calState.server.state)) {
+        list.replaceChildren(placeholderItem("rows", 3));
+        return;
+    }
     if (calState.server.state !== "running" || !calState.loaded || !calState.calendars.length) {
         list.replaceChildren(element("li", "module-empty", "Waiting for the calendar."));
         return;
     }
     const now = Date.now();
     const today = startOfDay(now);
-    const coming = visibleOccurrences(today, addDays(today, 15)).filter(o => o.end > now).slice(0, 5);
+    const coming = Cal.nextUp(visibleOccurrences(today, addDays(today, 15)), now);
     if (!coming.length) {
         list.replaceChildren(element("li", "module-empty", "Nothing in the next two weeks."));
         return;

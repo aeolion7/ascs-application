@@ -9,37 +9,20 @@
   <link rel="icon" href="assets/ascs.ico">
   <!-- Styles, in cascade order: each later file builds on the earlier ones. -->
   <link rel="stylesheet" href="styles/01-foundation.css">
-  <link rel="stylesheet" href="styles/02-restyle.css">
-  <link rel="stylesheet" href="styles/03-1.6.0.css">
-  <link rel="stylesheet" href="styles/04-1.7.0-shell.css">
-  <link rel="stylesheet" href="styles/05-1.7.0-almanac-logs.css">
-  <link rel="stylesheet" href="styles/06-1.7.0-games.css">
-  <link rel="stylesheet" href="styles/07-1.7.0-system.css">
-  <link rel="stylesheet" href="styles/08-1.8.0-help.css">
-  <link rel="stylesheet" href="styles/10-1.8.0-calendar.css">
-  <link rel="stylesheet" href="styles/11-1.8.0-polish.css">
-  <link rel="stylesheet" href="styles/13-1.8.0-sidebar-select.css">
-  <link rel="stylesheet" href="styles/14-1.8.0-notes-groups.css">
-  <link rel="stylesheet" href="styles/16-1.9.0-calendar.css">
-  <link rel="stylesheet" href="styles/20-1.9.2-ux.css">
-  <link rel="stylesheet" href="styles/21-1.10.0-workspaces.css">
-  <link rel="stylesheet" href="styles/24-1.11.2-status.css">
+  <link rel="stylesheet" href="styles/08-1.8.0-1.11.2-features.css">
   <link rel="stylesheet" href="styles/25-2.0.0-tokens.css">
   <link rel="stylesheet" href="styles/26-2.0.0-shell.css">
-  <link rel="stylesheet" href="styles/27-2.0.0-pages.css">
-  <link rel="stylesheet" href="styles/28-2.0.0-components.css">
   <link rel="stylesheet" href="styles/29-2.0.0-home.css">
   <link rel="stylesheet" href="styles/30-2.0.0-games.css">
   <link rel="stylesheet" href="styles/31-2.0.0-commands.css">
   <link rel="stylesheet" href="styles/32-2.0.0-system.css">
   <link rel="stylesheet" href="styles/33-2.0.0-sounds.css">
-    <link rel="stylesheet" href="styles/34-2.0.0-calendar.css">
-    <link rel="stylesheet" href="styles/35-2.0.0-workspaces.css">
-    <link rel="stylesheet" href="styles/36-2.0.0-notes.css">
-    <link rel="stylesheet" href="styles/37-2.0.0-preferences.css">
+  <link rel="stylesheet" href="styles/34-2.0.0-calendar.css">
+  <link rel="stylesheet" href="styles/35-2.0.0-workspaces.css">
+  <link rel="stylesheet" href="styles/36-2.0.0-notes.css">
+  <link rel="stylesheet" href="styles/37-2.0.0-preferences.css">
   <link rel="stylesheet" href="styles/38-2.0.0-polish.css">
-  <link rel="stylesheet" href="styles/39-2.1.0-backups.css">
-  <link rel="stylesheet" href="styles/40-2.1.0-notes-trash.css">
+  <link rel="stylesheet" href="styles/41-2.2.0-finish.css">
 </head>
 <body>
   <div class="app-shell">
@@ -50,71 +33,71 @@
           <span>Aeolionware</span>
           <strong>Maestro</strong>
         </span>
-        <span id="sidebarVersion" hidden>Maestro <span>2.1.1</span></span>
+        <span id="sidebarVersion" hidden>Maestro <span>2.2.0</span></span>
       </div>
 
       <nav class="primary-nav" aria-label="Pages">
         <button class="nav active" type="button" data-view="home" aria-controls="home" title="Command Center" aria-current="page">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg>
+          <svg data-icon="home" data-size="24"></svg>
           <span>Command Center</span>
         </button>
         <button class="nav" type="button" data-view="notes" aria-controls="notes" title="Quick Notes">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.75h7l4.25 4.5v12H7a2 2 0 0 1-2-2v-12a2.5 2.5 0 0 1 2-2.5Z"/><path d="M14 4v5h4M8.5 13h7M8.5 16.5h7"/></svg>
+          <svg data-icon="notes" data-size="24"></svg>
           <span>Quick Notes</span>
         </button>
         <button class="nav" type="button" data-view="calendar" aria-controls="calendar" title="Calendar">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 9.5h17M8 3v4M16 3v4M7.5 13.5h2M11 13.5h2M14.5 13.5h2M7.5 16.75h2M11 16.75h2"/></svg>
+          <svg data-icon="calendar" data-size="24"></svg>
           <span>Calendar</span>
         </button>
         <button class="nav" type="button" data-view="workspaces" aria-controls="workspaces" title="Workspaces">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9h18M11 9v10.5M11 14.25h10"/></svg>
+          <svg data-icon="workspaces" data-size="24"></svg>
           <span>Workspaces</span>
         </button>
         <button class="nav" type="button" data-view="games" aria-controls="games" title="Games">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8h9a4.5 4.5 0 0 1 4.3 5.8l-1 3.3a2.2 2.2 0 0 1-3.7.9L14 16h-4l-2.1 2a2.2 2.2 0 0 1-3.7-.9l-1-3.3A4.5 4.5 0 0 1 7.5 8Z"/><path d="M8 11v3m-1.5-1.5h3M15.5 12h.01M17.5 13.5h.01"/></svg>
+          <svg data-icon="games" data-size="24"></svg>
           <span>Games</span>
         </button>
         <button class="nav" type="button" data-view="dashboard" aria-controls="dashboard" title="System">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5V12m5.3 7.5V5m5.4 14.5v-10m5.3 10V8"/></svg>
+          <svg data-icon="system" data-size="24"></svg>
           <span>System</span>
         </button>
         <button class="nav" type="button" data-view="sounds" aria-controls="sounds" title="Sounds">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 9.5h3l4.5-4v13l-4.5-4h-3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1Z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+          <svg data-icon="sounds" data-size="24"></svg>
           <span>Sounds</span>
         </button>
         <button class="nav" type="button" data-view="commands" aria-controls="commands" title="Commands">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 9h2m3 0h2m3 0h.01M7 13h.01m3 0h.01m3 0h.01m3 0h.01M8 16h8"/></svg>
+          <svg data-icon="commands" data-size="24"></svg>
           <span>Commands</span>
         </button>
       </nav>
 
       <nav class="secondary-nav" aria-label="App">
         <button class="nav" type="button" data-view="settings" aria-controls="settings" title="Preferences">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="m19.4 15 .1.1a1.8 1.8 0 1 1-2.5 2.5l-.1-.1a1.8 1.8 0 0 0-3 .9v.2a1.8 1.8 0 1 1-3.6 0v-.2a1.8 1.8 0 0 0-3-.9l-.1.1a1.8 1.8 0 1 1-2.5-2.5l.1-.1a1.8 1.8 0 0 0-.9-3H3.7a1.8 1.8 0 1 1 0-3.6h.2a1.8 1.8 0 0 0 .9-3l-.1-.1a1.8 1.8 0 1 1 2.5-2.5l.1.1a1.8 1.8 0 0 0 3-.9v-.2a1.8 1.8 0 1 1 3.6 0v.2a1.8 1.8 0 0 0 3 .9l.1-.1a1.8 1.8 0 1 1 2.5 2.5l-.1.1a1.8 1.8 0 0 0 .9 3h.2a1.8 1.8 0 1 1 0 3.6h-.2a1.8 1.8 0 0 0-.9 3Z"/></svg>
+          <svg data-icon="settings" data-size="24"></svg>
           <span>Preferences</span>
         </button>
         <button class="nav sidebar-power" type="button" id="powerTrayButton" aria-haspopup="dialog" aria-expanded="false" title="Power and audio">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v8"/><path d="M7.2 6.6a7.5 7.5 0 1 0 9.6 0"/></svg>
+          <svg data-icon="power" data-size="24"></svg>
           <span>Power</span>
         </button>
       </nav>
       <button class="sidebar-toggle" type="button" id="sidebarToggle" aria-pressed="false" aria-label="Collapse sidebar" title="Collapse sidebar">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 7-5 5 5 5"/></svg>
+        <svg data-icon="chevron-left"></svg>
       </button>
     </aside>
           <div class="system-bar power-tray" id="powerTray" tabindex="-1" role="dialog" aria-label="Power and audio" hidden>
             <div class="system-group" role="group" aria-label="Instant">
-              <button class="system-button" type="button" data-power-now="lock" title="Lock"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg><span class="power-label">Lock</span></button>
-              <button class="system-button" type="button" id="audioButton" aria-haspopup="true" aria-expanded="false" title="Choose the audio output"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 9.5h3l4-3.5v12l-4-3.5h-3z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg><span class="power-label" id="audioCurrent">Audio</span></button>
+              <button class="system-button" type="button" data-power-now="lock" title="Lock"><svg data-icon="lock" data-size="24"></svg><span class="power-label">Lock</span></button>
+              <button class="system-button" type="button" id="audioButton" aria-haspopup="true" aria-expanded="false" title="Choose the audio output"><svg data-icon="speaker" data-size="24"></svg><span class="power-label" id="audioCurrent">Audio</span></button>
               <div class="audio-menu" id="audioMenu" role="menu" aria-label="Audio output" hidden></div>
             </div>
             <div class="system-group is-guarded" role="group" aria-label="Press and hold to confirm">
-              <span class="system-group-label" id="powerHint" title="Press and hold a button, or hold its letter, for 1.5 seconds. Letting go cancels."><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" opacity=".35"/><path d="M12 4a8 8 0 0 1 8 8"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/></svg><span id="powerHintText">Hold to confirm</span></span>
-              <button class="system-button is-guarded" type="button" data-power-hold="sleep" aria-keyshortcuts="Z" title="Hold Z, or press and hold here, to sleep"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5Z"/></svg><span class="power-label">Sleep</span><kbd class="power-key" aria-hidden="true">Z</kbd></button>
-              <button class="system-button is-guarded" type="button" data-power-hold="restart" aria-keyshortcuts="R" title="Hold R, or press and hold here, to restart"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></svg><span class="power-label"><u>R</u>estart</span><kbd class="power-key" aria-hidden="true">R</kbd></button>
-              <button class="system-button is-guarded" type="button" data-power-hold="shutdown" aria-keyshortcuts="S" title="Hold S, or press and hold here, to shut down"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v8"/><path d="M7.2 6.6a7.5 7.5 0 1 0 9.6 0"/></svg><span class="power-label"><u>S</u>hut down</span><kbd class="power-key" aria-hidden="true">S</kbd></button>
-              <button class="system-button is-guarded" type="button" data-power-hold="signout" aria-keyshortcuts="O" title="Hold O, or press and hold here, to sign out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4.5h4.5a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H14"/><path d="M10 8l-4 4 4 4M6 12h9"/></svg><span class="power-label">Sign <u>o</u>ut</span><kbd class="power-key" aria-hidden="true">O</kbd></button>
-              <button class="system-button is-guarded" type="button" data-power-hold="recycle" aria-keyshortcuts="B" title="Hold B, or press and hold here, to empty the Recycle Bin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12.5h8L17 7M10.5 10.5v6M13.5 10.5v6"/></svg><span class="power-label">Recycle <u>B</u>in</span><small id="recycleSize"></small><kbd class="power-key" aria-hidden="true">B</kbd></button>
+              <span class="system-group-label" id="powerHint" title="Press and hold a button, or hold its letter, for 1.5 seconds. Letting go cancels."><svg data-icon="hold"></svg><span id="powerHintText">Hold to confirm</span></span>
+              <button class="system-button is-guarded" type="button" data-power-hold="sleep" aria-keyshortcuts="Z" title="Hold Z, or press and hold here, to sleep"><svg data-icon="sleep" data-size="24"></svg><span class="power-label">Sleep</span><kbd class="power-key" aria-hidden="true">Z</kbd></button>
+              <button class="system-button is-guarded" type="button" data-power-hold="restart" aria-keyshortcuts="R" title="Hold R, or press and hold here, to restart"><svg data-icon="restart" data-size="24"></svg><span class="power-label"><u>R</u>estart</span><kbd class="power-key" aria-hidden="true">R</kbd></button>
+              <button class="system-button is-guarded" type="button" data-power-hold="shutdown" aria-keyshortcuts="S" title="Hold S, or press and hold here, to shut down"><svg data-icon="power" data-size="24"></svg><span class="power-label"><u>S</u>hut down</span><kbd class="power-key" aria-hidden="true">S</kbd></button>
+              <button class="system-button is-guarded" type="button" data-power-hold="signout" aria-keyshortcuts="O" title="Hold O, or press and hold here, to sign out"><svg data-icon="signout" data-size="24"></svg><span class="power-label">Sign <u>o</u>ut</span><kbd class="power-key" aria-hidden="true">O</kbd></button>
+              <button class="system-button is-guarded" type="button" data-power-hold="recycle" aria-keyshortcuts="B" title="Hold B, or press and hold here, to empty the Recycle Bin"><svg data-icon="trash" data-size="24"></svg><span class="power-label">Recycle <u>B</u>in</span><small id="recycleSize"></small><kbd class="power-key" aria-hidden="true">B</kbd></button>
             </div>
             <div class="power-confirm" id="powerConfirm" role="alert" hidden></div>
           </div>
@@ -128,7 +111,7 @@
         </div>
         <button class="secondary" type="button" id="arrangeButton" aria-pressed="false">Arrange</button>
         <button class="titlebar-command" type="button" id="titlebarCommand" aria-label="Open the command palette">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+          <svg data-icon="search"></svg>
           <span>Search or run a command</span>
           <kbd aria-label="Slash">/</kbd>
         </button>
@@ -136,7 +119,7 @@
           <button class="titlebar-help" type="button" id="titlebarHelp" aria-label="Help" title="Help (F1)">?</button>
           <span class="test-build-chip" id="testBuildChip" role="status" title="Running on a copy of your data. Go back with: maestro try --end" hidden>Test build, changes are discarded</span>
           <button class="attention-button" type="button" id="attentionButton" aria-haspopup="dialog" aria-expanded="false" hidden>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z"/><path d="M12 10v5M12 17.5v.01"/></svg>
+            <svg data-icon="attention"></svg>
             <span id="attentionLabel"></span>
           </button>
           <div class="top-time">
@@ -175,22 +158,20 @@
 
           <section class="module" data-module="today" aria-labelledby="homeTodayTitle">
             <div class="module-head"><h2 id="homeTodayTitle">Today</h2><button class="link-button" type="button" id="todaySettingsButton">Settings</button></div>
-            <div class="home-almanac" id="homeAlmanac" hidden></div>
+            <div class="home-almanac" id="homeAlmanac" data-placeholder="today"></div>
           </section>
 
           <section class="module" id="homeToday" data-module="next" aria-labelledby="todayHeading">
             <div class="module-head">
-              <h2 id="todayHeading">Next Up</h2>
-              <button class="link-button" type="button" id="todayOpen">Open</button>
+              <h2 id="todayHeading"><button class="module-link" type="button" id="todayOpen" title="Open Calendar">Next Up</button></h2>
             </div>
-            <ol class="module-list" id="todayList"></ol>
+            <ol class="module-list" id="todayList" data-placeholder="rows" data-placeholder-count="3"></ol>
             <div class="module-foot"><button class="secondary" type="button" id="homeNewEvent">New event</button></div>
           </section>
 
           <section class="module" data-module="system" aria-labelledby="homeSystemTitle">
             <div class="module-head">
-              <h2 id="homeSystemTitle">System</h2>
-              <button class="link-button" type="button" data-view="dashboard">Open</button>
+              <h2 id="homeSystemTitle"><button class="module-link" type="button" data-view="dashboard" title="Open System">System</button></h2>
             </div>
             <div class="sys-rows">
               <div class="sys-row">
@@ -201,7 +182,7 @@
                 <div class="sys-line"><span class="sys-name">Memory</span><small class="sys-note" id="homeRamDetail"></small><strong class="sys-value" id="homeRam">--%</strong></div>
                 <div class="metric-track" aria-hidden="true"><span id="homeRamBar"></span></div>
               </div>
-              <div class="sys-drives" id="homeDrives" aria-label="Drive storage"></div>
+              <div class="sys-drives" id="homeDrives" aria-label="Drive storage" data-placeholder="drives"></div>
             </div>
           </section>
 
@@ -215,8 +196,7 @@
             </section>
             <section class="module" aria-labelledby="homeWorkspacesTitle">
               <div class="module-head">
-                <h2 id="homeWorkspacesTitle">Arrangements</h2>
-                <button class="link-button" type="button" data-view="workspaces">Open</button>
+                <h2 id="homeWorkspacesTitle"><button class="module-link" type="button" data-view="workspaces" title="Open Workspaces">Arrangements</button></h2>
               </div>
               <div class="home-buttons" id="homeWorkspaces"></div>
             </section>
@@ -224,16 +204,14 @@
 
           <section class="module" data-module="continue" aria-labelledby="homeContinueTitle">
             <div class="module-head">
-              <h2 id="homeContinueTitle">Continue Playing</h2>
-              <button class="link-button" type="button" data-view="games">Library</button>
+              <h2 id="homeContinueTitle"><button class="module-link" type="button" data-view="games" title="Open Games">Continue Playing</button></h2>
             </div>
             <div class="home-continue" id="homeContinue"></div>
           </section>
 
           <section class="module" data-module="note" aria-labelledby="homeNoteTitle">
             <div class="module-head">
-              <h2 id="homeNoteTitle">Quick Note</h2>
-              <button class="link-button" type="button" data-view="notes">Open</button>
+              <h2 id="homeNoteTitle"><button class="module-link" type="button" data-view="notes" title="Open Quick Notes">Quick Note</button></h2>
             </div>
             <label class="sr-only" for="homeNoteInput">New note</label>
             <textarea id="homeNoteInput" placeholder="Write something, Enter saves it" autocomplete="off"></textarea>
@@ -261,8 +239,7 @@
 
           <section class="module" data-module="audio" aria-labelledby="homeAudioTitle">
             <div class="module-head">
-              <h2 id="homeAudioTitle">Audio</h2>
-              <button class="link-button" type="button" data-view="sounds">Sounds</button>
+              <h2 id="homeAudioTitle"><button class="module-link" type="button" data-view="sounds" title="Open Sounds">Audio</button></h2>
             </div>
             <div class="home-audio">
               <div class="sound-output">
@@ -275,24 +252,21 @@
 
           <section class="module" data-module="controllers" aria-labelledby="homeControllersTitle">
             <div class="module-head">
-              <h2 id="homeControllersTitle">Controllers</h2>
-              <button class="link-button" type="button" data-pref-go="games:controllers">Open</button>
+              <h2 id="homeControllersTitle"><button class="module-link" type="button" data-pref-go="games:controllers" title="Open Games › Controllers">Controllers</button></h2>
             </div>
             <ul class="stat-list" id="homeControllers"></ul>
           </section>
 
           <section class="module" data-module="pinned" aria-labelledby="homePinnedTitle">
             <div class="module-head">
-              <h2 id="homePinnedTitle">Pinned Notes</h2>
-              <button class="link-button" type="button" data-view="notes">Open</button>
+              <h2 id="homePinnedTitle"><button class="module-link" type="button" data-view="notes" title="Open Quick Notes">Pinned Notes</button></h2>
             </div>
             <ul class="module-list" id="homePinned"></ul>
           </section>
 
           <section class="module" data-module="unlocks" aria-labelledby="homeUnlocksTitle">
             <div class="module-head">
-              <h2 id="homeUnlocksTitle">Recent Unlocks</h2>
-              <button class="link-button" type="button" data-pref-go="games:achievements">Open</button>
+              <h2 id="homeUnlocksTitle"><button class="module-link" type="button" data-pref-go="games:achievements" title="Open Games › Achievements">Recent Unlocks</button></h2>
             </div>
             <ul class="stat-list" id="homeUnlocks"></ul>
           </section>
@@ -399,8 +373,8 @@
         <div class="section-bar cal-toolbar">
           <div class="cal-nav">
             <button class="secondary" type="button" id="calToday">Today</button>
-            <button class="secondary cal-step" type="button" id="calPrev" aria-label="Previous">‹</button>
-            <button class="secondary cal-step" type="button" id="calNext" aria-label="Next">›</button>
+            <button class="secondary cal-step" type="button" id="calPrev" aria-label="Previous"><svg data-icon="chevron-left"></svg></button>
+            <button class="secondary cal-step" type="button" id="calNext" aria-label="Next"><svg data-icon="chevron-right"></svg></button>
             <h2 id="calTitle" aria-live="polite"></h2>
           </div>
           <p class="cal-status" id="calStatus" role="status" hidden></p>
@@ -509,8 +483,7 @@
           <section class="module" id="gamesTotals" aria-labelledby="gamesTotalsTitle"></section>
           <section class="module" id="gamesContinueModule" aria-labelledby="continueHeading">
             <div class="module-head">
-              <h2 id="continueHeading">Continue Playing</h2>
-              <button class="link-button" type="button" id="gamesOpenLibrary">Library</button>
+              <h2 id="continueHeading"><button class="module-link" type="button" id="gamesOpenLibrary" title="Open the Library">Continue Playing</button></h2>
             </div>
             <ol class="module-list" id="gamesContinue"></ol>
           </section>
@@ -535,8 +508,8 @@
           </div>
           <div class="games-library-layout">
             <section class="module" aria-label="Library">
-              <p class="games-meta" id="gamesMeta" role="status">Loading…</p>
-              <ol id="gamesLibrary" class="games-library"></ol>
+              <p class="games-meta" id="gamesMeta" role="status"></p>
+              <ol id="gamesLibrary" class="games-library" data-placeholder="list" data-placeholder-count="8"></ol>
             </section>
             <aside class="module game-detail" id="gameDetail" aria-label="Selected game" hidden></aside>
           </div>
@@ -604,7 +577,7 @@
           <div class="sounds-playback">
             <button class="secondary" type="button" id="soundStop">Stop all</button>
             <div class="sound-output">
-              <button class="secondary" type="button" id="soundOutputButton" aria-haspopup="true" aria-expanded="false" title="Choose the audio output"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 9.5h3l4-3.5v12l-4-3.5h-3z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg><span class="sound-output-current" id="soundOutputCurrent">Audio output</span></button>
+              <button class="secondary" type="button" id="soundOutputButton" aria-haspopup="true" aria-expanded="false" title="Choose the audio output"><svg data-icon="speaker"></svg><span class="sound-output-current" id="soundOutputCurrent">Audio output</span></button>
               <div class="audio-menu" id="soundOutputMenu" role="menu" aria-label="Audio output" hidden></div>
             </div>
             <label class="sounds-volume" for="soundVolume"><span>Volume</span><input id="soundVolume" type="range" min="0" max="100" step="1" value="70"></label>
@@ -617,7 +590,7 @@
           <div class="sounds-find">
             <label class="sr-only" for="soundSearch">Search sounds</label>
             <input id="soundSearch" type="search" placeholder="Search every version…" autocomplete="off" spellcheck="false">
-            <button class="secondary" type="button" id="soundFavoritesOnly" aria-pressed="false">♥ Favorites</button>
+            <button class="secondary" type="button" id="soundFavoritesOnly" aria-pressed="false"><svg data-icon="heart-filled"></svg>Favorites</button>
             <span class="sound-own-folders" id="soundOwnFolders" hidden></span>
             <button class="secondary" type="button" id="soundRandom">Play random</button>
           </div>
@@ -627,7 +600,7 @@
           <div class="sounds-main">
             <div class="sounds-meta-row">
               <div class="sounds-meta-left">
-                <button class="sound-back" type="button" id="soundBack" title="Back to every version" hidden><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M7.5 2.5 4 6l3.5 3.5"/></svg>All versions</button>
+                <button class="sound-back" type="button" id="soundBack" title="Back to every version" hidden><svg data-icon="chevron-left"></svg>All versions</button>
                 <p class="sounds-meta" id="soundsMeta"></p>
               </div>
               <div class="sounds-meta-actions">
@@ -636,7 +609,7 @@
               </div>
             </div>
             <div class="sound-select-bar" id="soundSelectBar" role="toolbar" aria-label="Selected sounds" hidden></div>
-            <div id="soundGroups"></div>
+            <div id="soundGroups" data-placeholder="cards"></div>
             <form class="sound-library" id="soundLibraryForm" hidden>
               <span class="sound-library-label">Library folder:</span>
               <code id="soundLibraryShown"></code>
@@ -647,6 +620,18 @@
                 <input id="soundLibraryPath" type="text" autocomplete="off" spellcheck="false">
                 <button class="secondary" type="submit">Use this folder</button>
                 <button class="link-button" type="button" id="soundLibraryCancel">Cancel</button>
+              </span>
+            </form>
+            <form class="sound-library" id="soundCustomForm" hidden>
+              <span class="sound-library-label">Custom sounds folder:</span>
+              <code id="soundCustomShown"></code>
+              <small id="soundCustomNote"></small>
+              <button class="link-button" type="button" id="soundCustomChange">Change</button>
+              <span class="sound-library-edit" id="soundCustomEdit" hidden>
+                <label class="sr-only" for="soundCustomPath">Custom sounds folder</label>
+                <input id="soundCustomPath" type="text" autocomplete="off" spellcheck="false">
+                <button class="secondary" type="submit">Use this folder</button>
+                <button class="link-button" type="button" id="soundCustomCancel">Cancel</button>
               </span>
             </form>
           </div>
@@ -716,7 +701,7 @@
               </div>
               <p class="drive-form-status" id="driveStatus" role="status"></p>
             </form>
-            <div class="system-drive-grid" id="dashboardDrives" aria-label="Drive storage"></div>
+            <div class="system-drive-grid" id="dashboardDrives" aria-label="Drive storage" data-placeholder="drives" data-placeholder-count="3"></div>
           </section>
         </div>
 
@@ -727,7 +712,7 @@
         <div id="systemSignIn" role="tabpanel" aria-labelledby="systemTabSignIn" hidden>
           <section class="module" id="signInEmpty" aria-labelledby="signInEmptyTitle">
             <div class="module-head"><h2 id="signInEmptyTitle">Startup</h2></div>
-            <p class="loading-note" id="signInNote" role="status">Loading</p>
+            <p class="system-note" id="signInNote" data-placeholder="graph"></p>
           </section>
           <div class="system-signin" id="signInContent" hidden>
             <section class="module system-signin-graph" aria-labelledby="signInHistoryTitle">
@@ -788,8 +773,8 @@
                 <button class="secondary" type="button" id="openLogButton">Open file</button>
               </span>
             </div>
-            <p class="logs-meta" id="logMeta" role="status">Loading…</p>
-            <div class="log-list" id="logList"></div>
+            <p class="logs-meta" id="logMeta" role="status"></p>
+            <div class="log-list" id="logList" data-placeholder="log"></div>
           </section>
         </div>
       </section>
@@ -925,20 +910,20 @@
             <label class="settings-toggle" for="backupsEnabled"><input id="backupsEnabled" type="checkbox" disabled><span><strong>Back up every day</strong><small>Your notes, calendar, settings and arrangements, copied to the folder below. Each copy includes your secrets file.</small></span></label>
             <label class="settings-field" for="backupsTime"><span>Time</span><select id="backupsTime" disabled></select><small>If the PC is off then, the backup is made when Maestro next starts.</small></label>
             <div class="settings-row backup-row"><span><strong>Folder</strong><small id="backupsFolder">No folder chosen</small></span><button class="secondary" type="button" id="backupsChoose" disabled>Choose…</button><button class="secondary" type="button" id="backupsOpen" disabled>Open folder</button></div>
-            <div class="settings-row backup-row"><span><small id="backupsStatus" role="status">Loading</small></span><button class="secondary" type="button" id="backupsNow" disabled>Back up now</button></div>
+            <div class="settings-row backup-row"><span><small id="backupsStatus" role="status" data-placeholder="inline"></small></span><button class="secondary" type="button" id="backupsNow" disabled>Back up now</button></div>
             <p class="pref-note">To put a backup back, exit Maestro and run <code>maestro restore-data</code>.</p>
           </section>
           <section class="module" aria-labelledby="prefElsewhereTitle">
             <div class="module-head"><h2 id="prefElsewhereTitle">On Their Own Pages</h2></div>
             <p class="pref-note">A setting for one page lives on that page.</p>
             <ul class="pref-links">
-              <li><button class="link-button" type="button" data-pref-go="games:setup">Games › Setup</button><span>Programs, the PSO session, RetroAchievements</span></li>
-              <li><button class="link-button" type="button" data-pref-go="home:today">Command Center › Today</button><span>The Wikipedia almanac, under the Today module's Settings</span></li>
-              <li><button class="link-button" type="button" data-pref-go="notes">Quick Notes</button><span>Spell-check, at the foot of a note</span></li>
-              <li><button class="link-button" type="button" data-pref-go="sounds">Sounds</button><span>Maestro's own sounds, in the bar</span></li>
-              <li><button class="link-button" type="button" data-pref-go="commands">Commands</button><span>Keys, custom commands, the palette, quick actions</span></li>
-              <li><button class="link-button" type="button" data-pref-go="dashboard:live">System</button><span>Monitored drives, under Live</span></li>
-              <li><button class="link-button" type="button" data-pref-go="calendar">Calendar</button><span>Countdowns</span></li>
+              <li><button class="link-button has-chevron" type="button" data-pref-go="games:setup">Games › Setup</button><span>Programs, the PSO session, RetroAchievements</span></li>
+              <li><button class="link-button has-chevron" type="button" data-pref-go="home:today">Command Center › Today</button><span>The Wikipedia almanac, under the Today module's Settings</span></li>
+              <li><button class="link-button has-chevron" type="button" data-pref-go="notes">Quick Notes</button><span>Spell-check, at the foot of a note</span></li>
+              <li><button class="link-button has-chevron" type="button" data-pref-go="sounds">Sounds</button><span>Maestro's own sounds, in the bar</span></li>
+              <li><button class="link-button has-chevron" type="button" data-pref-go="commands">Commands</button><span>Keys, custom commands, the palette, quick actions</span></li>
+              <li><button class="link-button has-chevron" type="button" data-pref-go="dashboard:live">System</button><span>Monitored drives, under Live</span></li>
+              <li><button class="link-button has-chevron" type="button" data-pref-go="calendar">Calendar</button><span>Countdowns</span></li>
             </ul>
           </section>
         </div>
@@ -965,7 +950,7 @@
           <header class="help-header">
             <div><h2 id="notesTrashTitle">Trash</h2></div>
             <button class="help-close" type="button" id="notesTrashClose" aria-label="Close the trash" title="Close (Esc)">
-              <svg viewBox="0 0 10 10" aria-hidden="true"><path d="m1.5 1.5 7 7m0-7-7 7"/></svg>
+              <svg data-icon="close"></svg>
             </button>
           </header>
           <p class="pref-note">A deleted note is kept here for 30 days.</p>
@@ -993,7 +978,7 @@
           <header class="help-header">
             <div><h2 id="todaySettingsTitle">Today Settings</h2></div>
             <button class="help-close" type="button" id="todaySettingsClose" aria-label="Close Today settings" title="Close (Esc)">
-              <svg viewBox="0 0 10 10" aria-hidden="true"><path d="m1.5 1.5 7 7m0-7-7 7"/></svg>
+              <svg data-icon="close"></svg>
             </button>
           </header>
           <section class="arrange-today" aria-label="Today">
@@ -1017,7 +1002,7 @@
               <p class="help-meta" id="helpMeta"></p>
             </div>
             <button class="help-close" type="button" id="helpClose" aria-label="Close help" title="Close (F1 or Esc)">
-              <svg viewBox="0 0 10 10" aria-hidden="true"><path d="m1.5 1.5 7 7m0-7-7 7"/></svg>
+              <svg data-icon="close"></svg>
             </button>
           </header>
           <div class="help-columns">
@@ -1049,7 +1034,7 @@
               <p class="help-meta">What to type in the text editor, and how the Markdown viewer shows it. Ctrl + M switches between them.</p>
             </div>
             <button class="help-close" type="button" id="markdownClose" aria-label="Close the Markdown reference" title="Close (Esc)">
-              <svg viewBox="0 0 10 10" aria-hidden="true"><path d="m1.5 1.5 7 7m0-7-7 7"/></svg>
+              <svg data-icon="close"></svg>
             </button>
           </header>
           <div class="markdown-ref-scroll">
@@ -1067,7 +1052,7 @@
             <div>
               <h2 id="calEventHeading">New Event</h2>
             </div>
-            <button class="help-close" type="button" data-cal-close aria-label="Close" title="Close (Esc)"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="m1.5 1.5 7 7m0-7-7 7"/></svg></button>
+            <button class="help-close" type="button" data-cal-close aria-label="Close" title="Close (Esc)"><svg data-icon="close"></svg></button>
           </header>
           <label class="sr-only" for="calSummary">Title</label>
           <input class="cal-summary" id="calSummary" type="text" maxlength="200" placeholder="Title" autocomplete="off">
@@ -1146,7 +1131,7 @@
             <div>
               <h2 id="calCalendarHeading">New Calendar</h2>
             </div>
-            <button class="help-close" type="button" data-cal-close aria-label="Close" title="Close (Esc)"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="m1.5 1.5 7 7m0-7-7 7"/></svg></button>
+            <button class="help-close" type="button" data-cal-close aria-label="Close" title="Close (Esc)"><svg data-icon="close"></svg></button>
           </header>
           <label class="cal-field-label" id="calCalendarNameLabel" for="calCalendarName">Name</label>
           <input class="cal-summary" id="calCalendarName" type="text" maxlength="60" autocomplete="off">
@@ -1175,7 +1160,7 @@
             <div>
               <h2 id="calCountdownHeading">Countdowns</h2>
             </div>
-            <button class="help-close" type="button" data-cal-close aria-label="Close" title="Close (Esc)"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="m1.5 1.5 7 7m0-7-7 7"/></svg></button>
+            <button class="help-close" type="button" data-cal-close aria-label="Close" title="Close (Esc)"><svg data-icon="close"></svg></button>
           </header>
           <p class="cal-move-text">MM-DD repeats every year; YYYY-MM-DD happens once. Up to 12, sorted when saved. The nearest shows on the Command Center.</p>
           <div id="countdownRows" class="countdown-rows"></div>
@@ -1214,7 +1199,7 @@
             <div>
               <h2 id="calImportHeading">Import Events</h2>
             </div>
-            <button class="help-close" type="button" data-cal-close aria-label="Close" title="Close (Esc)"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="m1.5 1.5 7 7m0-7-7 7"/></svg></button>
+            <button class="help-close" type="button" data-cal-close aria-label="Close" title="Close (Esc)"><svg data-icon="close"></svg></button>
           </header>
           <p class="cal-import-summary" id="calImportSummary"></p>
           <label class="cal-field-label" for="calImportTarget">Into</label>
@@ -1232,6 +1217,7 @@
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
     </main>
   </div>
+  <script src="icons.js"></script>
   <script src="attention.js"></script>
   <script src="backups.js"></script>
   <script src="hardware.js"></script>
@@ -1264,5 +1250,7 @@
   <script src="workspacesview.js"></script>
   <script src="homeview.js"></script>
   <script src="homemodules.js"></script>
+  <script src="segmented.js"></script>
+  <script src="motion.js"></script>
 </body>
 </html>

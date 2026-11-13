@@ -552,7 +552,7 @@ function renderLogs() {
 
     let meta;
     if (logState.missing) meta = "This log doesn't exist yet; it appears after its first entry.";
-    else if (!logState.loaded) meta = "Loading…";
+    else if (!logState.loaded) meta = "";
     else if (!all.length) meta = "This log is empty.";
     else if (!visible.length) meta = "No lines match.";
     else meta = `Showing ${shown.length.toLocaleString()} of ${all.length.toLocaleString()} lines${visible.length > shown.length ? ` (the newest ${LOG_RENDER_LIMIT})` : ""} · refreshes while open`;

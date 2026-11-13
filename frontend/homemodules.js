@@ -9,6 +9,7 @@ const homeShowing = id => $("home").classList.contains("active") && !homeModule(
 // cache), network and apps every 3 seconds, while their modules show.
 
 let homeExtrasTimer = null;
+let homeStatsSoon = null;
 let weatherAskedAt = 0;
 
 function askHomeExtras(force = false) {
@@ -18,6 +19,16 @@ function askHomeExtras(force = false) {
     }
     const stats = ["network", "processes"].filter(homeShowing);
     if (stats.length) send("GetHomeStats", stats.join(","));
+    // Network and Top Apps are rates, so a first reading only starts one. On
+    // opening, the second comes a second later, not at the next poll, so they
+    // fill while the start screen is still up (2.2.0).
+    if (force && stats.length) {
+        clearTimeout(homeStatsSoon);
+        homeStatsSoon = setTimeout(() => {
+            const showing = ["network", "processes"].filter(homeShowing);
+            if (showing.length) send("GetHomeStats", showing.join(","));
+        }, 1000);
+    }
 }
 
 function startHomeExtras() {
@@ -32,6 +43,7 @@ function startHomeExtras() {
 function stopHomeExtras() {
     if (homeExtrasTimer !== null) clearInterval(homeExtrasTimer);
     homeExtrasTimer = null;
+    clearTimeout(homeStatsSoon);
 }
 
 // ---- Weather
@@ -47,7 +59,7 @@ function renderHomeWeather() {
     }
     const data = weatherState.data;
     if (!data) {
-        box.replaceChildren(weatherState.error ? element("p", "module-empty", weatherState.error) : loadingNote());
+        box.replaceChildren(weatherState.error ? element("p", "module-empty", weatherState.error) : placeholder("lines", 3));
         return;
     }
     const now = element("div", "weather-now");
@@ -129,7 +141,7 @@ function renderHomeControllers() {
     if (!list) return;
     const pads = Array.isArray(gamesState.pads) ? gamesState.pads : null;
     if (!pads) {
-        list.replaceChildren(loadingNote());
+        list.replaceChildren(placeholderItem("rows", 2));
         return;
     }
     if (!pads.length) {
@@ -151,7 +163,7 @@ function renderHomePinned() {
     const list = $("homePinned");
     if (!list) return;
     if (!notesLoaded) {
-        list.replaceChildren(loadingNote());
+        list.replaceChildren(placeholderItem("lines", 3));
         return;
     }
     const pinned = notesData.notes.filter(note => note.pinned).slice(0, 6);

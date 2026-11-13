@@ -14,7 +14,7 @@ Suspend(true)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 2.1.1
+; Version 2.2.0
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -24,7 +24,7 @@ Suspend(true)
 ; GLOBAL VARIABLES
 ; ==========================================
 
-global ASCS_Version := "2.1.1"
+global ASCS_Version := "2.2.0"
 global ASCS_App := ""
 global ASCS_WindowIcon := 0
 global ASCS_IconPath := A_ScriptDir "\frontend\assets\ascs.ico"
@@ -46,10 +46,10 @@ global ASCS_StartedAt := A_TickCount   ; 2.0.0: Super waits for the page until 3
 global ASCS_CommandsFile := ASCS_DataDir "\commands.ini"
 global ASCS_ActivityFile := ASCS_DataDir "\activity.log"
 
-; Default window size (2.0.0): tall enough for the fullest Command Center without
-; scrolling, measured at 1341 px; always capped to the screen.
+; Default window size (2.0.0; 10% shorter since 2.2.0, at the user's request):
+; the fullest Command Center fits without scrolling. Always capped to the screen.
 global ASCS_WindowWidth := 2540
-global ASCS_WindowHeight := 1360
+global ASCS_WindowHeight := 1224
 global ASCS_AlmanacDir := ASCS_DataDir "\almanac"
 
 ; Almanac (1.7.0). The location is fixed to New York City for now.
@@ -88,6 +88,7 @@ global ASCS_GameLibraryStamp := ""
 global ASCS_SecretsFile := ASCS_DataDir "\secrets.ini"
 global ASCS_RetroAchievementsAt := 0
 global ASCS_RetroAchievementsCache := Map()
+global ASCS_RetroAchievementsFetched := Map()  ; 2.2.0: when each reply was fetched, Unix seconds
 global ASCS_RaExtraCache := Map()      ; 1.9.0: one game's achievements, recent unlocks
 global ASCS_HttpRequests := Map()
 global ASCS_PsoSession := 0
@@ -102,6 +103,8 @@ global ASCS_RaImageFolder := ASCS_DataDir "\ra-images"
 global ASCS_PowerDelay := 5
 ; 1.8.0: the sound library behind the Sounds view, and its index.
 global ASCS_SoundLibrary := "C:\Sounds\all-windows-sounds-main"
+; Custom Sounds (2.2.0): a second folder, for sounds that aren't Windows'.
+global ASCS_CustomSounds := "C:\Sounds\!windows"
 global ASCS_StartupFile := ASCS_DataDir "\startup-sounds.ini"   ; 1.8.1; read by C:\Scripts\SignIn.ahk and Shutdown Sound.ahk
 global ASCS_OriginsFile := ASCS_DataDir "\sound-origins.ini"    ; 1.8.1; which original each leveled copy was made from
 global ASCS_SoundIndex := Map()
@@ -116,7 +119,10 @@ global ASCS_ReminderBalloonAt := 0      ; when the last reminder pop-up showed (
 global ASCS_SoundLengthQueue := []
 global ASCS_SoundLengthsFile := ASCS_DataDir "\sound-lengths.txt"
 global ASCS_AscsSoundMode := "show"
+; "start" (2.2.0) plays on the first show after Maestro starts, with the start
+; screen, in place of the show sound; none until one is chosen in Sounds.
 global ASCS_AscsSoundFiles := Map(
+    "start", "",
     "show", "C:\Sounds\all-windows-sounds-main\(2001) Windows XP\Windows XP Logon Sound.wav",
     "hide", "C:\Sounds\all-windows-sounds-main\(2001) Windows XP\Windows XP Logoff Sound.wav")
 ; The PSO session's Discord voice channel (a validated discord:// link, or "").
@@ -132,6 +138,18 @@ global ASCS_PowerPending := 0
 
 global ASCS_EverythingPath := ""
 global ASCS_PageReady := false
+global ASCS_HasShown := false           ; the window has been shown this run (2.2.0)
+; The start screen (2.2.0): whether it plays (the page says, from the logo swing
+; preference and reduced motion), its window while it shows, and its timing.
+global ASCS_StartScreenOn := true
+global ASCS_StartScreen := ""
+global ASCS_StartScreenAt := 0
+global ASCS_StartScreenFading := false
+global ASCS_StartScreenArt := A_ScriptDir "\frontend\assets\start-screen"
+global ASCS_StartScreenArm := ""
+global ASCS_StartScreenFrame := 0
+global ASCS_StartScreenFrames := []     ; the arm's pictures, by degree
+global ASCS_StartScreenSwapped := false
 global ASCS_PendingView := "home"
 global ASCS_DashboardErrorShown := false
 global ASCS_DriveCache := Map()
@@ -365,6 +383,10 @@ ShowASCS(view := "") {
     global ASCS_PageReady
     global ASCS_PendingView
     global ASCS_PreviousWindow
+    global ASCS_HasShown
+    global ASCS_AscsSoundFiles
+    global ASCS_StartScreenOn
+    global ASCS_StartScreen
 
     if !IsObject(ASCS_App)
         return
@@ -386,11 +408,25 @@ ShowASCS(view := "") {
         DllCall("ShowWindow", "Ptr", ASCS_App.Hwnd, "Int", 9)      ; SW_RESTORE
         WriteLog("Window was minimized when shown; restored to its normal size.")
     }
+    ; The first show after a start (2.2.0): the start screen goes up first, so
+    ; it's there the moment the window is, and the start sound, if one is
+    ; chosen, plays in place of the show sound. Maestro sounds Off silences both.
+    first := !wasVisible && !ASCS_HasShown
+    if !wasVisible
+        ASCS_HasShown := true
+    if (first && ASCS_StartScreenOn)
+        ShowStartScreen()
+    if (first && !IsObject(ASCS_StartScreen))
+        FreeStartScreenFrames()
     ASCS_App.Show()
     if (!wasVisible && ASCS_PageReady)
-        SendToFrontend('{"type":"windowShown"}')
-    if (!wasVisible && ASCS_AscsSoundMode = "show")
-        PlayAscsSound("show")
+        SendToFrontend(WindowShownJson())
+    if !wasVisible {
+        if (first && ASCS_AscsSoundMode != "off" && ASCS_AscsSoundFiles["start"] != "" && FileExist(ASCS_AscsSoundFiles["start"]))
+            PlayAscsSound("start")
+        else if (ASCS_AscsSoundMode = "show")
+            PlayAscsSound("show")
+    }
     EnsureWindowUsable()
     WinActivate("ahk_id " ASCS_App.Hwnd)
 
@@ -504,6 +540,229 @@ HandleNavigationCompleted(sender, args) {
         )
 }
 
+; ---- The start screen (2.2.0)
+; On the first show after Maestro starts, a plain window covers Maestro's: the
+; page's color with the mark and the name as the sidebar lays them out, 3.5
+; times the size, from frontend\assets\start-screen\ (made by
+; tests\preview\start-screen.ps1). Windows draws it at once, while WebView2 is
+; still drawing the page beneath it, so all of it is seen. The mark's arm makes
+; one movement, out and back on the sidebar's curve (MarkSwingAngle, two of its
+; four strokes: the whole swing kept Maestro covered too long): the art is cut into pictures that
+; don't overlap, and each step shows the arm's picture for that moment, one per
+; degree, so a late step skips ahead rather than slowing the swing. The step
+; hands the picture straight to its control (STM_SETIMAGE): AutoHotkey's own
+; swap blanked it for a moment (a probe caught 19 blank frames in 700 screen
+; grabs; none this way), and steps run each 10 ms, which Windows holds to one
+; per 15.6 ms tick (at 16 ms, most waited two ticks). The control keeps a copy
+; of each picture and hands back the one before, which is freed. Loading the
+; 41 pictures takes about 300 ms, so they're loaded while Maestro is hidden,
+; one each 30 ms, and freed when the start screen ends or won't play. It's owned
+; by Maestro's window, so it stays above it; clicks pass through it
+; (WS_EX_LAYERED | WS_EX_TRANSPARENT) and it never takes focus, so a key or
+; click still reaches Maestro, and ends it early. It holds for the movement and
+; a moment's rest (1.85 s; the page's redraw takes about 1), then dissolves over 280 ms (120 ms when ended early),
+; and the page is told as it starts to, so the name catches its sheen in view;
+; the sidebar's logo doesn't swing again. A window too small for the art opens
+; without it. The page says whether it plays (SetStartScreen).
+; Windows runs the dissolve (AnimateWindow): stepped from a timer, it stuttered
+; whenever the script was busy (a probe under load held steps up to 47 ms;
+; AnimateWindow kept one step per frame). It holds this thread for the
+; dissolve, once a run, and needs the window no longer layered first.
+
+WindowShownJson() {
+    global ASCS_StartScreen
+    return IsObject(ASCS_StartScreen) ? '{"type":"windowShown","startScreen":true}' : '{"type":"windowShown"}'
+}
+
+ShowStartScreen() {
+    global ASCS_App, ASCS_StartScreen, ASCS_StartScreenAt, ASCS_StartScreenFading, ASCS_StartScreenArt, ASCS_StartScreenArm, ASCS_StartScreenFrame
+    layout := ASCS_StartScreenArt "\layout.ini"
+    if (IsObject(ASCS_StartScreen) || !FileExist(layout))
+        return
+    try {
+        WinGetPos(&coverX, &coverY, &coverW, &coverH, ASCS_App.Hwnd)
+        artW := Integer(IniRead(layout, "Art", "Width")), artH := Integer(IniRead(layout, "Art", "Height"))
+        if (coverW < artW || coverH < artH)
+            return
+        cover := Gui("-Caption +ToolWindow -DPIScale +Owner" ASCS_App.Hwnd " +E0x80020", "Maestro")
+        cover.BackColor := "0D0E17"
+        cover.MarginX := 0, cover.MarginY := 0
+        artX := (coverW - artW) // 2, artY := (coverH - artH) // 2
+        for piece in ["top", "left", "right", "bottom", "arm"] {
+            x := Integer(IniRead(layout, piece, "X")), y := Integer(IniRead(layout, piece, "Y"))
+            w := Integer(IniRead(layout, piece, "W")), h := Integer(IniRead(layout, piece, "H"))
+            if (w > 0 && h > 0)
+                picture := cover.AddPicture("x" artX + x " y" artY + y " w" w " h" h, ASCS_StartScreenArt "\" (piece = "arm" ? "arm-00" : piece) ".png")
+        }
+        WinSetTransparent(255, cover)
+        cover.Show("NA x" coverX " y" coverY " w" coverW " h" coverH)
+        ASCS_StartScreen := cover
+        ASCS_StartScreenArm := picture
+        ASCS_StartScreenFrame := 0
+        ASCS_StartScreenSwapped := false
+        OnMessage(0x0138, StartScreenArmColor)      ; WM_CTLCOLORSTATIC
+        ASCS_StartScreenAt := A_TickCount
+        ASCS_StartScreenFading := false
+        SetTimer(StartScreenStep, 10)
+    } catch as err {
+        WriteLog("Start screen not shown: " err.Message)
+        EndStartScreen()
+    }
+}
+
+StartScreenStep() {
+    global ASCS_StartScreen, ASCS_StartScreenAt, ASCS_StartScreenArm, ASCS_StartScreenFrame, ASCS_StartScreenSwapped
+    if !IsObject(ASCS_StartScreen) {
+        SetTimer(StartScreenStep, 0)
+        return
+    }
+    elapsed := A_TickCount - ASCS_StartScreenAt
+    frame := Round(MarkSwingAngle(elapsed, 2))
+    if (frame != ASCS_StartScreenFrame) {
+        ASCS_StartScreenFrame := frame
+        try {
+            previous := SendMessage(0x172, 0, StartScreenFrame(frame), ASCS_StartScreenArm)      ; STM_SETIMAGE, IMAGE_BITMAP
+            ; The first handed back is AutoHotkey's own picture, which it frees.
+            if (ASCS_StartScreenSwapped && previous)
+                DllCall("DeleteObject", "Ptr", previous)
+            ASCS_StartScreenSwapped := true
+        } catch as err
+            WriteLog("Start screen arm not drawn: " err.Message)
+    }
+    ; A key or click ends it early; not in the first 400 ms, when the key that
+    ; showed Maestro is still being let go.
+    early := elapsed > 400 && (A_TimeIdleKeyboard < elapsed - 400 || GetKeyState("LButton") || GetKeyState("RButton"))
+    if (elapsed >= 1850 || early)
+        DissolveStartScreen(early ? 120 : 280)
+}
+
+DissolveStartScreen(length) {
+    global ASCS_StartScreen, ASCS_StartScreenFading
+    SetTimer(StartScreenStep, 0)
+    ASCS_StartScreenFading := true
+    SendToFrontend('{"type":"startScreenDone"}')
+    try {
+        WinSetTransparent("Off", ASCS_StartScreen)
+        WinSetExStyle("-0x20", ASCS_StartScreen)
+        if !DllCall("AnimateWindow", "Ptr", ASCS_StartScreen.Hwnd, "UInt", length, "UInt", 0x90000, "Int")     ; AW_HIDE | AW_BLEND
+            WriteLog("Start screen dissolve skipped: AnimateWindow failed.")
+    } catch as err
+        WriteLog("Start screen dissolve skipped: " err.Message)
+    EndStartScreen()
+}
+
+; Takes it down at once: when it has dissolved, or when Maestro hides first
+; (the page is told then too, so it never waits for it).
+EndStartScreen() {
+    global ASCS_StartScreen, ASCS_StartScreenFading, ASCS_StartScreenArm, ASCS_StartScreenSwapped
+    SetTimer(StartScreenStep, 0)
+    if !IsObject(ASCS_StartScreen)
+        return
+    if !ASCS_StartScreenFading
+        SendToFrontend('{"type":"startScreenDone"}')
+    if ASCS_StartScreenSwapped {
+        try {
+            last := SendMessage(0x172, 0, 0, ASCS_StartScreenArm)
+            if last
+                DllCall("DeleteObject", "Ptr", last)
+        }
+        ASCS_StartScreenSwapped := false
+    }
+    try ASCS_StartScreen.Destroy()
+    OnMessage(0x0138, StartScreenArmColor, 0)
+    ASCS_StartScreen := ""
+    ASCS_StartScreenArm := ""
+    ASCS_StartScreenFading := false
+    FreeStartScreenFrames()
+}
+
+; The arm's control fills its background before it draws each picture, and a
+; screen grab caught that fill now and then (about once a swing). With no brush
+; for it, the fill draws nothing and the last picture stays until the next.
+StartScreenArmColor(wParam, lParam, *) {
+    global ASCS_StartScreenArm
+    if (IsObject(ASCS_StartScreenArm) && lParam = ASCS_StartScreenArm.Hwnd)
+        return DllCall("GetStockObject", "Int", 5, "Ptr")      ; NULL_BRUSH, never freed
+}
+
+; The arm's picture at a degree, loaded now if it isn't yet.
+StartScreenFrame(degree) {
+    global ASCS_StartScreenFrames, ASCS_StartScreenArt
+    while (ASCS_StartScreenFrames.Length <= degree)
+        ASCS_StartScreenFrames.Push(0)
+    if !ASCS_StartScreenFrames[degree + 1]
+        ASCS_StartScreenFrames[degree + 1] := LoadPicture(ASCS_StartScreenArt "\arm-" Format("{:02}", degree) ".png")
+    return ASCS_StartScreenFrames[degree + 1]
+}
+
+; Loads the next of the arm's 41 pictures (0 to 40 degrees) while Maestro
+; waits for its first show; stops when they're in, or when it won't play.
+LoadStartScreenFrame() {
+    global ASCS_StartScreenFrames, ASCS_StartScreenOn, ASCS_HasShown
+    if (!ASCS_StartScreenOn || ASCS_HasShown) {
+        SetTimer(LoadStartScreenFrame, 0)
+        return
+    }
+    loop 41 {
+        if (ASCS_StartScreenFrames.Length < A_Index || !ASCS_StartScreenFrames[A_Index]) {
+            try StartScreenFrame(A_Index - 1)
+            catch as err {
+                WriteLog("Start screen arm not loaded: " err.Message)
+                SetTimer(LoadStartScreenFrame, 0)
+            }
+            return
+        }
+    }
+    SetTimer(LoadStartScreenFrame, 0)
+}
+
+; ---- Getting ready while hidden (2.2.0)
+; Once a run, the pages that take a moment to fill are filled before they're
+; first opened: the page asks for the sound library (indexing it holds this
+; thread about half a second), Windows' and the startup sounds, the game
+; library with its covers, and RetroAchievements (from the site, or from disk
+; first). It waits 15 s after the page is ready, out of the sign-in rush, and
+; then for 2 s without a key or the mouse, so that half second is unlikely to
+; meet a key; never while the start screen is up, where the swing needs this
+; thread.
+PrepareViews() {
+    global ASCS_StartScreen, ASCS_PageReady
+    static done := false
+    if (done || !ASCS_PageReady)
+        return
+    if (IsObject(ASCS_StartScreen) || A_TimeIdlePhysical < 2000) {
+        SetTimer(PrepareViews, -2000)
+        return
+    }
+    done := true
+    SendToFrontend('{"type":"prepareViews"}')
+}
+
+FreeStartScreenFrames() {
+    global ASCS_StartScreenFrames
+    SetTimer(LoadStartScreenFrame, 0)
+    for handle in ASCS_StartScreenFrames
+        if handle
+            DllCall("DeleteObject", "Ptr", handle)
+    ASCS_StartScreenFrames := []
+}
+
+; The page's say on it: "on" or "off", kept for the next start.
+SetStartScreen(value) {
+    global ASCS_StartScreenOn, ASCS_SettingsFile, ASCS_HasShown, ASCS_PageReady
+    on := value == "on"
+    if (on = ASCS_StartScreenOn)
+        return
+    ASCS_StartScreenOn := on
+    if !on
+        FreeStartScreenFrames()
+    else if (!ASCS_HasShown && ASCS_PageReady)
+        SetTimer(LoadStartScreenFrame, 30)
+    try IniWrite(value, ASCS_SettingsFile, "Appearance", "StartScreen")
+    catch as err
+        WriteLog("Start screen preference not saved: " err.Message)
+}
+
 ; ---- ASCS's own sounds (1.8.0)
 ; Off, on start (logon when ASCS starts, logoff on Exit), or on show (logon
 ; when the window appears, logoff when it is hidden). Never at Windows sign-in
@@ -544,6 +803,7 @@ HandleClose(*) {
     if (ASCS_AscsSoundMode = "show" && DllCall("IsWindowVisible", "Ptr", ASCS_App.Hwnd, "Int"))
         PlayAscsSound("hide")
     ASCS_App.Hide()
+    EndStartScreen()
     SetTimer(PushDashboard, 0)
     ; After Windows has finished closing the window, so the logo resetting for
     ; its next swing can't be seen.
@@ -638,13 +898,16 @@ HandleWebMessage(sender, args) {
                     announced := true
                     ShowNotice("Maestro is ready.")
                 }
+                if (ASCS_StartScreenOn && !ASCS_HasShown)
+                    SetTimer(LoadStartScreenFrame, 30)
+                SetTimer(PrepareViews, -15000)
 
                 SendToFrontend(
                     '{"type":"navigate","view":'
                     JsonQuote(ASCS_PendingView) '}'
                 )
                 if DllCall("IsWindowVisible", "Ptr", ASCS_App.Hwnd, "Int")
-                    SendToFrontend('{"type":"windowShown"}')
+                    SendToFrontend(WindowShownJson())
 
                 GetNotes()
                 SendSettings()
@@ -980,6 +1243,14 @@ HandleWebMessage(sender, args) {
             case "SetSoundLibrary":
                 if (StrLen(content) <= 400)
                     SetSoundLibrary(content)
+
+            case "SetCustomSounds":
+                if (StrLen(content) <= 400)
+                    SetCustomSounds(content)
+
+            case "SetStartScreen":
+                if (content == "on" || content == "off")
+                    SetStartScreen(content)
 
             case "SetupRetroAchievements":
                 SetupRetroAchievements()

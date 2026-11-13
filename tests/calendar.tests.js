@@ -178,7 +178,25 @@ END:VCALENDAR</C:calendar-data></prop><status>HTTP/1.1 200 OK</status></propstat
         { date: "13-40", name: "Impossible" }, { date: "2026-02-30", name: "Also impossible" }, { date: "11-10", name: "  " }];
     equal("countdowns: yearly and one-off in range", days(C.countdownDays(countdowns, local(2026, 11, 1), local(2027, 1, 1))), "Nov 26 2026 Thanksgiving, Dec 25 2026 Christmas");
     equal("countdowns: yearly repeats every year", days(C.countdownDays(countdowns, local(2027, 12, 1), local(2029, 1, 1)).filter(d => d.name === "Christmas")), "Dec 25 2027 Christmas, Dec 25 2028 Christmas");
-    equal("countdowns: a one-off appears once", C.countdownDays(countdowns, local(2027, 11, 1), local(2028, 1, 1)).some(d => d.name === "Thanksgiving"), false);
+    // Next Up (2.2.0): by day, a day's all-day events first, ended ones left out.
+    const occ = (name, start, end, allDay = false) => ({ name, start, end, allDay });
+    const coming = [
+        occ("Thanksgiving", local(2026, 11, 26), local(2026, 11, 27), true),
+        occ("Veterans Day", local(2026, 11, 11), local(2026, 11, 12), true),
+        occ("Family visit", local(2026, 11, 20, 18), local(2026, 11, 20, 20)),
+        occ("Dinner", local(2026, 11, 12, 19), local(2026, 11, 12, 21)),
+        occ("Lunch", local(2026, 11, 12, 12), local(2026, 11, 12, 13)),
+        occ("Trip", local(2026, 11, 12), local(2026, 11, 15), true),
+        occ("Standup", local(2026, 11, 12, 9), local(2026, 11, 12, 9, 30)),
+        occ("Late call", local(2026, 11, 11, 23), local(2026, 11, 12, 16))
+    ];
+    const names = list => list.map(item => item.name).join(", ");
+    const noon = local(2026, 11, 12, 12, 30);
+    equal("next up: by day, all-day first, ended left out", names(C.nextUp(coming, noon, 10)), "Late call, Trip, Lunch, Dinner, Family visit, Thanksgiving");
+    equal("next up: a holiday weeks out doesn't push out tonight", names(C.nextUp(coming, noon, 3)), "Late call, Trip, Lunch");
+    equal("next up: five by default", C.nextUp(coming, local(2026, 11, 1)).length, 5);
+    equal("next up: the list given isn't reordered", coming[0].name, "Thanksgiving");
+    equal("countdowns: a one-off appears once",C.countdownDays(countdowns, local(2027, 11, 1), local(2028, 1, 1)).some(d => d.name === "Thanksgiving"), false);
     equal("countdowns: 02-29 on leap years only", days(C.countdownDays(countdowns, local(2026, 1, 1), local(2029, 1, 1)).filter(d => d.name === "Leap day")), "Feb 29 2028 Leap day");
     const christmas = C.countdownDays(countdowns, local(2026, 12, 25), local(2026, 12, 26))[0];
     equal("countdowns: a whole local day", `${christmas.start === local(2026, 12, 25)} ${christmas.end === local(2026, 12, 26)} ${christmas.date}`, "true true 12-25");

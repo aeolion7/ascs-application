@@ -432,7 +432,7 @@
         vevent.props = vevent.props.filter(p => p.name !== "SEQUENCE").concat({ name: "SEQUENCE", params: {}, value: "0" });
         const calendar = { name: "VCALENDAR", props: [
             { name: "VERSION", params: {}, value: "2.0" },
-            { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 2.1.1//EN" },
+            { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 2.2.0//EN" },
             { name: "CALSCALE", params: {}, value: "GREGORIAN" }
         ], children: [vevent] };
         return serializeComponent(calendar) + "\r\n";
@@ -822,7 +822,7 @@
             uid,
             text: serializeComponent({ name: "VCALENDAR", props: [
                 { name: "VERSION", params: {}, value: "2.0" },
-                { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 2.1.1//EN" }
+                { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 2.2.0//EN" }
             ], children: [...zones, ...vevents] }) + "\r\n"
         }));
     }
@@ -852,7 +852,7 @@
                 else if (c.name === "VEVENT") events.push(c);
             });
         });
-        const props = [{ name: "VERSION", params: {}, value: "2.0" }, { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 2.1.1//EN" }, { name: "CALSCALE", params: {}, value: "GREGORIAN" }];
+        const props = [{ name: "VERSION", params: {}, value: "2.0" }, { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 2.2.0//EN" }, { name: "CALSCALE", params: {}, value: "GREGORIAN" }];
         if (name) props.push({ name: "X-WR-CALNAME", params: {}, value: escapeText(name) });
         return serializeComponent({ name: "VCALENDAR", props, children: [...zones.values(), ...events] }) + "\r\n";
     }
@@ -945,8 +945,19 @@
         return out.sort((a, b) => a.start - b.start || a.name.localeCompare(b.name));
     }
 
+    // The Command Center's Next Up (2.2.0): what hasn't ended, in date order,
+    // with a day's all-day events before its timed ones. The calendar's own
+    // order puts every all-day event first, which suits a day's cell but would
+    // put a holiday weeks away above tonight.
+    function nextUp(occurrences, now, limit = 5) {
+        const day = ms => { const t = new Date(ms); return new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime(); };
+        return occurrences.filter(occ => occ.end > now)
+            .sort((a, b) => day(a.start) - day(b.start) || (b.allDay - a.allDay) || a.start - b.start || a.end - b.end)
+            .slice(0, limit);
+    }
+
     global.ASCSCalendar = {
-        countdownDays,
+        countdownDays, nextUp,
         DAY, WEEKDAYS, unfold, parseLine, parseComponent, serializeComponent, escapeText, unescapeText, fold,
         parseDateValue, parseDuration, formatTrigger, parseRrule, formatRrule, wallToInstant, zoneOffset,
         readEvent, readResource, expandStarts, occurrences, reminders, uidNew, newResource, editResource, skipOccurrence, snapStart,

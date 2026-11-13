@@ -1148,7 +1148,8 @@
   grid-column: 1 / -1;
   align-items: center;
   gap: 12px;
-  min-height: calc(27px * var(--text-scale));
+  /* As tall as a line of its figures (2.2.0: tied to their size). */
+  min-height: calc(var(--t-sub) * 1.5);
 }
 
 /* A row with no sound keeps the same height as one with a bar. */

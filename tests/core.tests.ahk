@@ -680,6 +680,44 @@ Throws("library: a drive root", () => ValidateSoundLibrary("C:\"), "Choose a fol
 Throws("library: the Windows folder", () => ValidateSoundLibrary("C:\Windows"), "system or profile")
 Throws("library: a profile folder", () => ValidateSoundLibrary("C:\Users\lions"), "system or profile")
 Throws("library: relative", () => ValidateSoundLibrary("Sounds"), "Choose a folder")
+
+; 2.2.0: Custom Sounds, a second folder beside the library.
+Equal("custom: a library sound keeps its id", SoundIdForPath("C:\Sounds\lib\(2001) Windows XP\a.wav", "C:\Sounds\lib", "C:\Sounds\!windows"), "(2001) Windows XP\a.wav")
+Equal("custom: a custom sound's id starts with *", SoundIdForPath("C:\Sounds\!windows\PS3\Trophy.wav", "C:\Sounds\lib", "C:\Sounds\!windows"), "*\PS3\Trophy.wav")
+Equal("custom: a path outside both has none", SoundIdForPath("C:\Windows\Media\tada.wav", "C:\Sounds\lib", "C:\Sounds\!windows"), "")
+Equal("custom: a folder whose name only starts the same is outside", SoundIdForPath("C:\Sounds\!windows2\a.wav", "C:\Sounds\lib", "C:\Sounds\!windows"), "")
+Equal("custom: no custom folder, no custom ids", SoundIdForPath("C:\Sounds\!windows\a.wav", "C:\Sounds\lib", ""), "")
+Check("custom: beside the library is fine", !SoundFoldersOverlap("C:\Sounds\all-windows-sounds-main", "C:\Sounds\!windows"))
+Check("custom: inside the library overlaps", SoundFoldersOverlap("C:\Sounds", "C:\Sounds\!windows"))
+Check("custom: holding the library overlaps", SoundFoldersOverlap("C:\Sounds\!windows\lib", "C:\Sounds\!windows"))
+
+; Network and Top Apps (2.2.0): a rate only over a recent span.
+Check("rate: a second apart is a rate", RateSpanUsable(1000, 2000) && RateSpanUsable(0, 10000))
+Check("rate: too close is not", !RateSpanUsable(1000, 1499))
+Check("rate: across a hidden stretch is not", !RateSpanUsable(1000, 11001) && !RateSpanUsable(1000, 3600000))
+Check("rate: time running backward is not", !RateSpanUsable(5000, 1000))
+
+; RetroAchievements kept on disk (2.2.0): only the same user's, only JSON.
+raCached := ParseRaDiskCache(RaDiskCacheText("Aeolion", 1762000000, '{"User":"Aeolion"}'), "aeolion")
+Check("ra cache: reads back the reply and when it was fetched", raCached && raCached["at"] = 1762000000 && raCached["text"] = '{"User":"Aeolion"}')
+Check("ra cache: a list reply reads back", ParseRaDiskCache(RaDiskCacheText("Aeolion", 5, "[]"), "Aeolion") != "")
+Check("ra cache: another user's is ignored", ParseRaDiskCache(RaDiskCacheText("Someone", 5, "{}"), "Aeolion") = "")
+Check("ra cache: a reply that isn't JSON is ignored", ParseRaDiskCache(RaDiskCacheText("Aeolion", 5, "<html>"), "Aeolion") = "")
+Check("ra cache: a bad first line is ignored", ParseRaDiskCache("Aeolion`n{}", "Aeolion") = "" && ParseRaDiskCache("Aeolion`tsoon`n{}", "Aeolion") = "")
+Check("ra cache: no user, nothing read", ParseRaDiskCache(RaDiskCacheText("Aeolion", 5, "{}"), "") = "" && ParseRaDiskCache("", "Aeolion") = "")
+
+; The start screen's swing (2.2.0) matches the page's: values sampled from Edge's mark-swing.
+Check("swing: at rest before it starts", MarkSwingAngle(0) = 0 && MarkSwingAngle(-5) = 0)
+Check("swing: 40 degrees left at the end of the first stroke", Abs(MarkSwingAngle(850) - 40) < .001)
+Check("swing: eased like the page", Abs(MarkSwingAngle(100) - 1.3287) < .001 && Abs(MarkSwingAngle(212.5) - 5.7869) < .001)
+Check("swing: halfway through a stroke is halfway", Abs(MarkSwingAngle(425) - 20) < .001)
+Check("swing: coming back", Abs(MarkSwingAngle(1062.5) - 34.2131) < .001 && Abs(MarkSwingAngle(1700)) < .001)
+Check("swing: the second swing", Abs(MarkSwingAngle(2000) - 11.0112) < .001 && Abs(MarkSwingAngle(3300) - 1.3287) < .001)
+Check("swing: at rest after it ends", MarkSwingAngle(3400) = 0 && MarkSwingAngle(9000) = 0)
+Check("swing: the start screen's one movement goes out and back", Abs(MarkSwingAngle(850, 2) - 40) < .001 && Abs(MarkSwingAngle(1062.5, 2) - 34.2131) < .001)
+Check("swing: and is at rest after 1.7 s", MarkSwingAngle(1700, 2) = 0 && MarkSwingAngle(2000, 2) = 0)
+Check("custom: the same folder overlaps", SoundFoldersOverlap("C:\Sounds\", "C:\Sounds"))
+Check("custom: a name that only starts the same doesn't", !SoundFoldersOverlap("C:\Sounds\lib", "C:\Sounds\lib2"))
 Throws("library: parent hops", () => ValidateSoundLibrary("C:\Sounds\..\Windows"), "Choose a folder")
 Equal("leveled name", LeveledSoundName("CHIMES", -7.6), "CHIMES (-7.6 dB).wav")
 Equal("leveled name: positive, odd characters dropped", LeveledSoundName('Ding: "loud"?', 3.04), "Ding loud (+3.0 dB).wav")
@@ -788,7 +826,8 @@ Equal("session: a restarted emulator uses its new start time", PlaySessionSince(
 Equal("in use: a Windows event", JoinArray(ParseInUseKey("windows:.Default/SystemAsterisk"), "|"), "windows|.Default/SystemAsterisk")
 Equal("in use: an ASCS sound", JoinArray(ParseInUseKey("ascs:reminder"), "|"), "ascs|reminder")
 Equal("in use: the timer's sound (2.0.0)", JoinArray(ParseInUseKey("ascs:timer"), "|"), "ascs|timer")
-Check("each Maestro sound in use has a label", AscsSoundLabels().Has("timer") && AscsSoundLabels().Count = 4)
+Check("each Maestro sound in use has a label", AscsSoundLabels().Has("timer") && AscsSoundLabels().Count = 5)
+Check("the start sound has its own slot (2.2.0)", AscsSoundLabels().Has("start") && AscsSoundLabels()["start"] = "Maestro start")
 for bad in ["windows:Explorer/Nope", "ascs:other", "C:\Windows\Media\ding.wav", "windows:", "lib:x"] {
     threw := false
     try ParseInUseKey(bad)

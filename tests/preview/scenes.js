@@ -168,9 +168,9 @@ const PreviewScenes = (() => {
 
     function soundsData() {
         const sound = (id, name, era, group = "", seconds = 2.1) => ({ id, name, era, group, kind: "web", ext: "wav", size: 200000, seconds });
-        say({ type: "soundLibrary", root: "C:\\Sounds", exists: true, changed: true,
-            eras: [{ folder: "xp", year: 2001, label: "Windows XP" }, { folder: "7", year: 2009, label: "Windows 7" }, { folder: "11", year: 2021, label: "Windows 11" }],
-            sounds: [sound("xp/logon.wav", "Windows XP Logon Sound", "xp", "Startup"), sound("xp/ding.wav", "Windows XP Ding", "xp", "Notifications", 0.6), sound("xp/error.wav", "Windows XP Error", "xp", "Notifications", 0.9), sound("xp/shutdown.wav", "Windows XP Shutdown", "xp", "Startup", 3.2), sound("7/notify.wav", "Windows Notify", "7"), sound("11/chimes.wav", "Chimes", "11", "", 1.4)] });
+        say({ type: "soundLibrary", root: "C:\\Sounds", exists: true, changed: true, customRoot: "C:\\Sounds\\!windows", customState: "ok",
+            eras: [{ folder: "xp", year: 2001, label: "Windows XP" }, { folder: "7", year: 2009, label: "Windows 7" }, { folder: "11", year: 2021, label: "Windows 11" }, { folder: "*", year: 0, label: "Custom Sounds", custom: true }],
+            sounds: [sound("*\\PS3 Orchestra Tuning.wav", "PS3 Orchestra Tuning", "*", "", 8.4), sound("*\\PS3 Trophy.wav", "PS3 Trophy", "*", "", 1.2), sound("xp/logon.wav", "Windows XP Logon Sound", "xp", "Startup"), sound("xp/ding.wav", "Windows XP Ding", "xp", "Notifications", 0.6), sound("xp/error.wav", "Windows XP Error", "xp", "Notifications", 0.9), sound("xp/shutdown.wav", "Windows XP Shutdown", "xp", "Startup", 3.2), sound("7/notify.wav", "Windows Notify", "7"), sound("11/chimes.wav", "Chimes", "11", "", 1.4)] });
         say({ type: "windowsSounds", events: [
             { key: "SystemAsterisk", label: "Asterisk", file: "C:\\Sounds\\xp\\ding.wav", exists: true },
             { key: "SystemNotification", label: "System notification", file: "C:\\Sounds\\xp\\error.wav", exists: true },
@@ -257,7 +257,106 @@ const PreviewScenes = (() => {
         window.PreviewShift = moved;
     };
 
+    // The start screen's art (2.2.0): 1240 x 520, the brand centered in it.
+    function startScreenArt(angle) {
+        const sidebarBrand = document.querySelector(".sidebar .brand");
+        const brand = sidebarBrand.cloneNode(true);
+        brand.querySelector("#sidebarVersion")?.remove();
+        brand.removeAttribute("title");
+        brand.style.cssText = `width:${sidebarBrand.getBoundingClientRect().width}px;zoom:3.5;flex:none`;
+        // The shadow is the mark's box, not its drawing, so the arm can't change it.
+        const mark = brand.querySelector(".brand-mark");
+        mark.style.cssText = "border-radius:12px;box-shadow:0 7px 16px rgba(43,0,113,.55)";
+        mark.querySelector("svg").style.filter = "none";
+        const arm = mark.querySelector(".mark-arm");
+        arm.classList.remove("is-swinging", "is-previewing");
+        arm.style.setProperty("animation", "none", "important");
+        arm.style.setProperty("transform", `rotate(${-angle}deg)`, "important");
+        const art = document.createElement("div");
+        art.style.cssText = "position:fixed;left:0;top:0;z-index:9999;width:1240px;height:520px;overflow:hidden;"
+            + "background:radial-gradient(closest-side ellipse at 50% 50%, rgba(74,34,192,.3), rgba(74,34,192,0)), #0d0e17";
+        const place = document.createElement("div");
+        place.style.cssText = "position:absolute;left:0;top:0";
+        place.append(brand);
+        art.append(place);
+        document.body.append(art);
+        // Centered on what's drawn: from the mark's left to where the words end (the
+        // room's last 10 px, times the zoom, are empty), the mark's top to its bottom.
+        const box = mark.getBoundingClientRect();
+        const right = brand.querySelector(".brand-copy").getBoundingClientRect().right - 10 * 3.5;
+        place.style.transform = `translate(${Math.round(620 - (box.left + right) / 2)}px, ${Math.round(260 - (box.top + box.bottom) / 2)}px)`;
+    }
+    // Every icon in the set at 20 and 24 px on a module, and what each one-off
+    // drawing or glyph it replaces looked like (2.2.0).
+    function iconSheet() {
+        const sheet = document.createElement("div");
+        sheet.style.cssText = "position:fixed;inset:0;z-index:9999;overflow:auto;padding:40px;background:var(--surface-page);display:grid;gap:28px;align-content:start";
+        const panel = (title) => {
+            const section = document.createElement("section");
+            section.className = "module";
+            section.style.cssText = "padding:24px 28px";
+            const heading = document.createElement("h2");
+            heading.textContent = title;
+            const grid = document.createElement("div");
+            grid.style.cssText = "display:grid;grid-template-columns:repeat(10, minmax(0, 1fr));gap:18px 12px;margin-top:16px";
+            section.append(heading, grid);
+            sheet.append(section);
+            return grid;
+        };
+        const cell = (grid, label, ...drawings) => {
+            const item = document.createElement("div");
+            item.style.cssText = "display:grid;justify-items:center;gap:10px;padding:14px 6px;border-radius:12px;background:rgba(255,255,255,.03)";
+            const row = document.createElement("div");
+            row.style.cssText = "display:flex;align-items:center;gap:16px;min-height:28px;color:var(--text-strong)";
+            row.append(...drawings);
+            const name = document.createElement("small");
+            name.textContent = label;
+            name.style.cssText = "font-size:var(--t-floor);color:var(--text-muted)";
+            item.append(row, name);
+            grid.append(item);
+        };
+        const set = panel(`One icon set: ${MaestroIcons.names.length} icons, 20 px and 24 px`);
+        MaestroIcons.names.forEach(name => cell(set, name, MaestroIcons.create(name, 20), MaestroIcons.create(name, 24)));
+        const old = (markup) => {
+            const holder = document.createElement("span");
+            holder.innerHTML = markup;
+            holder.style.cssText = "display:inline-flex;align-items:center;font-size:20px;line-height:1";
+            const svg = holder.querySelector("svg");
+            if (svg) svg.style.cssText = "width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round";
+            return holder;
+        };
+        const arrow = () => { const span = document.createElement("span"); span.textContent = "→"; span.style.cssText = "color:var(--text-muted)"; return span; };
+        const replaces = panel("Replaces: before, then after");
+        [
+            ["close (10-unit)", '<svg viewBox="0 0 10 10"><path d="m1.5 1.5 7 7m0-7-7 7"/></svg>', "close"],
+            ["back (12-unit)", '<svg viewBox="0 0 12 12"><path d="M7.5 2.5 4 6l3.5 3.5"/></svg>', "chevron-left"],
+            ["calendar (16-unit)", '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3"/></svg>', "calendar"],
+            ["play (12-unit)", '<svg viewBox="0 0 12 12" style="fill:currentColor"><path d="M3 1.8v8.4L10 6Z" fill="currentColor"/></svg>', "play"],
+            ["favorite ♥", "♥", "heart-filled"],
+            ["not favorite ♡", "♡", "heart"],
+            ["pinned ◆", "◆", "pin"],
+            ["opens a page →", "→", "arrow-right"],
+            ["opens an app ↗", "↗", "arrow-up-right"],
+            ["select caret", '<svg viewBox="0 0 10 6"><path d="M1 1l4 4 4-4"/></svg>', "chevron-down"]
+        ].forEach(([label, before, after]) => cell(replaces, label, old(before), arrow(), MaestroIcons.create(after, 20)));
+        document.body.append(sheet);
+    }
     return {
+        "icon-sheet": () => { baseData(); iconSheet(); },
+        // 2.2.0: each page before its data arrives, holding the shapes of what's coming.
+        "loading-home": () => navigate("home"),
+        "loading-games": () => navigate("games"),
+        "loading-games-library": () => { navigate("games"); gamesSections.show("library"); },
+        "loading-games-achievements": () => { navigate("games"); gamesSections.show("achievements"); },
+        "loading-calendar": () => { calState.mode = "month"; navigate("calendar"); calState.server = { state: "running", message: "" }; renderCalendar(); },
+        "loading-calendar-agenda": () => { calState.mode = "agenda"; navigate("calendar"); calState.server = { state: "running", message: "" }; renderCalendar(); },
+        "loading-workspaces": () => navigate("workspaces"),
+        "loading-sounds": () => navigate("sounds"),
+        "loading-sounds-inuse": () => { navigate("sounds"); soundSections.show("inuse"); },
+        "loading-system": () => navigate("dashboard"),
+        "loading-system-startup": () => { navigate("dashboard"); systemSections.show("signin"); },
+        "loading-system-activity": () => { navigate("dashboard"); systemSections.show("activity"); },
+        "loading-settings": () => navigate("settings"),
         "shift-home": shift(() => navigate("home"), () => { baseData(); homeData(); navigate("home"); homeLive(); }),
         "shift-games": shift(() => navigate("games"), () => { baseData(); navigate("games"); gamesData(); live(); }),
         "shift-games-library": shift(() => { navigate("games"); gamesSections.show("library"); }, () => { baseData(); gamesData(); live(); }),
@@ -343,6 +442,12 @@ const PreviewScenes = (() => {
         "swing-start": () => { baseData(); homeData(); navigate("home"); homeLive(); markHasSwung = false; prepareMark(); },
         "swing-left": open("home", () => document.querySelector(".brand-mark .mark-arm").style.setProperty("animation", "mark-swing 3.4s linear -850ms 1 paused", "important")),
         "swing-right": open("home", () => document.querySelector(".brand-mark .mark-arm").style.setProperty("animation", "mark-swing 3.4s linear -1700ms 1 paused", "important")),
+        // 2.2.0: the start screen's art, for tests\preview\start-screen.ps1, which cuts it into
+        // frontend\assets\start-screen\. The sidebar's own brand, the same layout 3.5 times
+        // the size, on a glow that fades to the page's color before the edges. Each
+        // start-screen-arm-N has the arm N degrees left of its rest, for the swing.
+        "start-screen-art": () => startScreenArt(0),
+        ...Object.fromEntries(Array.from({ length: 41 }, (_, angle) => [`start-screen-arm-${angle}`, () => startScreenArt(angle)])),
         notes: open("notes"),
         "notes-edit": open("notes", () => $("noteEditButton").click()),
         "notes-code": open("notes", () => openNote(notesData.notes.find(note => note.type === "code")?.id)),

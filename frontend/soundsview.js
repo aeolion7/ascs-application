@@ -25,7 +25,7 @@ const soundState = {
     library: null, era: "", query: "", favoritesOnly: false, selected: "",
     bytes: new Map(), decoded: new Map(), waiting: new Map(), levels: new Map(),
     windowsSounds: [], ascsSounds: {}, context: null, master: null, playing: new Set(),
-    measuring: false, plan: null, editingLibrary: false, playToken: 0,
+    measuring: false, plan: null, editingLibrary: false, editingCustom: false, playToken: 0,
     inUse: new Map(), matchWaits: new Map(), measuringInUse: false, matching: false, playingRow: "",
     selecting: false, picked: new Set(), anchor: "", deleting: null, deleteWait: null,
     matchQueue: [], matchingKey: "",
@@ -65,11 +65,17 @@ function saveSoundPrefs() {
 }
 
 function openSoundsView() {
+    prepareSoundsView();
+    send("GetAudioDevices");
+}
+
+// Also ahead of time, while Maestro is hidden (2.2.0): the library is indexed
+// once, so Sounds opens with it in place.
+function prepareSoundsView() {
     if (!soundState.library) send("GetSoundLibrary");
     if (!settingsLoaded) send("GetSettings");          // for Maestro sounds, in the bar
     send("GetWindowsSounds");
     send("GetStartupSounds");
-    send("GetAudioDevices");
 }
 
 // ---- messages from ASCS
@@ -77,8 +83,9 @@ function openSoundsView() {
 function handleSoundLibrary(data) {
     const eras = (Array.isArray(data.eras) ? data.eras : [])
         .filter(era => era && typeof era.folder === "string")
-        .map(era => ({ folder: era.folder, year: Number.isFinite(era.year) ? era.year : 0, label: Sounds.folderLabel(era.folder, typeof era.label === "string" ? era.label : era.folder) }))
-        .sort((a, b) => (a.year || 9999) - (b.year || 9999) || a.label.localeCompare(b.label));
+        .map(era => ({ folder: era.folder, year: Number.isFinite(era.year) ? era.year : 0, custom: era.custom === true, label: Sounds.folderLabel(era.folder, typeof era.label === "string" ? era.label : era.folder) }))
+        // Custom Sounds (2.2.0) comes after the Windows versions.
+        .sort((a, b) => Number(a.custom) - Number(b.custom) || (a.year || 9999) - (b.year || 9999) || a.label.localeCompare(b.label));
     const labels = new Map(eras.map(era => [era.folder, era.label]));
     const sounds = (Array.isArray(data.sounds) ? data.sounds : [])
         .filter(sound => sound && typeof sound.id === "string" && typeof sound.name === "string")
@@ -89,9 +96,13 @@ function handleSoundLibrary(data) {
             eraLabel: labels.get(String(sound.era || "")) || "",
             origin: typeof sound.origin === "string" ? sound.origin : ""
         }));
-    soundState.library = { root: String(data.root || ""), exists: data.exists === true, eras, sounds, byId: new Map(sounds.map(s => [s.id, s])) };
+    soundState.library = { root: String(data.root || ""), exists: data.exists === true, eras, sounds, byId: new Map(sounds.map(s => [s.id, s])),
+        customRoot: String(data.customRoot || ""), customState: ["ok", "missing", "overlaps"].includes(data.customState) ? data.customState : "missing" };
     $("soundLibraryShown").textContent = soundState.library.root;
     if (!soundState.editingLibrary) $("soundLibraryPath").value = soundState.library.root;
+    $("soundCustomShown").textContent = soundState.library.customRoot;
+    $("soundCustomNote").textContent = { ok: "", missing: "Not found", overlaps: "Inside the library, so not used" }[soundState.library.customState];
+    if (!soundState.editingCustom) $("soundCustomPath").value = soundState.library.customRoot;
     if (data.ascsSounds && typeof data.ascsSounds === "object") soundState.ascsSounds = data.ascsSounds;
     if (soundState.era && !eras.some(era => era.folder === soundState.era)) soundState.era = "";
     // After a re-read, sounds may have changed on disk; when ASCS only filled
@@ -305,6 +316,9 @@ function renderOwnFolders(folders) {
     holder.hidden = !folders.length;
 }
 
+// Above a version's name: its year, or Custom for Custom Sounds (2.2.0).
+const eraTag = era => era.year ? String(era.year) : era.custom ? "Custom" : "Yours";
+
 function versionCard(era, count) {
     const card = element("button", "sound-version");
     card.type = "button";
@@ -312,7 +326,7 @@ function versionCard(era, count) {
     const art = element("span", "sound-version-art");
     art.append(eraLogoImage(era));
     const copy = element("span", "sound-version-copy");
-    copy.append(element("small", "", era.year ? String(era.year) : "Yours"), element("strong", "", era.label),
+    copy.append(element("small", "", eraTag(era)), element("strong", "", era.label),
         element("em", "", `${count} sound${count === 1 ? "" : "s"}`));
     card.append(art, copy);
     card.title = `Open ${era.label}`;
@@ -324,11 +338,11 @@ function renderSounds() {
     const library = soundState.library;
     const strip = $("soundEras");
     const grid = showingVersionGrid();
-    // Windows versions (folders with a year) fill the grid and the strip;
-    // folders of your own (Aeolionware Startup, Maestro Leveled…) are buttons
-    // beside Favorites instead.
-    const versions = (library?.eras || []).filter(era => era.year);
-    renderOwnFolders((library?.eras || []).filter(era => !era.year));
+    // Windows versions (folders with a year) and Custom Sounds (2.2.0) fill the
+    // grid and the strip; folders of your own (Aeolionware Startup, Maestro
+    // Leveled…) are buttons beside Favorites instead.
+    const versions = (library?.eras || []).filter(era => era.year || era.custom);
+    renderOwnFolders((library?.eras || []).filter(era => !era.year && !era.custom));
     strip.hidden = grid || !versions.length;
     // Back to the grid, right above the sounds (also clears a search).
     $("soundBack").hidden = grid || !library;
@@ -339,7 +353,7 @@ function renderSounds() {
         chip.dataset.soundEra = era.folder;
         chip.setAttribute("aria-pressed", String(active));
         const copy = element("span", "sound-era-copy");
-        copy.append(element("small", "", era.year ? String(era.year) : "Yours"), element("span", "", era.label));
+        copy.append(element("small", "", eraTag(era)), element("span", "", era.label));
         chip.append(eraLogoImage(era), copy);
         chip.title = era.label;
         chip.addEventListener("click", () => openSoundEra(era.folder));
@@ -349,11 +363,12 @@ function renderSounds() {
     $("soundFavoritesOnly").setAttribute("aria-pressed", String(soundState.favoritesOnly));
     // The folder's line waits for the library, so it arrives below the list.
     $("soundLibraryForm").hidden = !library;
+    $("soundCustomForm").hidden = !library;
 
     const sounds = visibleSounds();
     const groups = $("soundGroups");
     if (!library) {
-        groups.replaceChildren(loadingNote("Loading the library"));
+        groups.replaceChildren(placeholder("cards"));
     } else if (!library.exists) {
         groups.replaceChildren(element("p", "settings-note", `The library folder ${library.root} wasn't found. Set it below, under Library.`));
     } else if (grid) {
@@ -378,7 +393,7 @@ function renderSounds() {
     }
     const era = library?.eras.find(item => item.folder === soundState.era);
     $("soundsMeta").textContent = !library ? "" : grid
-        ? `${versions.length} versions · ${library.sounds.length} sounds`
+        ? `${versions.filter(era => era.year).length} versions${versions.some(era => era.custom) ? " and Custom Sounds" : ""} · ${library.sounds.length} sounds`
         : soundState.query.trim() || soundState.favoritesOnly
         ? `${sounds.length} sound${sounds.length === 1 ? "" : "s"} across every version`
         : `${era ? `${era.year ? `${era.year} · ` : ""}${era.label}` : ""} · ${sounds.length} sound${sounds.length === 1 ? "" : "s"}`;
@@ -402,7 +417,7 @@ function soundTile(sound) {
     const play = element("button", "sound-play");
     play.type = "button";
     play.title = `Play ${sound.name} (Ctrl + click to layer it over what's playing)`;
-    play.innerHTML = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.8v8.4L10 6Z"/></svg>';
+    play.append(MaestroIcons.create("play"));
     play.addEventListener("click", event => {
         event.stopPropagation();
         selectSound(sound.id);
@@ -442,9 +457,11 @@ function soundTile(sound) {
             playSound(sound.id, 0, event.ctrlKey);
         });
     }
-    const star = element("button", `sound-star${soundPrefs.favorites.has(sound.id) ? " is-on" : ""}`, soundPrefs.favorites.has(sound.id) ? "♥" : "♡");
+    const star = element("button", `sound-star${soundPrefs.favorites.has(sound.id) ? " is-on" : ""}`);
     star.type = "button";
+    star.append(MaestroIcons.create(soundPrefs.favorites.has(sound.id) ? "heart-filled" : "heart"));
     star.title = soundPrefs.favorites.has(sound.id) ? "Remove from favorites" : "Add to favorites";
+    star.setAttribute("aria-label", star.title);
     star.setAttribute("aria-pressed", String(soundPrefs.favorites.has(sound.id)));
     star.addEventListener("click", event => {
         event.stopPropagation();
@@ -613,6 +630,7 @@ function selectSound(id) {
 // What the selected sound is used for: Windows events and ASCS's sounds.
 function soundUses(id) {
     const uses = soundState.windowsSounds.filter(event => event.id === id).map(event => event.label);
+    if (soundState.ascsSounds?.start?.id === id) uses.push("Maestro start");
     if (soundState.ascsSounds?.show?.id === id) uses.push("Maestro show");
     if (soundState.ascsSounds?.hide?.id === id) uses.push("Maestro hide");
     if (soundState.ascsSounds?.reminder?.id === id) uses.push("Calendar reminders");
@@ -626,7 +644,9 @@ function renderSoundDetail() {
     const panel = $("soundDetail");
     const sound = soundState.library?.byId.get(soundState.selected);
     if (!sound) {
-        panel.replaceChildren(element("p", "settings-note", "Click a sound to play it and see its level."));
+        const head = element("div", "module-head");
+        head.append(element("h2", "", "Selected Sound"));
+        panel.replaceChildren(head, emptyState("Click a sound to play it and see its level."));
         return;
     }
     const level = soundState.levels.get(sound.id);
@@ -657,7 +677,8 @@ function renderSoundDetail() {
         return node;
     };
     button("Play", event => playSound(sound.id, 0, event.ctrlKey)).title = "Ctrl + click to layer it over what's playing";
-    const favorite = button(soundPrefs.favorites.has(sound.id) ? "♥ Favorite" : "♡ Favorite", () => toggleFavorite(sound.id));
+    const favorite = button("Favorite", () => toggleFavorite(sound.id));
+    favorite.prepend(MaestroIcons.create(soundPrefs.favorites.has(sound.id) ? "heart-filled" : "heart"));
     favorite.classList.toggle("is-favorite", soundPrefs.favorites.has(sound.id));
     favorite.setAttribute("aria-pressed", String(soundPrefs.favorites.has(sound.id)));
     button("Show file", () => send("ShowSoundFile", sound.id));
@@ -802,7 +823,7 @@ function renderSoundDetail() {
         });
         const groupAscs = element("optgroup");
         groupAscs.label = "Maestro";
-        [["ascs:show", "When Maestro shows"], ["ascs:hide", "When Maestro hides"], ["ascs:reminder", "Calendar reminders"], ["ascs:timer", "When a timer ends"]].forEach(([value, text]) => {
+        [["ascs:start", "When Maestro first shows after it starts"], ["ascs:show", "When Maestro shows"], ["ascs:hide", "When Maestro hides"], ["ascs:reminder", "Calendar reminders"], ["ascs:timer", "When a timer ends"]].forEach(([value, text]) => {
             const option = element("option", "", text);
             option.value = value;
             groupAscs.append(option);
@@ -912,7 +933,7 @@ const NOTIFY_PRESETS = [["Quiet", -30], ["Balanced", -24], ["Clear", -18]];
 
 function inUseRows() {
     const ascs = soundState.ascsSounds || {};
-    const rows = [["show", "Maestro shows"], ["hide", "Maestro hides"], ["reminder", "Calendar reminders"], ["timer", "Timer ends"]].map(([kind, label]) => {
+    const rows = [["start", "Maestro starts"], ["show", "Maestro shows"], ["hide", "Maestro hides"], ["reminder", "Calendar reminders"], ["timer", "Timer ends"]].map(([kind, label]) => {
         const entry = ascs[kind] || {};
         return { key: `ascs:${kind}`, label, file: entry.file || "", exists: entry.exists === true, changed: entry.changed === true,
             restore: () => send("RestoreAscsSound", kind) };
@@ -1339,7 +1360,7 @@ function renderBoard(board) {
         const section = element("section", `module sound-board-list${group.className ? ` ${group.className}` : ""}`);
         if (group.title) section.append(element("h2", "", group.title));
         if (group.lead) section.append(group.lead());
-        if (!board.loaded()) section.append(loadingNote("Loading"));
+        if (!board.loaded()) section.append(placeholder("rows", 5));
         else if (group.rows.length) {
             const list = element("div", "sound-assignments");
             list.append(...group.rows.map(boardRow));
@@ -1428,7 +1449,8 @@ function boardRow(row) {
         label.type = "button";
         label.title = "This sound's own level, from the board's. Click to type one.";
         label.addEventListener("click", () => { soundState.ownEditing = row.key; renderSoundAssignments(); });
-        const reset = element("button", "notify-own-reset", "×");
+        const reset = element("button", "notify-own-reset");
+        reset.append(MaestroIcons.create("close"));
         reset.type = "button";
         reset.title = "Back to the board's level";
         reset.setAttribute("aria-label", `${row.label}: back to the board's level`);
@@ -1594,6 +1616,26 @@ $("soundLibraryForm").addEventListener("submit", event => {
     const path = $("soundLibraryPath").value.trim();
     if (path) send("SetSoundLibrary", path);
     editSoundLibrary(false);
+});
+
+// Custom Sounds' folder (2.2.0), changed as the library's is.
+function editCustomSounds(editing) {
+    soundState.editingCustom = editing;
+    $("soundCustomEdit").hidden = !editing;
+    ["soundCustomShown", "soundCustomNote", "soundCustomChange"].forEach(id => { $(id).hidden = editing; });
+    if (editing) {
+        $("soundCustomPath").value = soundState.library?.customRoot || "";
+        $("soundCustomPath").focus();
+        $("soundCustomPath").select();
+    }
+}
+$("soundCustomChange").addEventListener("click", () => editCustomSounds(true));
+$("soundCustomCancel").addEventListener("click", () => editCustomSounds(false));
+$("soundCustomForm").addEventListener("submit", event => {
+    event.preventDefault();
+    const path = $("soundCustomPath").value.trim();
+    if (path) send("SetCustomSounds", path);
+    editCustomSounds(false);
 });
 $("soundReindex").addEventListener("click", () => send("GetSoundLibrary", "refresh"));
 enableTabWheel($("soundEras"), ".sound-era");

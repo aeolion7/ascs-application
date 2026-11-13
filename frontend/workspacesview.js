@@ -106,7 +106,7 @@ function renderWorkspaceWaiting() {
     $("workspaceActions").replaceChildren();
     $("workspacesEmpty").replaceChildren(wsView.loaded
         ? element("p", "module-empty", "Arrange your windows on your desktops, then save them with Save open windows. Super + S saves them as Default.")
-        : loadingNote("Loading arrangements"));
+        : placeholder("board"));
     $("wsWindowTitle").textContent = "Selected Window";
     $("wsWindowTitle").removeAttribute("data-user-text");
     $("wsWindowSub").hidden = true;
@@ -118,7 +118,7 @@ function renderWorkspaceWaiting() {
 function renderWorkspaceList() {
     const list = $("workspaceList");
     if (!wsView.loaded) {
-        list.replaceChildren(loadingNote("Loading arrangements"));
+        list.replaceChildren(placeholder("rows", 3));
         renderWorkspaceSave();
         return;
     }

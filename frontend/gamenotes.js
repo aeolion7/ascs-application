@@ -177,7 +177,7 @@ function syncNowPlayingNotes(title) {
     if (!root) {
         const head = element("div", "game-notes-head");
         head.append(element("h2", "", "Notes"));
-        panel.replaceChildren(head, gamesState.loaded ? element("p", "module-empty", "No game to take notes on.") : loadingNote());
+        panel.replaceChildren(head, gamesState.loaded ? element("p", "module-empty", "No game to take notes on.") : placeholder("field"));
     } else if (panel.firstChild !== root) panel.replaceChildren(root);
 }
 

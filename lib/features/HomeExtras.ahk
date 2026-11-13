@@ -186,7 +186,7 @@ NetworkSpeedJson(&previous) {
     sample := Map("time", A_TickCount, "in", totals["in"], "out", totals["out"])
     last := previous
     previous := sample
-    if (!IsObject(last) || sample["time"] - last["time"] < 500 || sample["in"] < last["in"] || sample["out"] < last["out"])
+    if (!IsObject(last) || !RateSpanUsable(last["time"], sample["time"]) || sample["in"] < last["in"] || sample["out"] < last["out"])
         return '{"name":' JsonQuote(totals["name"]) '}'
     seconds := (sample["time"] - last["time"]) / 1000
     return '{"name":' JsonQuote(totals["name"])
@@ -218,7 +218,7 @@ ProcessUsageJson(&previous) {
                 cpu[name] := (cpu.Has(name) ? cpu[name] : 0) + used
         }
     }
-    elapsed := IsObject(last) ? (readings["time"] - last["time"]) * 10000 * cores : 0     ; ms to 100 ns, on every core
+    elapsed := IsObject(last) && RateSpanUsable(last["time"], readings["time"]) ? (readings["time"] - last["time"]) * 10000 * cores : 0     ; ms to 100 ns, on every core
     top(values, scale) {
         list := []
         for name, value in values

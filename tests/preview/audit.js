@@ -2,6 +2,9 @@
 // Measures what's on screen in a preview scene (2.0.0): text sizes, contrast,
 // line lengths, how clearly controls look like controls, and how the page uses
 // the window's width. Writes JSON into <pre id="auditResult"> for preview.ps1.
+// 2.2.0: names a few elements at each text size (sizeAt), leaves out text only a
+// screen reader reads, and doesn't count a view that clips its own sides as
+// overflowing.
 globalThis.PreviewAudit = (scene, pageErrors) => {
     const parse = text => {
         const m = /rgba?\(([^)]+)\)/.exec(text || "");
@@ -61,6 +64,7 @@ globalThis.PreviewAudit = (scene, pageErrors) => {
     const scope = dialogOpen ? [dialogOpen] : [root, document.querySelector(".top-bar") || document.querySelector("header"), document.querySelector(".sidebar") || document.querySelector("aside")].filter(Boolean);
 
     const sizes = {};
+    const sizeAt = {};         // a few elements at each size, to trace one to its rule (2.2.0)
     const small = {};
     const lowContrast = {};
     let contrastChecked = 0, contrastFailed = 0, unknownBackground = 0;
@@ -73,13 +77,15 @@ globalThis.PreviewAudit = (scene, pageErrors) => {
             const owner = text.parentElement;
             if (!value || !owner || seen.has(owner) || !visible(owner)) continue;
             if (["SCRIPT", "STYLE", "OPTION", "DATALIST", "TEXTAREA"].includes(owner.tagName)) continue;
-            if (owner.closest("svg")) continue;
+            if (owner.closest("svg, .sr-only")) continue;      // drawings, and text only a screen reader reads
             seen.add(owner);
             const style = getComputedStyle(owner);
             const px = parseFloat(style.fontSize);
             const key = String(Math.round(px * 10) / 10);
             sizes[key] = (sizes[key] || 0) + value.length;
-            if (px < 17) {
+            if ((sizeAt[key] ||= []).length < 4 && !sizeAt[key].includes(label(owner))) sizeAt[key].push(label(owner));
+            // 2.2.0: Lato at least 18 px, the condensed display face at least 19.
+            if (px < (/Maestro Display|Bahnschrift/.test(style.fontFamily.split(",")[0]) ? 19 : 18)) {
                 const name = `${label(owner)} (${key}px)`;
                 if (!small[name]) small[name] = value.slice(0, 40);
             }
@@ -131,9 +137,12 @@ globalThis.PreviewAudit = (scene, pageErrors) => {
         if (box.height < 24 || box.width < 24) tiny[`${label(node)} (${Math.round(box.width)}x${Math.round(box.height)})`] = (node.textContent || node.getAttribute("aria-label") || "").trim().slice(0, 30);
     });
     controls.slice(0, 80).forEach(node => {
+        // A control the page has already focused is blurred first, so its ring
+        // shows as a change rather than reading as none (2.2.0).
+        const had = document.activeElement;
+        if (had === node) node.blur();
         const before = getComputedStyle(node);
         const was = `${before.outlineStyle}|${before.outlineWidth}|${before.boxShadow}|${before.borderTopColor}`;
-        const had = document.activeElement;
         node.focus({ preventScroll: true });
         if (document.activeElement === node) {
             const now = getComputedStyle(node);
@@ -206,15 +215,26 @@ globalThis.PreviewAudit = (scene, pageErrors) => {
     }));
     // A module holding more than its square (2.0.0), by how many pixels.
     const overfull = {};
+    const overfullParts = {};
     document.querySelectorAll(".view.active [data-module], .view.active .module").forEach(node => {
         if (!visible(node)) return;
         const extra = node.scrollHeight - node.clientHeight;
         let children = 0;
         // A part of it that clips, not one that scrolls by design.
         [...node.children].forEach(child => { if (visible(child) && !/auto|scroll/.test(getComputedStyle(child).overflowY)) children = Math.max(children, child.scrollHeight - child.clientHeight); });
-        if (extra > 1 || children > 1) overfull[`${label(node)}${node.closest("[data-module]") ? ` in ${node.closest("[data-module]").dataset.module}` : ""}`] = Math.max(extra, children);
+        if (extra > 1 || children > 1) {
+            const name = `${label(node)}${node.closest("[data-module]") ? ` in ${node.closest("[data-module]").dataset.module}` : ""}`;
+            overfull[name] = Math.max(extra, children);
+            // 2.2.0: what fills it, so the fix can go where the height is.
+            const bottom = node.getBoundingClientRect().bottom;
+            overfullParts[name] = [...node.querySelectorAll(":scope > *, :scope > * > *")].filter(visible)
+                .map(part => `${label(part)} ${Math.round(part.getBoundingClientRect().height)}`)
+                .concat([...node.querySelectorAll("*")].filter(part => part.getBoundingClientRect().bottom > bottom + 1)
+                    .map(part => `past the edge: ${label(part)} by ${Math.round(part.getBoundingClientRect().bottom - bottom)}`));
+        }
     });
-    const pageOverflow = document.documentElement.scrollWidth > innerWidth || [...document.querySelectorAll(".view.active")].some(node => node.scrollWidth > node.clientWidth + 1);
+    // A page that clips its sides (Arrange, 2.2.0) can't make the window wider.
+    const pageOverflow = document.documentElement.scrollWidth > innerWidth || [...document.querySelectorAll(".view.active")].some(node => getComputedStyle(node).overflowX === "visible" && node.scrollWidth > node.clientWidth + 1);
     // Text spilling out of its box into whatever is next to it.
     const spilling = {};
     scope.forEach(area => area.querySelectorAll("*").forEach(node => {
@@ -225,7 +245,7 @@ globalThis.PreviewAudit = (scene, pageErrors) => {
     const overflowing = {};
     if (root) {
         const edge = root.getBoundingClientRect().right;
-        root.querySelectorAll("*").forEach(node => {
+        if (getComputedStyle(root).overflowX === "visible") root.querySelectorAll("*").forEach(node => {
             if (!visible(node)) return;
             const box = node.getBoundingClientRect();
             if (box.right <= edge + 1) return;
@@ -269,9 +289,9 @@ globalThis.PreviewAudit = (scene, pageErrors) => {
             return [Math.round(n.getBoundingClientRect().bottom + document.scrollingElement.scrollTop + parseFloat(style.marginBottom || 0) + (n.matches(".main, .view") ? 0 : 0)), `${n.tagName.toLowerCase()}#${n.id}.${String(n.className).split(" ").join(".")} pb ${style.paddingBottom} mb ${style.marginBottom} mh ${style.minHeight}`];
         }).sort((a, b) => b[0] - a[0]).slice(0, 6),
         innerScroll: [...document.querySelectorAll(".view.active *")].filter(n => /auto|scroll/.test(getComputedStyle(n).overflowY) && n.scrollHeight > n.clientHeight + 1).map(n => `${n.id || n.className}: ${n.clientHeight} of ${n.scrollHeight}`), shift: globalThis.PreviewShift ?? null,
-        sizes, small, contrastChecked, contrastFailed, unknownBackground, lowContrast,
+        sizes, sizeAt, small, contrastChecked, contrastFailed, unknownBackground, lowContrast,
         longestLine, longestLineAt,
-        clipped, overfull, pageOverflow, overflowing, spilling, scrolling, controls: controls.length, offCenter, looks, looksLikeText, tiny, noFocus, noFocusNames: Object.keys(noFocusNames), pointerOnly,
+        clipped, overfull, overfullParts, pageOverflow, overflowing, spilling, scrolling, controls: controls.length, offCenter, looks, looksLikeText, tiny, noFocus, noFocusNames: Object.keys(noFocusNames), pointerOnly,
         sideWidth: Math.round(sideWidth), contentLeft: Math.round(contentLeft), contentRight: Math.round(contentRight), contentBottom: Math.round(contentBottom)
     };
     const pre = document.createElement("pre");

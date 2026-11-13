@@ -28,7 +28,7 @@ function renderRaAwards(box) {
     section.append(head);
     box.append(section);
     if (!ra.awards) {
-        section.append(ra.awardsError ? element("p", "settings-note", ra.awardsError) : loadingNote());
+        section.append(ra.awardsError ? element("p", "settings-note", ra.awardsError) : placeholder("badges"));
         return;
     }
     const parsed = Games.parseRaAwards(ra.awards);

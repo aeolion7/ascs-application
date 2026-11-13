@@ -1,6 +1,7 @@
 # The Maestro command line, run through C:\Scripts\maestro.cmd: maestro <command> [options]
 # To add a command: write a function, then add it to $Commands below.
 # Keep this file ASCII. Only `try` starts or closes Maestro, and nothing here commits.
+# `isolate --run` starts only a copy made by `isolate`, which can't act outside itself.
 # Only `restore-data` changes the data folder, and only with Maestro closed.
 # `new-release` and `bump` change files in a second checkout, never the main
 # folder; `clean` removes a second checkout once its branch is merged and pushed.
@@ -962,6 +963,423 @@ function Invoke-Clean([string[]]$options) {
     }
 }
 
+# ---- doctor
+
+# The WebView2 Runtime's id with Edge Update, which records its version.
+$WebView2Client = '{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+$SignInTask = 'Startup - Sign-in'
+
+function Write-Finding([string]$mark, [string]$text, [string]$hint = '') {
+    $color = switch ($mark) { 'OK' { 'Green' } '!!' { 'Red' } default { 'DarkGray' } }
+    Write-Host ('  {0,-4}{1}' -f $mark, $text) -ForegroundColor $color
+    if ($hint) { Write-Host "      $hint" }
+    if ($mark -eq '!!') { $script:DoctorProblems++ }
+}
+
+function Get-WebView2Version {
+    foreach ($key in "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\$WebView2Client", "HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\$WebView2Client", "HKCU:\Software\Microsoft\EdgeUpdate\Clients\$WebView2Client") {
+        $value = (Get-ItemProperty -LiteralPath $key -Name pv -ErrorAction SilentlyContinue).pv
+        if ($value -and $value -ne '0.0.0.0') { return $value }
+    }
+    return ''
+}
+
+# A shortcut's target and the full paths quoted in its arguments. Reading a
+# shortcut this way never saves it.
+function Get-ShortcutPaths([string]$path) {
+    $link = (New-Object -ComObject WScript.Shell).CreateShortcut($path)
+    $quoted = [regex]::Matches($link.Arguments, '"([A-Za-z]:\\[^"]+)"') | ForEach-Object { $_.Groups[1].Value }
+    return @(@($link.TargetPath) + @($quoted) | Where-Object { $_ })
+}
+
+# What each file in a folder holds. A shortcut by what it does: its bytes also
+# carry Windows' own tracking data, which differs between two copies of one.
+function Get-FileHashes([string]$folder) {
+    $hashes = @{}
+    $shell = New-Object -ComObject WScript.Shell
+    foreach ($file in (Get-ChildItem -LiteralPath $folder -File -Force | Where-Object { $_.Name -notin 'desktop.ini', 'Thumbs.db' })) {
+        $hashes[$file.Name] = if ($file.Extension -eq '.lnk') {
+            $link = $shell.CreateShortcut($file.FullName)
+            ($link.TargetPath, $link.Arguments, $link.WorkingDirectory, $link.IconLocation, $link.Hotkey, $link.WindowStyle) -join '|'
+        } else { (Get-FileHash -LiteralPath $file.FullName).Hash }
+    }
+    return $hashes
+}
+
+function Invoke-Doctor([string[]]$options) {
+    if ($options.Count) { Stop-WithError 'doctor takes no options. See: maestro help' }
+    $script:DoctorProblems = 0
+    $data = Join-Path $Repo 'data'
+    Write-Host "Maestro in $Repo"
+
+    Write-Host ''
+    Write-Host 'Needed'
+    if (-not (Test-Path -LiteralPath $AhkExe)) {
+        Write-Finding '!!' "AutoHotkey v2 isn't at $AhkExe" 'Install AutoHotkey v2 (64-bit).'
+    } else {
+        $version = "$((Get-Item -LiteralPath $AhkExe).VersionInfo.FileVersion)"
+        if ($version -like '2.*') { Write-Finding 'OK' "AutoHotkey $version" }
+        else { Write-Finding '!!' "AutoHotkey $version at $AhkExe, not version 2" 'Install AutoHotkey v2 (64-bit).' }
+    }
+    $webView2 = Get-WebView2Version
+    if ($webView2) { Write-Finding 'OK' "WebView2 Runtime $webView2" }
+    else { Write-Finding '!!' "The WebView2 Runtime isn't installed" "Install Microsoft's Evergreen WebView2 Runtime." }
+    $missing = @('WebViewToo.ahk', 'WebView2.ahk' | Where-Object { -not (Test-Path -LiteralPath (Join-Path $Repo "webview\$_")) })
+    if ($missing.Count) { Write-Finding '!!' "WebViewToo is missing from webview\ ($($missing -join ', '))" 'Put WebViewToo there; see README section 10.' }
+    else { Write-Finding 'OK' 'WebViewToo in webview\' }
+    $git = "$(& git --version 2>$null)".Trim()
+    $global:LASTEXITCODE = 0
+    if ($git) { Write-Finding 'OK' $git } else { Write-Finding '!!' "git isn't on your PATH" 'Install Git for Windows; this command line needs it.' }
+    if (Test-Path -LiteralPath $data -PathType Container) { Write-Finding 'OK' 'data\, your notes and settings' }
+    else { Write-Finding '!!' "There's no data folder" 'Maestro makes one when it starts. If it ran here before, put yours back: maestro restore-data' }
+
+    Write-Host ''
+    Write-Host 'Optional'
+    if (Test-Path -LiteralPath (Join-Path $Repo 'lib\VirtualDesktopAccessor.dll')) { Write-Finding 'OK' 'VirtualDesktopAccessor.dll, for desktop switching' }
+    else { Write-Finding '--' 'No VirtualDesktopAccessor.dll: desktop actions report a failure' }
+    # Where FindEverything in Notes.ahk looks.
+    $everything = @("$env:ProgramFiles\Everything\Everything.exe", "${env:ProgramFiles(x86)}\Everything\Everything.exe", "$env:LOCALAPPDATA\Programs\Everything\Everything.exe") |
+        Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($everything) { Write-Finding 'OK' 'Everything, for file search' } else { Write-Finding '--' 'No Everything: file search is off' }
+    if (Test-Path -LiteralPath "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe") { Write-Finding 'OK' 'Microsoft Edge, for the tests and previews' }
+    else { Write-Finding '--' 'No Microsoft Edge: the frontend tests and previews need it' }
+    $radicale = Join-Path $data 'radicale'
+    $parts = @('venv\Scripts\pythonw.exe', 'config', 'users' | Where-Object { -not (Test-Path -LiteralPath (Join-Path $radicale $_)) })
+    if (-not (Test-Path -LiteralPath (Join-Path $radicale 'venv'))) {
+        Write-Finding '--' "The calendar server isn't installed (tools\Install-Radicale.ps1)"
+    } elseif ($parts.Count) {
+        Write-Finding '!!' "The calendar server is missing $($parts -join ', ')" 'Run tools\Install-Radicale.ps1 again.'
+    } else {
+        # Read from the package's folder name, so nothing runs Python.
+        $installed = Get-ChildItem -LiteralPath (Join-Path $radicale 'venv\Lib\site-packages') -Directory -Filter 'radicale-*.dist-info' -ErrorAction SilentlyContinue |
+            ForEach-Object { $_.Name -replace '^radicale-(.+)\.dist-info$', '$1' } | Select-Object -First 1
+        $pins = Join-Path $Repo 'tools\radicale-requirements.txt'
+        $pinned = if (Test-Path -LiteralPath $pins) { [regex]::Match([IO.File]::ReadAllText($pins), '(?im)^radicale==([\w.]+)').Groups[1].Value } else { '' }
+        if (-not $installed) { Write-Finding '!!' "Can't tell which Radicale the calendar server has" 'Run tools\Install-Radicale.ps1 again.' }
+        elseif ($pinned -and $installed -ne $pinned) { Write-Finding '!!' "Radicale $installed, but $pinned is pinned" 'Run tools\Install-Radicale.ps1.' }
+        else { Write-Finding 'OK' ("Radicale $installed, the calendar server" + $(if ($pinned) { ', as pinned' } else { '' })) }
+    }
+
+    Write-Host ''
+    Write-Host 'Sign-in and startup'
+    $startup = [Environment]::GetFolderPath('Startup')
+    # The sign-in scripts live beside maestro.cmd, so no folder is written in here.
+    $command = Get-Command maestro.cmd -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    $scripts = if ($command) { Split-Path $command.Source -Parent } else { '' }
+    if (-not $scripts) {
+        Write-Finding '--' "No maestro.cmd on your PATH, so the sign-in scripts beside it weren't checked"
+    } else {
+        $cli = Join-Path $Repo 'tools\cli\Maestro-Cli.ps1'
+        if ([IO.File]::ReadAllText($command.Source).IndexOf($cli, [StringComparison]::OrdinalIgnoreCase) -ge 0) { Write-Finding 'OK' "maestro.cmd in $scripts runs this Maestro" }
+        else { Write-Finding '!!' "$($command.Source) doesn't run $cli" "Point it at $cli." }
+        $readers = @(Join-Path $scripts 'SignIn.ahk')
+        if (Test-Path -LiteralPath (Join-Path $startup 'Shutdown Sound.ahk')) { $readers += Join-Path $startup 'Shutdown Sound.ahk' }
+        $settings = Join-Path $data 'startup-sounds.ini'
+        foreach ($reader in $readers) {
+            $name = Split-Path $reader -Leaf
+            if (-not (Test-Path -LiteralPath $reader)) { Write-Finding '!!' "$reader is missing" 'Put it back from a backup.'; continue }
+            if ([IO.File]::ReadAllText($reader).IndexOf($settings, [StringComparison]::OrdinalIgnoreCase) -ge 0) { Write-Finding 'OK' "$name reads $settings" }
+            else { Write-Finding '!!' "$name doesn't read $settings, so Sounds > Startup has no effect on it" 'Correct the path in it.' }
+        }
+        $task = Get-ScheduledTask -TaskName $SignInTask -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $task) {
+            Write-Finding '!!' "The task `"$SignInTask`" isn't registered, so SignIn.ahk doesn't run" 'Run Configure-Startup.ps1 (it asks for admin rights), then restart.'
+        } else {
+            $info = $task | Get-ScheduledTaskInfo
+            $result = switch ($info.LastTaskResult) { 0 { 'succeeded' } 267009 { 'still running' } 267011 { 'has never run' } default { 'failed (0x{0:X})' -f $info.LastTaskResult } }
+            $when = if ($info.LastRunTime -and $info.LastRunTime.Year -gt 2000) { $info.LastRunTime.ToString('yyyy-MM-dd HH:mm') } else { 'never' }
+            $text = "Task `"$SignInTask`": last run $when, $result"
+            if ("$($task.State)" -eq 'Disabled') { Write-Finding '!!' "$text, and it's disabled" 'Run Configure-Startup.ps1 (it asks for admin rights).' }
+            elseif ($info.LastTaskResult -in 0, 267009) { Write-Finding 'OK' $text }
+            else { Write-Finding '!!' $text 'See how the last sign-in went: Startup Status.cmd' }
+        }
+        $workingCopy = Join-Path $scripts 'Startup Folder (Working Copy)'
+        if (Test-Path -LiteralPath $workingCopy) {
+            $want = Get-FileHashes $workingCopy
+            $have = Get-FileHashes $startup
+            $differ = @(foreach ($name in (@($want.Keys) + @($have.Keys) | Sort-Object -Unique)) {
+                if (-not $have.ContainsKey($name)) { "$name (missing)" }
+                elseif (-not $want.ContainsKey($name)) { "$name (not in the working copy)" }
+                elseif ($want[$name] -ne $have[$name]) { "$name (changed)" }
+            })
+            if ($differ.Count) { Write-Finding '!!' "The Startup folder differs from its working copy: $($differ -join ', ')" 'Run Sync Startup Folder.cmd; it lists the changes and asks first.' }
+            else { Write-Finding 'OK' "The Startup folder matches its working copy ($($want.Count) items)" }
+        }
+    }
+    $links = @(Get-ChildItem -LiteralPath $startup -Filter *.lnk -File -ErrorAction SilentlyContinue | ForEach-Object { @{ File = $_; Where = 'Startup folder' } }) +
+        @(Get-ChildItem -LiteralPath ([Environment]::GetFolderPath('Programs')) -Filter *.lnk -File -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match 'ASCS|Maestro' } | ForEach-Object { @{ File = $_; Where = 'Start Menu' } })
+    foreach ($link in $links) {
+        $name = "$($link.Where): $($link.File.BaseName)"
+        $paths = Get-ShortcutPaths $link.File.FullName
+        $gone = @($paths | Where-Object { -not (Test-Path -LiteralPath $_) })
+        $elsewhere = @($paths | Where-Object { $_ -match '\\ASCS(\.Launcher)?\.ahk$' -and -not $_.StartsWith("$Repo\", [StringComparison]::OrdinalIgnoreCase) })
+        if ($gone.Count) { Write-Finding '!!' "$name points to $($gone -join ', '), which isn't there" 'Make it again: pwsh -File tools\Install-Shortcut.ps1 (Maestro and its launcher), or fix it by hand.' }
+        elseif ($elsewhere.Count) { Write-Finding '!!' "$name starts $($elsewhere -join ', '), not this Maestro" 'Make it again: pwsh -File tools\Install-Shortcut.ps1' }
+        else { Write-Finding 'OK' $name }
+    }
+
+    Write-Host ''
+    if ($script:DoctorProblems) {
+        Write-Host "$($script:DoctorProblems) problem(s) found."
+        $global:LASTEXITCODE = 1
+        exit 1
+    }
+    Write-Host 'No problems found.'
+}
+
+# ---- isolate
+
+$IsolateMarker = 'isolate.txt'
+$IsolateMain = 'ASCS-Isolated.ahk'
+$IsolatePort = 5233
+# What a copy holds: the scripts that run and what they include. The launcher
+# stays out: it would answer Ctrl+Alt+Shift+A for the real Maestro.
+$IsolateFiles = @('ASCS.ahk', 'ASCS.DriveProbe.ahk', 'ASCS.HardwareProbe.ahk')
+$IsolateFolders = @('lib', 'webview', 'frontend')
+# Built-ins that can act outside the copy. Calls are rewritten to the hook's
+# Isolate_ versions, which act only inside it (tools\cli\isolate-hook.ahk).
+$IsolateGuarded = 'Run|RunWait|ProcessClose|FileDelete|FileRecycle|FileMove|FileCopy|DirDelete|DirMove|DirCopy|FileAppend|FileOpen|IniWrite|IniDelete'
+# DLL calls that lock, sleep or shut down Windows.
+$IsolatePowerCalls = 'LockWorkStation|PowrProf\\SetSuspendState|ExitWindowsEx|InitiateSystemShutdown\w*|InitiateShutdown\w*'
+$IsolateInclude = '#Include %A_ScriptDir%\isolate-hook.ahk'
+
+function Get-IsolateRoot {
+    if ($env:ASCS_ISOLATE_ROOT) { return $env:ASCS_ISOLATE_ROOT }
+    return Join-Path ([IO.Path]::GetTempPath()) 'maestro-isolate'
+}
+
+# One script, rewritten for a copy. -Entry adds the hook (and the caller's
+# probes, with -Probes) to a script that runs on its own.
+function ConvertTo-IsolatedScript([string]$text, [switch]$Entry, [switch]$Probes, [switch]$Main) {
+    $text = [regex]::Replace($text, "(?i)(?<![\w.#`"'])($IsolateGuarded)\(", 'Isolate_$1(')
+    $text = [regex]::Replace($text, "(?i)\bDllCall\(\s*`"($IsolatePowerCalls)`"", 'Isolate_Stub("$1"')
+    $text = [regex]::Replace($text, '(?i)(?<![\w.])Send\((?=\s*ASCS_SoundSwitchKey)', 'Isolate_Stub("Send", ')
+    $text = [regex]::Replace($text, '(?i)(?<!\w)F24(?!\w)', 'Pause')
+    $text = [regex]::Replace($text, '(?im)^(\s*)([~$*]*\^!\+a::)', '$1; (maestro isolate) $2')
+    $text = [regex]::Replace($text, '(?<!\d)5232(?!\d)', "$IsolatePort")
+    if ($Main) {
+        # Warnings go to standard output, where --run collects them, not to a
+        # message box that would wait for a click.
+        $text = [regex]::Replace($text, '(?im)^#Warn\s*$', '#Warn All, StdOut')
+        $text = [regex]::Replace($text, '(?im)^(#Warn\b.*?),\s*MsgBox\s*$', '$1, StdOut')
+    }
+    if ($Entry) {
+        $include = $IsolateInclude + $(if ($Probes) { "`r`n#Include %A_ScriptDir%\isolate-probes.ahk" } else { '' })
+        $requires = [regex]::Match($text, '(?im)^#Requires\b.*$')
+        $text = if ($requires.Success) { $text.Insert($requires.Index + $requires.Length, "`r`n$include") } else { "$include`r`n$text" }
+    }
+    return $text
+}
+
+# Code alone: strings and comments become blanks, keeping the line breaks.
+function Get-AhkCode([string]$text) {
+    $keepLines = { param($m) -join ($m.Value.ToCharArray() | Where-Object { $_ -eq "`n" }) }
+    $text = [regex]::Replace($text, '(?ms)^\s*/\*.*?^\s*\*/', $keepLines)
+    $text = [regex]::Replace($text, '"(?:[^"`\r\n]|`.)*"|''(?:[^''`\r\n]|`.)*''', '""')
+    return [regex]::Replace($text, '(?m)(^|\s);.*$', '$1')
+}
+
+# Everything in a copy that could still act outside it, as "file:line: what".
+# The hook itself is the one file allowed the real calls.
+function Find-IsolationHazards([string]$folder) {
+    $hazards = @()
+    $add = { param($file, $text, $index, $what) $line = ($text.Substring(0, $index) -split "`n").Count; "${file}:${line}: $what" }
+    foreach ($item in (Get-ChildItem -LiteralPath $folder -Recurse -File -Filter *.ahk)) {
+        if ($item.Name -eq 'isolate-hook.ahk' -and $item.DirectoryName -eq $folder) { continue }
+        $file = $item.FullName.Substring($folder.Length + 1)
+        $text = [IO.File]::ReadAllText($item.FullName)
+        $code = Get-AhkCode $text
+        $checks = @(
+            @{ In = $text; Pattern = '(?i)(?<!\w)F24(?!\w)'; What = 'the Super key (F24)' }
+            @{ In = $text; Pattern = '(?im)^\s*[~$*]*\^!\+a::'; What = "the reload hotkey (Ctrl+Alt+Shift+A)" }
+            @{ In = $text; Pattern = '(?<!\d)5232(?!\d)'; What = "the live calendar's port" }
+            @{ In = $text; Pattern = "(?i)(?<![\w.#`"'])($IsolateGuarded)\("; What = 'an unguarded call' }
+            @{ In = $code; Pattern = "(?im)^\s*(?:try\s+|else\s+)?($IsolateGuarded)\s+(?![:+\-*/.|&^]?=)[^\s,)]"; What = 'an unguarded call, without brackets' }
+            @{ In = $code; Pattern = "(?im)::\s*($IsolateGuarded)\s+[^\s(]"; What = 'an unguarded call, without brackets' }
+            # A bare name that isn't called, indexed or assigned to: a built-in passed on.
+            @{ In = $code; Pattern = "(?i)(?<![\w.#&$%])($IsolateGuarded)(?![\w(\[.]|[ \t]*[:+\-*/|&^]?=(?!=)|[ \t]+[^\s,)\]])"; What = 'a built-in passed on unguarded' }
+            @{ In = $text; Pattern = "(?i)DllCall\(\s*`"($IsolatePowerCalls)`""; What = 'a power call' }
+            @{ In = $text; Pattern = '(?i)(?<![\w.])Send\(\s*ASCS_SoundSwitchKey'; What = 'the audio switch' }
+            @{ In = $code; Pattern = '(?i)\.(ShellExecute\w*|Exec|Run)\(|ComObject\(\s*"WScript\.Shell'; What = 'a launch through COM' }
+        )
+        foreach ($check in $checks) {
+            foreach ($match in [regex]::Matches($check.In, $check.Pattern)) {
+                $hazards += & $add $file $check.In $match.Index "$($check.What): $($match.Value.Trim())"
+            }
+        }
+        # A script at the top runs on its own; the probes are included by the main one.
+        if ($item.DirectoryName -eq $folder -and $item.Name -ne 'isolate-probes.ahk' -and -not $text.Contains($IsolateInclude)) { $hazards += "${file}: runs without the hook" }
+    }
+    foreach ($name in 'ASCS.ahk', 'ASCS.Launcher.ahk', 'data\secrets.ini') {
+        if (Test-Path -LiteralPath (Join-Path $folder $name)) { $hazards += "${name}: shouldn't be in a copy" }
+    }
+    return $hazards
+}
+
+function Invoke-IsolateClean {
+    $root = Get-IsolateRoot
+    $running = @(Get-CimInstance Win32_Process -Filter "Name='AutoHotkey64.exe'" | ForEach-Object { "$($_.CommandLine)" })
+    $removed = 0
+    foreach ($copy in (Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue)) {
+        if (-not (Test-Path -LiteralPath (Join-Path $copy.FullName $IsolateMarker))) { continue }
+        if ($running | Where-Object { $_.IndexOf("$($copy.FullName)\", [StringComparison]::OrdinalIgnoreCase) -ge 0 }) { Write-Host "Kept $($copy.FullName): it's running."; continue }
+        try { [IO.Directory]::Delete($copy.FullName, $true); $removed++ }
+        catch { Write-Host "Couldn't remove $($copy.FullName): $($_.Exception.Message)" }
+    }
+    Write-Host "Removed $removed isolated $(if ($removed -eq 1) { 'copy' } else { 'copies' })."
+}
+
+function Invoke-Isolate([string[]]$options) {
+    $run = $false; $clean = $false; $seconds = 120; $probes = ''
+    for ($i = 0; $i -lt $options.Count; $i++) {
+        switch ($options[$i]) {
+            '--run' { $run = $true }
+            '--clean' { $clean = $true }
+            '--for' {
+                $i++
+                if ($i -ge $options.Count -or $options[$i] -notmatch '^\d{1,4}$' -or [int]$options[$i] -lt 1) { Stop-WithError '--for needs a number of seconds, 1 to 9999.' }
+                $seconds = [int]$options[$i]
+            }
+            '--hook' {
+                $i++
+                if ($i -ge $options.Count) { Stop-WithError '--hook needs an .ahk file.' }
+                $probes = $options[$i]
+            }
+            default { Stop-WithError "isolate doesn't know $($options[$i]). See: maestro help" }
+        }
+    }
+    if ($clean) {
+        if ($run -or $probes) { Stop-WithError '--clean takes no other options.' }
+        Invoke-IsolateClean
+        return
+    }
+    if ($probes) {
+        if (-not (Test-Path -LiteralPath $probes -PathType Leaf) -or $probes -notmatch '\.ahk$') { Stop-WithError "$probes isn't an .ahk file." }
+        $probes = (Resolve-Path -LiteralPath $probes).ProviderPath
+    }
+    $source = Get-HereCheckout
+    if (-not (Test-Path -LiteralPath (Join-Path $source 'ASCS.ahk'))) { Stop-WithError "$source has no ASCS.ahk to copy." }
+    $hook = Join-Path $PSScriptRoot 'isolate-hook.ahk'
+    $version = (Get-VersionSpots $source)['ASCS_Version']
+    $root = Get-IsolateRoot
+    $base = Join-Path $root "$(if ($version) { $version } else { 'copy' })-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+    $copy = $base
+    for ($n = 2; Test-Path -LiteralPath $copy; $n++) { $copy = "$base-$n" }
+    [IO.Directory]::CreateDirectory($copy) | Out-Null
+    $utf8 = [Text.UTF8Encoding]::new($false)
+    try {
+        [IO.File]::WriteAllText((Join-Path $copy $IsolateMarker), "Made by maestro isolate from $source. maestro isolate --clean deletes it.`r`n")
+        foreach ($folder in $IsolateFolders) {
+            $from = Join-Path $source $folder
+            if (Test-Path -LiteralPath $from) { Copy-Item -LiteralPath $from -Destination (Join-Path $copy $folder) -Recurse }
+        }
+        foreach ($file in $IsolateFiles) {
+            $from = Join-Path $source $file
+            if (-not (Test-Path -LiteralPath $from)) { continue }
+            $main = $file -eq 'ASCS.ahk'
+            $text = ConvertTo-IsolatedScript ([IO.File]::ReadAllText($from)) -Entry -Probes:($main -and [bool]$probes) -Main:$main
+            [IO.File]::WriteAllText((Join-Path $copy $(if ($main) { $IsolateMain } else { $file })), $text, $utf8)
+        }
+        foreach ($item in (Get-ChildItem -LiteralPath $copy -Recurse -File -Filter *.ahk | Where-Object { $_.DirectoryName -ne $copy })) {
+            [IO.File]::WriteAllText($item.FullName, (ConvertTo-IsolatedScript ([IO.File]::ReadAllText($item.FullName))), $utf8)
+        }
+        if ($probes) { [IO.File]::WriteAllText((Join-Path $copy 'isolate-probes.ahk'), (ConvertTo-IsolatedScript ([IO.File]::ReadAllText($probes))), $utf8) }
+        $hookText = [regex]::Replace([IO.File]::ReadAllText($hook), '(?m)^(global Isolate_Seconds := )\d+', "`${1}$seconds")
+        [IO.File]::WriteAllText((Join-Path $copy 'isolate-hook.ahk'), $hookText, $utf8)
+        # A data folder of its own, marked so the title bar says TEST BUILD and backups stay off.
+        $data = Join-Path $copy 'data'
+        [IO.Directory]::CreateDirectory($data) | Out-Null
+        [IO.File]::WriteAllText((Join-Path $data $TestMarker), "Made by maestro isolate.`r`n")
+
+        $hazards = @(Find-IsolationHazards $copy)
+        if ($hazards.Count) { throw "The copy could still act outside itself, so it was deleted:`n" + (($hazards | ForEach-Object { "  $_" }) -join "`n") }
+        foreach ($file in @($IsolateMain, 'ASCS.DriveProbe.ahk', 'ASCS.HardwareProbe.ahk')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $copy $file))) { continue }
+            $problem = Test-AhkScriptParse $copy $file
+            if ($problem) { throw "The copy's $file doesn't parse, so it was deleted:`n$problem" }
+        }
+    } catch {
+        try { [IO.Directory]::Delete($copy, $true) } catch { }
+        Stop-WithError "$($_.Exception.Message)"
+    }
+
+    $script = Join-Path $copy $IsolateMain
+    Write-Host "Isolated copy of $source"
+    Write-Host "  $copy"
+    Write-Host "Super is Pause there, Ctrl+Alt+Shift+A is left to your Maestro, and the calendar would use port $IsolatePort."
+    Write-Host 'Launches, registry writes, power, mute and audio switches, and file changes outside the copy are written to isolate-log.txt instead.'
+    Write-Host "It exits by itself $seconds s after it starts."
+    if (-not $run) {
+        Write-Host "To run it: `"$AhkExe`" /ErrorStdOut=UTF-8 `"$script`""
+        return
+    }
+
+    Write-Host ''
+    Write-Host "Running it for up to $seconds s..."
+    $stdout = Join-Path $copy 'stdout.txt'
+    $stderr = Join-Path $copy 'stderr.txt'
+    $process = Start-Process $AhkExe -ArgumentList @('/ErrorStdOut=UTF-8', "`"$script`"") -WorkingDirectory $copy -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+    $null = $process.Handle
+    $ended = $process.WaitForExit(($seconds + 30) * 1000)
+    if (-not $ended) { $process.Kill() }
+    $read = { param($path) for ($try = 0; $try -lt 20; $try++) { try { return @([IO.File]::ReadAllLines($path) | Where-Object { $_ }) } catch { Start-Sleep -Milliseconds 250 } }; @() }
+    $log = @(& $read (Join-Path $copy 'isolate-log.txt'))
+    $warnings = @(& $read $stdout)
+    $errors = @(& $read $stderr)
+    Write-Host ''
+    Write-Host 'isolate-log.txt:'
+    $log | ForEach-Object { Write-Host "  $_" }
+    if ($warnings.Count) { Write-Host 'Warnings:'; $warnings | ForEach-Object { Write-Host "  $_" } }
+    if ($errors.Count) { Write-Host 'Errors:'; $errors | ForEach-Object { Write-Host "  $_" } }
+    $failed = @($log | Where-Object { $_ -match '^\S+\s+\S+\s+error\b' }).Count + $errors.Count
+    if (-not $ended) { Write-Host "It didn't exit within $($seconds + 30) s, so it was closed."; $failed++ }
+    elseif ($process.ExitCode -ne 0) { Write-Host "It exited with code $($process.ExitCode)."; $failed++ }
+    Write-Host ''
+    if ($failed) { Write-Host 'Not clean: see above.'; $global:LASTEXITCODE = 1; exit 1 }
+    Write-Host 'Ran clean.'
+}
+
+# ---- preview
+
+function Invoke-Preview([string[]]$options) {
+    $scenes = @(); $sizes = @(); $audit = $false; $list = $false; $out = ''
+    for ($i = 0; $i -lt $options.Count; $i++) {
+        $option = $options[$i]
+        if ($option -eq '--list') { $list = $true }
+        elseif ($option -eq '--audit') { $audit = $true }
+        elseif ($option -in '--size', '--to') {
+            $i++
+            if ($i -ge $options.Count) { Stop-WithError "$option needs a value." }
+            if ($option -eq '--to') { $out = $options[$i] }
+            else {
+                foreach ($size in ($options[$i] -split ',')) {
+                    if ($size -notmatch '^\d{3,5}x\d{3,5}$') { Stop-WithError "$size isn't a size like 2540x1224." }
+                    $sizes += $size
+                }
+            }
+        }
+        elseif ($option -like '-*') { Stop-WithError "preview doesn't know $option. See: maestro help" }
+        else { $scenes += @($option -split ',' | Where-Object { $_ }) }
+    }
+    $folder = Get-HereCheckout
+    $script = Join-Path $folder 'tests\preview\preview.ps1'
+    if (-not (Test-Path -LiteralPath $script)) { Stop-WithError "$folder has no tests\preview\preview.ps1." }
+    if ($list) {
+        & pwsh -NoProfile -File $script -List
+        return
+    }
+    if (-not $scenes.Count) { Stop-WithError "Name a scene or more, or all. See them with: maestro preview --list" }
+    if (-not $out) { $out = Join-Path ([IO.Path]::GetTempPath()) "maestro-preview\$(Get-Date -Format 'yyyyMMdd-HHmmss')" }
+    $arguments = @('-OutDir', $out)
+    if ($scenes -notcontains 'all') { $arguments += @('-Scenes', ($scenes -join ',')) }
+    if ($sizes.Count) { $arguments += @('-Sizes', ($sizes -join ',')) }
+    if ($audit) { $arguments += '-Audit' }
+    & pwsh -NoProfile -File $script @arguments
+    if ($LASTEXITCODE -ne 0) { Stop-WithError 'The preview failed.' }
+    Get-ChildItem -LiteralPath $out -File | Where-Object { $_.Extension -in '.png', '.json' } | ForEach-Object { Write-Host $_.FullName }
+}
+
 # ---- help
 
 function Invoke-Help {
@@ -1029,6 +1447,37 @@ maestro <command> [options]
         --dry-run, -n   Show what would happen, and change nothing
         --yes, -y       Don't ask
 
+  doctor
+      Checks what Maestro needs (AutoHotkey v2, the WebView2 Runtime,
+      WebViewToo, git, the data folder), what it can use (the desktop DLL,
+      Everything, Edge, the calendar server at its pinned version), and the
+      sign-in side: maestro.cmd, the scripts that read the startup sounds, the
+      sign-in task, the Startup folder against its working copy, and the
+      shortcuts. Changes nothing. Says how to fix each problem.
+
+  isolate [--run] [--for <seconds>] [--hook <file.ahk>]
+      Makes a copy of the checkout you're standing in that can't act outside
+      itself, in the temp folder: an empty data folder, Super on Pause, no
+      Ctrl+Alt+Shift+A, the calendar on port 5233, and launches, registry
+      writes, power, mute, audio switches and file changes outside the copy
+      written to its isolate-log.txt instead. It's checked for anything left,
+      and parsed, before it can run, and it exits by itself.
+        --run           Run it, wait for it to exit, and show its log
+        --for <seconds> How long it runs before it exits (120)
+        --hook <file>   An .ahk file of probes, included after the guard; start
+                        them with SetTimer, since Maestro isn't set up yet
+  isolate --clean
+      Deletes the copies isolate made, except any that are running.
+
+  preview <scene,...|all> [--size WxH] [--audit] [--to <folder>]
+      Screenshots of the checkout you're standing in, from the preview scenes:
+      the real page with stand-in data, in headless Edge. Writes to a new
+      folder in the temp folder unless you name one, and lists the files.
+        --size WxH      The window size, or several, comma-separated (2540x1224)
+        --audit         Also each scene's layout audit, as JSON
+  preview --list
+      The scenes.
+
   help
       This list.
 '@
@@ -1044,6 +1493,9 @@ $Commands = @{
     'new-release' = { Invoke-NewRelease $Rest }
     'bump'        = { Invoke-Bump $Rest }
     'clean'       = { Invoke-Clean $Rest }
+    'doctor'      = { Invoke-Doctor $Rest }
+    'isolate'     = { Invoke-Isolate $Rest }
+    'preview'     = { Invoke-Preview $Rest }
     'help'        = { Invoke-Help }
 }
 

@@ -62,18 +62,19 @@
 
 :root {
   /* Type. Bahnschrift SemiCondensed ships with Windows: titles, numbers,
-     controls. Lato ships with Maestro: reading. Nothing is under 17 px. */
+     controls. Lato ships with Maestro: reading. Since 2.2.0 Lato is never under
+     18 px and the condensed face never under 19, since it reads smaller. */
   --font-display: "Maestro Display", "Bahnschrift SemiCondensed", "Bahnschrift", "Segoe UI", sans-serif;
   --font-body: "Lato", "Segoe UI", sans-serif;
   --text-scale: 1;     /* Preferences > Text size sets this. */
-  --t-floor: calc(17px * var(--text-scale));
-  --t-sub: calc(18px * var(--text-scale));
+  --t-floor: calc(18px * var(--text-scale));
+  --t-sub: calc(19px * var(--text-scale));
   --t-body: calc(19px * var(--text-scale));
-  --t-button: calc(19px * var(--text-scale));
-  --t-tab: calc(21px * var(--text-scale));
-  --t-subhead: calc(22px * var(--text-scale));
+  --t-button: calc(20px * var(--text-scale));
+  --t-tab: calc(22px * var(--text-scale));
+  --t-subhead: calc(23px * var(--text-scale));
   --t-nav: calc(24px * var(--text-scale));
-  --t-module: calc(25px * var(--text-scale));
+  --t-module: calc(26px * var(--text-scale));
   --t-name: calc(34px * var(--text-scale));
   --t-time: calc(36px * var(--text-scale));
   --t-number: calc(40px * var(--text-scale));
@@ -105,6 +106,25 @@
   --brand-burgundy-text: #f0a5bf;
   --brand-gold: #d9b95f;
   --brand-gold-text: #ecd48c;
+  /* 2.2.0, the Lacquer finish: depth from a lighter top edge and soft shadows,
+     in three levels (page, module, overlay). */
+  --surface-module-top: #1e2032;
+  --surface-overlay: #232539;
+  --line-button: #41455f;
+  --highlight: inset 0 1px 0 rgba(255, 255, 255, .055);
+  --highlight-strong: inset 0 1px 0 rgba(255, 255, 255, .17);
+  --elevation-1: 0 1px 0 rgba(0, 0, 0, .35), 0 14px 30px -16px rgba(0, 0, 0, .6);
+  --elevation-2: 0 28px 70px -16px rgba(0, 0, 0, .75), 0 2px 8px rgba(0, 0, 0, .45);
+  --fill-primary: linear-gradient(180deg, #4a22c0, #3a12a6);
+  --fill-primary-hover: linear-gradient(180deg, #5730d4, #4a22c0);
+  --fill-secondary: linear-gradient(180deg, #2b2e45, #25283c);
+  --fill-secondary-hover: linear-gradient(180deg, #363a54, #2e3249);
+  --glow-primary: 0 8px 18px -10px rgba(74, 34, 192, 1);
+  /* Motion: one curve, three speeds. Only position and opacity move. */
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --dur-quick: 120ms;
+  --dur-standard: 200ms;
+  --dur-entrance: 320ms;
 
   /* Space and shape. */
   --space-page: 28px;

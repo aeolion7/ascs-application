@@ -200,6 +200,8 @@ function navigate(view, fromHistory = false) {
         element.classList.toggle("active", element.id === view);
         element.setAttribute("aria-hidden", String(element.id !== view));
     });
+    // The page comes in from where it sits in the sidebar (2.2.0).
+    globalThis.MaestroMotion?.pageEnters(previousView, view);
 
     document.querySelectorAll(".nav").forEach(button => {
         const isCurrent = button.dataset.view === view;
@@ -501,7 +503,7 @@ function buildLauncherResults() {
             const recent = Palette.recentIds(usage, 5).map(id => byId.get(id)).filter(Boolean)
                 .map(item => ({ ...item, group: "Recent" }));
             const recentIds = new Set(recent.map(item => item.id));
-            return [...recent, ...visible.filter(item => !recentIds.has(item.id)).map(item => ({ ...item, group: "All commands" }))];
+            return [...recent, ...visible.filter(item => !recentIds.has(item.id)).map(item => ({ ...item, group: "All Commands" }))];
         }
         return visible;
     }
@@ -568,7 +570,9 @@ function renderLauncherResults() {
         }
         const badge = document.createElement("span");
         badge.className = "launcher-option-action";
-        badge.textContent = command.badge || "RUN";
+        // Kinds stay in capitals in code; they show in sentence case (2.2.0).
+        const kind = command.badge || "RUN";
+        badge.textContent = kind[0] + kind.slice(1).toLowerCase();
         meta.append(badge);
         option.append(copy, meta);
         option.addEventListener("mouseenter", () => {
@@ -975,7 +979,7 @@ function noteListItem(note) {
         const mark = document.createElement("span");
         mark.className = "pin-mark";
         mark.setAttribute("aria-label", "Pinned");
-        mark.textContent = "◆ ";
+        mark.append(MaestroIcons.create("pin"));
         title.prepend(mark);
     }
     item.classList.toggle("is-pinned", Boolean(note.pinned));
@@ -1027,10 +1031,14 @@ function noteGroupSection(group, filtering) {
     toggle.dataset.groupKey = key;
     toggle.setAttribute("aria-expanded", String(open));
     toggle.title = open ? `Close ${group.name}` : `Open ${group.name}`;
-    const chevron = svgNode("svg", { viewBox: "0 0 12 12", "aria-hidden": "true" });
-    chevron.append(svgNode("path", { d: "M4.5 2.5 8 6l-3.5 3.5" }));
+    const chevron = MaestroIcons.create("chevron-right");
     const name = element("span", "note-group-name", group.name);
-    if (group.pinned) name.prepend(element("span", "pin-mark", "◆ "));
+    if (group.pinned) {
+        const mark = element("span", "pin-mark");
+        mark.setAttribute("aria-label", "Pinned");
+        mark.append(MaestroIcons.create("pin"));
+        name.prepend(mark);
+    }
     toggle.append(chevron, name, element("small", "note-group-count", String(group.notes.length)));
     toggle.addEventListener("click", () => {
         if (filtering) return;                   // a filter shows every match
@@ -1041,9 +1049,11 @@ function noteGroupSection(group, filtering) {
     });
     head.append(toggle);
     if (!group.ungrouped) {
-        const more = element("button", "note-group-more", "⋯");
+        const more = element("button", "note-group-more");
+        more.append(MaestroIcons.create("more"));
         more.type = "button";
         more.title = `${group.name}: pin, rename or delete`;
+        more.setAttribute("aria-label", more.title);
         more.setAttribute("aria-haspopup", "menu");
         more.addEventListener("click", event => {
             event.stopPropagation();
@@ -1739,11 +1749,25 @@ function handleWebMessage(event) {
             break;
         case "windowShown":
             windowIsHidden = false;
-            swingMark();
+            // 2.2.0: AutoHotkey's start screen swings the logo itself, so the sidebar's doesn't,
+            // whatever Logo swing says; the sheen waits until it dissolves (startScreenDone),
+            // so it's seen; three seconds at most.
+            clearTimeout(startScreenWait);
+            if (data.startScreen === true) {
+                markHasSwung = true;
+                startScreenWait = setTimeout(() => openingMotion(false), 3000);
+                prepareGames();
+            } else openingMotion();
             globalThis.syncSystemView?.();
+            break;
+        case "startScreenDone":
+            if (startScreenWait !== null && !windowIsHidden) openingMotion(false);
             break;
         case "windowHidden":
             windowIsHidden = true;
+            clearTimeout(startScreenWait);
+            startScreenWait = null;
+            globalThis.MaestroMotion?.hidden();
             prepareMark();
             globalThis.syncSystemView?.();
             break;
@@ -1972,6 +1996,16 @@ function handleWebMessage(event) {
                 renderAchievements();
             }
             break;
+        case "retroAchievementsAt":
+            // 2.2.0: kept replies come with when they were fetched.
+            if (Number.isFinite(data.at) && data.at > 0) {
+                gamesState.ra.updatedAt = Math.min(data.at, Date.now());
+                updateRaTimestamp();
+            }
+            break;
+        case "prepareViews":
+            prepareViews();
+            break;
         case "retroAchievements":
             gamesState.ra.state = typeof data.state === "string" ? data.state : "off";
             gamesState.ra.message = typeof data.message === "string" ? data.message : "";
@@ -2079,6 +2113,13 @@ function updateShortcutReference(hotkeys) {
         else currentHotkeys[key] = currentHotkeys[key].toLowerCase();
     });
     renderKeymap();
+}
+
+// A number counts to its new value (2.2.0); before motion.js has loaded, a
+// reply that arrives early is just written.
+function countTo(node, value, format) {
+    if (globalThis.MaestroMotion) MaestroMotion.count(node, value, format);
+    else node.textContent = format(value);
 }
 
 function formatMetric(value) {
@@ -2215,6 +2256,23 @@ function swingMark() {
     setTimeout(start, 120);     // no frames come while nothing is drawing
 }
 
+// What a show sets moving (2.2.0): MAESTRO's sheen, and the logo's swing unless the
+// start screen swung it.
+let startScreenWait = null;
+function openingMotion(swing = true) {
+    clearTimeout(startScreenWait);
+    startScreenWait = null;
+    globalThis.MaestroMotion?.shown();
+    if (swing) swingMark();
+}
+
+// The start screen is AutoHotkey's window, so it's told whether to play it:
+// not when the logo never swings, or with Windows' reduced motion (2.2.0).
+const startScreenWanted = () => !markMotionOff() && MaestroAppearance.swingMode(readAppearance(LOGO_SWING_KEY)) !== "never";
+function tellStartScreen() {
+    send("SetStartScreen", startScreenWanted() ? "on" : "off");
+}
+
 function previewMarkSwing() {
     const arm = markArm();
     if (!arm || markMotionOff()) return;
@@ -2239,7 +2297,10 @@ $("logoSwing").value = MaestroAppearance.swingMode(readAppearance(LOGO_SWING_KEY
 $("logoSwing").addEventListener("change", () => {
     keepAppearance(LOGO_SWING_KEY, $("logoSwing").value);
     if ($("logoSwing").value !== "never") previewMarkSwing();      // so you can see what you chose
+    tellStartScreen();
 });
+matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", tellStartScreen);
+tellStartScreen();
 
 setInterval(() => {
     if (document.visibilityState === "visible") {
@@ -2726,38 +2787,15 @@ updateTopbar();
 
 const DEFAULT_QUICK_ACTIONS = ["launch:terminal", "launch:explorer", "view:notes", "launch:taskmanager", "launch:calculator"];
 const MAX_QUICK_ACTIONS = 6;
-const QUICK_ACTION_ICONS = {
-    VIEW: '<path d="M4 5.5h16v13H4z"/><path d="M4 9.5h16"/>',
-    APP: '<path d="m5 7 5 5-5 5m7 0h7"/>',
-    FIND: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/>',
-    CUSTOM: '<path d="M12 3.5 14.4 9l5.9.5-4.5 3.9 1.4 5.8L12 16.2 6.8 19.2l1.4-5.8L3.7 9.5 9.6 9z"/>',
-    WORKSPACE: '<rect x="3.5" y="4.5" width="7" height="15" rx="1.5"/><rect x="13.5" y="4.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="6" rx="1.5"/>',
-    CODE: '<path d="m9 8-4 4 4 4m6-8 4 4-4 4"/>',
-    NOTE: '<path d="M6.5 3.75h7l4 4v12.5h-11a2 2 0 0 1-2-2v-12a2.5 2.5 0 0 1 2-2.5Z"/><path d="M13.5 4v4h4m-9 4.5h6m-6 3.5h6"/>'
-};
-// Specific icons for common items; anything else uses its kind's icon.
+// Each kind's icon from the set (icons.js), and specific ones for common items.
+const KIND_ICONS = { VIEW: "window", APP: "terminal", FIND: "search", CUSTOM: "star", WORKSPACE: "layout", CODE: "code", NOTE: "notes" };
 const ITEM_ICONS = {
-    "view:home": '<rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/>',
-    "view:notes": QUICK_ACTION_ICONS.NOTE,
-    "view:dashboard": '<path d="M4 19.5V12m5.3 7.5V5m5.4 14.5v-10m5.3 10V8"/>',
-    "view:commands": '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 9h2m3 0h2m3 0h.01M7 13h.01m3 0h.01m3 0h.01m3 0h.01M8 16h8"/>',
-    "view:games": '<path d="M7.5 8h9a4.5 4.5 0 0 1 4.3 5.8l-1 3.3a2.2 2.2 0 0 1-3.7.9L14 16h-4l-2.1 2a2.2 2.2 0 0 1-3.7-.9l-1-3.3A4.5 4.5 0 0 1 7.5 8Z"/><path d="M8 11v3m-1.5-1.5h3"/>',
-    "view:logs": '<path d="M5 6.5h.01M5 12h.01M5 17.5h.01M9 6.5h10M9 12h10M9 17.5h6"/>',
-    "view:settings": '<circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.5m0 13V21M3 12h2.5m13 0H21M5.6 5.6l1.8 1.8m9.2 9.2 1.8 1.8M5.6 18.4l1.8-1.8m9.2-9.2 1.8-1.8"/>',
-    "launch:terminal": '<path d="m5 7 5 5-5 5m7 0h7"/>',
-    "launch:explorer": '<path d="M3.5 7.5a2 2 0 0 1 2-2h5l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-10Z"/><path d="M3.75 10h16.5"/>',
-    "launch:calculator": '<rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8.5 7h7m-7 5h.01m3.5 0h.01m3.5 0h.01m-7 4h.01m3.5 0h.01m3.5 0h.01"/>',
-    "launch:claude": '<path d="M12 3.5v4m0 9v4M3.5 12h4m9 0h4M6 6l2.8 2.8m6.4 6.4L18 18M6 18l2.8-2.8m6.4-6.4L18 6"/>',
-    "launch:taskmanager": '<path d="M4 19V5m0 14h16"/><path d="m7 15 3-4 3 2 5-6"/>',
-    "launch:everything": QUICK_ACTION_ICONS.FIND,
-    "launch:vivaldi": '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.6 5.4 3.6 8.5s-1.1 5.9-3.6 8.5c-2.5-2.6-3.6-5.4-3.6-8.5S9.5 6.1 12 3.5Z"/>',
-    "launch:settings": '<circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.5m0 13V21M3 12h2.5m13 0H21M5.6 5.6l1.8 1.8m9.2 9.2 1.8 1.8M5.6 18.4l1.8-1.8m9.2-9.2 1.8-1.8"/>',
-    "launch:downloads": '<path d="M12 4v11m-4.5-4.5L12 15l4.5-4.5M5 19.5h14"/>',
-    "launch:projects": '<path d="M3.5 7.5a2 2 0 0 1 2-2h5l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-10Z"/>',
-    "launch:snipping": '<circle cx="6.5" cy="7" r="2.5"/><circle cx="6.5" cy="17" r="2.5"/><path d="m8.6 8.4 11 8.1m0-9-11 8.1"/>',
-    "launch:lock": '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
-    "launch:mute": '<path d="M4.5 9.5h3l4.5-4v13l-4.5-4h-3z"/><path d="m16 9.5 5 5m0-5-5 5"/>',
-    "launch:reload": '<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4.2h-4.2"/>'
+    "view:home": "home", "view:notes": "notes", "view:dashboard": "system", "view:commands": "commands",
+    "view:games": "games", "view:logs": "logs", "view:settings": "settings",
+    "launch:terminal": "terminal", "launch:explorer": "folder-open", "launch:calculator": "calculator",
+    "launch:claude": "spark", "launch:taskmanager": "chart", "launch:everything": "search", "launch:vivaldi": "globe",
+    "launch:settings": "settings", "launch:downloads": "download", "launch:projects": "folder", "launch:snipping": "scissors",
+    "launch:lock": "lock", "launch:mute": "mute", "launch:reload": "reload"
 };
 let quickActionIds = null;      // null: never customized, so the defaults show
 
@@ -2770,8 +2808,7 @@ function quickActionCatalog() {
 }
 
 function iconSvg(item) {
-    const paths = (item && ITEM_ICONS[item.id]) || QUICK_ACTION_ICONS[item?.badge] || QUICK_ACTION_ICONS.APP;
-    return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths}</svg>`;
+    return MaestroIcons.markup((item && ITEM_ICONS[item.id]) || KIND_ICONS[item?.badge] || KIND_ICONS.APP, 24);
 }
 
 function renderQuickActions() {
@@ -2803,7 +2840,7 @@ function renderQuickActions() {
         const arrow = document.createElement("span");
         arrow.className = "action-arrow";
         arrow.setAttribute("aria-hidden", "true");
-        arrow.textContent = item.view ? "→" : "↗";
+        arrow.append(MaestroIcons.create(item.view ? "arrow-right" : "arrow-up-right"));
         card.append(icon, copy, arrow);
         card.addEventListener("click", () => runQuickAction(item));
         wrap.append(card);
@@ -3413,11 +3450,11 @@ function renderAlmanac() {
     const dots = document.createElement("span");
     dots.className = "alm-dots";
     dots.setAttribute("aria-hidden", "true");
-    const arrow = (label, glyph, direction) => {
+    const arrow = (label, icon, direction) => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "alm-step";
-        button.textContent = glyph;
+        button.append(MaestroIcons.create(icon));
         button.setAttribute("aria-label", label);
         button.addEventListener("click", () => {
             stepAlmanac(direction);
@@ -3425,7 +3462,7 @@ function renderAlmanac() {
         });
         return button;
     };
-    controls.append(arrow("Previous almanac item", "‹", -1), dots, arrow("Next almanac item", "›", 1));
+    controls.append(arrow("Previous almanac item", "chevron-left", -1), dots, arrow("Next almanac item", "chevron-right", 1));
     story.append(stage, controls);
     strip.append(story);
     strip.hidden = false;
@@ -3696,7 +3733,7 @@ const Games = globalThis.ASCSGames;
 const COVER_PATTERN = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/;
 const gamesState = {
     items: [], loaded: false, filter: "all", sort: "recent", query: "",
-    covers: new Map(), requested: new Set(), coversEnabled: false,
+    covers: new Map(), requested: new Set(), coversEnabled: false, coversAhead: false,
     openId: "", details: new Map(), pads: [], renaming: "", tester: null, testerTimer: null, testerBuilt: "",
     ra: { state: "", summary: "", recent: "", message: "", updatedAt: 0,
         // 1.9.0, the achievement browser: games by RetroAchievements ID (raw
@@ -3746,6 +3783,12 @@ function gameCover(game, className) {
         holder.append(initials);
     }
     return holder;
+}
+
+// Games asks for covers while it's open, or ahead of time once Maestro has
+// prepared its pages (2.2.0).
+function coversWanted() {
+    return gamesState.coversAhead || $("games").classList.contains("active");
 }
 
 function requestCovers(games) {
@@ -3822,6 +3865,7 @@ function continueRow(game) {
     return row;
 }
 
+let playTimeShown = NaN;
 function renderPlayTime() {
     const totals = Games.totalsByEmulator(gamesState.items).filter(total => total.seconds > 0);
     const all = totals.reduce((sum, total) => sum + total.seconds, 0);
@@ -3832,7 +3876,7 @@ function renderPlayTime() {
     head.append(heading);
     const panel = $("gamesTotals");
     if (!totals.length) {
-        panel.replaceChildren(head, (gamesState.loaded ? element("p", "module-empty", "No play time recorded yet.") : loadingNote()));
+        panel.replaceChildren(head, (gamesState.loaded ? element("p", "module-empty", "No play time recorded yet.") : placeholder("meters")));
         return;
     }
     const rows = element("div", "sys-rows");
@@ -3850,7 +3894,12 @@ function renderPlayTime() {
         row.append(line, bar);
         rows.append(row);
     });
-    panel.replaceChildren(head, element("strong", "games-total", Games.formatDuration(all)), rows);
+    // The total counts to its new value when it changes in view (2.2.0).
+    const total = element("strong", "games-total");
+    total.dataset.countValue = String(playTimeShown);
+    panel.replaceChildren(head, total, rows);
+    countTo(total, all, Games.formatDuration);
+    playTimeShown = all;
 }
 
 function renderGames() {
@@ -3859,11 +3908,11 @@ function renderGames() {
     const recent = recentGames().slice(0, GAMES_CONTINUE_ROWS);
     $("gamesContinue").replaceChildren(...recent.map(continueRow));
     if (!recent.length) {
-        $("gamesContinue").append(element("li", "module-empty", gamesState.loaded ? "No recent games yet. Games you play in RetroArch, Dolphin, or PCSX2 appear here." : "Loading…"));
+        $("gamesContinue").append(gamesState.loaded ? element("li", "module-empty", "No recent games yet. Games you play in RetroArch, Dolphin, or PCSX2 appear here.") : placeholderItem("list"));
     }
     renderPlayTime();
     if (gamesSections.current() === "library") renderLibrary();
-    if ($("games").classList.contains("active")) requestCovers(recent);
+    if (coversWanted()) requestCovers(recent);
     renderHomeContinue();
 }
 
@@ -3875,12 +3924,13 @@ function renderLibrary() {
     if (!items.some(game => game.id === gamesState.openId) && shown[0]) gamesState.openId = shown[0].id;
     if (gamesState.openId) askGameDetails(gamesState.openId);
     $("gamesLibrary").replaceChildren(...shown.map(libraryRow));
-    $("gamesMeta").textContent = !gamesState.loaded ? "Loading…"
+    if (!gamesState.loaded) $("gamesLibrary").append(placeholderItem("list", 8));
+    $("gamesMeta").textContent = !gamesState.loaded ? ""
         : !items.length ? "No play time found yet. Check the programs in Games › Setup."
             : !visible.length ? "No games match."
                 : `${visible.length} game${visible.length === 1 ? "" : "s"}${visible.length > shown.length ? ` (showing ${shown.length})` : ""}`;
     renderGameDetail();
-    if ($("games").classList.contains("active")) requestCovers(shown.slice(0, 40));
+    if (coversWanted()) requestCovers(shown.slice(0, 40));
 }
 
 function renderGamesLive(data) {
@@ -3953,11 +4003,131 @@ function element(tag, className, text) {
     return node;
 }
 
-// What shows in a space being held for something still on its way (2.0.0).
-function loadingNote(text = "Loading") {
+// A status that says what's happening ("Starting the calendar server…",
+// "Measuring") while it happens (2.0.0). Something on its way shows its shape
+// instead: placeholder(), below.
+function loadingNote(text) {
     const note = element("p", "loading-note", text);
     note.setAttribute("role", "status");
     return note;
+}
+
+// Loading shown as the shape of what's coming (2.2.0): each kind is the layout
+// it holds the place of, so a module keeps its size and nothing moves when it
+// fills. The shapes appear only if the wait lasts past 180 ms, so a page filled
+// ahead of time never flashes them, and they breathe in step across the page
+// (each starts at the same point of one 3.2 s cycle). Not with reduced motion.
+const PLACEHOLDER_CYCLE = 3200;
+const PLACEHOLDER_WIDTHS = ["58%", "44%", "70%", "36%", "52%", "64%", "40%", "48%"];
+function skelShape(kind = "", width = "", height = "") {
+    const node = element("span", kind ? `skel-shape is-${kind}` : "skel-shape");
+    if (width) node.style.width = width;
+    if (height) node.style.height = height;
+    return node;
+}
+function skelGroup(className, ...children) {
+    const node = element("span", className);
+    node.append(...children);
+    return node;
+}
+const PLACEHOLDERS = {
+    // A name and, at the end, its date or value: Next Up, saved arrangements.
+    rows: (count = 3) => Array.from({ length: count }, (_, i) =>
+        skelGroup("skel-row is-split", skelShape("", PLACEHOLDER_WIDTHS[i % 8]), skelShape("", i % 2 ? "12%" : "18%"))),
+    // A mark, then a line: Today, the calendars.
+    marked: (count = 4) => Array.from({ length: count }, (_, i) =>
+        skelGroup("skel-row", skelShape("dot"), skelShape("", PLACEHOLDER_WIDTHS[(i + 2) % 8]))),
+    // Today: the almanac's lines, then the quote.
+    today: () => [...PLACEHOLDERS.marked(4), skelShape("", "92%"), skelShape("", "40%")],
+    // Lines of text: weather, pinned notes.
+    lines: (count = 3) => Array.from({ length: count }, (_, i) => skelShape("", PLACEHOLDER_WIDTHS[(i + 4) % 8])),
+    // Pills: countdowns, saved arrangements as buttons.
+    pills: (count = 3) => Array.from({ length: count }, () => skelShape("pill")),
+    // Now Playing's copy, beside its cover.
+    now: () => [
+        skelShape("big", "56%"), skelShape("", "30%"),
+        skelGroup("skel-row is-stats", ...["90px", "70px"].map(width => skelGroup("skel-stack", skelShape("", width), skelShape("big", "120px")))),
+        skelShape("bar", "100%"),
+        skelGroup("skel-row", skelShape("pill", "96px"), skelShape("pill", "140px"), skelShape("pill", "130px"))
+    ],
+    // A total, then a bar per part: Play Time, the drives.
+    meters: (count = 4) => [skelShape("big", "44%"), ...Array.from({ length: count }, (_, i) =>
+        skelGroup("skel-stack", skelGroup("skel-row is-split", skelShape("", ["30%", "26%", "34%", "22%"][i % 4]), skelShape("title", "16%")), skelShape("bar", "100%")))],
+    // Drives in one row, a column each, without a total.
+    drives: (count = 2) => {
+        const row = skelGroup("skel-grid is-drives", ...Array.from({ length: count }, () =>
+            skelGroup("skel-stack", skelGroup("skel-row is-split", skelShape("", "46%"), skelShape("title", "22%")), skelShape("bar", "100%"))));
+        row.style.gridTemplateColumns = `repeat(${count}, minmax(0, 1fr))`;
+        return [row];
+    },
+    // A thumbnail, a title and a line, and a button: Continue Playing, the library.
+    list: (count = 5) => Array.from({ length: count }, (_, i) => skelGroup("skel-row is-item",
+        skelShape("thumb"), skelGroup("skel-stack is-fill", skelShape("", PLACEHOLDER_WIDTHS[i % 8]), skelShape("", "34%")), skelShape("pill", "56px"))),
+    // A game's tile on the Command Center's shelf.
+    tile: () => [skelShape("cover"), skelShape("", "86%"), skelShape("", "60%")],
+    // Next Up on Games: the game, the next achievement, then its facts.
+    nextup: () => [skelShape("", "40%"),
+        skelGroup("skel-row is-top", skelShape("badge"), skelGroup("skel-stack is-fill", skelShape("title", "42%"), skelShape("", "88%"))),
+        ...PLACEHOLDERS.rows(5)],
+    // RetroAchievements: the player's figures, then recent games.
+    stats: () => [
+        skelGroup("skel-grid is-five", ...Array.from({ length: 5 }, () => skelGroup("skel-stack", skelShape("", "50%"), skelShape("big", "70%")))),
+        skelShape("title", "18%"),
+        skelGroup("skel-grid is-four", ...Array.from({ length: 8 }, () => skelGroup("skel-row is-top",
+            skelShape("badge", "64px", "64px"), skelGroup("skel-stack is-fill", skelShape("", "70%"), skelShape("", "44%"), skelShape("bar", "100%")))))
+    ],
+    // A grid of badges: site badges.
+    badges: (count = 12) => [skelGroup("skel-grid is-badges", ...Array.from({ length: count }, () => skelShape("badge")))],
+    // The Sounds library's version cards.
+    cards: (count = 4) => [skelShape("", "22%"), skelGroup("skel-grid is-four", ...Array.from({ length: count }, () =>
+        skelGroup("skel-row is-card", skelShape("badge", "52px", "52px"), skelGroup("skel-stack is-fill", skelShape("", "34%"), skelShape("title", "72%"), skelShape("", "44%")))))],
+    // Workspaces: the desktops, the screen, then its windows.
+    board: () => [skelGroup("skel-row", ...PLACEHOLDERS.pills(3).map(pill => { pill.style.width = "110px"; return pill; })),
+        skelShape("block", "100%", "420px"), ...PLACEHOLDERS.rows(4)],
+    // A note's text box and its buttons.
+    field: () => [skelShape("block", "100%", "262px"), skelGroup("skel-row", skelShape("pill", "120px"), skelShape("pill", "150px"))],
+    // The startup history: its graph, then its figures.
+    graph: () => [skelShape("block", "100%", "220px"), ...PLACEHOLDERS.rows(3)],
+    // Lines of a log.
+    log: (count = 10) => Array.from({ length: count }, (_, i) => skelShape("", PLACEHOLDER_WIDTHS[(i * 3) % 8])),
+    // One value in a line of text.
+    inline: () => [skelShape("", "9em")]
+};
+function placeholder(kind, count) {
+    const node = element("span", `skel is-${kind}`);
+    node.setAttribute("role", "status");
+    node.setAttribute("aria-label", "Loading");
+    node.style.setProperty("--skel-phase", `${-Math.round(performance.now() % PLACEHOLDER_CYCLE)}ms`);
+    node.append(...PLACEHOLDERS[kind](count));
+    return node;
+}
+// A list's placeholder, as its one item.
+function placeholderItem(kind, count) {
+    const item = element("li", "skel-item");
+    item.append(placeholder(kind, count));
+    return item;
+}
+// Spaces the page leaves empty until their data arrives hold their shape from
+// the start: data-placeholder names the kind, data-placeholder-count how many.
+function fillPlaceholders() {
+    document.querySelectorAll("[data-placeholder]").forEach(node => {
+        if (node.children.length) return;
+        const kind = node.dataset.placeholder;
+        const count = Number(node.dataset.placeholderCount) || undefined;
+        if (kind === "tiles") node.append(...Array.from({ length: count || 9 }, () => placeholder("tile")));
+        else if (node.matches("ol, ul")) node.append(placeholderItem(kind, count));
+        else node.append(placeholder(kind, count));
+    });
+}
+
+// A module with nothing to show yet (2.2.0): a quiet mark and one line,
+// centered in the room the module keeps, so nothing moves when it fills.
+function emptyState(text, mark = "play") {
+    const box = element("div", `empty-state is-${mark}`);
+    const glyph = element("span", "empty-state-mark");
+    glyph.setAttribute("aria-hidden", "true");
+    box.append(glyph, element("p", "", text));
+    return box;
 }
 
 function formatExactPlayed(iso) {
@@ -4032,7 +4202,7 @@ function renderGameDetail() {
         panel.replaceChildren();
         return;
     }
-    if ($("games").classList.contains("active")) requestCovers([game]);
+    if (coversWanted()) requestCovers([game]);
     panel.replaceChildren(gameDetailsPanel(game));
 }
 
@@ -4052,7 +4222,11 @@ function gameDetailsPanel(game) {
     fact("Last played", formatExactPlayed(game.last) || "Unknown");
     const extra = gamesState.details.get(game.id);
     if (extra) extra.fields.forEach(([label, value]) => fact(label, value));
-    else fact("Details", "Loading…");
+    else {
+        const waiting = element("dd");
+        waiting.append(placeholder("inline"));
+        facts.append(element("dt", "", "Details"), waiting);
+    }
     const progress = raProgressFor(game);
     if (progress && progress.possible) {
         fact("Achievements", `${progress.achieved} of ${progress.possible} (${progress.percent}%)${progress.mastered ? " · mastered" : ""}`);
@@ -4320,7 +4494,9 @@ function updateRaTimestamp() {
         return;
     }
     const minutes = Math.floor((Date.now() - at) / 60000);
-    $("raUpdated").textContent = minutes < 1 ? "Updated just now" : `Updated ${minutes} m ago`;
+    $("raUpdated").textContent = minutes < 1 ? "Updated just now"
+        : minutes < 60 ? `Updated ${minutes} m ago`
+            : minutes < 1440 ? `Updated ${Math.floor(minutes / 60)} h ago` : `Updated ${Math.floor(minutes / 1440)} d ago`;
 }
 
 // ---- the achievement browser (1.9.0)
@@ -4379,14 +4555,15 @@ function renderRaBrowser(box) {
     const ra = gamesState.ra;
     const id = ra.openGame;
     const panel = element("div", "ra-browser");
-    const back = element("button", "secondary ra-back", "‹ Achievements");
+    const back = element("button", "secondary ra-back", "Achievements");
+    back.prepend(MaestroIcons.create("chevron-left"));
     back.type = "button";
     back.addEventListener("click", () => { ra.openGame = 0; renderAchievements(); });
     panel.append(back);
     const raw = ra.games.get(id);
     const game = raw ? Games.parseRaGame(raw) : null;
     if (!game) {
-        panel.append(element("p", "settings-note", ra.gameErrors.get(id) || (raw ? "RetroAchievements sent something unexpected for this game." : "Loading…")));
+        panel.append(raw || ra.gameErrors.has(id) ? element("p", "settings-note", ra.gameErrors.get(id) || "RetroAchievements sent something unexpected for this game.") : placeholder("list", 6));
         box.append(panel);
         return;
     }
@@ -4466,10 +4643,10 @@ function renderGamesNextUp() {
     heading.id = "gamesNextUpTitle";
     if (waiting) {
         head.append(heading);
-        panel.replaceChildren(head, loadingNote());
+        panel.replaceChildren(head, placeholder("nextup"));
         return;
     }
-    const all = element("button", "link-button", "All achievements");
+    const all = element("button", "link-button has-chevron", "All achievements");
     all.type = "button";
     all.addEventListener("click", () => openRaGame(gameId));
     head.append(heading, all);
@@ -4521,7 +4698,12 @@ function renderAchievements() {
     $("refreshAchievements").hidden = !live;
     $("raProfile").hidden = ra.state !== "ok";
     updateRaTimestamp();
-    if (ra.state === "off" || ra.state === "invalid" || !ra.state) {
+    // Before RetroAchievements has said whether it's set up, it's on its way.
+    if (!ra.state) {
+        box.append(placeholder("stats"));
+        return;
+    }
+    if (ra.state === "off" || ra.state === "invalid") {
         box.append(element("p", "settings-note", ra.state === "invalid"
             ? ra.message || "The RetroAchievements details in data\\secrets.ini aren't valid."
             : "Connect RetroAchievements to see your points, rank, recent unlocks and progress here. Add your user name and Web API key to a local secrets file that is never committed."));
@@ -4536,7 +4718,7 @@ function renderAchievements() {
         return;
     }
     if (!ra.summary && !ra.recent) {
-        box.append(loadingNote());
+        box.append(placeholder("stats"));
         return;
     }
     const data = Games.parseRetroAchievements(ra.summary, ra.recent);
@@ -4636,11 +4818,14 @@ function renderAchievements() {
         }
         unlockList.append(item);
     });
-    if (!unlockList.children.length) unlockList.append(element("li", "settings-note", ra.unlocksOpen ? (ra.unlocksError || (ra.unlocks ? "No unlocks in the last 30 days." : "Loading…")) : "No recent unlocks."));
+    if (!unlockList.children.length) unlockList.append(ra.unlocksOpen && !ra.unlocksError && !ra.unlocks ? placeholderItem("rows", 4)
+        : element("li", "settings-note", ra.unlocksOpen ? (ra.unlocksError || "No unlocks in the last 30 days.") : "No recent unlocks."));
     unlocks.append(unlockList);
     const pager = element("div", "ra-pager");
-    const pageButton = (label, hint, disabled, onClick) => {
+    const pageButton = (label, hint, disabled, onClick, icon) => {
         const button = element("button", "link-button", label);
+        if (icon === "chevron-left") button.prepend(MaestroIcons.create(icon));
+        else if (icon) button.append(MaestroIcons.create(icon));
         button.type = "button";
         button.title = hint;
         button.disabled = disabled;
@@ -4657,9 +4842,9 @@ function renderAchievements() {
             }));
         }
     } else if (all) {
-        pager.append(pageButton("‹ Newer", "Newer unlocks", ra.unlockPage === 0, () => { ra.unlockPage--; renderAchievements(); }));
+        pager.append(pageButton("Newer", "Newer unlocks", ra.unlockPage === 0, () => { ra.unlockPage--; renderAchievements(); }, "chevron-left"));
         pager.append(element("small", "", all.length ? `${ra.unlockPage * PAGE + 1}–${Math.min(all.length, ra.unlockPage * PAGE + PAGE)} of ${all.length} in the last 30 days` : ""));
-        pager.append(pageButton("Older ›", "Older unlocks", ra.unlockPage >= pages - 1, () => { ra.unlockPage++; renderAchievements(); }));
+        pager.append(pageButton("Older", "Older unlocks", ra.unlockPage >= pages - 1, () => { ra.unlockPage++; renderAchievements(); }, "chevron-right"));
     }
     if (pager.childElementCount) unlocks.append(pager);
     columns.append(progress, unlocks);
@@ -4716,6 +4901,28 @@ function handleRaImage(token, data) {
 }
 
 $("raProfile").addEventListener("click", () => send("OpenRetroAchievementsProfile"));
+
+// 2.2.0: once a run, while Maestro is hidden and idle, AutoHotkey says to fill
+// the pages that take a moment to, so they open filled: Sounds (its library,
+// Windows' and the startup sounds), Games (the library, the covers it shows
+// first) and RetroAchievements (summary, recent games and the site badges).
+function prepareViews() {
+    if (gamesState.coversAhead) return;
+    gamesState.coversAhead = true;
+    prepareSoundsView();
+    if (!gamesState.loaded) send("GetGames");
+    else renderGames();         // asks for the covers it shows
+    prepareGames();
+}
+
+// Games' requests to RetroAchievements, so Games opens filled: in the hidden
+// prep above, and as the start screen goes up, whichever comes first (Maestro
+// answers from memory within 10 minutes). They wait on the network, not on
+// AutoHotkey's thread, so the start screen's swing goes on.
+function prepareGames() {
+    send("GetRetroAchievements");
+    send("GetRaAwards");
+}
 
 // The library loads once, in the background, after the Command Center first
 // opens, so Games opens with it in place (1.9.2). It sends only the local

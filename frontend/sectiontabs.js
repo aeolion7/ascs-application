@@ -11,6 +11,7 @@
             const chosen = tabs.find(tab => tab.dataset.sectionTab === name);
             if (!chosen) return;
             const changed = current !== "" && current !== name;
+            const from = tabs.findIndex(tab => tab.dataset.sectionTab === current);
             // The focus stays with the row: never on a tab that isn't selected.
             const keepFocus = tabs.includes(document.activeElement);
             current = name;
@@ -22,6 +23,8 @@
                 if (panel) panel.hidden = !on;
             });
             if (focus || keepFocus) chosen.focus();
+            // The section comes in from the side its tab is on (2.2.0).
+            if (changed) globalThis.MaestroMotion?.sectionEnters(document.getElementById(chosen.getAttribute("aria-controls")), tabs.indexOf(chosen) > from ? 1 : -1);
             if (changed) onChange?.(name);
         }
 

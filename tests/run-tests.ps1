@@ -1,11 +1,14 @@
 <#
-    Runs the ASCS unit tests:
-      * tests\core.tests.ahk     — lib\ASCS.Core.ahk (validators, workspace matching, search, activity)
-      * tests\frontend.tests.html — the frontend modules' pure logic, in headless Edge
-      * tests\smoke.js (1.9.0)     — the real page, every module and stylesheet, with a stand-in
-                                   for WebView2: every view opens without script errors, and
-                                   every message it sends is in ASCS.ahk's allowlist
-    None of them touches the running ASCS instance or the data folder.
+    Runs Maestro's automated checks:
+      * core     tests\core.tests.ahk — lib\ASCS.Core.ahk (validators, workspace matching, search, activity)
+      * timers   no timer is set both repeating and one-shot
+      * startup  hotkeys wait for the window, and the start notices
+      * frontend tests\frontend.tests.html — the frontend modules' pure logic, in headless Edge
+      * smoke    tests\smoke.js (1.9.0) — the real page, every module and stylesheet, with a stand-in
+                 for WebView2: every view opens without script errors, every message it sends is
+                 in ASCS.ahk's allowlist, and (2.2.0) loading shapes, motion and the seven type sizes
+      * cli      tests\cli.tests.ps1 — the maestro command, against throwaway repositories
+    None of them touches the running Maestro or the data folder.
     Usage:  pwsh -File tests\run-tests.ps1      Exit code 0 when everything passes.
 #>
 $ErrorActionPreference = "Stop"
@@ -125,8 +128,10 @@ $smokePage = Join-Path $work "smoke.html"
 Set-Content $smokePage $page -Encoding utf8
 $dom = Join-Path $work "smoke.out.html"
 $url = "file:///" + $smokePage.Replace('\', '/')
+# Virtual time, so the budget costs no real time. 2.2.0's checks wait for
+# things that move (counting, sliding), which outran 6 s.
 $process = Start-Process $edge -ArgumentList "--headless=new", "--disable-gpu", "--allow-file-access-from-files", "--user-data-dir=`"$work\edge`"", "--window-size=1600,1000",
-    "--virtual-time-budget=6000", "--dump-dom", $url -RedirectStandardOutput $dom -RedirectStandardError (Join-Path $work "smoke.err") -PassThru -NoNewWindow
+    "--virtual-time-budget=12000", "--dump-dom", $url -RedirectStandardOutput $dom -RedirectStandardError (Join-Path $work "smoke.err") -PassThru -NoNewWindow
 if (-not $process.WaitForExit(60000)) { $process.Kill(); throw "Edge timed out on the smoke test." }
 $html = Get-Content $dom -Raw -Encoding utf8
 $match = [regex]::Match($html, '<pre id="results">([\s\S]*?)</pre>')

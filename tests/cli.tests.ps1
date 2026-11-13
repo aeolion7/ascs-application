@@ -461,6 +461,129 @@ foreach ($copy in "$($r.work)\tools\cli\Maestro-Cli.ps1", "$($r.work)\_1.3\tools
     Add-Check "no folder named: $from works on the main folder" ($own -match ('Keeping:\s+' + [regex]::Escape("$($r.work)\_1.3 ")) -and $own -notmatch ('Keeping:\s+' + [regex]::Escape("$($r.work) "))) $own
 }
 
+# ---- doctor (2.2.0): it reads this PC, so only what a stand-in repo decides is checked
+$r = New-TestRepo doctor
+$before = @(Get-ChildItem -LiteralPath $r.work -Recurse -Force -Name)
+$run = Invoke-Cli $r @('doctor')
+Add-Check 'doctor: a repo without WebViewToo or data fails' ($run.code -ne 0) $run.text
+Add-Check 'doctor: names WebViewToo' ($run.text -match '!!\s+WebViewToo is missing') $run.text
+Add-Check 'doctor: names the data folder' ($run.text -match "!!\s+There's no data folder") $run.text
+Add-Check 'doctor: finds AutoHotkey' ($run.text -match 'OK\s+AutoHotkey 2\.') $run.text
+Add-Check 'doctor: counts the problems' ($run.text -match '\d+ problem\(s\) found') $run.text
+Add-Check 'doctor: changes nothing' ($null -eq (Compare-Object $before @(Get-ChildItem -LiteralPath $r.work -Recurse -Force -Name)))
+$run = Invoke-Cli $r @('doctor', '--fix')
+Add-Check 'doctor: takes no options' ($run.code -ne 0 -and $run.text -match 'takes no options') $run.text
+
+# ---- isolate (2.2.0)
+# The checkout these tests are in, for commands that only read it: isolate
+# copies it out and preview writes to the scratch folder.
+$checkout = Split-Path $PSScriptRoot -Parent
+function Invoke-CliHere([string[]]$arguments) {
+    $env:ASCS_REPO = $checkout
+    Push-Location $checkout
+    try { $output = & pwsh -NoProfile -File $cli @arguments 2>&1; $code = $LASTEXITCODE }
+    finally { Pop-Location; Remove-Item Env:\ASCS_REPO -ErrorAction SilentlyContinue }
+    return @{ code = $code; text = ($output | ForEach-Object { "$_" }) -join "`n" }
+}
+function Get-CopyPath([string]$text) { [regex]::Match($text, '(?m)^  (\S.*\\[\w.]+-\d{8}-\d{6}(?:-\d+)?)\s*$').Groups[1].Value }
+$env:ASCS_ISOLATE_ROOT = Join-Path $scratch 'isolated'
+$outside = Join-Path $scratch 'outside'
+[IO.Directory]::CreateDirectory($outside) | Out-Null
+[IO.File]::WriteAllText("$outside\keep.txt", 'keep')
+$testKey = 'HKCU:\Software\MaestroIsolateTest'
+# Each act would reach outside the copy; none must. Never() only has to be rewritten.
+$standIn = @"
+#Requires AutoHotkey v2.0 64-bit
+#SingleInstance Force
+#Warn
+#NoTrayIcon
+global ASCS_Version := "9.9.9"
+F24 & l::DllCall("LockWorkStation")
+`$^!+a::Reload()
+global CalendarPort := 5232
+SetTimer(Act, -100)
+Act() {
+    Run('"' A_ComSpec '" /c echo ran> "$outside\ran.txt"', , "Hide")
+    FileAppend("inside", A_ScriptDir "\data\inside.txt")
+    FileDelete("$outside\keep.txt")
+    FileAppend("x", "$outside\made.txt")
+    RegWrite("x", "REG_SZ", "HKCU\Software\MaestroIsolateTest", "v")
+}
+Never() {
+    DllCall("PowrProf\SetSuspendState", "Int", 0, "Int", 0, "Int", 0)
+    SoundSetMute(1)
+}
+"@
+$r = New-TestRepo isolate
+[IO.File]::WriteAllText("$($r.work)\ASCS.ahk", $standIn)
+[IO.File]::WriteAllText("$scratch\probes.ahk", "SetTimer(() => Isolate_Note(`"probe`", `"hello`"), -50)`r`nFileDelete(`"$outside\keep.txt`")`r`n")
+$run = Invoke-Cli $r @('isolate', '--run', '--for', '3', '--hook', "$scratch\probes.ahk")
+$copy = Get-CopyPath $run.text
+Add-Check 'isolate --run: runs clean' ($run.code -eq 0 -and $run.text -match 'Ran clean') $run.text
+Add-Check 'isolate: names its copy' ($copy -and $copy.StartsWith($env:ASCS_ISOLATE_ROOT)) $run.text
+Add-Check 'isolate: the main script is renamed' ((Test-Path "$copy\ASCS-Isolated.ahk") -and -not (Test-Path "$copy\ASCS.ahk"))
+Add-Check 'isolate: a data folder of its own, marked as a test build' (Test-Path "$copy\data\test-build.txt")
+$text = if ($copy) { [IO.File]::ReadAllText("$copy\ASCS-Isolated.ahk") } else { '' }
+Add-Check 'isolate: Super becomes Pause' ($text.Contains('Pause & l::Isolate_Stub("LockWorkStation")')) $text
+Add-Check 'isolate: the reload hotkey is left out' ($text.Contains('; (maestro isolate) $^!+a::')) $text
+Add-Check 'isolate: the calendar port moves' ($text.Contains('5233') -and -not $text.Contains('5232')) $text
+Add-Check 'isolate: sleep is stubbed' ($text.Contains('Isolate_Stub("PowrProf\SetSuspendState"')) $text
+Add-Check 'isolate: warnings go to standard output' ($text -match '(?m)^#Warn All, StdOut') $text
+Add-Check 'isolate: inside the copy still works' (Test-Path "$copy\data\inside.txt")
+Add-Check 'isolate: no launch outside' (-not (Test-Path "$outside\ran.txt")) $run.text
+Add-Check 'isolate: no delete outside' (Test-Path "$outside\keep.txt") $run.text
+Add-Check 'isolate: no write outside' (-not (Test-Path "$outside\made.txt")) $run.text
+Add-Check 'isolate: no registry write' (-not (Test-Path $testKey)) $run.text
+Add-Check 'isolate: what was stopped is logged' ($run.text -match 'blocked\s+Run ' -and $run.text -match 'blocked\s+FileDelete ' -and $run.text -match 'blocked\s+FileAppend ' -and $run.text -match 'blocked\s+RegWrite\(') $run.text
+Add-Check 'isolate: the probes ran, guarded too' ($run.text -match 'probe\s+hello' -and @([regex]::Matches($run.text, 'blocked\s+FileDelete ')).Count -eq 2) $run.text
+if (Test-Path $testKey) { Remove-Item $testKey -Recurse -Force }
+
+# Something the rewrite doesn't reach: no copy is left.
+[IO.File]::WriteAllText("$($r.work)\ASCS.ahk", $standIn + "`r`nAlso() {`r`n    Run `"notepad.exe`"`r`n}`r`n")
+$copies = @(Get-ChildItem -LiteralPath $env:ASCS_ISOLATE_ROOT -Directory).Count
+$run = Invoke-Cli $r @('isolate')
+Add-Check 'isolate: refuses a copy that could act outside' ($run.code -ne 0 -and $run.text -match 'could still act outside itself' -and $run.text -match 'without brackets') $run.text
+Add-Check 'isolate: and deletes it' (@(Get-ChildItem -LiteralPath $env:ASCS_ISOLATE_ROOT -Directory).Count -eq $copies)
+[IO.File]::WriteAllText("$($r.work)\ASCS.ahk", $standIn + "`r`nAlso() {`r`n    f := FileDelete`r`n}`r`n")
+$run = Invoke-Cli $r @('isolate')
+Add-Check 'isolate: refuses a built-in passed on' ($run.code -ne 0 -and $run.text -match 'passed on unguarded') $run.text
+foreach ($bad in @(@('--for', '0'), @('--bogus'), @('--hook', "$scratch\missing.ahk"), @('--clean', '--run'))) {
+    $run = Invoke-Cli $r (@('isolate') + $bad)
+    Add-Check "isolate $($bad -join ' '): refused" ($run.code -ne 0) $run.text
+}
+
+# This checkout, whole: it passes its own scan and parse.
+$run = Invoke-CliHere @('isolate')
+$copy = Get-CopyPath $run.text
+Add-Check 'isolate this checkout: exit 0' ($run.code -eq 0 -and $copy) $run.text
+if ($copy) {
+    Add-Check 'isolate this checkout: no data of yours' (-not (Test-Path "$copy\data\secrets.ini") -and @(Get-ChildItem "$copy\data" -Name).Count -eq 1)
+    Add-Check 'isolate this checkout: no launcher' (-not (Test-Path "$copy\ASCS.Launcher.ahk"))
+    $games = [IO.File]::ReadAllText("$copy\lib\features\Games.ahk")
+    Add-Check 'isolate this checkout: game launches are guarded' ($games.Contains('Isolate_Run("steam://') -and $games -notmatch '(?<![\w.])Run\(')
+    Add-Check 'isolate this checkout: Super is Pause' ([IO.File]::ReadAllText("$copy\lib\features\SuperKey.ahk") -match 'Pause & ')
+}
+
+# --clean removes only what isolate marked.
+[IO.Directory]::CreateDirectory("$env:ASCS_ISOLATE_ROOT\not-a-copy") | Out-Null
+$run = Invoke-Cli $r @('isolate', '--clean')
+Add-Check 'isolate --clean: removes the copies' ($run.code -eq 0 -and (@(Get-ChildItem -LiteralPath $env:ASCS_ISOLATE_ROOT -Directory -Name) -join ',') -eq 'not-a-copy') $run.text
+Remove-Item Env:\ASCS_ISOLATE_ROOT
+
+# ---- preview (2.2.0)
+$run = Invoke-CliHere @('preview', '--list')
+Add-Check 'preview --list: lists the scenes' ($run.code -eq 0 -and $run.text -match '(?m)^home$' -and $run.text -match '(?m)^games$') $run.text
+$run = Invoke-CliHere @('preview')
+Add-Check 'preview: needs a scene' ($run.code -ne 0 -and $run.text -match 'Name a scene') $run.text
+$run = Invoke-CliHere @('preview', 'home', '--size', '2540')
+Add-Check 'preview: refuses a size without a height' ($run.code -ne 0 -and $run.text -match "isn't a size") $run.text
+$run = Invoke-CliHere @('preview', 'no-such-scene', '--to', "$scratch\preview-unknown")
+Add-Check 'preview: refuses an unknown scene' ($run.code -ne 0 -and $run.text -match 'Unknown scene: no-such-scene') $run.text
+$png = "$scratch\preview\home-2540.png"
+$run = Invoke-CliHere @('preview', 'home', '--to', "$scratch\preview")
+Add-Check 'preview: renders a scene' ($run.code -eq 0 -and (Test-Path $png) -and (Get-Item $png).Length -gt 20000) $run.text
+Add-Check 'preview: lists what it wrote' ($run.text.Contains($png)) $run.text
+
 # ---- try and status, with stand-ins for ASCS.ahk
 $standIn = @'
 #Requires AutoHotkey v2.0 64-bit
@@ -587,6 +710,7 @@ try {
     Start-Sleep -Milliseconds 300
     try { [IO.Directory]::Delete($scratch, $true) } catch { }
     Remove-Item Env:\ASCS_BACKUPS -ErrorAction SilentlyContinue
+    Remove-Item Env:\ASCS_ISOLATE_ROOT -ErrorAction SilentlyContinue
 }
 
 "PASS $passed FAIL $($failures.Count)"

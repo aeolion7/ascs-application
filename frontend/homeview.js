@@ -95,7 +95,14 @@ function drawNowPlaying(panel, view, { headingId, open, actions, detailed = fals
     const heading = element("h2", "", lead ? "Now Playing" : last ? "Last Played" : "Now Playing");
     heading.id = headingId;
     head.append(heading);
-    if (open) head.append(open());
+    // The heading opens its page (2.2.0), in place of an Open button.
+    if (open) {
+        const link = element("button", "module-link", heading.textContent);
+        link.type = "button";
+        link.title = "Open Games";
+        link.addEventListener("click", open);
+        heading.replaceChildren(link);
+    }
     copy.append(head);
 
     panel.classList.toggle("is-playing", Boolean(lead));
@@ -113,8 +120,13 @@ function drawNowPlaying(panel, view, { headingId, open, actions, detailed = fals
     if (shown) panel.append(gameCover(shown, "game-cover-home"));
     panel.append(copy);
 
+    if (!lead && !last && !gamesState.loaded) {
+        panel.prepend(nowCoverPlaceholder());
+        copy.append(placeholder("now"));
+        return;
+    }
     if (!lead && !last) {
-        copy.append(gamesState.loaded ? element("p", "module-empty", "No game is running.") : loadingNote());
+        copy.append(element("p", "module-empty", "No game is running."));
         return;
     }
 
@@ -127,8 +139,13 @@ function drawNowPlaying(panel, view, { headingId, open, actions, detailed = fals
         return;
     }
 
-    copy.append(element("strong", "home-now-name", name ? Games.displayTitle(name) : "At the menu"),
-        element("p", "home-now-meta", [Games.EMULATORS[lead.emulator] || lead.emulator, game ? Games.systemName(game.system) : ""].filter(Boolean).join(" · ")));
+    // Other games running share the meta line (2.2.0), so Now Playing keeps
+    // its square in the shorter window.
+    const others = playing.slice(1).map(item => Games.displayTitle(Games.playingTitle(gamesState.items, item) || Games.EMULATORS[item.emulator] || item.emulator));
+    const meta = element("p", "home-now-meta", [Games.EMULATORS[lead.emulator] || lead.emulator, game ? Games.systemName(game.system) : "",
+        others.length ? `Also running: ${others.join(", ")}` : ""].filter(Boolean).join(" · "));
+    meta.title = meta.textContent;
+    copy.append(element("strong", "home-now-name", name ? Games.displayTitle(name) : "At the menu"), meta);
 
     const stats = element("div", "home-now-stats");
     if (name) {
@@ -169,19 +186,22 @@ function drawNowPlaying(panel, view, { headingId, open, actions, detailed = fals
         }
     }
 
-    if (playing.length > 1) {
-        const others = playing.slice(1).map(item => Games.displayTitle(Games.playingTitle(gamesState.items, item) || Games.EMULATORS[item.emulator] || item.emulator));
-        copy.append(element("p", "home-now-meta", `Also running: ${others.join(", ")}`));
-    }
-
     copy.append(actions(lead, game, Games.playingTitle(gamesState.items, lead) || name, progress));
     tickNowPlaying();
+}
+
+// The cover's place while the games are on their way: the cover's own size.
+function nowCoverPlaceholder() {
+    const cover = placeholder("tile");
+    cover.replaceChildren();
+    cover.classList.add("game-cover", "game-cover-home");
+    return cover;
 }
 
 function renderHomeNow() {
     drawNowPlaying($("homeNow"), "home", {
         headingId: "homeNowTitle",
-        open: () => homeButton("Open", "link-button", () => navigate("games")),
+        open: () => navigate("games"),
         actions: homeGameActions
     });
 }
@@ -197,9 +217,8 @@ function renderHomeContinue() {
     if (!shelf || !Games) return;
     const recent = recentGames().slice(0, 9);
     shelf.replaceChildren(...recent.map(gameTile));
-    if (!recent.length) {
-        shelf.append(gamesState.loaded ? element("p", "module-empty", "Games you play appear here.") : loadingNote());
-    }
+    if (!recent.length && !gamesState.loaded) shelf.append(...Array.from({ length: 9 }, () => placeholder("tile")));
+    else if (!recent.length) shelf.append(element("p", "module-empty", "Games you play appear here."));
     if ($("home").classList.contains("active")) requestCovers(recent);
 }
 
@@ -215,7 +234,7 @@ function homeCapacity(used, total) {
 }
 
 function setHomeValue(value, percent) {
-    value.textContent = formatMetric(percent);
+    countTo(value, percent, formatMetric);
     value.classList.toggle("is-high", Number(percent) >= 90);
 }
 
@@ -258,7 +277,12 @@ function renderHomeWorkspaces() {
         button.title = `Restore: ${workspace.windows} window${workspace.windows === 1 ? "" : "s"}`;
         return button;
     }));
-    if (!savedWorkspaces.length) list.append(element("p", "module-empty", "No arrangements saved yet."));
+    // Until the first list arrives, it's on its way rather than empty.
+    if (savedWorkspaces.length) return;
+    if (wsView.loaded) return list.append(element("p", "module-empty", "No arrangements saved yet."));
+    const waiting = placeholder("pills", 2);
+    waiting.classList.add("is-across");
+    list.append(waiting);
 }
 
 // ---- Quick note
@@ -347,8 +371,6 @@ function announceArrange(id, note = "") {
     $("arrangeLive").textContent = note || `${moduleLabel(id)}: place ${shown.indexOf(id) + 1} of ${shown.length}, ${width} square${width === 1 ? "" : "s"} wide. ${arrangeFitText()}`;
 }
 
-const GRIP_DOTS = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="5.5" cy="3.5" r="1.4"/><circle cx="10.5" cy="3.5" r="1.4"/><circle cx="5.5" cy="8" r="1.4"/><circle cx="10.5" cy="8" r="1.4"/><circle cx="5.5" cy="12.5" r="1.4"/><circle cx="10.5" cy="12.5" r="1.4"/></svg>';
-
 // A module's tile while arranging: its bar (grip, name, Hide), its width, and a
 // handle on its right edge. Built once, and put back if the module redraws.
 function arrangeOverlay(module) {
@@ -361,7 +383,7 @@ function arrangeOverlay(module) {
     const grip = element("button", "arrange-grip");
     grip.type = "button";
     grip.dataset.arrange = `${id}-grip`;
-    grip.innerHTML = GRIP_DOTS;
+    grip.append(MaestroIcons.create("grip"));
     grip.setAttribute("aria-label", `Move ${label}`);
     grip.setAttribute("aria-describedby", "arrangeKeys");
     grip.addEventListener("keydown", event => arrangeKey(event, id));
@@ -660,6 +682,11 @@ $("todaySettingsDialog").addEventListener("keydown", event => {
 });
 
 applyHomeLayout();
+// Before the first data arrives (2.2.0): Games draws its waiting state, and
+// the spaces left empty until then hold their shape.
+renderGames();
+renderGamesNow();
+fillPlaceholders();
 renderHomeNow();
 renderHomeContinue();
 renderHomeWorkspaces();

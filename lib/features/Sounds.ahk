@@ -9,11 +9,16 @@
 ; copies are written by ASCS into "ASCS Leveled" inside the library, never
 ; over an existing file. Windows sounds are set only for allowlisted events
 ; (WindowsSoundEvents) and only to WAV files in the library, with the
-; original value kept so it can be restored.
+; original value kept so it can be restored. Since 2.2.0 a second folder,
+; Custom Sounds (C:\Sounds\!windows by default), is indexed beside the library
+; and counts as part of it: its sounds' ids start with "*\" (SoundIdForPath).
 
 LoadSoundSettings() {
-    global ASCS_SettingsFile, ASCS_SoundLibrary, ASCS_AscsSoundFiles
+    global ASCS_SettingsFile, ASCS_SoundLibrary, ASCS_AscsSoundFiles, ASCS_CustomSounds
     try ASCS_SoundLibrary := ValidateSoundLibrary(IniRead(ASCS_SettingsFile, "Sounds", "Library", ASCS_SoundLibrary))
+    catch as err
+        WriteLog("Sounds: " err.Message)
+    try ASCS_CustomSounds := ValidateSoundLibrary(IniRead(ASCS_SettingsFile, "Sounds", "CustomFolder", ASCS_CustomSounds))
     catch as err
         WriteLog("Sounds: " err.Message)
     reminder := ExpandEnvironment(ReadWindowsSound([".Default", "Notification.Reminder", ""])["value"])
@@ -34,20 +39,25 @@ LoadSoundSettings() {
 SoundIndex(refresh := false) {
     global ASCS_SoundLibrary, ASCS_SoundIndex, ASCS_SoundLengthQueue
     static builtFor := ""
-    if (!refresh && builtFor = ASCS_SoundLibrary && ASCS_SoundIndex.Count)
+    root := ASCS_SoundLibrary
+    custom := CustomSoundsFolder()
+    if (!refresh && builtFor = root "|" custom && ASCS_SoundIndex.Count)
         return ASCS_SoundIndex
     index := Map()
-    root := ASCS_SoundLibrary
     lengths := SoundLengths()
     queue := []
-    if DirExist(root) {
-        Loop Files root "\*.*", "FR" {
+    ; The library, then Custom Sounds, whose ids start with "*\" (2.2.0).
+    for source in [[root, ""], [custom, "*\"]] {
+        folder := source[1]
+        if (folder = "" || !DirExist(folder))
+            continue
+        Loop Files folder "\*.*", "FR" {
             if (index.Count >= 5000)
                 break
             kind := SoundKind(A_LoopFileExt)
             if (kind = "" || InStr(A_LoopFileAttrib, "H"))
                 continue
-            id := SubStr(A_LoopFileFullPath, StrLen(root) + 2)
+            id := source[2] SubStr(A_LoopFileFullPath, StrLen(folder) + 2)
             parts := StrSplit(id, "\")
             SplitPath(A_LoopFileName, , , , &stem)
             group := ""
@@ -68,7 +78,7 @@ SoundIndex(refresh := false) {
         }
     }
     ASCS_SoundIndex := index
-    builtFor := root
+    builtFor := root "|" custom
     ASCS_SoundLengthQueue := queue
     if queue.Length
         SetTimer(FillSoundLengths, 10)
@@ -134,7 +144,7 @@ FillSoundLengths() {
 ; refresh re-reads the folder; changed tells the page cached sounds may be
 ; stale (false when only lengths were filled in).
 SendSoundLibrary(refresh := false, changed := true) {
-    global ASCS_SoundLibrary
+    global ASCS_SoundLibrary, ASCS_CustomSounds
     t := A_TickCount
     index := SoundIndex(refresh)
     eras := Map()
@@ -149,8 +159,8 @@ SendSoundLibrary(refresh := false, changed := true) {
             if (byName = "")
                 byName := OriginalsByName()
             path := SoundOrigin(sound["path"], byName)
-            if (path != sound["path"] && InStr(path, ASCS_SoundLibrary "\") = 1)
-                origin := SubStr(path, StrLen(ASCS_SoundLibrary) + 2)
+            if (path != sound["path"])
+                origin := SoundIdFor(path)
         }
         sounds .= (sounds = "" ? "" : ",") '{"id":' JsonQuote(id) ',"name":' JsonQuote(sound["name"])
             . ',"era":' JsonQuote(sound["era"]) ',"group":' JsonQuote(sound["group"])
@@ -160,10 +170,12 @@ SendSoundLibrary(refresh := false, changed := true) {
     }
     eraJson := ""
     for folder in eras {
-        era := ParseSoundEra(folder = "" ? "Loose sounds" : folder)
-        eraJson .= (eraJson = "" ? "" : ",") '{"folder":' JsonQuote(folder) ',"year":' era["year"] ',"label":' JsonQuote(era["label"]) '}'
+        era := folder = "*" ? Map("year", 0, "label", "Custom Sounds") : ParseSoundEra(folder = "" ? "Loose sounds" : folder)
+        eraJson .= (eraJson = "" ? "" : ",") '{"folder":' JsonQuote(folder) ',"year":' era["year"] ',"label":' JsonQuote(era["label"])
+            . (folder = "*" ? ',"custom":true' : "") '}'
     }
     SendToFrontend('{"type":"soundLibrary","root":' JsonQuote(ASCS_SoundLibrary) ',"exists":' (DirExist(ASCS_SoundLibrary) ? "true" : "false")
+        . ',"customRoot":' JsonQuote(ASCS_CustomSounds) ',"customState":' JsonQuote(CustomSoundsState())
         . ',"changed":' (changed ? "true" : "false")
         . ',"eras":[' eraJson '],"sounds":[' sounds '],"ascsSounds":' AscsSoundsJson() '}')
     if refresh
@@ -531,9 +543,7 @@ StartupSoundPath(slot) {
 }
 
 StartupSoundJson(path) {
-    global ASCS_SoundLibrary
-    library := ASCS_SoundLibrary
-    relative := p => InStr(p, library "\") = 1 ? SubStr(p, StrLen(library) + 2) : ""
+    relative := p => SoundIdFor(p)
     origin := SoundOrigin(path)
     SplitPath(path, &file)
     return '"file":' JsonQuote(file) ',"id":' JsonQuote(relative(path)) ',"origin":' JsonQuote(relative(origin))
@@ -750,10 +760,9 @@ SendWindowsSounds() {
         current := ReadWindowsSound(event)
         path := ExpandEnvironment(current["value"])
         SplitPath(path, &file)
-        inLibrary := path != "" && InStr(path, ASCS_SoundLibrary "\") = 1
         backup := IniRead(ASCS_SettingsFile, "WindowsSoundBackup", key, "")
         json .= (json = "" ? "" : ",") '{"key":' JsonQuote(key) ',"label":' JsonQuote(event[3])
-            . ',"file":' JsonQuote(file) ',"id":' JsonQuote(inLibrary ? SubStr(path, StrLen(ASCS_SoundLibrary) + 2) : "")
+            . ',"file":' JsonQuote(file) ',"id":' JsonQuote(SoundIdFor(path))
             . ',"exists":' (path != "" && FileExist(path) ? "true" : "false")
             . ',"changed":' (backup != "" ? "true" : "false") '}'
     }
@@ -955,7 +964,7 @@ PreviewWindowsSound(content) {
 
 ; ---- ASCS's own show/hide sounds, chosen from the library
 
-AscsSoundKey(kind) => Map("show", "ShowFile", "hide", "HideFile", "reminder", "ReminderFile", "timer", "TimerFile")[kind]
+AscsSoundKey(kind) => Map("start", "StartFile", "show", "ShowFile", "hide", "HideFile", "reminder", "ReminderFile", "timer", "TimerFile")[kind]
 
 AscsSoundsJson() {
     global ASCS_AscsSoundFiles, ASCS_SoundLibrary, ASCS_SettingsFile
@@ -963,7 +972,7 @@ AscsSoundsJson() {
     for kind in AscsSoundLabels() {
         path := ASCS_AscsSoundFiles[kind]
         SplitPath(path, &file)
-        id := InStr(path, ASCS_SoundLibrary "\") = 1 ? SubStr(path, StrLen(ASCS_SoundLibrary) + 2) : ""
+        id := SoundIdFor(path)
         changed := IniRead(ASCS_SettingsFile, "AscsSoundBackup", kind, "") != ""
         json .= (json = "" ? "" : ",") JsonQuote(kind) ':{"file":' JsonQuote(file) ',"id":' JsonQuote(id)
             . ',"exists":' (FileExist(path) ? "true" : "false") ',"changed":' (changed ? "true" : "false") '}'
@@ -1016,7 +1025,7 @@ RestoreAscsSoundValue(kind) {
     return true
 }
 
-; Payload: kind|id, the kind show, hide, reminder or timer.
+; Payload: kind|id, the kind start, show, hide, reminder or timer.
 SetAscsSound(content) {
     global ASCS_SettingsFile, ASCS_AscsSoundFiles
     try {
@@ -1032,6 +1041,45 @@ SetAscsSound(content) {
         SendToFrontend('{"type":"notice","message":' JsonQuote(err.Message) '}')
     }
     SendWindowsSounds()
+}
+
+; ---- Custom Sounds (2.2.0)
+
+; The Custom Sounds folder in use: "" when it doesn't exist, or is the library,
+; inside it or holds it (its sounds would be listed twice).
+CustomSoundsFolder() {
+    global ASCS_SoundLibrary, ASCS_CustomSounds
+    return CustomSoundsState() = "ok" ? ASCS_CustomSounds : ""
+}
+
+; "ok", "missing" or "overlaps", for the page to say why it isn't used.
+CustomSoundsState() {
+    global ASCS_SoundLibrary, ASCS_CustomSounds
+    if (ASCS_CustomSounds = "" || !DirExist(ASCS_CustomSounds))
+        return "missing"
+    return SoundFoldersOverlap(ASCS_SoundLibrary, ASCS_CustomSounds) ? "overlaps" : "ok"
+}
+
+; A sound's id from its path, in the library or Custom Sounds; "" elsewhere.
+SoundIdFor(path) {
+    global ASCS_SoundLibrary
+    return SoundIdForPath(path, ASCS_SoundLibrary, CustomSoundsFolder())
+}
+
+SetCustomSounds(content) {
+    global ASCS_SettingsFile, ASCS_SoundLibrary, ASCS_CustomSounds
+    try {
+        path := ValidateSoundLibrary(content)
+        if !DirExist(path)
+            throw Error("That folder doesn't exist.")
+        if SoundFoldersOverlap(ASCS_SoundLibrary, path)
+            throw Error("Choose a folder outside the library: its sounds would be listed twice.")
+        ASCS_CustomSounds := path
+        IniWrite(path, ASCS_SettingsFile, "Sounds", "CustomFolder")
+        SendSoundLibrary(true)
+    } catch as err {
+        SendToFrontend('{"type":"notice","message":' JsonQuote(err.Message) '}')
+    }
 }
 
 SetSoundLibrary(content) {

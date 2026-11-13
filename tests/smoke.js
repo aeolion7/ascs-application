@@ -63,6 +63,127 @@
             checks.push(["the allowlist was read", allowed.size >= 50 ? [] : [`only ${allowed.size} message types`]]);
             checks.push(["every message sent is allowlisted", [...sent].filter(type => !allowed.has(type)).map(type => `${type} isn't allowlisted`)]);
 
+            // 2.2.0: before its data arrives, a space shows the shape of what's coming:
+            // no "Loading" and no spinner, and no empty message that isn't true yet.
+            // Only notes and the arrangements have answered by now.
+            {
+                const serverWas = calState.server;
+                calState.server = { state: "running", message: "" };
+                renderCalendar();
+                const shapes = {
+                    home: ["#homeNow", "#homeAlmanac", "#todayList", "#homeDrives", "#homeContinue"],
+                    games: ["#gamesNow", "#gamesNowNotes", "#gamesTotals", "#gamesContinue"],
+                    calendar: ["#calCalendars", "#calCountdowns"],
+                    sounds: ["#soundGroups"],
+                    dashboard: ["#dashboardDrives"]
+                };
+                Object.entries(shapes).forEach(([view, places]) => {
+                    navigate(view);
+                    const page = $(view);
+                    const loading = /\bLoading\b/.test(page.innerText) ? ["says Loading"] : [];
+                    const spinning = [...page.querySelectorAll(".loading-note")].filter(note => note.offsetParent).map(note => `a spinner: ${note.textContent}`);
+                    const missing = places.filter(place => !document.querySelector(`${place} .skel`)).map(place => `no shape in ${place}`);
+                    checks.push([`${view} shows shapes while it waits`, [...loading, ...spinning, ...missing]]);
+                });
+                navigate("games");
+                gamesSections.show("achievements");
+                checks.push(["Achievements waits for RetroAchievements rather than asking to connect it",
+                    $("gamesAchievements").querySelector(".skel") && !/Connect RetroAchievements/.test($("gamesAchievements").textContent) ? [] : [$("gamesAchievements").textContent.slice(0, 80)]]);
+                gamesSections.show("playing");
+                navigate("dashboard");
+                systemSections.show("signin");
+                checks.push(["Startup shows its graph's shape", $("signInNote").querySelector(".skel") ? [] : ["none"]]);
+                systemSections.show("live");
+                const sample = document.querySelector("#gamesNow .skel");
+                const style = getComputedStyle(sample);
+                checks.push(["a shape is a status that breathes", sample.getAttribute("role") === "status" && sample.getAttribute("aria-label") === "Loading" && style.animationName.includes("skel-breathe") ? [] : [style.animationName]]);
+                // Every placeholder starts at the same point of one cycle, so they breathe together.
+                const phases = [...document.querySelectorAll(".skel")].map(node => Number.parseFloat(node.style.getPropertyValue("--skel-phase")));
+                checks.push(["placeholders carry the page's breathing phase", phases.length > 10 && phases.every(phase => phase <= 0 && phase > -PLACEHOLDER_CYCLE) ? [] : [`${phases.length} phases`]]);
+                // Before the arrangements answer, Arrangements isn't empty yet; after, it may be.
+                const wsLoaded = wsView.loaded;
+                wsView.loaded = false;
+                renderHomeWorkspaces();
+                checks.push(["Arrangements waits before saying there are none", $("homeWorkspaces").querySelector(".skel") && !/No arrangements/.test($("homeWorkspaces").textContent) ? [] : ["said none"]]);
+                wsView.loaded = wsLoaded;
+                renderHomeWorkspaces();
+                checks.push(["and says so once they've answered", /No arrangements saved yet/.test($("homeWorkspaces").textContent) ? [] : ["no message"]]);
+                // When the games arrive, their shapes go.
+                const gamesWas = { items: gamesState.items, loaded: gamesState.loaded };
+                handleWebMessage({ data: { type: "games", covers: false, items: [{ id: "st:5", title: "Shaped", emulator: "steam", system: "", seconds: 600, last: "2026-11-08T10:00:00", plays: 1, launchable: true, installed: true }] } });
+                navigate("games");
+                const left = ["#gamesNow", "#gamesNowNotes", "#gamesTotals", "#gamesContinue", "#homeContinue", "#homeNow"].filter(place => document.querySelector(`${place} .skel`));
+                checks.push(["the games' shapes go when the games arrive", left.map(place => `still in ${place}`)]);
+                gamesState.items = gamesWas.items;
+                gamesState.loaded = gamesWas.loaded;
+                renderGames();
+                calState.server = serverWas;
+                renderCalendar();
+                navigate("home");
+            }
+
+            // 2.2.0: pages, sections, the sidebar's marker and numbers move.
+            {
+                const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+                const entrance = view => document.getElementById(view).getAnimations().at(-1);
+                const firstShift = animation => String(animation?.effect.getKeyframes()[0].transform || "");
+                navigate("home");
+                navigate("games");
+                checks.push(["a page lower in the sidebar rises in", /translateY\(12px\)/.test(firstShift(entrance("games"))) ? [] : [firstShift(entrance("games")) || "no entrance"]]);
+                navigate("notes");
+                checks.push(["a page higher in the sidebar settles from above", /translateY\(-12px\)/.test(firstShift(entrance("notes"))) ? [] : [firstShift(entrance("notes")) || "no entrance"]]);
+                checks.push(["the 1.x entrance is off", getComputedStyle($("notes")).animationName === "none" ? [] : [getComputedStyle($("notes")).animationName]]);
+                // While it moves, a page never makes the window taller: 12 px stays in its margin.
+                const taller = [];
+                [...document.querySelectorAll(".nav[data-view]")].map(button => button.dataset.view).forEach(view => {
+                    navigate(view === "home" ? "commands" : "home");
+                    navigate(view);
+                    const animation = entrance(view);
+                    if (!animation) return taller.push(`${view}: no entrance`);
+                    animation.pause();
+                    animation.currentTime = 0;
+                    const moving = document.documentElement.scrollHeight;
+                    animation.finish();
+                    const still = document.documentElement.scrollHeight;
+                    if (moving > still) taller.push(`${view}: ${moving} while moving, ${still} after`);
+                });
+                checks.push(["no page makes the window taller while it comes in", taller]);
+                navigate("games");
+                gamesSections.show("playing");
+                await wait(80);
+                gamesSections.show("library");
+                const library = $("gamesLibraryPanel").getAnimations().at(-1);
+                checks.push(["a section to the right comes from the right", /translateX\(10px\)/.test(firstShift(library)) ? [] : [firstShift(library) || "no entrance"]]);
+                await wait(80);
+                gamesSections.show("playing");
+                const playing = $("gamesPlaying").getAnimations().at(-1);
+                checks.push(["and one to the left from the left", /translateX\(-10px\)/.test(firstShift(playing)) ? [] : [firstShift(playing) || "no entrance"]]);
+                navigate("dashboard");
+                gamesSections.show("library");
+                gamesSections.show("playing");
+                checks.push(["a section on a page out of sight doesn't move", $("gamesPlaying").getAnimations().length <= 1 ? [] : ["it moved"]]);
+                // The marker is sent to the current page's button (it slides there in CSS).
+                await wait(50);
+                const sidebar = document.querySelector(".sidebar");
+                const current = document.querySelector('.nav[data-view="dashboard"]').getBoundingClientRect();
+                const side = sidebar.getBoundingClientRect();
+                const markerY = Number.parseFloat(sidebar.style.getPropertyValue("--nav-marker-y"));
+                const markerH = Number.parseFloat(sidebar.style.getPropertyValue("--nav-marker-h"));
+                checks.push(["the sidebar's marker goes to the current page", sidebar.classList.contains("has-nav-marker")
+                    && Math.abs(side.top + sidebar.clientTop + markerY - current.top) < 2 && Math.abs(markerH - current.height) < 2 ? [] : [`marker to ${Math.round(markerY)}, page at ${Math.round(current.top - side.top)}`]]);
+                checks.push(["the current page's own fill gives way to it", getComputedStyle(document.querySelector('.nav[data-view="dashboard"]')).backgroundImage === "none" ? [] : ["filled twice"]]);
+                // A number counts to its new value, and lands on it.
+                navigate("home");
+                const cpu = $("homeCpu");
+                countTo(cpu, 10, formatMetric);
+                countTo(cpu, 60, formatMetric);
+                const midway = cpu.textContent;
+                await wait(500);
+                checks.push(["a number counts to its new value", midway !== "60%" && cpu.textContent === "60%" ? [] : [`${midway} then ${cpu.textContent}`]]);
+                countTo(cpu, undefined, formatMetric);
+                checks.push(["and a missing one is written at once", cpu.textContent === "--%" ? [] : [cpu.textContent]]);
+            }
+
             // 1.9.1: rules and rendering the unit tests can't see.
             navigate("games");
             const fillOf = className => {
@@ -83,6 +204,73 @@
             checks.push(["the folder's line and the version strip wait for the library", soundState.library || ($("soundLibraryForm").hidden && $("soundEras").hidden) ? [] : ["showing"]]);
             checks.push(["Sounds has three sections", $("soundTabs").querySelectorAll("[role=tab]").length === 3 ? [] : ["wrong count"]]);
             checks.push(["the selected sound sits with the library", $("soundLibraryPanel").contains($("soundDetail")) ? [] : ["elsewhere"]]);
+            // 2.2.0: before a sound is chosen, the panel has its heading and an empty state.
+            {
+                const selectedWas = soundState.selected;
+                soundState.selected = null;
+                renderSoundDetail();
+                checks.push(["Selected Sound is headed before a sound is chosen", $("soundDetail").querySelector(".module-head h2")?.textContent === "Selected Sound" && $("soundDetail").querySelector(".empty-state p") ? [] : [$("soundDetail").textContent]]);
+                soundState.selected = selectedWas;
+                renderSoundDetail();
+            }
+            // 2.2.0: once Maestro is hidden and idle after a start, AutoHotkey has the page fill
+            // Sounds, Games and RetroAchievements ahead of time; Games then asks for the covers it
+            // shows while it's closed.
+            {
+                const was = { items: gamesState.items, loaded: gamesState.loaded, covers: gamesState.coversEnabled, library: soundState.library, updated: gamesState.ra.updatedAt };
+                const ahead = { id: "st:77", title: "Ahead", emulator: "steam", system: "", seconds: 60, last: "2026-11-08T10:00:00", plays: 1, launchable: true, installed: true, cover: true };
+                gamesState.requested.delete("st:77");
+                let sentFrom = messages.length;
+                handleWebMessage({ data: { type: "games", covers: true, items: [ahead] } });
+                checks.push(["closed, Games asks for no covers", !$("games").classList.contains("active") && !messages.slice(sentFrom).some(message => message.startsWith("GetCovers")) ? [] : ["asked"]]);
+                soundState.library = null;
+                sentFrom = messages.length;
+                handleWebMessage({ data: { type: "prepareViews" } });
+                const asked = messages.slice(sentFrom);
+                const names = asked.map(message => message.split("\n")[0]);
+                checks.push(["prepared ahead: Sounds, Games' covers and RetroAchievements",
+                    ["GetSoundLibrary", "GetWindowsSounds", "GetStartupSounds", "GetRetroAchievements", "GetRaAwards"].every(name => names.includes(name)) && asked.includes("GetCovers\nst:77") ? [] : [names.join(", ")]]);
+                sentFrom = messages.length;
+                handleWebMessage({ data: { type: "prepareViews" } });
+                checks.push(["and only once a run", messages.length === sentFrom ? [] : [messages.slice(sentFrom).join(", ")]]);
+                handleWebMessage({ data: { type: "retroAchievementsAt", at: Date.now() - 3 * 3600000 - 60000 } });
+                checks.push(["kept RetroAchievements show their real age", $("raUpdated").textContent === "Updated 3 h ago" ? [] : [$("raUpdated").textContent]]);
+                handleWebMessage({ data: { type: "retroAchievementsAt", at: "soon" } });
+                checks.push(["and a bad age changes nothing", $("raUpdated").textContent === "Updated 3 h ago" ? [] : [$("raUpdated").textContent]]);
+                gamesState.coversAhead = false;
+                gamesState.requested.delete("st:77");
+                gamesState.items = was.items;
+                gamesState.loaded = was.loaded;
+                gamesState.coversEnabled = was.covers;
+                gamesState.ra.updatedAt = was.updated;
+                soundState.library = was.library;
+                renderGames();
+                renderSounds();
+                updateRaTimestamp();
+            }
+            // 2.2.0: Custom Sounds, a second folder, is one card after the Windows versions.
+            {
+                const libraryWas = soundState.library;
+                const custom = (customState = "ok") => handleWebMessage({ data: { type: "soundLibrary", root: "C:\\Sounds\\lib", exists: true, changed: true,
+                    customRoot: "C:\\Sounds\\!windows", customState,
+                    eras: [{ folder: "*", year: 0, label: "Custom Sounds", custom: true }, { folder: "(2001) Windows XP", year: 2001, label: "Windows XP" }],
+                    sounds: [{ id: "*\\PS3 Trophy.wav", name: "PS3 Trophy", era: "*", group: "", kind: "web", ext: "wav", size: 1, seconds: 1 },
+                        { id: "(2001) Windows XP\\Ding.wav", name: "Ding", era: "(2001) Windows XP", group: "", kind: "web", ext: "wav", size: 1, seconds: 1 }] } });
+                custom();
+                const cards = [...$("soundGroups").querySelectorAll(".sound-version")];
+                checks.push(["Custom Sounds is a card after the Windows versions", cards.at(-1)?.dataset.soundEra === "*" && cards.at(-1).querySelector("small")?.textContent === "Custom"
+                    && cards.at(-1).querySelector("strong")?.textContent === "Custom Sounds" ? [] : [cards.map(card => card.dataset.soundEra).join(", ")]]);
+                checks.push(["its folder has a line under the library's", !$("soundCustomForm").hidden && $("soundCustomShown").textContent === "C:\\Sounds\\!windows" && !$("soundCustomNote").textContent ? [] : ["missing"]]);
+                custom("overlaps");
+                checks.push(["and says when it can't be used", $("soundCustomNote").textContent === "Inside the library, so not used" ? [] : [$("soundCustomNote").textContent]]);
+                const sentFrom = messages.length;
+                $("soundCustomChange").click();
+                $("soundCustomPath").value = "D:\\Effects";
+                $("soundCustomForm").requestSubmit();
+                checks.push(["Change sends the new folder", messages.slice(sentFrom).includes("SetCustomSounds\nD:\\Effects") && $("soundCustomEdit").hidden ? [] : [messages.slice(sentFrom).join(" | ")]]);
+                soundState.library = libraryWas;
+                renderSounds();
+            }
             const soundBoardsHidden = $("soundAssignments").hidden && $("soundStartup").hidden && !$("soundLibraryPanel").hidden;
             checks.push(["and the boards are out of the way", soundBoardsHidden ? [] : ["showing"]]);
             handleWebMessage({ data: { type: "audioDevices", soundSwitch: true, items: [{ name: "Headphones (2- Arctis <b>)", label: "Headphones (Arctis <b>)", current: true }, { name: "LG (NVIDIA)", label: "Monitor Speaker (LG)", current: false }] } });
@@ -93,6 +281,8 @@
             checks.push(["the output button opens its menu", !$("soundOutputMenu").hidden && $("audioMenu").hidden ? [] : ["wrong menu"]]);
             document.body.click();
             checks.push(["a click elsewhere closes it", $("soundOutputMenu").hidden ? [] : ["still open"]]);
+            // 2.2.0: as it loads, the page tells AutoHotkey whether the start screen plays.
+            checks.push(["the page tells AutoHotkey the start screen plays", messages.includes("SetStartScreen\non") ? [] : [String(messages.filter(message => message.startsWith("SetStartScreen")))]]);
             sent.clear();
             messages.length = 0;
             $("soundOutputButton").click();
@@ -125,7 +315,7 @@
             gamesSections.show("playing");
             handleWebMessage({ data: { type: "retroAchievements", state: "loading" } });
             const continueBefore = $("gamesContinueModule").getBoundingClientRect();
-            checks.push(["Next Up shows it's loading", !$("gamesNextUp").hidden && $("gamesNextUp").querySelector(".loading-note") ? [] : ["hidden"]]);
+            checks.push(["Next Up shows its shape while it waits", !$("gamesNextUp").hidden && $("gamesNextUp").querySelector(".skel") ? [] : ["hidden"]]);
             checks.push(["with its heading", $("gamesNextUp").querySelector("h2")?.textContent === "Next Up" ? [] : ["no heading"]]);
             handleWebMessage({ data: { type: "retroAchievements", state: "off" } });
             checks.push(["without RetroAchievements it steps aside", $("gamesNextUp").hidden ? [] : ["showing"]]);
@@ -187,6 +377,23 @@
             openOccurrence({ countdown: "12-25" });
             checks.push(["a countdown on the calendar opens the dialog", !$("calCountdownDialog").hidden && $("calendar").classList.contains("active") ? [] : ["didn't open"]]);
             closeCalDialogs();
+            // 2.2.0: a long title in Day or Week ends on a whole line, inside its block.
+            {
+                const was = { resources: calState.resources, calendars: calState.calendars, loaded: calState.loaded, mode: calState.mode, cursor: calState.cursor };
+                const text = `BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//x//EN\r\nBEGIN:VEVENT\r\nUID:long\r\nDTSTAMP:20261101T000000Z\r\nDTSTART:20261108T130000\r\nDTEND:20261108T150000\r\nSUMMARY:${"Release planning for the next version ".repeat(6)}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n`;
+                calState.calendars = [{ id: "work", name: "Work", color: "#C4587B" }];
+                calState.resources = new Map([["work/long", { calendar: "work", name: "long", etag: "1", text, parsed: Cal.readResource(text), editable: true }]]);
+                Object.assign(calState, { loaded: true, mode: "week", cursor: new Date(2026, 10, 8).getTime() });
+                renderCalendar();
+                const blocks = [...$("calendar").querySelectorAll(".cal-block:not(.is-short)")];
+                checks.push(["a long title in Week ends on a whole line, inside its block", blocks.length ? blocks.filter(block => {
+                    const title = block.querySelector(":scope > span:not([class])");
+                    const lines = title.getBoundingClientRect().height / parseFloat(getComputedStyle(title).lineHeight);
+                    return Math.abs(lines - Math.round(lines)) > .05 || title.getBoundingClientRect().bottom > block.getBoundingClientRect().bottom - parseFloat(getComputedStyle(block).paddingBottom) + .5;
+                }).map(block => block.textContent.slice(0, 30)) : ["no block drawn"]]);
+                Object.assign(calState, was);
+                renderCalendar();
+            }
             // 2.0.0: the calendar editor fits its buttons, and takes any color.
             const serverWas = calState.server;
             calState.server = { state: "running", message: "" };
@@ -230,6 +437,50 @@
             checks.push(["System reads no log on Live", !sent.has("GetLog") && logState.timer === null ? [] : ["reading"]]);
             checks.push(["System has its four sections", $("systemTabs").querySelectorAll("[role=tab]").length === 4 ? [] : ["wrong count"]]);
             handleWebMessage({ data: { type: "windowShown" } });
+            // 2.2.0: the start screen is AutoHotkey's window. The page says whether it plays, and
+            // under it the logo's swing and the sheen wait until it dissolves.
+            {
+                const frames = () => new Promise(resolve => { requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 0))); setTimeout(resolve, 1050); });
+                await new Promise(resolve => setTimeout(resolve, 150));     // the show above starts its swing within 120 ms
+                const arm = document.querySelector(".brand-mark .mark-arm");
+                const armSwinging = () => arm.getAnimations().some(motion => motion.animationName === "mark-swing");
+                const lastSay = () => messages.filter(message => message.startsWith("SetStartScreen\n")).at(-1);
+                const swingWas = $("logoSwing").value;
+                $("logoSwing").value = "never";
+                $("logoSwing").dispatchEvent(new Event("change"));
+                checks.push(["and not when the logo never swings", lastSay() === "SetStartScreen\noff" ? [] : [String(lastSay())]]);
+                $("logoSwing").value = swingWas;
+                $("logoSwing").dispatchEvent(new Event("change"));
+                arm.getAnimations().forEach(motion => motion.cancel());
+                arm.classList.remove("is-swinging", "is-previewing");
+                handleWebMessage({ data: { type: "windowHidden" } });
+                markHasSwung = false;
+                $("logoSwing").value = "every";
+                $("logoSwing").dispatchEvent(new Event("change"));
+                const shownFrom = messages.length;
+                handleWebMessage({ data: { type: "windowShown", startScreen: true } });
+                checks.push(["under the start screen, nothing moves yet", !armSwinging() && !document.body.classList.contains("is-showing") ? [] : ["moving"]]);
+                checks.push(["and Games' RetroAchievements requests go out", ["GetRetroAchievements", "GetRaAwards"].every(name => messages.slice(shownFrom).includes(name + "\n")) ? [] : [messages.slice(shownFrom).join(" | ")]]);
+                const pageBefore = [document.scrollingElement.scrollHeight, document.documentElement.clientWidth];
+                handleWebMessage({ data: { type: "startScreenDone" } });
+                await frames();
+                checks.push(["the start screen swung the logo, so the sidebar's stays still, even every time", !armSwinging() && markHasSwung ? [] : ["swinging"]]);
+                $("logoSwing").value = swingWas;
+                $("logoSwing").dispatchEvent(new Event("change"));
+                // A show never moves or resizes the page: a rise once flashed the scrollbar.
+                const pageAfter = [document.scrollingElement.scrollHeight, document.documentElement.clientWidth];
+                checks.push(["a show leaves the page's height and width alone", pageAfter.join() === pageBefore.join() && document.querySelector(".main").getAnimations().length === 0 ? [] : [`${pageBefore} -> ${pageAfter}`]]);
+                checks.push(["and MAESTRO catches the sheen", document.querySelector(".brand-copy strong").getAnimations().some(motion => motion.animationName === "name-sheen") ? [] : ["no sheen"]]);
+                arm.getAnimations().forEach(motion => motion.cancel());
+                arm.classList.remove("is-swinging", "is-previewing");
+                handleWebMessage({ data: { type: "windowHidden" } });
+                checks.push(["hidden, the page stays drawn, so the window keeps a real frame", getComputedStyle(document.querySelector(".app-shell")).opacity === "1" && !document.body.classList.contains("is-showing") ? [] : ["blanked"]]);
+                handleWebMessage({ data: { type: "windowShown" } });
+                handleWebMessage({ data: { type: "windowHidden" } });
+                await frames();
+                checks.push(["a show cut short by a hide starts nothing late", document.body.classList.contains("is-showing") ? ["started"] : []]);
+                handleWebMessage({ data: { type: "windowShown" } });
+            }
             checks.push(["Live asks for readings every second", liveTimer !== null ? [] : ["not reading"]]);
             sent.clear();
             handleWebMessage({ data: { type: "metrics", cpu: 42, ram: 50, history: [[10, 20], [12, 22]], drives: [] } });
@@ -283,12 +534,28 @@
             // Every heading, column head and tab: small words stay lowercase, the
             // rest are capitalized. Text the user wrote and dates are left out.
             const small = new Set(["a", "an", "the", "and", "but", "or", "nor", "for", "so", "yet", "as", "at", "by", "in", "of", "on", "to", "via", "per"]);
-            const ownText = node => [...node.childNodes].filter(child => child.nodeType === Node.TEXT_NODE).map(child => child.textContent).join(" ").trim();
+            // A heading that opens its page (2.2.0) holds its words in that link.
+            const ownText = node => [...node.childNodes].filter(child => child.nodeType === Node.TEXT_NODE || child.classList?.contains("module-link")).map(child => child.textContent).join(" ").trim();
             const lowered = text => text.split(/\s+/).filter((word, index, words) => /^[a-z]/.test(word) && (index === 0 || index === words.length - 1 || !small.has(word)));
             checks.push(["headings are in title case", [...document.querySelectorAll("h1, h2, h3, th, [role=tab]")]
                 .filter(node => !node.closest("[data-user-text], #notePreview, .note-preview, .markdown-body"))
                 .filter(node => lowered(ownText(node)).length)
                 .map(node => `"${ownText(node)}"`)]);
+            // 2.2.0: a heading with a chevron opens its page, in place of an Open button.
+            checks.push(["no module heading has an Open or Library button", [...document.querySelectorAll(".module-head .link-button")].map(button => button.textContent.trim()).filter(text => /^(Open|Library)$/.test(text))]);
+            checks.push(["each heading that opens a page is a button in its heading that says where", [...document.querySelectorAll(".module-link")].filter(link => link.tagName !== "BUTTON" || !link.closest("h2") || !/^Open /.test(link.title)).map(link => link.textContent)]);
+            const nowLink = $("homeNowTitle")?.querySelector(".module-link");
+            navigate("home");
+            nowLink?.click();
+            checks.push(["Now Playing's heading opens Games", nowLink && $("games").classList.contains("active") ? [] : [nowLink ? "Games didn't open" : "no link"]]);
+            navigate("games");
+            gamesSections.show("library");
+            await null;
+            const tabs = $("gamesTabs"), libraryTab = $("gamesTabLibrary");
+            checks.push(["the section marker sits behind the chosen tab and follows it", tabs.classList.contains("has-marker") && tabs.style.getPropertyValue("--marker-x") === `${libraryTab.offsetLeft}px` && tabs.style.getPropertyValue("--marker-w") === `${libraryTab.offsetWidth}px` ? [] : [`${tabs.className} ${tabs.style.cssText}`]]);
+            checks.push(["the chosen tab's own fill gives way to the marker", getComputedStyle(libraryTab).backgroundColor === "rgba(0, 0, 0, 0)" ? [] : [getComputedStyle(libraryTab).backgroundColor]]);
+            gamesSections.show("playing");
+            navigate("home");
             checks.push(["Ctrl numbers cover the eight pages", sidebarViews().length === 8 && sidebarViews()[7] === "commands" ? [] : [sidebarViews().join()]]);
             checks.push(["no errors from the 1.9.1 and 1.9.2 checks", errors.splice(0)]);
 
@@ -313,8 +580,8 @@
             const screen = document.querySelector("#workspaceScreens .ws-screen").getBoundingClientRect();
             checks.push(["the canvas has the monitor's real shape", Math.abs(screen.width / screen.height - 2.4571) < 0.02 ? [] : [`${screen.width}x${screen.height}`]]);
             const tooSmall = ["#workspaces .ws-window strong", "#workspaces .ws-window > span", "#workspaces .ws-row small", "#workspaces .ws-tab em", "#workspaces .ws-item small", "#workspaces .ws-number span", "#workspaces .ws-place", "#workspaces .ws-panel-title", "#workspaces .ws-switch"]
-                .filter(selector => parseFloat(getComputedStyle(document.querySelector(selector)).fontSize) < 17);
-            checks.push(["nothing on the page is smaller than 17 px", tooSmall]);
+                .filter(selector => parseFloat(getComputedStyle(document.querySelector(selector)).fontSize) < 18);
+            checks.push(["nothing on the page is smaller than 18 px", tooSmall]);
             checks.push(["Selected Window is headed by the window's app, as text", $("wsWindowTitle").textContent === "<b>Code</b>" && !$("wsWindowTitle").querySelector("b") && $("wsWindowSub").textContent.startsWith("<img") ? [] : [$("wsWindowTitle").innerHTML]]);
             checks.push(["a window's name and title stay text", document.querySelector("#workspaceScreens b, #workspaceScreens img, #workspaceInspector img") ? ["markup ran"] : []]);
             checks.push(["the first window is selected", document.querySelector(".ws-window.is-selected")?.dataset.index === "1" ? [] : ["none"]]);
@@ -691,7 +958,7 @@
             const awardEntry = (type, extra, id, title, when) => ({ AwardedAt: when, Title: title, ConsoleName: "Game Boy", ImageIcon: `/Images/${id}.png`, AwardType: type, AwardData: id, AwardDataExtra: extra });
             handleWebMessage({ data: "RA\nsummary\n" + JSON.stringify({ User: "Player", TotalPoints: 10, Rank: 5, TotalRanked: 100 }) });
             handleWebMessage({ data: "RA\nrecent\n[]" });
-            checks.push(["site badges wait for their reply", $("gamesAchievements").querySelector(".ra-awards .loading-note") ? [] : ["no note"]]);
+            checks.push(["site badges show their shape while they wait", $("gamesAchievements").querySelector(".ra-awards .skel") ? [] : ["no shape"]]);
             handleWebMessage({ data: "RA\nawards\n" + JSON.stringify({ HiddenAwardsCount: 1, VisibleUserAwards: [
                 awardEntry("Mastery/Completion", 1, 100, "<img src=x onerror=alert(1)>", "2026-01-01T12:00:00+00:00"),
                 awardEntry("Game Beaten", 1, 100, "Same game", "2025-01-01T12:00:00+00:00"),
@@ -1090,6 +1357,23 @@
             const trackWidth = node => Math.round(node.closest(".metric-track").getBoundingClientRect().width);
             const driveTracks = [...$("homeDrives").querySelectorAll(".metric-track span")].map(trackWidth);
             checks.push(["drive bars are as long as the processor's", driveTracks.length === 2 && driveTracks.every(width => width === trackWidth($("homeCpuBar"))) ? [] : [trackWidth($("homeCpuBar")), ...driveTracks]]);
+            // 2.2.0: System's readings share two columns at every width, so six drives fit a
+            // square in whole rows at the real window (the preview audit measures that).
+            {
+                const system = document.querySelector('#homeFace [data-module="system"]');
+                const width = system.dataset.width;
+                system.dataset.width = "1";
+                const [cpu, memory] = [$("homeCpu"), $("homeRam")].map(value => value.closest(".sys-row").getBoundingClientRect());
+                checks.push(["System's readings share two columns in one square", Math.abs(cpu.top - memory.top) < 1 && memory.left > cpu.right ? [] : [`${Math.round(cpu.top)} ${Math.round(memory.top)}`]]);
+                system.dataset.width = width;
+            }
+            // 2.2.0: a badge still on its way shows a mark, not an empty box.
+            {
+                const badge = raImage("", "ra-badge");
+                $("home").append(badge);
+                checks.push(["a badge without its picture shows a mark", getComputedStyle(badge, "::after").content !== "none" ? [] : ["empty"]]);
+                badge.remove();
+            }
             const moduleCount = document.querySelectorAll("#homeFace > [data-module]").length;
             checks.push(["every module in the list is on the page", moduleCount === MaestroHomeLayout.MODULES.length ? [] : [moduleCount]]);
             const savedLayout = localStorage.getItem(HOME_LAYOUT_KEY);
@@ -1226,6 +1510,11 @@
             askHomeExtras(true);
             windowIsHidden = wasHidden;
             checks.push(["they ask only for what shows", messages.includes("GetWeather\n") && messages.includes("GetHomeStats\nnetwork,processes") ? [] : [messages.join(";")]]);
+            // 2.2.0: rates need a second reading; on opening it comes after a second.
+            windowIsHidden = false;
+            await new Promise(resolve => setTimeout(resolve, 1100));
+            windowIsHidden = wasHidden;
+            checks.push(["and read Network and Top Apps again a second later", messages.filter(message => message === "GetHomeStats\nnetwork,processes").length === 2 ? [] : [messages.join(";")]]);
             handleWebMessage({ data: { type: "weatherSettings", enabled: true } });
             handleWebMessage({ data: "WEATHER\n" + JSON.stringify({ current: { temperature_2m: 48.3, apparent_temperature: 44.1, relative_humidity_2m: 61, weather_code: 3, wind_speed_10m: 9.4 }, daily: { time: ["2026-11-09"], temperature_2m_max: [52], temperature_2m_min: [40], weather_code: [61], precipitation_probability_max: [80] } }) });
             checks.push(["the weather shows", /48°/.test($("homeWeather").textContent) && /Cloudy/.test($("homeWeather").textContent) && /80% rain/.test($("homeWeather").textContent) ? [] : [$("homeWeather").textContent]]);
@@ -1396,6 +1685,8 @@
             // 2.0.0: the command palette and its calculator.
             checks.push(["the title-bar search shows the / key", document.querySelector("#titlebarCommand kbd")?.textContent === "/" ? [] : [document.querySelector("#titlebarCommand kbd")?.textContent]]);
             openLauncher("all");
+            checks.push(["the palette's kinds read in sentence case, not capitals (2.2.0)", [...$("launcherResults").querySelectorAll(".launcher-option-action")].map(node => node.textContent).filter(text => !/^[A-Z][a-z]+$/.test(text))]);
+            checks.push(["its groups are headed in title case", [...$("launcherResults").querySelectorAll(".launcher-group")].map(node => node.textContent).filter(text => !["Recent", "All Commands"].includes(text))]);
             checks.push(["the palette is called Command Palette", $("launcherTitle").textContent === "Command Palette" ? [] : [$("launcherTitle").textContent]]);
             checks.push(["and says Super + Space opens it from anywhere", /Super\s*\+\s*Space opens it from anywhere/.test(document.querySelector(".launcher-anywhere")?.textContent.replace(/\s+/g, " ") || "") ? [] : ["missing"]]);
             const typeInPalette = text => { $("launcherSearch").value = text; $("launcherSearch").dispatchEvent(new Event("input", { bubbles: true })); };
@@ -1731,7 +2022,60 @@
                 });
                 document.activeElement?.blur();
             };
-            const sectioned = { games: gamesSections, dashboard: systemSections, sounds: soundSections, commands: commandsSections, workspaces: workspaceSections };
+            // 2.2.0: no small text on any page, tab, the sidebar or the title bar.
+            // Lato is at least 18 px; the condensed display face reads smaller,
+            // so it's at least 19. The keyboard map's SVG scales with the window.
+            const smallText = new Set();
+            // 2.2.0: seven sizes, with Lato and the display face paired at the
+            // smallest. The sidebar's brand keeps its own measured sizes, and
+            // text only a screen reader reads has no size to see.
+            const STEPS = [18, 19, 20, 22, 26, 34, 40, 58];
+            const offScale = new Set();
+            const sizeCheck = place => {
+                const areas = [document.querySelector(".view.active"), document.querySelector(".sidebar"), document.querySelector(".topbar")];
+                areas.forEach((area, index) => {
+                    const where = index ? "shell" : place;
+                    const walker = document.createTreeWalker(area, NodeFilter.SHOW_TEXT);
+                    for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+                        const owner = text.parentElement;
+                        if (!text.textContent.trim() || !owner || owner.closest("svg, [hidden], option, script, style")) continue;
+                        const box = owner.getBoundingClientRect();
+                        const style = getComputedStyle(owner);
+                        if (!box.width || !box.height || style.visibility === "hidden") continue;
+                        const px = parseFloat(style.fontSize);
+                        const display = /Maestro Display|Bahnschrift/.test(style.fontFamily.split(",")[0]);
+                        if (px < (display ? 19 : 18)) smallText.add(`${where}: ${owner.id ? "#" + owner.id : owner.tagName.toLowerCase() + "." + [...owner.classList].join(".")} ${px}px "${text.textContent.trim().slice(0, 24)}"`);
+                        if (!STEPS.includes(Math.round(px * 10) / 10) && !owner.closest(".brand, .sr-only")) offScale.add(`${owner.id ? "#" + owner.id : owner.tagName.toLowerCase() + "." + [...owner.classList].join(".")} ${px}px "${text.textContent.trim().slice(0, 24)}"`);
+                    }
+                });
+            };
+            // One icon set (2.2.0): every drawing that's an icon comes from icons.js,
+            // isn't empty, and is drawn at 20 or 24 px. The logo, the window
+            // controls (Windows' own caption glyphs), charts, the keyboard map and
+            // the almanac's sun and moon are drawings, not icons.
+            const NOT_ICONS = ".brand-mark, .window-control, .chart-plot, .keymap, .alm-moon, .alm-sun";
+            const iconProblems = new Set();
+            const iconCheck = place => {
+                [document.querySelector(".view.active"), document.querySelector(".sidebar"), document.querySelector(".topbar")].forEach((area, index) => {
+                    const where = index ? "shell" : place;
+                    area.querySelectorAll("svg").forEach(svg => {
+                        if (svg.parentElement?.closest("svg") || svg.closest(NOT_ICONS) || svg.closest("[hidden]")) return;
+                        const holder = svg.parentElement;
+                        const name = holder?.id ? "#" + holder.id : `${holder?.tagName.toLowerCase()}.${[...(holder?.classList || [])].join(".")}`;
+                        const width = Math.round(svg.getBoundingClientRect().width);
+                        if (!svg.classList.contains("icon")) iconProblems.add(`${where}: a drawing outside the set in ${name}`);
+                        else if (!svg.childElementCount) iconProblems.add(`${where}: an empty icon in ${name}`);
+                        else if (width && width !== 20 && width !== 24) iconProblems.add(`${where}: an icon ${width} px wide in ${name}`);
+                    });
+                    // A glyph standing in for an icon, alone or at either end of a button's words.
+                    area.querySelectorAll("button, a").forEach(control => {
+                        const copy = control.cloneNode(true);
+                        copy.querySelectorAll("kbd").forEach(key => key.remove());     // a key's name is text, not an icon
+                        const words = copy.textContent.trim();
+                        if (/^[‹›⋯×✕♥♡◆→↗↻]|[‹›⋯×✕♥♡◆→↗↻]$/.test(words)) iconProblems.add(`${where}: a glyph for an icon in "${words.slice(0, 30)}"`);
+                    });
+                });
+            };            const sectioned = { games: gamesSections, dashboard: systemSections, sounds: soundSections, commands: commandsSections, workspaces: workspaceSections };
             // The Calendars list with a calendar in it, where the cut-off Edit was found.
             const calendarsBefore = { loaded: calState.loaded, calendars: calState.calendars };
             calState.loaded = true;
@@ -1740,12 +2084,15 @@
                 navigate(view);
                 if (view === "calendar") renderCalendar();
                 const sections = sectioned[view];
-                if (!sections) return ringCheck(view);
+                if (!sections) return (ringCheck(view), sizeCheck(view), iconCheck(view));
                 const tabs = [...document.querySelectorAll(`#${view} [data-section-tab]`)].map(tab => tab.dataset.sectionTab);
-                tabs.forEach(tab => { sections.show(tab); ringCheck(`${view} › ${tab}`); });
+                tabs.forEach(tab => { sections.show(tab); ringCheck(`${view} › ${tab}`); sizeCheck(`${view} › ${tab}`); iconCheck(`${view} › ${tab}`); });
             });
             Object.assign(calState, calendarsBefore);
             checks.push(["no control's focus ring is cut off", [...new Set(clippedRings)]]);
+            checks.push(["no text under 18 px, or 19 px in the display face", [...smallText]]);
+            checks.push(["every text is one of the seven sizes", [...offScale]]);
+            checks.push(["every icon is from the set, drawn at 20 or 24 px", [...iconProblems]]);
             checks.push(["no errors from focusing every control", errors.splice(0)]);
 
             const allowedNow = new Set(window.SMOKE_ALLOWLIST || []);

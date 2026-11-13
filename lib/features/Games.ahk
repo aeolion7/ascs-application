@@ -1280,6 +1280,10 @@ OpenRetroAchievementsProfile() {
     }
 }
 
+; Summary and recent games are kept for 10 minutes (a refresh asks again after
+; one), and on disk (2.2.0), so after a start Games shows the last ones at once,
+; with their real age, while newer ones are fetched. With those showing, a
+; failed fetch leaves them in place, only logged, rather than an error.
 FetchRetroAchievements(force := false) {
     global ASCS_RetroAchievementsAt, ASCS_RetroAchievementsCache
 
@@ -1292,25 +1296,32 @@ FetchRetroAchievements(force := false) {
         SendToFrontend('{"type":"retroAchievements","state":"off"}')
         return
     }
-    age := A_TickCount - ASCS_RetroAchievementsAt
-    if (ASCS_RetroAchievementsCache.Count && (age < 600000 || (force && age < 60000))) {
+    if !ASCS_RetroAchievementsCache.Count
+        LoadRaDiskCache(credentials["user"])
+    shown := ASCS_RetroAchievementsCache.Count > 0
+    if shown {
         for kind, text in ASCS_RetroAchievementsCache
             SendRetroAchievementsText(kind, text)
-        return
-    }
+        SendRetroAchievementsAge()
+        age := A_TickCount - ASCS_RetroAchievementsAt
+        if (age < 600000 && !(force && age >= 60000))
+            return
+    } else
+        SendToFrontend('{"type":"retroAchievements","state":"loading"}')
     ASCS_RetroAchievementsAt := A_TickCount
-    SendToFrontend('{"type":"retroAchievements","state":"loading"}')
     query := "z=" UriEncode(credentials["user"]) "&y=" UriEncode(credentials["key"]) "&u=" UriEncode(credentials["user"])
     HttpGetAsync("ra-summary", "https://retroachievements.org/API/API_GetUserSummary.php?" query "&g=5&a=8",
-        RetroAchievementsDone.Bind("summary"))
+        RetroAchievementsDone.Bind("summary", shown, credentials["user"]))
     HttpGetAsync("ra-recent", "https://retroachievements.org/API/API_GetUserRecentlyPlayedGames.php?" query "&c=8",
-        RetroAchievementsDone.Bind("recent"))
+        RetroAchievementsDone.Bind("recent", shown, credentials["user"]))
 }
 
-RetroAchievementsDone(kind, ok, result) {
-    global ASCS_RetroAchievementsCache
+RetroAchievementsDone(kind, shown, user, ok, result) {
+    global ASCS_RetroAchievementsCache, ASCS_RetroAchievementsFetched
     if !ok {
         WriteLog("RetroAchievements " kind " unavailable: " result)
+        if shown
+            return
         message := InStr(result, "HTTP 401") || InStr(result, "HTTP 403")
             ? "RetroAchievements rejected the user name or key in data\secrets.ini."
             : "RetroAchievements is unavailable right now (" result ")."
@@ -1318,7 +1329,59 @@ RetroAchievementsDone(kind, ok, result) {
         return
     }
     ASCS_RetroAchievementsCache[kind] := result
+    ASCS_RetroAchievementsFetched[kind] := UnixNow()
     SendRetroAchievementsText(kind, result)
+    path := RaDiskCachePath(kind)
+    try {
+        try FileDelete(path ".tmp")
+        FileAppend(RaDiskCacheText(user, ASCS_RetroAchievementsFetched[kind], result), path ".tmp", "UTF-8-RAW")
+        FileMove(path ".tmp", path, 1)
+    } catch as err
+        WriteLog("RetroAchievements " kind " not kept on disk: " err.Message)
+}
+
+RaDiskCachePath(kind) {
+    global ASCS_DataDir
+    return ASCS_DataDir "\retroachievements-" kind ".txt"
+}
+
+; The first ask of a run fills the memory cache from disk, aged by when the
+; oldest reply was fetched, so the 10 minutes count from then.
+LoadRaDiskCache(user) {
+    global ASCS_RetroAchievementsAt, ASCS_RetroAchievementsCache, ASCS_RetroAchievementsFetched
+    for kind in ["summary", "recent"] {
+        path := RaDiskCachePath(kind)
+        if !FileExist(path)
+            continue
+        try cached := ParseRaDiskCache(FileRead(path, "UTF-8"), user)
+        catch as err {
+            WriteLog("RetroAchievements " kind " not read from disk: " err.Message)
+            continue
+        }
+        if !cached
+            continue
+        ASCS_RetroAchievementsCache[kind] := cached["text"]
+        ASCS_RetroAchievementsFetched[kind] := cached["at"]
+    }
+    if ASCS_RetroAchievementsCache.Count
+        ASCS_RetroAchievementsAt := A_TickCount - Max(0, UnixNow() - RetroAchievementsFetchedAt()) * 1000
+}
+
+; When the oldest reply showing was fetched, Unix seconds.
+RetroAchievementsFetchedAt() {
+    global ASCS_RetroAchievementsCache, ASCS_RetroAchievementsFetched
+    oldest := 0
+    for kind in ASCS_RetroAchievementsCache
+        if ASCS_RetroAchievementsFetched.Has(kind)
+            oldest := oldest ? Min(oldest, ASCS_RetroAchievementsFetched[kind]) : ASCS_RetroAchievementsFetched[kind]
+    return oldest
+}
+
+; Kept replies are sent with their age, so Games doesn't call them new.
+SendRetroAchievementsAge() {
+    at := RetroAchievementsFetchedAt()
+    if at
+        SendToFrontend('{"type":"retroAchievementsAt","at":' at * 1000 '}')
 }
 
 ; ---- the achievement browser (1.9.0)

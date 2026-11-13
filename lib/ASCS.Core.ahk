@@ -1556,6 +1556,28 @@ ValidateSoundLibrary(path) {
     return path
 }
 
+; ---- Custom Sounds (2.2.0)
+; A second folder of sounds beside the library (C:\Sounds\!windows by default), for
+; sounds that aren't Windows'. Its sounds' ids are "*\" and their path inside it:
+; "*" can't be in a Windows path, so they never meet the library's, which are
+; their path inside the library.
+SoundIdForPath(path, library, custom) {
+    if (path = "")
+        return ""
+    if (library != "" && InStr(path, library "\") = 1)
+        return SubStr(path, StrLen(library) + 2)
+    if (custom != "" && InStr(path, custom "\") = 1)
+        return "*\" SubStr(path, StrLen(custom) + 2)
+    return ""
+}
+
+; True when one folder is the other or inside it: their sounds would be listed
+; twice, so the custom folder is then left out.
+SoundFoldersOverlap(a, b) {
+    a := RTrim(a, "\") "\", b := RTrim(b, "\") "\"
+    return InStr(a, b) = 1 || InStr(b, a) = 1
+}
+
 ; The name of a leveled copy: "CHIMES (-7.6 dB).wav". Characters a file
 ; name or an INI key can't hold are dropped (1.8.1: also = [ ] ;).
 LeveledSoundName(stem, gainDb) {
@@ -1606,7 +1628,7 @@ WindowsSoundEvent(key) {
 ; only ever ask for the file a known event or ASCS sound already plays.
 ; Maestro's own sounds, by kind, with what the page and notices call them
 ; (the timer's since 2.0.0).
-AscsSoundLabels() => Map("show", "Maestro show", "hide", "Maestro hide", "reminder", "Calendar reminder", "timer", "Timer")
+AscsSoundLabels() => Map("start", "Maestro start", "show", "Maestro show", "hide", "Maestro hide", "reminder", "Calendar reminder", "timer", "Timer")
 
 ParseInUseKey(key) {
     if RegExMatch(key, "^windows:(.{1,80})$", &match) {
@@ -2486,6 +2508,27 @@ UnixNow() {
     return DateDiff(A_NowUTC, "19700101000000", "Seconds")
 }
 
+; RetroAchievements' summary or recent games kept on disk (2.2.0), so Games
+; shows the last ones at once after a start: the user it's for and when it was
+; fetched (Unix seconds) on the first line, then the reply as it came.
+RaDiskCacheText(user, unix, text) {
+    return user "`t" unix "`n" text
+}
+
+; The reply and when it was fetched, if the file is the given user's and holds
+; JSON; "" otherwise. User names compare without case, as the site's do.
+ParseRaDiskCache(content, user) {
+    newline := InStr(content, "`n")
+    if (!newline || user = "")
+        return ""
+    if !RegExMatch(SubStr(content, 1, newline - 1), "^([^\t\r\n]+)\t(\d{1,11})\r?$", &head) || head[1] != user
+        return ""
+    text := SubStr(content, newline + 1)
+    if !RegExMatch(text, "^\s*[\{\[]")
+        return ""
+    return Map("at", Integer(head[2]), "text", text)
+}
+
 MetricHistoryLimits() {
     return Map("seconds", 300, "tens", 360, "minutes", 1440)
 }
@@ -2604,6 +2647,13 @@ ReadNetworkTotals() {
 ; Every process this user can read: its processor time (100 ns units, kernel and
 ; user) and working set (bytes), keyed by id and start time so a reused id isn't
 ; mistaken for the old process. Names are looked up once per process.
+; Whether two readings, ms apart on A_TickCount, make a fair rate (2.2.0): at
+; least half a second, and no more than 10 s, so the first reading after
+; Maestro was hidden starts afresh rather than averaging the hidden hours.
+RateSpanUsable(earlier, later) {
+    return later - earlier >= 500 && later - earlier <= 10000
+}
+
 ReadProcessUsage() {
     static names := Map()
     ids := Buffer(4096 * 4, 0)
@@ -2712,6 +2762,34 @@ BackupDue(now, time, lastAttempt, lastResult) {
     if (lastResult = "failed")
         return DateDiff(now, lastAttempt, "Minutes") >= 60
     return false
+}
+
+; The logo's swing as the page draws it (mark-swing, 2.2.0), for the start
+; screen: degrees left of its rest, ms into the swing. 850 ms strokes, out to
+; 40 degrees and back, each eased by cubic-bezier(.37, 0, .63, 1); the page's
+; has four (3.4 s), the start screen's two (one movement, 1.7 s). At rest
+; before and after.
+MarkSwingAngle(ms, strokes := 4) {
+    if (ms <= 0 || ms >= strokes * 850)
+        return 0
+    stroke := Floor(ms / 850)
+    eased := CubicBezierEase((ms - stroke * 850) / 850, .37, 0, .63, 1)
+    return 40 * (Mod(stroke, 2) ? 1 - eased : eased)
+}
+
+; CSS's cubic-bezier(x1, y1, x2, y2) at x (0 to 1): the curve's t for x by
+; halving, then its y there.
+CubicBezierEase(x, x1, y1, x2, y2) {
+    low := 0.0, high := 1.0
+    loop 40 {
+        t := (low + high) / 2
+        if (3 * (1 - t) ** 2 * t * x1 + 3 * (1 - t) * t ** 2 * x2 + t ** 3 < x)
+            low := t
+        else
+            high := t
+    }
+    t := (low + high) / 2
+    return 3 * (1 - t) ** 2 * t * y1 + 3 * (1 - t) * t ** 2 * y2 + t ** 3
 }
 
 ; A backup's result as one line of plain text for the page and the log.

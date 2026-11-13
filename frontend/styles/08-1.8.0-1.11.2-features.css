@@ -1,0 +1,2656 @@
+/* ==========================================================================
+   1.8.0: Help (F1 or the ? button in the title bar)
+   ========================================================================== */
+
+.help-dialog {
+  display: flex;
+  width: min(820px, calc(100vw - 48px));
+  max-height: calc(100vh - 64px);
+  flex-direction: column;
+  gap: 22px;
+  overflow: auto;
+  padding: 26px 28px 22px;
+  border: 1px solid rgba(139, 111, 245, .22);
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgba(74, 32, 170, .22), transparent 60%),
+    linear-gradient(160deg, rgba(31, 34, 50, .98), rgba(20, 22, 33, .98));
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .55), inset 0 1px rgba(255, 255, 255, .05);
+}
+
+.help-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(152, 151, 181, .12);
+}
+
+.help-header h2 {
+  margin: 8px 0 4px;
+  color: #f0f1f8;
+  font-size: calc(27px * var(--text-scale));
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.help-meta {
+  margin: 0;
+  color: #8f94aa;
+  font-size: var(--t-floor);
+}
+
+.help-close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(167, 174, 202, .16);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .03);
+  color: #a4a9bb;
+  cursor: pointer;
+  transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease;
+}
+
+.help-close svg {
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+.help-close:hover,
+.help-close:focus-visible {
+  border-color: rgba(139, 111, 245, .45);
+  background: rgba(139, 111, 245, .1);
+  color: #eef0f7;
+}
+
+.help-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px;
+}
+
+.help-dialog h3 {
+  margin: 0 0 12px;
+  color: #a4a9bb;
+  font-size: var(--t-floor);
+  font-weight: 700;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+}
+
+.help-dialog h3 span {
+  margin-left: 8px;
+  color: var(--text-muted);
+  font-weight: 600;
+  letter-spacing: .4px;
+  text-transform: none;
+}
+
+.help-keys {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 16px;
+  margin: 0;
+}
+
+.help-keys dt {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.help-keys dd {
+  margin: 0;
+  color: #c9ccd8;
+  font-size: var(--t-floor);
+}
+
+.help-dialog kbd {
+  min-width: 22px;
+  padding: 3px 7px 4px;
+  border: 1px solid rgba(167, 174, 202, .22);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .02));
+  color: #eef0f7;
+  font-family: inherit;
+  font-size: var(--t-floor);
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+}
+
+.help-plus {
+  color: var(--text-muted);
+  font-size: var(--t-floor);
+}
+
+.help-pages {
+  padding-top: 18px;
+  border-top: 1px solid rgba(152, 151, 181, .12);
+}
+
+.help-page-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px;
+}
+
+.help-page {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 7px;
+  border: 1px solid rgba(167, 174, 202, .14);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .025);
+  color: #c9ccd8;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--t-floor);
+  transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
+}
+
+.help-page span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.help-page kbd {
+  min-width: 18px;
+  padding: 2px 5px 3px;
+  font-size: var(--t-floor);
+}
+
+.help-page:hover,
+.help-page:focus-visible {
+  border-color: rgba(139, 111, 245, .4);
+  background: rgba(139, 111, 245, .08);
+  color: #eef0f7;
+}
+
+.help-page.is-current {
+  border-color: rgba(139, 111, 245, .5);
+  background: rgba(74, 32, 170, .3);
+  color: #f0f1f8;
+}
+
+.help-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(152, 151, 181, .12);
+}
+
+.help-footer p {
+  margin: 0;
+  color: #8f94aa;
+  font-size: var(--t-floor);
+}
+
+@media (max-width: 760px) {
+  .help-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* ==========================================================================
+   1.8.0: Calendar
+   ========================================================================== */
+
+.cal-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.cal-nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.cal-nav h2 {
+  overflow: hidden;
+  margin: 0 0 0 8px;
+  color: #f0f1f8;
+  font-size: calc(25px * var(--text-scale));
+  font-weight: 600;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-step {
+  width: 34px;
+  padding: 0;
+  font-size: calc(20px * var(--text-scale));
+  line-height: 1;
+}
+
+.cal-modes {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+  padding: 4px;
+  border: 1px solid var(--border-soft);
+  border-radius: 11px;
+  background: rgba(10, 12, 19, .45);
+}
+
+.cal-modes button {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: #a4a9bb;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--t-floor);
+  font-weight: 600;
+}
+
+.cal-modes button[aria-pressed="true"] {
+  background: rgba(74, 32, 170, .45);
+  color: #f0f1f8;
+}
+
+.cal-status {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--gold-border);
+  border-radius: 10px;
+  background: var(--gold-soft);
+  color: var(--gold-text);
+  font-size: var(--t-floor);
+}
+
+.cal-status[data-state="starting"] {
+  border-color: rgba(167, 174, 202, .2);
+  background: rgba(255, 255, 255, .03);
+  color: #a4a9bb;
+}
+
+.cal-layout {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.cal-side {
+  min-height: 0;
+  gap: 10px;
+}
+
+.cal-calendars {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cal-calendar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 0;
+}
+
+.cal-calendar label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  color: #dfe1ea;
+  cursor: pointer;
+  font-size: var(--t-floor);
+}
+
+.cal-calendar label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-calendar input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  border: 2px solid var(--cal-color);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  appearance: none;
+}
+
+.cal-calendar input[type="checkbox"]:checked {
+  background: var(--cal-color);
+}
+
+.cal-calendar .link-button {
+  flex: 0 0 auto;
+  font-size: var(--t-floor);
+}
+
+/* Month */
+.cal-month {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-auto-rows: minmax(108px, auto);
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: rgba(22, 25, 37, .6);
+}
+
+.cal-month .cal-weekday {
+  grid-row: 1;
+  min-height: 0;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-soft);
+  color: #8f94aa;
+  font-size: var(--t-floor);
+  font-weight: 700;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+}
+
+.cal-month {
+  grid-template-rows: auto;
+}
+
+.cal-day {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 6px 8px;
+  border-right: 1px solid rgba(152, 151, 181, .08);
+  border-bottom: 1px solid rgba(152, 151, 181, .08);
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.cal-day:nth-child(7n) {
+  border-right: 0;
+}
+
+.cal-day:hover,
+.cal-day:focus-visible {
+  background: rgba(139, 111, 245, .06);
+  outline: none;
+}
+
+.cal-day.is-other {
+  background: rgba(10, 12, 19, .3);
+}
+
+.cal-day.is-other .cal-day-number {
+  color: var(--text-muted);
+}
+
+.cal-day-number {
+  align-self: flex-start;
+  min-width: 24px;
+  margin-bottom: 2px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: #c9ccd8;
+  font-size: var(--t-floor);
+  font-weight: 600;
+  text-align: center;
+}
+
+.cal-day.is-today .cal-day-number {
+  background: rgba(98, 54, 210, .85);
+  color: #fff;
+}
+
+.cal-chip {
+  display: flex;
+  min-width: 0;
+  min-height: 20px;
+  align-items: center;
+  gap: 5px;
+  line-height: 16px;
+  padding: 2px 6px;
+  border: 0;
+  border-left: 3px solid var(--cal-color);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--cal-color) 14%, transparent);
+  color: #e6e8f0;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--t-floor);
+  text-align: left;
+}
+
+.cal-chip small {
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--cal-color) 70%, #ffffff);
+  font-size: var(--t-floor);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Trimmed to the capitals and baseline, so text is centered by its letters:
+   Segoe UI's line box has extra room below, which left text sitting high. */
+.cal-chip:not(.cal-block) small,
+.cal-chip:not(.cal-block) span {
+  text-box: trim-both cap alphabetic;
+}
+
+/* The trimmed box runs from the capitals' top to the baseline, and the title
+   clips (for its ellipsis): padding above and below gives ascenders and
+   descenders room, and the matching negative margins keep the letters
+   centered. Week and day blocks stack time over title, so they keep their
+   normal line boxes. */
+.cal-chip:not(.cal-block) span {
+  margin: -3px 0 -4px;
+  padding: 3px 0 4px;
+}
+
+.cal-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-chip.is-all-day {
+  background: color-mix(in srgb, var(--cal-color) 38%, transparent);
+  color: #fff;
+}
+
+.cal-chip:hover,
+.cal-chip:focus-visible {
+  background: color-mix(in srgb, var(--cal-color) 30%, transparent);
+}
+
+.cal-more {
+  align-self: flex-start;
+  padding: 1px 6px;
+  border: 0;
+  background: none;
+  color: #a4a9bb;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--t-floor);
+}
+
+.cal-more:hover {
+  color: #eef0f7;
+}
+
+/* Week */
+.cal-week {
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: rgba(22, 25, 37, .6);
+}
+
+.cal-week-head,
+.cal-week-allday,
+.cal-week-body {
+  display: grid;
+  grid-template-columns: 64px repeat(7, minmax(0, 1fr));
+}
+
+.cal-week-head {
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.cal-week-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: #a4a9bb;
+  cursor: pointer;
+  font: inherit;
+}
+
+.cal-week-day small {
+  font-size: var(--t-floor);
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* A 30 px circle with the date centered in it, in Week (column) and Day
+   (row) alike; two-digit dates widen it into a pill. */
+.cal-week-day strong {
+  display: inline-flex;
+  min-width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border-radius: 999px;
+  color: #eef0f7;
+  font-size: var(--t-body);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.cal-week-day.is-today strong {
+  background: rgba(98, 54, 210, .85);
+}
+
+.cal-gutter {
+  padding: 6px 8px 0 0;
+  color: var(--text-muted);
+  font-size: var(--t-floor);
+  text-align: right;
+}
+
+.cal-week-allday {
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.cal-allday-cell {
+  display: flex;
+  min-height: 30px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  padding: 3px;
+  border-left: 1px solid rgba(152, 151, 181, .08);
+}
+
+.cal-week-scroll {
+  overflow-y: auto;
+}
+
+.cal-hours {
+  display: flex;
+  flex-direction: column;
+}
+
+.cal-hours span {
+  height: 60px;
+  padding-right: 8px;
+  color: var(--text-muted);
+  font-size: var(--t-floor);
+  line-height: 1;
+  text-align: right;
+  transform: translateY(-5px);
+}
+
+.cal-column {
+  position: relative;
+  border-left: 1px solid rgba(152, 151, 181, .08);
+  background-image: repeating-linear-gradient(to bottom, rgba(152, 151, 181, .08) 0 1px, transparent 1px 60px);
+  cursor: pointer;
+}
+
+.cal-column.is-today {
+  background-color: rgba(139, 111, 245, .04);
+}
+
+.cal-block {
+  position: absolute;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--cal-color) 26%, #181b28);
+}
+
+.cal-block span {
+  white-space: normal;
+}
+
+.cal-now {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: var(--gold-bright);
+  box-shadow: 0 0 6px rgba(227, 192, 114, .6);
+  pointer-events: none;
+}
+
+/* Agenda */
+.cal-agenda {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cal-agenda-day h3 {
+  margin: 0 0 6px;
+  color: #a4a9bb;
+  font-size: var(--t-floor);
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.cal-agenda-day.is-today h3 {
+  color: var(--gold-text);
+}
+
+.cal-agenda-row {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 150px 10px minmax(0, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  margin-bottom: 6px;
+  background: rgba(29, 33, 48, .7);
+  color: #eef0f7;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.cal-agenda-row:hover {
+  border-color: rgba(139, 111, 245, .35);
+}
+
+.cal-agenda-time {
+  color: #a4a9bb;
+  font-size: var(--t-floor);
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-agenda-row i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--cal-color);
+}
+
+.cal-agenda-row strong {
+  overflow: hidden;
+  font-size: var(--t-floor);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-agenda-row small {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--t-floor);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Dialogs */
+.cal-dialog {
+  gap: 16px;
+}
+
+.cal-dialog-small {
+  width: min(460px, calc(100vw - 48px));
+}
+
+.cal-summary {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(167, 174, 202, .22);
+  border-radius: 9px;
+  background: var(--panel-input);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--t-sub);
+}
+
+.cal-fields {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px 14px;
+}
+
+.cal-fields > label,
+.cal-fields > span,
+.cal-field-label {
+  padding-top: 8px;
+  color: #a4a9bb;
+  font-size: var(--t-floor);
+}
+
+.cal-dialog input[type="text"],
+.cal-dialog input[type="date"],
+.cal-dialog input[type="time"],
+.cal-dialog input[type="number"],
+.cal-dialog select,
+.cal-dialog textarea {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(167, 174, 202, .2);
+  border-radius: 8px;
+  background: var(--panel-input);
+  color: var(--text);
+  color-scheme: dark;
+  font: inherit;
+  font-size: var(--t-floor);
+}
+
+.cal-dialog textarea {
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.cal-dialog select option {
+  background: #1d2130;
+}
+
+.cal-dialog input[type="number"] {
+  width: 64px;
+}
+
+.cal-when,
+.cal-repeat {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cal-range,
+.cal-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: #a4a9bb;
+  font-size: var(--t-floor);
+}
+
+.cal-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #c9ccd8;
+  font-size: var(--t-floor);
+}
+
+.cal-every {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cal-every[hidden],
+.cal-row[hidden],
+.cal-weekdays[hidden],
+#calCountWrap[hidden],
+.cal-dialog [hidden] {
+  display: none;
+}
+
+.cal-weekdays {
+  display: flex;
+  gap: 6px;
+}
+
+.cal-weekday-chip {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(167, 174, 202, .2);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .03);
+  color: #a4a9bb;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--t-floor);
+  font-weight: 700;
+}
+
+.cal-weekday-chip[aria-pressed="true"] {
+  border-color: rgba(139, 111, 245, .7);
+  background: rgba(98, 54, 210, .7);
+  color: #fff;
+}
+
+.cal-scope {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--gold-border);
+  border-radius: 10px;
+  background: var(--gold-soft);
+  color: #dfe1ea;
+  font-size: var(--t-floor);
+}
+
+.cal-scope legend {
+  padding: 0 6px;
+  color: var(--gold-text);
+  font-size: var(--t-floor);
+}
+
+.cal-scope label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cal-form-error {
+  margin: 0;
+  color: var(--burgundy-text, #ff9aab);
+  font-size: var(--t-floor);
+}
+
+.cal-dialog-actions {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.cal-dialog-spacer {
+  flex: 1;
+}
+
+.cal-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cal-swatch {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: var(--cal-color);
+  box-shadow: inset 0 0 0 2px rgba(13, 15, 22, .9);
+  cursor: pointer;
+}
+
+.cal-swatch[aria-checked="true"] {
+  border-color: #fff;
+}
+
+@media (max-width: 1100px) {
+  .cal-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cal-block.is-short {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 5px;
+  padding-top: 2px;
+}
+
+.cal-block.is-short span {
+  white-space: nowrap;
+}
+
+.cal-swatch[aria-checked="true"] {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+.cal-swatch[aria-checked="false"] {
+  border-color: transparent;
+}
+
+/* 1.8.0 alignment pass: text in a row shares one baseline; dots, boxes and
+   check marks are centered on it. */
+.cal-agenda-row {
+  align-items: baseline;
+}
+
+.cal-agenda-row i {
+  align-self: center;
+}
+
+.cal-calendar {
+  align-items: baseline;
+}
+
+.cal-calendar label {
+  align-items: baseline;
+}
+
+.cal-calendar input[type="checkbox"] {
+  align-self: center;
+}
+
+.cal-week-allday .cal-gutter {
+  padding-top: 8px;
+}
+
+.cal-agenda-row i {
+  transform: translateY(2px);
+}
+
+.cal-calendar input[type="checkbox"] {
+  transform: translateY(1.5px);
+}
+
+/* A confirmation always answers something already open (the event editor,
+   the calendar editor), so it sits above every other dialog. */
+#confirmDialog {
+  z-index: 40;
+}
+
+/* 1.8.0: the Day view shares the week's hourly layout, with one column. */
+.cal-week .cal-week-head,
+.cal-week .cal-week-allday,
+.cal-week .cal-week-body {
+  grid-template-columns: 64px repeat(var(--cal-days, 7), minmax(0, 1fr));
+}
+
+.cal-week.is-day .cal-week-day {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+}
+
+.cal-week.is-day .cal-week-day small {
+  font-size: var(--t-sub);
+}
+
+.cal-allday-cell {
+  cursor: pointer;
+}
+
+.cal-allday-cell:hover {
+  background: rgba(139, 111, 245, .05);
+}
+
+/* 1.8.0: the month as week rows, so multi-day events can be bars across the
+   days they cover (lanes under the day numbers, the day's own events below). */
+.cal-month {
+  display: flex;
+  flex-direction: column;
+}
+
+.cal-month-head {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.cal-week-row {
+  display: grid;
+  min-height: 108px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: 30px repeat(var(--lanes, 0), 24px) minmax(30px, 1fr);
+  border-bottom: 1px solid rgba(152, 151, 181, .08);
+}
+
+.cal-week-row:last-child {
+  border-bottom: 0;
+}
+
+.cal-week-row > .cal-day {
+  grid-row: 1 / -1;
+  border-bottom: 0;
+}
+
+.cal-week-row > .cal-day.is-row-end {
+  border-right: 0;
+}
+
+.cal-week-row > .cal-day:nth-child(7n) {
+  border-right: 1px solid rgba(152, 151, 181, .08);
+}
+
+.cal-week-row > .cal-day.is-row-end:nth-child(7n) {
+  border-right: 0;
+}
+
+.cal-day-items {
+  z-index: 1;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  padding: 3px 6px 8px;
+  pointer-events: none;                 /* clicks between events reach the day */
+}
+
+.cal-day-items > * {
+  pointer-events: auto;
+}
+
+/* Bars: one per event per row, pointed where they continue past the row. */
+.cal-bar {
+  z-index: 1;
+  min-width: 0;
+  align-self: center;
+  height: 21px;
+  margin: 0 5px;
+  align-items: center;
+  background: color-mix(in srgb, var(--cal-color) 34%, #171a27);
+  color: #f0f1f8;
+}
+
+.cal-bar:hover,
+.cal-bar:focus-visible {
+  background: color-mix(in srgb, var(--cal-color) 48%, #171a27);
+}
+
+.cal-bar.continues-before {
+  margin-left: 0;
+  padding-left: 13px;
+  border-left-width: 0;
+  border-radius: 0 5px 5px 0;
+  clip-path: polygon(8px 0, 100% 0, 100% 100%, 8px 100%, 0 50%);
+}
+
+.cal-bar.continues-after {
+  margin-right: 0;
+  padding-right: 13px;
+  border-radius: 5px 0 0 5px;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 0 100%);
+}
+
+.cal-bar.continues-before.continues-after {
+  border-radius: 0;
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 8px 100%, 0 50%);
+}
+
+.cal-bar span {
+  flex: 1 1 auto;
+}
+
+/* The week and day views' all-day row: bars in lanes over the day cells. */
+.cal-week .cal-week-allday {
+  grid-template-rows: repeat(var(--lanes, 1), 26px);
+  padding: 2px 0;
+}
+
+.cal-week-allday .cal-gutter {
+  grid-row: 1 / -1;
+  grid-column: 1;
+}
+
+.cal-week-allday .cal-allday-cell {
+  grid-row: 1 / -1;
+  min-height: 26px;
+}
+
+.cal-week-allday .cal-bar {
+  margin: 0 3px;
+}
+
+.cal-week-allday .cal-bar.continues-before {
+  margin-left: 0;
+}
+
+.cal-week-allday .cal-bar.continues-after {
+  margin-right: 0;
+}
+
+.cal-week-row {
+  grid-template-rows: 28px repeat(var(--lanes, 0), 24px) minmax(24px, 1fr);
+}
+
+/* ==========================================================================
+   1.8.0: the Command Center's Today card, and calendar import
+   ========================================================================== */
+
+.cal-side-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.cal-import-summary {
+  margin: 0;
+  color: #dfe1ea;
+  font-size: var(--t-floor);
+}
+
+/* ==========================================================================
+   1.8.0 polish: dropdown carets, the Sounds version grid, favorites, and
+   countdowns in the Calendar.
+   ========================================================================== */
+
+/* Every dropdown draws its own chevron, set in from the right edge, with
+   room so the chosen text never runs under it. */
+select:not([multiple]):not([size]) {
+  padding-right: 34px;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23a4a9bb' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right 13px center;
+  background-repeat: no-repeat;
+  background-size: 10px 6px;
+  cursor: pointer;
+}
+
+select:not([multiple]):not([size]):disabled {
+  cursor: default;
+  opacity: .6;
+}
+
+/* Countdowns in the Calendar are read-only: a pill with an hourglass, where
+   events (yearly ones too) are square-cornered with a color stripe. */
+.cal-chip.is-countdown,
+.cal-chip.is-countdown.is-all-day {
+  gap: 5px;
+  padding: 2px 10px 2px 7px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cal-color) 32%, transparent), color-mix(in srgb, var(--cal-color) 10%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cal-color) 42%, transparent);
+  color: color-mix(in srgb, var(--cal-color) 45%, #ffffff);
+}
+
+.cal-chip.is-countdown:hover,
+.cal-chip.is-countdown:focus-visible {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cal-color) 46%, transparent), color-mix(in srgb, var(--cal-color) 20%, transparent));
+}
+
+.cal-countdown-mark {
+  display: inline-flex;
+  flex: none;
+  width: 11px;
+  height: 11px;
+}
+
+.cal-countdown-mark svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.4;
+}
+
+.cal-agenda-row.is-countdown strong {
+  color: var(--gold-text);
+}
+
+/* Horizontal strips being dragged sideways (enableDragScroll in app.js). */
+.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.is-dragging * {
+  cursor: grabbing;
+  pointer-events: none;
+}
+
+/* Quick Notes: whether a note fills placeholders when pasted from the palette. */
+.note-fill {
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: var(--t-floor);
+  white-space: nowrap;
+}
+
+.note-fill.is-on {
+  border-color: var(--burgundy-border);
+  background: var(--burgundy-soft);
+  color: var(--burgundy-text);
+}
+
+.note-fill-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.placeholder-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  width: 360px;
+  max-height: min(70vh, 560px);
+  flex-direction: column;
+  padding: 8px;
+  border: 1px solid rgba(167, 174, 202, .18);
+  border-radius: 12px;
+  background: #1a1d2b;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .45);
+}
+
+.placeholder-menu[hidden] {
+  display: none;
+}
+
+.placeholder-items {
+  overflow-y: auto;
+}
+
+.placeholder-group {
+  margin: 8px 8px 4px;
+  color: var(--text-muted);
+  font-size: var(--t-floor);
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.placeholder-group:first-child {
+  margin-top: 2px;
+}
+
+.placeholder-item {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: 10px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: #dfe1ea;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--t-floor);
+  text-align: left;
+}
+
+.placeholder-item code {
+  color: var(--burgundy-text);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: var(--t-floor);
+}
+
+.placeholder-item small {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: #8a8fa5;
+  font-size: var(--t-floor);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.placeholder-item:hover,
+.placeholder-item:focus-visible {
+  background: rgba(74, 32, 170, .3);
+  outline: none;
+}
+
+.placeholder-fill {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 6px;
+  padding: 10px 8px 4px;
+  border-top: 1px solid rgba(167, 174, 202, .12);
+  cursor: pointer;
+}
+
+.note-controls .placeholder-fill input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin: 2px 0 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+.placeholder-fill span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.placeholder-fill strong {
+  color: #dfe1ea;
+  font-size: var(--t-floor);
+  font-weight: 600;
+}
+
+.placeholder-fill small {
+  color: #8a8fa5;
+  font-size: var(--t-floor);
+}
+
+/* The palette asking for a placeholder's value. */
+.launcher-option[data-kind="next"] .launcher-option-action,
+.launcher-option[data-kind="paste"] .launcher-option-action,
+.launcher-option[data-kind="copy"] .launcher-option-action {
+  border-color: rgba(139, 111, 245, .45);
+  background: rgba(74, 32, 170, .3);
+  color: #e4e0fb;
+}
+
+/* ==========================================================================
+   1.8.0: Sidebar footer
+   A quiet card: the wordmark and version on one line, the live status under
+   it, and the Super keycap centered against both.
+   ========================================================================== */
+
+/* ==========================================================================
+   1.8.0: Select in Sounds (several leveled copies deleted at once)
+   Picked tiles take burgundy, the color of destructive actions; tiles that
+   can't be picked fade back.
+   ========================================================================== */
+
+/* 1.8.0: the power messages. The arm warning states each warning as a
+   sentence with the instruction beneath; a held action reads as a headline
+   with one line of explanation. */
+.power-confirm strong {
+  color: #f6e7bd;
+  font-weight: 600;
+}
+
+.power-confirm span {
+  color: #c9b98f;
+  font-size: var(--t-floor);
+}
+
+.power-banner.is-held strong {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.power-held-title {
+  color: #f6dbe5;
+  font-size: var(--t-floor);
+  font-weight: 650;
+  letter-spacing: .2px;
+}
+
+.power-held-text {
+  color: #d9c9d0;
+  font-size: var(--t-floor);
+  font-weight: 450;
+  line-height: 1.45;
+}
+
+/* 1.8.0: the event editor's day strip, showing where the event lands. */
+.cal-slot-preview {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.cal-slot-caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  font-size: var(--t-floor);
+}
+
+.cal-slot-caption strong {
+  color: #d9dcea;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-slot-clash {
+  color: var(--burgundy-text);
+}
+
+.cal-slot-track {
+  position: relative;
+  height: 26px;
+  border: 1px solid rgba(167, 174, 202, .16);
+  border-radius: 7px;
+  background:
+    repeating-linear-gradient(90deg, transparent 0, transparent calc(100% / var(--hours, 24) - 1px), rgba(167, 174, 202, .1) calc(100% / var(--hours, 24) - 1px), rgba(167, 174, 202, .1) calc(100% / var(--hours, 24))),
+    rgba(10, 11, 18, .45);
+  overflow: hidden;
+}
+
+.cal-slot-scale {
+  position: relative;
+  height: 12px;
+  margin-top: -2px;
+}
+
+.cal-slot-scale span {
+  position: absolute;
+  top: 0;
+  color: var(--text-muted);
+  font-size: var(--t-floor);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.cal-slot-scale span:first-child {
+  transform: none;
+}
+
+.cal-slot-scale span:last-child {
+  transform: translateX(-100%);
+}
+
+.cal-slot-other,
+.cal-slot-this {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  border-radius: 4px;
+}
+
+.cal-slot-other {
+  background: rgba(167, 174, 202, .22);
+}
+
+.cal-slot-this {
+  z-index: 1;
+  border: 1.5px solid var(--cal-color);
+  background: color-mix(in srgb, var(--cal-color) 45%, transparent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--cal-color) 45%, transparent);
+}
+
+.power-banner.is-held .power-banner-dot {
+  align-self: flex-start;
+  margin-top: 6px;
+}
+
+/* ==========================================================================
+   1.8.0: Quick Notes groups
+   Headers fold their notes away; pinned groups carry the gold diamond.
+   ========================================================================== */
+
+.notes-list-card {
+  position: relative;
+}
+
+.note-items {
+  display: grid;
+  gap: 5px;
+}
+
+.note-group + .note-group,
+.note-items + .note-group {
+  margin-top: 4px;
+}
+
+.note-group-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-top: 1px solid rgba(152, 151, 181, .1);
+  padding-top: 6px;
+}
+
+.note-items:first-child + .note-group .note-group-head,
+.note-group:first-child .note-group-head {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.note-group-toggle {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 6px 6px 4px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: #c9cbdb;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.note-group-toggle:hover,
+.note-group-toggle:focus-visible {
+  background: rgba(139, 111, 245, .08);
+  color: #eef0f7;
+}
+
+.note-group-toggle svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 140ms ease;
+}
+
+.note-group.is-open .note-group-toggle svg {
+  transform: rotate(90deg);
+}
+
+.note-group-name {
+  overflow: hidden;
+  font-size: var(--t-floor);
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.note-group.is-pinned .note-group-name .pin-mark {
+  color: var(--gold-text);
+}
+
+.note-group-count {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(167, 174, 202, .1);
+  color: #a4a9bb;
+  font-size: var(--t-floor);
+  font-variant-numeric: tabular-nums;
+}
+
+.note-group-more {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: #8d92a8;
+  cursor: pointer;
+  font-size: var(--t-floor);
+  line-height: 1;
+}
+
+.note-group-more:hover,
+.note-group-more:focus-visible {
+  background: rgba(139, 111, 245, .12);
+  color: #eef0f7;
+}
+
+.note-group > .note-items {
+  margin-top: 4px;
+  padding-left: 10px;
+  border-left: 1px solid rgba(139, 111, 245, .16);
+  margin-left: 9px;
+}
+
+.note-group-rename {
+  flex: 1;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 8px;
+  font-size: var(--t-floor);
+}
+
+.note-group-menu {
+  position: absolute;
+  z-index: 20;
+  display: grid;
+  min-width: 170px;
+  padding: 5px;
+  border: 1px solid rgba(167, 174, 202, .2);
+  border-radius: 10px;
+  background: #1a1c28;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, .45);
+}
+
+.note-group-menu-item {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: #e4e6f0;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--t-floor);
+  text-align: left;
+}
+
+.note-group-menu-item:hover,
+.note-group-menu-item:focus-visible {
+  background: rgba(139, 111, 245, .14);
+  outline: none;
+}
+
+.note-group-menu-item.is-danger {
+  color: var(--burgundy-text);
+}
+
+.note-controls .note-group-field {
+  flex: 0 1 170px;
+  min-width: 110px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 9px;
+  font-size: var(--t-floor);
+}
+
+/* Day labels sit under the middle of each day, not on its edge. */
+.cal-slot-scale.is-days span,
+.cal-slot-scale.is-days span:first-child,
+.cal-slot-scale.is-days span:last-child {
+  transform: translateX(-50%);
+}
+
+/* 1.8.0: dragging events in Day and Week. The event dims where it was; an
+   outline in its color, snapped to 15 minutes, shows where it will land. */
+.cal-block {
+  touch-action: none;
+}
+
+body.is-dragging-event,
+body.is-dragging-event * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+.cal-block.is-drag-source {
+  opacity: .35;
+}
+
+.cal-drop-ghost {
+  position: absolute;
+  z-index: 3;
+  right: 2px;
+  left: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+  padding: 3px 7px;
+  border: 1.5px dashed color-mix(in srgb, var(--cal-color) 85%, #ffffff);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--cal-color) 30%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cal-color) 18%, transparent), 0 8px 20px rgba(0, 0, 0, .35);
+  color: #f3f4fa;
+  font-size: var(--t-floor);
+  pointer-events: none;
+}
+
+.cal-drop-ghost.is-short {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.cal-drop-ghost strong {
+  font-size: var(--t-floor);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.cal-drop-ghost span {
+  overflow: hidden;
+  color: #d9dbe6;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-move-text {
+  margin: 4px 0 6px;
+  color: #c9cbdb;
+  font-size: var(--t-floor);
+  line-height: 1.5;
+}
+
+
+/* ==========================================================================
+   1.9.0: Calendar. Resizing events by their top and bottom edges, moving
+   events between days in Month, and the wheel time picker.
+   ========================================================================== */
+
+/* Resize grips: the top and bottom 6 px of an event in Day and Week, with a
+   short bar that shows on hover. */
+.cal-resize {
+  position: absolute;
+  z-index: 1;
+  right: 0;
+  left: 0;
+  height: 6px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.cal-resize.is-start {
+  top: 0;
+}
+
+.cal-resize.is-end {
+  bottom: 0;
+}
+
+.cal-resize::after {
+  position: absolute;
+  left: 50%;
+  width: 18px;
+  height: 2px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, .55);
+  content: "";
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity .12s ease;
+}
+
+.cal-resize.is-start::after {
+  top: 2px;
+}
+
+.cal-resize.is-end::after {
+  bottom: 2px;
+}
+
+.cal-block:hover .cal-resize::after {
+  opacity: 1;
+}
+
+body.is-resizing-event,
+body.is-resizing-event * {
+  cursor: ns-resize !important;
+  user-select: none;
+}
+
+/* Month: the event dims where it was; the day it will start on is outlined,
+   with the outline of the event at the top of its list. */
+.cal-chip.is-drag-source {
+  opacity: .35;
+}
+
+.cal-day.is-drop-target {
+  background: rgba(139, 111, 245, .12);
+  box-shadow: inset 0 0 0 1.5px rgba(168, 146, 251, .55);
+}
+
+.cal-drop-ghost.is-month {
+  position: static;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+  margin-bottom: 2px;
+  padding: 1px 6px;
+  font-size: var(--t-floor);
+}
+
+.cal-drop-ghost.is-month strong {
+  font-size: var(--t-floor);
+}
+
+/* The wheel pickers (times and dates): they look like the fields they
+   replace. A date's own field sits invisibly under its picker, so the
+   calendar pop-up opens in place. */
+.cal-time-native {
+  display: none !important;
+}
+
+.cal-spin {
+  position: relative;
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 0;
+  padding: 0 8px;
+  border: 1px solid rgba(167, 174, 202, .2);
+  border-radius: 8px;
+  background: var(--panel-input);
+  color: var(--text);
+  font-size: var(--t-floor);
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-spin[hidden] {
+  display: none;
+}
+
+.cal-spin:focus-within {
+  border-color: rgba(168, 146, 251, .6);
+}
+
+.cal-dialog .cal-spin input.cal-date-native {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cal-spin-part {
+  min-width: 2ch;
+  padding: 2px 1px;
+  border-radius: 4px;
+  cursor: default;
+  outline: none;
+  text-align: center;
+  user-select: none;
+}
+
+.cal-spin-part.is-meridiem {
+  margin-left: 5px;
+  padding: 2px 3px;
+}
+
+.cal-spin-part.is-hour {
+  text-align: right;
+}
+
+.cal-spin-part.is-year {
+  min-width: 4ch;
+}
+
+.cal-spin-part:hover {
+  background: rgba(139, 111, 245, .14);
+}
+
+.cal-spin-part:focus-visible,
+.cal-spin-part:focus {
+  background: rgba(139, 111, 245, .32);
+  color: #ffffff;
+}
+
+.cal-spin-sep {
+  color: #a4a9bb;
+}
+
+.cal-spin-open {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  margin-left: 8px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #a4a9bb;
+  cursor: pointer;
+}
+
+.cal-spin-open svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.4;
+}
+
+.cal-spin-open:hover,
+.cal-spin-open:focus-visible {
+  background: rgba(139, 111, 245, .2);
+  color: #ffffff;
+  outline: none;
+}
+
+/* Where it lands keeps its height: one line of caption (a long overlap note
+   is cut short), and when the end isn't after the start the strip stays,
+   empty, and says so in burgundy. */
+.cal-slot-caption {
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.cal-slot-caption > * {
+  flex: 0 0 auto;
+}
+
+.cal-slot-caption .cal-slot-clash {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cal-slot-caption.is-invalid strong {
+  color: var(--burgundy-bright);
+}
+
+.cal-slot-track.is-invalid {
+  border-color: rgba(196, 88, 123, .45);
+  background: repeating-linear-gradient(135deg, rgba(196, 88, 123, .08) 0 6px, transparent 6px 12px);
+}
+
+/* A toast with an action (Undo): it can be clicked, and the button sits at
+   the end of its text. */
+.toast.has-action {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.toast.has-action.show {
+  pointer-events: auto;
+}
+
+.toast-action {
+  flex: 0 0 auto;
+  padding: 3px 10px;
+  border: 1px solid rgba(168, 146, 251, .45);
+  border-radius: 6px;
+  background: rgba(139, 111, 245, .18);
+  color: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--t-floor);
+  font-weight: 600;
+}
+
+.toast-action:hover,
+.toast-action:focus-visible {
+  background: rgba(139, 111, 245, .34);
+  outline: none;
+}
+
+/* ==========================================================================
+   1.9.2: the power tray, ASCS Logs as a dialog, the sign-in graph
+   ========================================================================== */
+
+/* The page footer is gone; keep the room it left at the end of each view. */
+.view {
+  padding-bottom: 32px;
+}
+
+/* Power, above the sidebar's status card. */
+.sidebar-power {
+  flex: 0 0 auto;
+  margin-top: auto;
+  margin-bottom: 8px;
+}
+
+/* The tray opens beside the button, over whatever view is showing. */
+.power-tray {
+  position: fixed;
+  z-index: 40;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  width: 260px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid rgba(167, 174, 202, .18);
+  border-radius: 16px;
+  background: #141722;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .55);
+}
+
+.power-tray:focus {
+  outline: none;
+}
+
+.power-tray[hidden] {
+  display: none;
+}
+
+.power-tray .system-group {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.power-tray .system-group-label {
+  padding: 4px 7px;
+}
+
+.power-tray .system-button {
+  width: 100%;
+}
+
+.power-tray .system-button small {
+  margin-left: auto;
+}
+
+.power-tray .system-button #audioCurrent {
+  max-width: none;
+}
+
+.system-bar.power-tray .audio-menu,
+.system-bar.power-tray .power-confirm {
+  position: static;
+  width: auto;
+  box-shadow: none;
+}
+
+
+/* ==========================================================================
+   1.10.0: the Workspaces view. A canvas draws one desktop at its monitor's real
+   shape, and a panel beside it edits the selected window. The page's layout,
+   type and controls are in 35-2.0.0-workspaces.css.
+   ========================================================================== */
+
+.ws-tabs[hidden],
+.ws-panel[hidden],
+.ws-add[hidden] {
+  display: none;
+}
+
+.ws-save {
+  gap: 8px;
+}
+
+.ws-save input {
+  width: 190px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(167, 174, 202, .25);
+  border-radius: 8px;
+  background: var(--panel-input);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--t-floor);
+}
+
+.ws-thumb {
+  position: relative;
+  flex: 0 0 auto;
+  display: block;
+  width: 58px;
+  height: 24px;
+  overflow: hidden;
+  border: 1px solid rgba(167, 174, 202, .25);
+  border-radius: 3px;
+  background: rgba(10, 11, 18, .6);
+}
+
+.ws-thumb i {
+  position: absolute;
+  border-radius: 1px;
+  background: rgba(168, 146, 251, .65);
+  box-shadow: 0 0 0 1px rgba(10, 11, 18, .9) inset;
+}
+
+.ws-thumb i.is-pinned {
+  background: var(--gold-text);
+}
+
+/* The workspace's heading and actions. */
+.ws-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.ws-head h2 {
+  margin: 0;
+  font-size: calc(29px * var(--text-scale));
+  line-height: 1.15;
+}
+
+.ws-head p {
+  margin: 4px 0 0;
+  color: #b8bccb;
+  font-size: var(--t-floor);
+}
+
+.ws-name {
+  width: 340px;
+  max-width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid rgba(168, 146, 251, .6);
+  border-radius: 8px;
+  background: var(--panel-input);
+  color: var(--text);
+  font: inherit;
+  font-size: calc(23px * var(--text-scale));
+  font-weight: 600;
+}
+
+.ws-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ws-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+}
+
+.ws-tab {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  border: 1px solid rgba(167, 174, 202, .14);
+  border-radius: 8px;
+  background: transparent;
+  color: #c9ccd8;
+  font: inherit;
+  font-size: var(--t-floor);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ws-tab:hover {
+  border-color: rgba(139, 111, 245, .35);
+}
+
+.ws-tab em {
+  margin-left: 7px;
+  color: #a4a9bb;
+  font-size: var(--t-floor);
+  font-style: normal;
+  font-weight: 500;
+}
+
+.ws-tab.is-pinned {
+  color: var(--gold-text);
+}
+
+.ws-tab[aria-pressed="true"] {
+  border-color: rgba(139, 111, 245, .55);
+  background: rgba(74, 32, 170, .32);
+  color: #fff;
+}
+
+.ws-tab.is-pinned[aria-pressed="true"] {
+  color: var(--gold-text);
+}
+
+/* The canvas. */
+.ws-screens {
+  display: flex;
+  gap: 10px;
+  touch-action: none;
+}
+
+.ws-monitor {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.ws-monitor-label {
+  color: #a4a9bb;
+  font-size: var(--t-floor);
+  font-weight: 600;
+}
+
+.ws-screen {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(167, 174, 202, .22);
+  border-radius: 8px;
+  background: rgba(10, 11, 18, .65);
+}
+
+.ws-window {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  overflow: hidden;
+  padding: 8px 10px;
+  border: 1px solid rgba(168, 146, 251, .55);
+  border-radius: 5px;
+  background: #2a2350;
+  color: #efeaff;
+  font: inherit;
+  text-align: left;
+  cursor: grab;
+}
+
+.ws-window:active {
+  cursor: grabbing;
+}
+
+.ws-window strong,
+.ws-window > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-window strong {
+  font-size: var(--t-floor);
+  font-weight: 650;
+}
+
+.ws-window > span {
+  margin-top: 2px;
+  color: #c8c1e6;
+  font-size: var(--t-floor);
+}
+
+.ws-window.is-selected {
+  border: 2px solid #c9b8ff;
+  background: #3a2d78;
+  box-shadow: 0 0 0 3px rgba(168, 146, 251, .25);
+}
+
+.ws-window:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -4px;
+}
+
+.ws-window.is-pinned {
+  border-color: var(--gold-border);
+  background: #3a3218;
+  color: var(--gold-text);
+}
+
+.ws-window.is-pinned > span {
+  color: #d6c98f;
+}
+
+.ws-window.is-pinned.is-selected {
+  border-color: var(--gold-text);
+  box-shadow: 0 0 0 3px var(--gold-soft);
+}
+
+.ws-window.is-off {
+  border-style: dashed;
+  background: rgba(42, 35, 80, .35);
+  color: #a4a9bb;
+}
+
+.ws-window.is-off > span {
+  color: #8d92a6;
+}
+
+/* Grab points on the selected window: a thin strip along each edge, and a
+   visible square in each corner. */
+.ws-handle {
+  position: absolute;
+  z-index: 2;
+}
+
+.ws-handle-n, .ws-handle-s { left: 12px; right: 12px; height: 8px; cursor: ns-resize; }
+.ws-handle-e, .ws-handle-w { top: 12px; bottom: 12px; width: 8px; cursor: ew-resize; }
+.ws-handle-n { top: 0; }
+.ws-handle-s { bottom: 0; }
+.ws-handle-e { right: 0; }
+.ws-handle-w { left: 0; }
+
+.ws-handle-nw, .ws-handle-ne, .ws-handle-se, .ws-handle-sw {
+  width: 10px;
+  height: 10px;
+  border: 2px solid #c9b8ff;
+  border-radius: 2px;
+  background: #0e1017;
+}
+
+.ws-handle-nw { top: 2px; left: 2px; cursor: nwse-resize; }
+.ws-handle-ne { top: 2px; right: 2px; cursor: nesw-resize; }
+.ws-handle-se { right: 2px; bottom: 2px; cursor: nwse-resize; }
+.ws-handle-sw { bottom: 2px; left: 2px; cursor: nesw-resize; }
+
+/* The list under the canvas: every window, even one hidden behind another. */
+.ws-rows {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.ws-row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--t-floor);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ws-row:hover {
+  background: rgba(255, 255, 255, .03);
+}
+
+.ws-row.is-selected {
+  background: rgba(74, 32, 170, .28);
+}
+
+.ws-row strong {
+  overflow: hidden;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-row span {
+  overflow: hidden;
+  color: #b8bccb;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-row small {
+  color: #a4a9bb;
+  font-size: var(--t-floor);
+  white-space: nowrap;
+}
+
+.ws-row.is-off strong,
+.ws-row.is-off span {
+  color: #8d92a6;
+}
+
+.ws-empty {
+  margin: 8px 12px;
+  color: #a4a9bb;
+  font-size: var(--t-floor);
+}
+
+.ws-add {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ws-add select,
+.ws-field select,
+.ws-numbers input {
+  min-height: 34px;
+  border: 1px solid rgba(167, 174, 202, .25);
+  border-radius: 8px;
+  background: var(--panel-input);
+  color: var(--text);
+  color-scheme: dark;
+  font: inherit;
+  font-size: var(--t-floor);
+}
+
+.ws-add select {
+  flex: 1;
+  min-width: 0;
+  padding: 0 8px;
+}
+
+/* The panel. */
+.ws-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(167, 174, 202, .14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .025);
+}
+
+.ws-warning {
+  margin: 0;
+  color: var(--gold-text);
+  font-size: var(--t-floor);
+  line-height: 1.4;
+}
+
+.ws-field {
+  display: grid;
+  gap: 5px;
+}
+
+.ws-field > span {
+  color: #c4c8d7;
+  font-size: var(--t-floor);
+  font-weight: 600;
+}
+
+.ws-field select {
+  width: 100%;
+  padding: 0 8px;
+}
+
+.ws-places {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.ws-place {
+  padding: 7px 4px;
+  border: 1px solid rgba(167, 174, 202, .2);
+  border-radius: 7px;
+  background: transparent;
+  color: #d9dbe6;
+  font: inherit;
+  font-size: var(--t-floor);
+  cursor: pointer;
+}
+
+.ws-place:hover {
+  border-color: rgba(139, 111, 245, .45);
+}
+
+.ws-place.is-on {
+  border-color: rgba(139, 111, 245, .7);
+  background: rgba(74, 32, 170, .32);
+  color: #fff;
+}
+
+.ws-numbers {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.ws-number {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ws-number span {
+  color: #a4a9bb;
+  font-size: var(--t-floor);
+  text-align: center;
+}
+
+.ws-numbers input {
+  width: 100%;
+  min-width: 0;
+  padding: 0 2px;
+  text-align: center;
+  appearance: textfield;
+}
+
+.ws-numbers input::-webkit-outer-spin-button,
+.ws-numbers input::-webkit-inner-spin-button {
+  appearance: none;
+}
+
+/* A plain checkbox drawn as a switch. */
+.ws-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #e5e6ee;
+  font-size: var(--t-floor);
+  cursor: pointer;
+}
+
+.ws-switch input {
+  position: relative;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 18px;
+  margin: 0;
+  border-radius: 9px;
+  background: #3b3f52;
+  cursor: pointer;
+  appearance: none;
+}
+
+.ws-switch input::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #d5d7e2;
+  transition: left var(--dur-fast, .12s) ease;
+}
+
+.ws-switch input:checked {
+  background: #6b48e0;
+}
+
+.ws-switch input:checked::after {
+  left: 18px;
+  background: #fff;
+}
+
+.ws-switch input:focus-visible {
+  outline: 2px solid #c9b8ff;
+  outline-offset: 2px;
+}
+
+.ws-panel-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(167, 174, 202, .12);
+}
+
+.ws-panel-links .secondary {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: var(--t-floor);
+}
+
+/* Launch rules. */
+.ws-rule-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ws-rule {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(167, 174, 202, .1);
+}
+
+.ws-rule:first-child {
+  border-top: 0;
+}
+
+.ws-rule .ws-thumb {
+  width: 92px;
+  height: 38px;
+}
+
+.ws-rule.is-off .ws-thumb,
+.ws-rule.is-off .ws-rule-copy {
+  opacity: .55;
+}
+
+.ws-rule-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.ws-rule-copy strong {
+  font-size: var(--t-floor);
+  font-weight: 650;
+}
+
+.ws-rule-copy small {
+  color: #c4c8d7;
+  font-size: var(--t-floor);
+}
+
+.ws-rule .link-button.is-danger {
+  color: var(--burgundy-bright);
+  font-size: var(--t-floor);
+}
+
+.ws-rule-windows {
+  display: grid;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.ws-rule-window {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(167, 174, 202, .14);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ws-rule-window:hover {
+  border-color: rgba(139, 111, 245, .4);
+}
+
+.ws-rule-window.is-on {
+  border-color: rgba(139, 111, 245, .65);
+  background: rgba(74, 32, 170, .25);
+}
+
+.ws-rule-window strong {
+  flex: 0 0 auto;
+  font-size: var(--t-floor);
+  font-weight: 650;
+}
+
+.ws-rule-window small {
+  overflow: hidden;
+  color: #a4a9bb;
+  font-size: var(--t-floor);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   1.11.2: the title bar status says when the page has had an error, and when
+   this is a test build on a copy of your data.
+   ========================================================================== */
+

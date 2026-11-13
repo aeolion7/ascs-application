@@ -51,7 +51,7 @@
         grip.dataset.dragHandle = "";
         grip.setAttribute("aria-label", `Move ${label}. Use the arrow keys.`);
         grip.title = "Drag to move, or use the arrow keys";
-        grip.innerHTML = '<svg viewBox="0 0 12 20" aria-hidden="true"><circle cx="3" cy="4" r="1.6"/><circle cx="9" cy="4" r="1.6"/><circle cx="3" cy="10" r="1.6"/><circle cx="9" cy="10" r="1.6"/><circle cx="3" cy="16" r="1.6"/><circle cx="9" cy="16" r="1.6"/></svg>';
+        grip.append(MaestroIcons.create("grip"));
         return grip;
     }
 

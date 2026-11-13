@@ -665,19 +665,19 @@
     // The placeholders the editor's menu offers, in order. "select" is the
     // part selected after inserting, ready to type over (a name, a number).
     const PLACEHOLDER_MENU = [
-        { group: "Date and time", label: "Date", text: "{date}" },
-        { group: "Date and time", label: "Date in 7 days", text: "{date+7}", select: [6, 7], note: "Change 7 to any number of days, or use - for days ago" },
-        { group: "Date and time", label: "ISO date", text: "{isodate}" },
-        { group: "Date and time", label: "Weekday", text: "{weekday}" },
-        { group: "Date and time", label: "Time", text: "{time}" },
-        { group: "Date and time", label: "24-hour time", text: "{time24}" },
-        { group: "Date and time", label: "Month", text: "{month}" },
-        { group: "Date and time", label: "Year", text: "{year}" },
-        { group: "Ask when pasting", label: "Ask for a value", text: "{ask:name}", select: [5, 9], note: "The palette asks for it, by this name, before pasting" },
-        { group: "Ask when pasting", label: "Ask, with a default", text: "{ask:name=default}", select: [5, 9], note: "Enter keeps the default" },
-        { group: "From the moment", label: "Clipboard", text: "{clipboard}", note: "The text on the clipboard" },
-        { group: "From the moment", label: "Cursor", text: "{cursor}", note: "Where the cursor ends up after pasting" },
-        { group: "From the moment", label: "Unique ID", text: "{uuid}" }
+        { group: "Date and Time", label: "Date", text: "{date}" },
+        { group: "Date and Time", label: "Date in 7 days", text: "{date+7}", select: [6, 7], note: "Change 7 to any number of days, or use - for days ago" },
+        { group: "Date and Time", label: "ISO date", text: "{isodate}" },
+        { group: "Date and Time", label: "Weekday", text: "{weekday}" },
+        { group: "Date and Time", label: "Time", text: "{time}" },
+        { group: "Date and Time", label: "24-hour time", text: "{time24}" },
+        { group: "Date and Time", label: "Month", text: "{month}" },
+        { group: "Date and Time", label: "Year", text: "{year}" },
+        { group: "Ask When Pasting", label: "Ask for a value", text: "{ask:name}", select: [5, 9], note: "The palette asks for it, by this name, before pasting" },
+        { group: "Ask When Pasting", label: "Ask, with a default", text: "{ask:name=default}", select: [5, 9], note: "Enter keeps the default" },
+        { group: "From the Moment", label: "Clipboard", text: "{clipboard}", note: "The text on the clipboard" },
+        { group: "From the Moment", label: "Cursor", text: "{cursor}", note: "Where the cursor ends up after pasting" },
+        { group: "From the Moment", label: "Unique ID", text: "{uuid}" }
     ];
 
     // Whether a note fills placeholders: its own setting, or by style (text

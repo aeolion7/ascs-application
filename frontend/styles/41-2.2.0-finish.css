@@ -1,0 +1,984 @@
+/* ==========================================================================
+   2.2.0: the finish pass. One set of parts, in the Lacquer finish.
+   Stage 1, sizes: the window is 10% shorter (1224 px) and small text is
+   larger, so the Command Center's squares and Games' modules hold what they
+   did with tighter spacing, as in the approved mock.
+   ========================================================================== */
+
+/* A heading row is as tall as a compact button, and so is the button in it. */
+:root .module-head,
+:root .game-notes-head {
+  min-height: 38px;
+}
+
+:root .module-head .link-button {
+  min-height: 38px;
+}
+
+/* Now Playing in a square: the name at name size, and the line under it stays
+   one line (its full text is its tooltip). */
+:root .face .home-now .home-now-name {
+  font-size: var(--t-name);
+}
+
+:root .face .home-now .home-now-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Now Playing one square wide: compact buttons, so all four stay on one row. */
+@container (max-width: 800px) {
+  :root .home-now .home-now-actions {
+    gap: 6px;
+  }
+
+  :root .home-now .home-now-actions :is(.primary, .secondary) {
+    min-height: 38px;
+    padding-inline: 12px;
+  }
+}
+
+/* Today: 40 px rows. */
+:root .face .home-almanac .alm-cell {
+  min-height: 40px;
+}
+
+/* Quick Actions and Arrangements: their button grids use the compact height. */
+:root .face #quickActions,
+:root .face .home-buttons {
+  gap: 6px;
+}
+
+:root .face #quickActions .action-card,
+:root .face .home-buttons .secondary {
+  min-height: 38px;
+}
+
+/* Top Apps: Processor and Memory side by side, where there's width to spare
+   and no height. */
+:root .face #homeProcesses {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: auto 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--space-module);
+}
+
+/* Quick Note: a shorter box. */
+:root .face #homeNoteInput {
+  height: 76px;
+}
+
+/* Games › Continue Playing: five games in a smaller row. */
+:root #gamesContinue .game-line {
+  padding-block: 6px;
+}
+
+:root #gamesContinue .game-cover-thumb {
+  width: 46px;
+  height: 60px;
+}
+
+/* ==========================================================================
+   Stage 2, the parts. Three button looks (primary, secondary, quiet) at two
+   heights; a heading with a chevron opens its page; one segmented control with
+   a sliding marker; quiet keys; three levels of depth.
+   ========================================================================== */
+
+/* ---- Depth: modules sit a level above the page, dialogs a level above them ---- */
+
+:root .module {
+  background: linear-gradient(180deg, var(--surface-module-top), var(--surface-module) 140px);
+  box-shadow: var(--highlight), var(--elevation-1);
+}
+
+:root .confirm-dialog,
+:root .help-dialog,
+:root .launcher-dialog {
+  border-color: var(--line-button);
+  background: linear-gradient(180deg, var(--surface-overlay), var(--surface-module) 180px);
+  box-shadow: var(--highlight), var(--elevation-2);
+}
+
+/* ---- Buttons. Primary does a module's main thing; secondary is every other
+   action; quiet is for minor actions. Each lifts a little and presses in. ---- */
+
+:root .primary,
+:root .secondary,
+:root .link-button {
+  transition: background var(--dur-quick) var(--ease-out), border-color var(--dur-quick) var(--ease-out), transform var(--dur-quick) var(--ease-out);
+}
+
+:root .primary {
+  border-color: #6447dd;
+  background: var(--fill-primary);
+  box-shadow: var(--highlight-strong), var(--glow-primary);
+}
+
+:root .primary:hover:not(:disabled) {
+  background: var(--fill-primary-hover);
+  box-shadow: var(--highlight-strong), var(--glow-primary);
+}
+
+:root .secondary {
+  border-color: var(--line-button);
+  background: var(--fill-secondary);
+  box-shadow: var(--highlight);
+}
+
+:root .secondary:hover:not(:disabled) {
+  background: var(--fill-secondary-hover);
+  box-shadow: var(--highlight);
+}
+
+:root :is(.primary, .secondary, .link-button):active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+:root .link-button {
+  border-color: transparent;
+  background: transparent;
+}
+
+:root .link-button:hover:not(:disabled) {
+  border-color: transparent;
+  background: rgba(123, 92, 240, .15);
+  color: var(--brand-tint-text);
+}
+
+/* A quiet button at the end of a heading row lines its text up with the
+   module's edge, as the heading's text lines up with the other edge. */
+:root .module-head > .link-button:last-child {
+  margin-right: -12px;
+}
+
+/* ---- A heading that opens its page, in place of an Open button ---- */
+
+:root .module-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 38px;
+  margin: 0 0 0 -10px;
+  padding: 0 12px 0 10px;
+  border: 0;
+  border-radius: var(--radius-key);
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  transition: background var(--dur-quick) var(--ease-out);
+}
+
+:root .module-link:hover {
+  background: rgba(255, 255, 255, .055);
+}
+
+/* The chevron: anything that opens another page or tab ends in one. */
+:root .module-link::after,
+:root .has-chevron::after {
+  content: "";
+  flex: none;
+  width: .36em;
+  height: .36em;
+  margin-right: .12em;
+  border-top: .11em solid var(--brand-tint-text);
+  border-right: .11em solid var(--brand-tint-text);
+  transform: rotate(45deg);
+  transition: transform var(--dur-standard) var(--ease-out);
+}
+
+:root .has-chevron {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+:root .module-link:hover::after,
+:root .has-chevron:hover::after {
+  transform: translateX(3px) rotate(45deg);
+}
+
+/* ---- One segmented control: section tabs, the calendar's views, the
+   keymap's layers. segmented.js places a marker behind the chosen one. ---- */
+
+:root :is([role="tablist"], .cal-modes, .keymap-layers) {
+  position: relative;
+  isolation: isolate;
+}
+
+:root :is([role="tablist"], .cal-modes, .keymap-layers).has-marker::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  width: var(--marker-w);
+  height: var(--marker-h);
+  border-radius: var(--radius-key);
+  background: var(--fill-primary);
+  box-shadow: var(--highlight-strong), 0 4px 12px -6px rgba(74, 34, 192, 1);
+  transform: translate(var(--marker-x), var(--marker-y));
+}
+
+:root :is([role="tablist"], .cal-modes, .keymap-layers).marker-moves::before {
+  transition: transform var(--dur-standard) var(--ease-out), width var(--dur-standard) var(--ease-out);
+}
+
+:root .has-marker [role="tab"][aria-selected="true"],
+:root .has-marker.cal-modes button[aria-pressed="true"],
+:root .has-marker.keymap-layers .keymap-layer[aria-pressed="true"] {
+  background: transparent;
+}
+
+/* Only the words fade: the marker does the moving, so the fill never doubles. */
+:root .has-marker :is([role="tab"], button, .keymap-layer) {
+  transition: color var(--dur-standard) var(--ease-out);
+}
+
+/* ---- The sidebar: the current page lifts; keys are quiet labels ---- */
+
+.nav {
+  transition: background var(--dur-quick) var(--ease-out), color var(--dur-quick) var(--ease-out);
+}
+
+:root .nav.active {
+  border-color: transparent;
+  background: linear-gradient(180deg, var(--brand-indigo-control), var(--brand-indigo));
+  box-shadow: var(--highlight-strong), 0 8px 20px -10px rgba(74, 34, 192, .9);
+}
+
+:root .nav .nav-key,
+:root .power-key {
+  border-color: transparent;
+  background: rgba(255, 255, 255, .06);
+  color: var(--text-muted);
+}
+
+:root .nav.active .nav-key {
+  border-color: transparent;
+  background: rgba(255, 255, 255, .17);
+  color: #fff;
+}
+
+:root kbd {
+  border-color: transparent;
+  background: rgba(255, 255, 255, .08);
+}
+
+/* ---- The title bar: every control at one height ---- */
+
+:root #arrangeButton {
+  min-height: var(--height-control);
+}
+
+/* ---- Capitals left over: group labels read as written ---- */
+
+:root .launcher-group,
+:root .placeholder-group,
+:root .help-dialog h3 span {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root :is([role="tablist"], .cal-modes, .keymap-layers).marker-moves::before,
+  :root .module-link::after,
+  :root .has-chevron::after {
+    transition: none;
+  }
+
+  :root :is(.primary, .secondary, .link-button):active:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* ==========================================================================
+   Stage 3, the pages, in order of use.
+   ========================================================================== */
+
+/* ---- Calendar ---- */
+
+/* Day and Week: a title gets whole lines only, as many as its block holds
+   (calendarview.js sets the count), and ends in an ellipsis. */
+:root .cal-block:not(.is-short) > span:not([class]) {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+}
+
+/* ---- Command Center ---- */
+
+/* System in one square: Processor, Memory and the drives share two columns,
+   as in wider squares, so six drives fit in whole rows. More scroll, and a
+   scroll stops on a whole row, never through one. */
+@container (max-width: 999px) {
+  :root .face > [data-module] .sys-rows {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: space-evenly;
+    gap: 14px 32px;
+    overflow-y: auto;
+    scroll-snap-type: y mandatory;
+  }
+
+  :root .face > [data-module] .sys-drives {
+    display: contents;
+  }
+
+  :root .face > [data-module] .sys-row {
+    scroll-snap-align: start;
+  }
+}
+
+/* ---- Shared: a module with nothing in it yet ---- */
+
+:root .empty-state {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 0;
+  padding: 24px;
+  text-align: center;
+}
+
+:root .empty-state p {
+  max-width: 32ch;
+  margin: 0;
+  color: var(--text-soft);
+  font-size: var(--t-body);
+}
+
+/* The mark: a quiet ring; "play" adds a triangle inside it. */
+:root .empty-state-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, rgba(123, 92, 240, .2), rgba(123, 92, 240, .06) 70%);
+  box-shadow: inset 0 0 0 1px rgba(123, 92, 240, .35), var(--highlight);
+}
+
+:root .empty-state.is-play .empty-state-mark::after {
+  content: "";
+  margin-left: 5px;
+  border-block: 11px solid transparent;
+  border-left: 18px solid var(--brand-tint-text);
+}
+
+/* ---- Games ---- */
+
+/* A badge or cover still on its way: the frame keeps its size and shows a
+   quiet mark, not an empty box. */
+:root .ra-image:empty {
+  display: grid;
+  place-items: center;
+  border-color: var(--line-button);
+  background: linear-gradient(160deg, var(--surface-overlay), var(--surface-module));
+  box-shadow: var(--highlight);
+}
+
+:root .ra-image:empty::after {
+  content: "";
+  width: 38%;
+  height: 38%;
+  border: 2px solid rgba(255, 255, 255, .14);
+  border-radius: 50%;
+}
+
+/* Covers without art: lacquered, with the monogram set like a label. */
+:root .game-cover:not(:has(img)) {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), inset 0 0 0 1px rgba(255, 255, 255, .06), var(--elevation-1);
+}
+
+:root .game-cover:not(:has(img))::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, rgba(255, 255, 255, .1), rgba(255, 255, 255, 0) 42%);
+  pointer-events: none;
+}
+
+:root .game-cover b {
+  position: relative;
+  color: rgba(255, 255, 255, .92);
+  letter-spacing: .04em;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, .35);
+}
+
+/* ---- The sidebar's name ---- */
+
+/* AEOLIONWARE and MAESTRO span the same width, so MAESTRO, the larger, is the
+   focal point. AEOLIONWARE is spaced .19em; MAESTRO, at .05em, is sized to
+   match, measured from the ink of both words: 2.36 times AEOLIONWARE's size
+   (about 42 px), drawn left by its M's side bearing, so both lines start and
+   end together. MAESTRO sits close under AEOLIONWARE: pulled up over the room
+   its face keeps above capitals, leaving a seventh of MAESTRO's size between
+   the words.
+   The pair fills the room beside the logo, ending where the pages' number keys
+   end (10 px short of the brand's edge): AEOLIONWARE's ink is 9.133 times its
+   size, so its size is the room less 10 px, over 9.133 (about 21.5 px). It's a
+   logo, so it follows the sidebar's width, not the text size. The room above
+   AEOLIONWARE's capitals and below MAESTRO's baseline is taken out of its
+   height, so the letters span the logo's height and center on it, and the
+   brand stays as tall as the logo. */
+:root body:not(.sidebar-collapsed) .brand-copy {
+  container-type: inline-size;
+  flex: 1 1 0;
+}
+
+:root body:not(.sidebar-collapsed) .brand-copy > span {
+  margin-top: -.172em;
+  font-size: calc((100cqi - 10px) / 9.133);
+  line-height: 1.2;
+  letter-spacing: .19em;
+}
+
+:root body:not(.sidebar-collapsed) .brand-copy strong {
+  margin: -.21em 0 -.19em -.07em;
+  font-size: calc((100cqi - 10px) / 9.133 * 2.36);
+  line-height: 1;
+  letter-spacing: .05em;
+}
+
+/* The sidebar's toggle sits halfway between the logo (ending at 76) and the
+   first page (starting at 100), in both widths, not beside the logo. */
+:root .sidebar > .sidebar-toggle {
+  top: 75px;
+}
+
+/* ---- Sounds ---- */
+
+/* Version cards are the library's way in, so they sit at a module's depth and
+   lift a little under the pointer. */
+:root .sound-version {
+  border-color: var(--line);
+  background: linear-gradient(180deg, var(--surface-module-top), var(--surface-module));
+  box-shadow: var(--highlight), var(--elevation-1);
+  transition: transform var(--dur-quick) var(--ease-out), border-color var(--dur-quick) var(--ease-out);
+}
+
+:root .sound-version:hover {
+  border-color: var(--line-button);
+  background: linear-gradient(180deg, var(--surface-overlay), var(--surface-module-top));
+  transform: translateY(-2px);
+}
+
+/* Selected Sound before a sound is chosen: its heading, and the empty state in
+   the room it keeps. */
+:root .sound-detail > .module-head {
+  margin-bottom: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root .sound-version:hover {
+    transform: none;
+  }
+}
+
+/* ==========================================================================
+   Stage 4, motion. motion.js, once the page is drawing, lets MAESTRO catch a
+   sheen. The start screen is AutoHotkey's own window, not the page's. Nothing
+   here may move or resize the page: a 6 px rise of the content was taken out
+   because it made the page taller than the window while it played, so the
+   scrollbar flashed and every module narrowed. Background position only.
+   ========================================================================== */
+
+/* The sheen: a band of light across MAESTRO's gold, once per show. At rest
+   the band waits past the name's right end. */
+:root body:not(.sidebar-collapsed) .brand-copy strong {
+  background-image:
+    linear-gradient(105deg, transparent 42%, rgba(255, 250, 230, .9) 50%, transparent 58%),
+    linear-gradient(135deg, #f8e8ac 0%, #c9a24a 42%, #f3dd92 68%, #b08b36 100%);
+  background-repeat: no-repeat;
+  background-size: 300% 100%, 100% 100%;
+  background-position: 0% 0, 0 0;
+}
+
+body.is-showing:not(.sidebar-collapsed) .brand-copy strong {
+  animation: name-sheen 900ms var(--ease-out) 120ms both;
+}
+
+@keyframes name-sheen {
+  from { background-position: 0% 0, 0 0; }
+  to { background-position: 100% 0, 0 0; }
+}
+
+/* Reduced motion: no sheen. */
+@media (prefers-reduced-motion: reduce) {
+  body.is-showing:not(.sidebar-collapsed) .brand-copy strong {
+    animation: none;
+  }
+}
+
+/* ---- Sounds: Custom Sounds' folder (2.2.0) ----
+   A second line under the library's, one block with it; why the folder isn't
+   used (not found, inside the library) sits beside its path. */
+:root #soundLibraryForm:has(+ #soundCustomForm:not([hidden])) {
+  padding-bottom: 8px;
+}
+
+:root #soundCustomForm {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+:root #soundCustomNote {
+  flex-basis: auto;
+  color: var(--brand-gold-text);
+  font-size: var(--t-sub);
+}
+
+:root #soundCustomNote:empty {
+  display: none;
+}
+
+/* One icon set (2.2.0): icons.js draws every icon on a 24-unit grid, and this
+   rule gives them one stroke whatever size they're drawn at, 20 px or 24 px.
+   The stroke is measured on screen (non-scaling), so both sizes match the
+   sidebar's weight, about 1.65 px. Parts that are filled carry .icon-dot. */
+:root svg.icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.65px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  overflow: visible;
+}
+
+:root svg.icon.icon-24 {
+  width: 24px;
+  height: 24px;
+}
+
+:root svg.icon > * {
+  vector-effect: non-scaling-stroke;
+}
+
+:root svg.icon .icon-dot {
+  fill: currentColor;
+  stroke: none;
+}
+/* Where the set's icons sit. The power tray keeps its soft and gold strokes;
+   a button with an icon and words spaces them like the primary buttons. */
+:root .power-tray .system-button svg.icon {
+  stroke: var(--text-soft);
+}
+
+:root .power-tray .system-button.is-guarded svg.icon {
+  stroke: var(--brand-gold);
+}
+
+:root .secondary:has(> svg.icon) {
+  gap: 8px;
+}
+
+:root .pin-mark {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+:root .sound-star {
+  display: inline-grid;
+  place-items: center;
+}
+
+/* The chevron is the set's own: 24 px on a module's heading, 20 px elsewhere,
+   drawn as a mask so it takes the link's tint. The stroke is set for each
+   size, so both come out at 1.65 px. */
+:root .module-link::after,
+:root .has-chevron::after {
+  width: 20px;
+  height: 20px;
+  margin-right: 0;
+  border: 0;
+  background: var(--brand-tint-text);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.98' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9.5 7 5 5-5 5'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.98' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9.5 7 5 5-5 5'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  transform: none;
+}
+
+:root .module-link::after {
+  width: 24px;
+  height: 24px;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.65' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9.5 7 5 5-5 5'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.65' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9.5 7 5 5-5 5'/%3E%3C/svg%3E");
+}
+
+:root .module-link:hover::after,
+:root .has-chevron:hover::after {
+  transform: translateX(3px);
+}
+
+/* Every dropdown's caret is the set's chevron, at 20 px. */
+select:not([multiple]):not([size]) {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a4a9bb' stroke-width='1.98' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 9.5 5 5 5-5'/%3E%3C/svg%3E");
+  background-position: right 9px center;
+  background-size: 20px 20px;
+}
+/* Buttons that hold only an icon center it; a link with one spaces it. */
+:root :is(.alm-step, .notify-own-reset, .note-group-more) {
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+}
+
+:root .link-button:has(> svg.icon) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* ---- Loading shown as shapes (stage 7) ---- */
+
+/* Something on its way shows the shape of what's coming, at its size, so the
+   module keeps its place. It appears only after 180 ms (a page filled ahead of
+   time never shows it), and breathes: the whole placeholder dims and settles,
+   one layer each, in step across the page (--skel-phase is set when it's made).
+   The fade-in is a filter so it doesn't fight the breathing's opacity. */
+:root {
+  --skel-fill: rgba(182, 165, 251, .075);
+  --skel-fill-strong: rgba(182, 165, 251, .11);
+}
+
+.skel {
+  display: grid;
+  grid-column: 1 / -1;
+  align-content: start;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  pointer-events: none;
+  user-select: none;
+  animation: skel-in var(--dur-entrance) var(--ease-out) 180ms both,
+    skel-breathe 1.6s ease-in-out var(--skel-phase, 0ms) infinite alternate;
+}
+
+@keyframes skel-in {
+  from { filter: opacity(0); }
+  to { filter: opacity(1); }
+}
+
+@keyframes skel-breathe {
+  from { opacity: 1; }
+  to { opacity: .45; }
+}
+
+.skel-item {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.skel-shape {
+  display: block;
+  flex: none;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--skel-fill);
+}
+
+.skel-shape.is-title { height: 24px; border-radius: 8px; background: var(--skel-fill-strong); }
+.skel-shape.is-big { height: 44px; border-radius: 10px; background: var(--skel-fill-strong); }
+.skel-shape.is-bar { height: 6px; border-radius: 3px; }
+.skel-shape.is-pill { width: 100%; height: 34px; border-radius: 10px; }
+.skel-shape.is-dot { width: 18px; height: 18px; border-radius: 50%; }
+.skel-shape.is-thumb { width: 36px; height: 36px; border-radius: var(--radius-key); }
+.skel-shape.is-badge { width: 76px; height: 76px; border-radius: var(--radius-control); }
+.skel-shape.is-block { border-radius: var(--radius-control); }
+.skel-shape.is-cover { flex: 1 1 140px; min-height: 140px; border-radius: var(--radius-control); }
+
+.skel-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.skel-row.is-split { justify-content: space-between; }
+.skel-row.is-top { align-items: flex-start; margin: 8px 0; }
+.skel-row.is-stats { gap: 44px; margin-top: 10px; }
+.skel-row.is-card { padding: 22px 20px; border-radius: var(--radius-control); background: var(--skel-fill); }
+
+/* Rows of a list are ruled like the list they stand for. */
+:is(.skel-row.is-split, .skel-row.is-item) + :is(.skel-row.is-split, .skel-row.is-item) {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.skel-stack {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.skel-stack.is-fill { flex: 1 1 auto; }
+
+.skel-grid { display: grid; gap: 16px; }
+.skel-grid.is-drives { gap: 26px; }
+.skel-grid.is-four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.skel-grid.is-five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.skel-grid.is-badges { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
+.skel-grid.is-badges > .skel-shape { width: auto; height: auto; aspect-ratio: 1; }
+
+/* Saved arrangements stand in a row, like their buttons. */
+.skel.is-across { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+
+/* One value inside a line of text. */
+.skel.is-inline {
+  display: inline-grid;
+  width: auto;
+  vertical-align: middle;
+}
+
+/* A game's tile on the shelf: one per place, so the shelf's own columns and
+   its limit for the module's width apply. */
+.skel.is-tile {
+  display: flex;
+  flex-direction: column;
+  grid-column: auto;
+  gap: 6px;
+}
+
+/* Now Playing's cover: its own size, as one shape, without a cover's colors
+   or the lacquer of a cover without art. */
+:root .home-now .skel.game-cover-home {
+  background: var(--skel-fill);
+  box-shadow: none;
+}
+
+:root .home-now .skel.game-cover-home::before {
+  content: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Still kept back for 180 ms, then shown at once and still. */
+  .skel {
+    animation: skel-in 1ms linear 180ms both;
+  }
+}
+
+/* Without RetroAchievements set up, its button keeps its own height: the
+   tab's rows share what's left (2.2.0). */
+:root #gamesAchievements > button {
+  align-self: start;
+}
+
+/* ---- Page changes and numbers that move (stage 8) ---- */
+
+/* Pages and sections come in through motion.js, from where they sit, and only
+   when they change: the 1.x entrance played on every show of a page, from
+   below whichever way you went. */
+:root .view {
+  animation: none;
+}
+
+/* The current page's lift is one marker that slides along the sidebar, under
+   the buttons, as the tabs' marker does. */
+.nav-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  width: var(--nav-marker-w, 0);
+  height: var(--nav-marker-h, 0);
+  border-radius: var(--radius-control);
+  background: linear-gradient(180deg, var(--brand-indigo-control), var(--brand-indigo));
+  box-shadow: var(--highlight-strong), 0 8px 20px -10px rgba(74, 34, 192, .9);
+  opacity: 0;
+  transform: translate(var(--nav-marker-x, 0), var(--nav-marker-y, 0));
+  pointer-events: none;
+}
+
+:root .sidebar .nav {
+  position: relative;
+  z-index: 1;
+}
+
+:root .sidebar.has-nav-marker .nav-marker {
+  opacity: 1;
+}
+
+:root .sidebar.nav-marker-moves .nav-marker {
+  transition: transform var(--dur-standard) var(--ease-out), width var(--dur-standard) var(--ease-out), height var(--dur-standard) var(--ease-out);
+}
+
+:root .sidebar.has-nav-marker .nav.active {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Numbers that count keep their width as their digits change. */
+:root :is(.sys-value, .system-value, .games-total) {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root .sidebar.nav-marker-moves .nav-marker {
+    transition: none;
+  }
+}
+
+/* ---- Seven type sizes (stage 9) ---- */
+
+/* Fourteen sizes showed on the pages; these are the seven left, each with one
+   use. Sizes within a few pixels of each other became one, the smaller where
+   a larger one could crowd its module:
+     text            18 Lato, 19 Bahnschrift (they read alike), --t-floor, --t-sub, --t-body
+     controls        20  --t-button
+     navigation      22  --t-tab: tabs, the sidebar (24 before), subheads (23)
+     module headings 26  --t-module
+     names           34  --t-name: a game's name, the title bar's time (36)
+     titles, figures 40  --t-number: readings, the page's title (43)
+     large figures   58  --t-number-large: Play Time, the timer (72)
+   The sidebar's brand keeps its own measured sizes. The old names stay, so
+   nothing that uses them changes; they now point at their step. */
+:root {
+  --t-subhead: var(--t-tab);
+  --t-nav: var(--t-tab);
+  --t-time: var(--t-name);
+  --t-title: var(--t-number);
+}
+
+:root .attention-text strong {
+  font-size: var(--t-subhead);
+}
+
+:root .timer-display {
+  font-size: var(--t-number-large);
+}
+
+/* ---- Larger text and smaller windows (stage 9) ---- */
+
+/* Now Playing on the Command Center. Above 1700 px its rows are a third of the
+   page each, whatever they hold, and its words ran 26 px past its foot at the
+   default size and window, more in a shorter window or at a larger text size,
+   cutting its buttons. So there the achievements bar sits beside the session's
+   figures, which are set at name size; the lines close up, the buttons take
+   the compact height Quick Actions and Arrangements use, and the cover takes
+   the module's height. It fits at the default size, at Largest text, and in a
+   1920 x 1080 window. Its rows keep their whole height: if it still can't all
+   fit, the module cuts its foot rather than the game's name. */
+@media (min-width: 1701px) {
+  :root .face .home-now-copy {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-content: start;
+    grid-auto-rows: max-content;
+    column-gap: var(--space-module);
+    row-gap: 2px;
+  }
+
+  :root .face .home-now .home-now-stats {
+    margin-top: 0;
+  }
+
+  :root .face .home-now .home-now-stats strong {
+    font-size: var(--t-name);
+  }
+
+  :root .face .home-now .home-now-actions {
+    gap: 6px;
+    padding-top: 2px;
+  }
+
+  :root .face .home-now .home-now-actions :is(.primary, .secondary) {
+    min-height: 38px;
+    padding-inline: 12px;
+  }
+
+  :root .face .home-now-copy > * {
+    grid-column: 1 / -1;
+  }
+
+  :root .face .home-now-copy > .home-now-stats {
+    grid-column: 1;
+  }
+
+  :root .face .home-now-copy > .home-now-progress {
+    grid-column: 2;
+    align-self: end;
+    padding-bottom: 6px;
+  }
+
+  :root .face .home-now .game-cover-home {
+    flex-basis: auto;
+    align-self: stretch;
+    width: auto;
+    height: auto;
+    aspect-ratio: 2 / 3;
+  }
+
+  /* Its shapes while the games are on their way follow: no bar of their own,
+     and the lines closer. */
+  :root .face .home-now .skel.is-now {
+    gap: 6px;
+  }
+
+  :root .face .home-now .skel.is-now > .is-bar {
+    display: none;
+  }
+
+  :root .face .home-now .skel.is-now > .is-stats {
+    margin-top: 0;
+  }
+
+  /* One square wide, the smaller cover stays, so the words keep their room,
+     and the achievements bar keeps a row of its own. */
+  @container (max-width: 800px) {
+    :root .face .home-now .game-cover-home {
+      flex-basis: 120px;
+      align-self: flex-start;
+      width: 120px;
+      height: 180px;
+      aspect-ratio: auto;
+    }
+
+    :root .face .home-now-copy > .home-now-progress {
+      grid-column: 1 / -1;
+      padding-bottom: 0;
+    }
+  }
+}
+
+/* Columns sized in pixels grow with the text, so "10% rain" and "-18.2 dB"
+   stay on one line at the larger sizes. */
+:root .weather-day {
+  grid-template-columns: calc(70px * var(--text-scale)) minmax(0, 1fr) auto calc(80px * var(--text-scale));
+}
+
+:root .weather-day small,
+:root .sound-meter strong {
+  white-space: nowrap;
+}
+
+:root .sound-meter {
+  grid-template-columns: calc(44px * var(--text-scale)) minmax(0, 1fr) calc(84px * var(--text-scale));
+}
+
+/* A slider is 16 px tall as drawn by the browser: too small to aim at. */
+:root input[type="range"] {
+  min-height: 24px;
+}
+
+/* Arrange's width handles stand 7 px past a module's edge; in a narrow window
+   the last column's handle made the page wider than the window. They're still
+   drawn whole, inside the clip's margin. */
+body.is-arranging-home #home {
+  overflow-x: clip;
+  overflow-clip-margin: 8px;
+}
