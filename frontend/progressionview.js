@@ -16,7 +16,8 @@ const PROG_DEFAULT = Object.freeze({ title: "Sketch", root: "C", scale: "major",
 const PROG_SONG_ID = /^[a-z0-9]{8,24}$/;
 const PROG_SONGS_MAX = 100;
 const PROG_UNDER = Object.freeze(["numerals", "nashville", "nothing"]);
-const PROG_SIDES = Object.freeze(["chord", "keys", "prompt", "songs"]);
+// The songs moved to the title's menu in 2.4.1; a side kept as "songs" shows the chord.
+const PROG_SIDES = Object.freeze(["chord", "keys", "prompt"]);
 // 2.4.0: a bass under the loop: none, each chord's root, or walking.
 const PROG_BASSES = Object.freeze(["off", "roots", "walking"]);
 const PROG_BASS_GAIN = 1.3;    // a single low note, against a chord's several
@@ -26,7 +27,7 @@ const PROG_PLAYED = Object.freeze(["Once", "Twice", "3 times", "4 times", "5 tim
 function parseProgression(text) {
     let stored = null;
     try { stored = JSON.parse(text ?? "null"); } catch { stored = null; }
-    const settings = { sketch: structuredClone(PROG_DEFAULT), show: "symbols", loop: true, sevenths: true, song: null, under: "numerals", side: "chord", prompt: null, locked: [], bass: "off" };
+    const settings = { sketch: structuredClone(PROG_DEFAULT), show: "symbols", loop: true, sevenths: true, song: null, under: "numerals", side: "chord", prompt: null, locked: [], bass: "off", move: false };
     if (!stored || typeof stored !== "object" || Array.isArray(stored)) return settings;
     const sketch = MaestroHarmony.cleanChart(stored.sketch);
     if (sketch) {
@@ -42,6 +43,8 @@ function parseProgression(text) {
     if (PROG_UNDER.includes(stored.under)) settings.under = stored.under;
     if (PROG_SIDES.includes(stored.side)) settings.side = stored.side;
     if (PROG_BASSES.includes(stored.bass)) settings.bass = stored.bass;
+    // Whether a new root moves the chords with it (2.4.1).
+    if (typeof stored.move === "boolean") settings.move = stored.move;
     // The writing prompt (2.4.0) and the parts locked; one is drawn when first shown.
     settings.prompt = MaestroPrompts.cleanPrompt(stored.prompt);
     if (settings.prompt) settings.locked = MaestroPrompts.cleanLocked(stored.locked);
@@ -51,6 +54,8 @@ function parseProgression(text) {
 const prog = {
     settings: parseProgression((() => { try { return localStorage.getItem(PROG_KEY); } catch { return null; } })()),
     at: { section: 0, bar: 0, slot: 0 },  // the chord picked
+    barOpen: false,         // whether its drawer is open under its line (2.4.1)
+    sectionOpen: null,      // the section whose heading is open to edit, by index
     scale: null,            // a scale picked for it, shown on the neck: { root, scale }
     ideas: [],              // the other chords offered for it
     timeline: [],           // the sketch as played: harmony.js's chartTimeline
@@ -233,6 +238,13 @@ function setProgKey(changes) {
     changeProgression(() => Object.assign(progSketch(), key));
 }
 
+// A new root relabels the chords, or moves them with it (2.4.1, one Key).
+function setProgRoot(root) {
+    if (!MaestroMusic.ROOTS.includes(root)) return;
+    if (prog.settings.move) transposeProgression(root);
+    else setProgKey({ root });
+}
+
 // ---- Sections, repeated bars and the title (2.4.0, chord charts)
 
 // A bar after the one picked that plays it again (%).
@@ -255,33 +267,48 @@ function writeOutProgBar(section, bar) {
     strumProgChord(progChosen());
 }
 
-function setProgSection(changes) {
-    const section = progSketch().sections[prog.at.section];
-    if (Object.entries(changes).every(([field, value]) => section[field] === value)) return;
+// A section is edited in its own heading (2.4.1): one open at a time, and
+// opening it closes a bar's drawer.
+function openProgSection(index) {
+    prog.sectionOpen = progSketch().sections[index] && prog.sectionOpen !== index ? index : null;
+    if (prog.sectionOpen !== null) prog.barOpen = false;
+    renderProgressions();
+    if (prog.sectionOpen !== null) $("progSectionName").focus();
+}
+
+function setProgSection(index, changes) {
+    const section = progSketch().sections[index];
+    if (!section || Object.entries(changes).every(([field, value]) => section[field] === value)) return;
     changeProgression(() => Object.assign(section, changes));
 }
 
-// A section after the one picked, with a bar of the key's first chord.
+// A section at the end, with a bar of the key's first chord, open to be named.
 function addProgSection() {
     const sketch = progSketch();
     if (sketch.sections.length >= MaestroHarmony.CHART_LIMITS.sections || progTotalBars() >= MaestroHarmony.CHART_LIMITS.totalBars) return;
     const home = progHome();
     changeProgression(() => {
-        sketch.sections.splice(prog.at.section + 1, 0, { name: "", repeat: 1, bars: [[home]] });
-        prog.at = { section: prog.at.section + 1, bar: 0, slot: 0 };
+        sketch.sections.push({ name: "", repeat: 1, bars: [[home]] });
+        prog.at = { section: sketch.sections.length - 1, bar: 0, slot: 0 };
+        prog.sectionOpen = prog.at.section;
+        prog.barOpen = false;
     });
     strumProgChord(home);
+    if (prog.sectionOpen !== null) $("progSectionName").focus();
 }
 
-function removeProgSection() {
+function removeProgSection(at) {
     const sketch = progSketch();
-    if (sketch.sections.length < 2) return;
-    const at = prog.at.section;
+    if (sketch.sections.length < 2 || !sketch.sections[at]) return;
     const name = sketch.sections[at].name || progLetter(at);
     changeProgression(() => {
         sketch.sections.splice(at, 1);
-        prog.at = { section: Math.min(at, sketch.sections.length - 1), bar: 0, slot: 0 };
-    }, `Removed section ${name}.`);
+        prog.sectionOpen = null;
+        // The chord picked stays where it was, or goes to the section now in its place.
+        const { section, bar, slot } = prog.at;
+        if (section === at) prog.at = { section: Math.min(at, sketch.sections.length - 1), bar: 0, slot: 0 };
+        else if (section > at) prog.at = { section: section - 1, bar, slot };
+    },`Removed section ${name}.`);
 }
 
 function setProgTitle(text) {
@@ -349,6 +376,19 @@ function saveProgSong() {
     sendProgSong(id, text);
 }
 
+// The sheet kept as another song (2.4.1): the one it came from stays as it was saved.
+function saveProgSongCopy() {
+    const text = progSongText();
+    if (prog.songs === null || !text) return;
+    if (prog.songs.length >= PROG_SONGS_MAX) {
+        showToast(`Maestro keeps up to ${PROG_SONGS_MAX} songs. Delete one to save another.`);
+        return;
+    }
+    prog.settings.song = newProgSongId();
+    saveProgression();
+    sendProgSong(prog.settings.song, text);
+}
+
 // AHK has written a song: it joins the list (the sketch's own, or one put back).
 function chartSaved(id) {
     const text = prog.saving.get(id);
@@ -393,6 +433,8 @@ function replaceProgSketch(sketch, song, said, tempo = null) {
     prog.settings.sketch = chart;
     prog.settings.song = song;
     prog.at = { section: 0, bar: 0, slot: 0 };
+    prog.barOpen = false;
+    prog.sectionOpen = null;
     prog.scale = null;
     prog.voicing = null;
     if (meter && meter !== metro.settings.meter) setMetroMeter(meter);
@@ -472,33 +514,76 @@ function drawPrintChart() {
 }
 
 function printProgChart() {
-    togglePrintPanel(false);
+    toggleProgPopover("print", false);
     if (!drawPrintChart()) return;
     window.print();
 }
 
-function togglePrintPanel(open = $("progPrintPanel").hidden) {
-    const panel = $("progPrintPanel");
-    if (panel.hidden === !open) return;
-    panel.hidden = !open;
-    $("progPrintButton").setAttribute("aria-expanded", String(open));
+// ---- Popovers (2.4.1): the song menu, Print, the key and the bass. One is
+// open at a time; a click outside it or Escape closes it.
+
+const progPopovers = {};
+
+function wireProgPopover(name, button, panel, { onOpen = null, returnTo = button } = {}) {
+    progPopovers[name] = { button, panel, onOpen };
+    button.addEventListener("click", () => toggleProgPopover(name));
+    panel.addEventListener("keydown", event => {
+        if (event.key !== "Escape") return;
+        event.stopPropagation();
+        toggleProgPopover(name, false);
+        returnTo.focus();
+    });
+}
+
+function toggleProgPopover(name, open = progPopovers[name].panel.hidden) {
+    const pop = progPopovers[name];
     if (open) {
-        renderPrintPanel();
-        requestAnimationFrame(() => $("progPrint").focus());
+        closeProgPopovers(name);
+        closeConsPopovers();
     }
+    if (pop.panel.hidden === !open) return;
+    pop.panel.hidden = !open;
+    pop.button.setAttribute("aria-expanded", String(open));
+    if (open) pop.onOpen?.();
+}
+
+function closeProgPopovers(except = null) {
+    Object.keys(progPopovers).forEach(name => {
+        if (name !== except) toggleProgPopover(name, false);
+    });
 }
 
 function renderPrintPanel() {
     document.querySelectorAll("#progUnder [data-under]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.under === prog.settings.under)));
 }
 
+// A chord clicked is picked and its drawer opens under its line (2.4.1);
+// clicked again, the drawer closes and the chord stays picked.
 function pickProgChord(section, bar, slot) {
+    const again = prog.barOpen && prog.at.section === section && prog.at.bar === bar && prog.at.slot === slot;
     prog.at = { section, bar, slot };
     clampProgPick();
+    prog.barOpen = !again;
+    prog.sectionOpen = null;
     prog.scale = null;
     renderProgressions();
     renderConsNeck();
-    strumProgChord(progChosen());
+    if (!again) strumProgChord(progChosen());
+}
+
+function closeProgDrawer() {
+    if (!prog.barOpen) return;
+    prog.barOpen = false;
+    renderProgressions();
+    $("progSheet").querySelector('.prog-chord[aria-pressed="true"]')?.focus();
+}
+
+function closeProgSection() {
+    const at = prog.sectionOpen;
+    if (at === null) return;
+    prog.sectionOpen = null;
+    renderProgressions();
+    $("progSheet").querySelector(`[data-section-head="${at}"]`)?.focus();
 }
 
 // ---- Sound: a chord picked is strummed, unless the loop is playing it.
@@ -698,10 +783,15 @@ function renderProgBar() {
     const sketch = progSketch();
     $("progRoot").value = sketch.root;
     $("progScale").value = sketch.scale;
-    $("progTranspose").value = sketch.root;
+    $("progKeyName").textContent = progKeyLabel();
+    $("progMove").checked = prog.settings.move;
+    $("progMoveNote").textContent = prog.settings.move
+        ? "A new root moves every chord with it. A new scale relabels them."
+        : "The chords stay as they are. Their numerals count from the new key.";
     document.querySelectorAll("#progShow [data-show]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.show === prog.settings.show)));
     $("progLoop").setAttribute("aria-pressed", String(prog.settings.loop));
     document.querySelectorAll("#progBass [data-bass]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.bass === prog.settings.bass)));
+    $("progBassNow").textContent = $("progBass").querySelector(`[data-bass="${prog.settings.bass}"]`)?.textContent ?? "Off";
     // A capo, when it lets more of the chords be played as open shapes.
     let capoText = "";
     if (cons.settings.instrument === "guitar") {
@@ -717,18 +807,23 @@ function renderProgBar() {
 function renderProgSheet() {
     const sketch = progSketch();
     const playing = metro.running && prog.settings.loop ? prog.playing : null;
+    $("progTitleText").textContent = sketch.title;
     if (document.activeElement !== $("progTitle")) $("progTitle").value = sketch.title;
     const played = sketch.sections.reduce((sum, section) => sum + section.bars.length * section.repeat, 0);
-    $("progFacts").textContent = `${progKeyLabel()} \u00B7 ${MaestroMetronome.meterLabel(metro.settings.meter)} \u00B7 ${played} ${played === 1 ? "bar" : "bars"} as played`;
+    $("progFacts").textContent = `${MaestroMetronome.meterLabel(metro.settings.meter)} · ${played} ${played === 1 ? "bar" : "bars"} as played`;
+    // Saved reads as a word; with changes, it's a button (2.4.1).
     const saved = progIsSaved();
     $("progSave").textContent = saved ? "Saved" : progSavedSong() ? "Save changes" : "Save song";
     $("progSave").disabled = saved || prog.songs === null;
+    $("progSave").classList.toggle("is-saved", saved);
+    // What's focused in the drawer or a section's heading keeps the focus as they move.
+    const focused = $("progDrawer").contains(document.activeElement) || $("progSectionEdit").contains(document.activeElement) ? document.activeElement : null;
+    // Both wait at the module's end until placed, so they're never out of the page.
+    $("progSheet").parentElement.append($("progDrawer"), $("progSectionEdit"));
     const total = progTotalBars();
+    let pickedLine = null;
     $("progSheet").replaceChildren(...sketch.sections.flatMap((section, s) => {
-        const head = element("div", "prog-section-head");
-        head.append(element("span", "prog-letter", progLetter(s)));
-        if (section.name) head.append(element("span", "prog-section-name", section.name));
-        if (section.repeat > 1) head.append(element("span", "prog-repeat", `\u00D7${section.repeat}`));
+        const head = progSectionHead(section, s);
         const cells = [];
         section.bars.forEach((bar, b) => {
             const cell = element("div", "prog-bar");
@@ -742,7 +837,7 @@ function renderProgSheet() {
                 same.dataset.writeOut = String(b);
                 same.title = "Plays the bar before again: click to write its chords out";
                 same.setAttribute("aria-label", `Bar ${b + 1}, the bar before again: write it out`);
-                same.append(element("span", "prog-same-sign", "\uE500"));
+                same.append(element("span", "prog-same-sign", ""));
                 cell.append(same);
             } else bar.forEach((name, c) => {
                 const chord = element("button", "prog-chord");
@@ -750,6 +845,7 @@ function renderProgSheet() {
                 chord.dataset.slot = String(c);
                 const picked = prog.at.section === s && prog.at.bar === b && prog.at.slot === c;
                 chord.setAttribute("aria-pressed", String(picked));
+                if (picked) chord.setAttribute("aria-expanded", String(prog.barOpen));
                 chord.setAttribute("aria-label", `${name}, bar ${b + 1}${bar.length > 1 ? `, chord ${c + 1}` : ""}`);
                 chord.append(progChordLabel(name));
                 cell.append(chord);
@@ -761,6 +857,7 @@ function renderProgSheet() {
         for (let at = 0; at < cells.length; at += 4) {
             const line = element("div", "prog-bars");
             line.append(...cells.slice(at, at + 4));
+            if (s === prog.at.section && prog.at.bar >= at && prog.at.bar < at + 4) pickedLine = line;
             lines.push(line);
         }
         if (section.bars.length < MaestroHarmony.CHART_LIMITS.bars && total < MaestroHarmony.CHART_LIMITS.totalBars) {
@@ -772,10 +869,47 @@ function renderProgSheet() {
             add.append(MaestroIcons.create("plus"));
             lines.at(-1).append(add);
         }
-        return sketch.sections.length > 1 || section.name || section.repeat > 1 ? [head, ...lines] : lines;
+        return [head, ...lines];
     }));
-    // The bar playing, or else the chord picked (a new bar or section, say), stays in view.
-    if (progIsShown()) revealProgBar($("progSheet").querySelector(".prog-bar.is-playing") ?? $("progSheet").querySelector('.prog-chord[aria-pressed="true"]')?.closest(".prog-bar"));
+    // The drawer opens under the picked bar's line, its notch at the chord.
+    $("progDrawer").hidden = !prog.barOpen || !pickedLine;
+    if (!$("progDrawer").hidden) {
+        pickedLine.after($("progDrawer"));
+        const chord = pickedLine.querySelector('.prog-chord[aria-pressed="true"]');
+        const box = chord?.getBoundingClientRect();
+        const drawer = $("progDrawer").getBoundingClientRect();
+        if (box && box.width) $("progDrawer").style.setProperty("--notch", `${Math.round(box.left - drawer.left + box.width / 2)}px`);
+    }
+    $("progSectionEdit").hidden = prog.sectionOpen === null;
+    if (focused?.isConnected && !focused.disabled) focused.focus({ preventScroll: true });
+    // The bar playing, or else the chord picked (a new bar or section, say), stays
+    // in view, with its drawer below it when there's room.
+    if (!progIsShown()) return;
+    const lit = $("progSheet").querySelector(".prog-bar.is-playing");
+    if (!lit && !$("progDrawer").hidden) revealProgBar($("progDrawer"));
+    revealProgBar(lit ?? $("progSheet").querySelector('.prog-chord[aria-pressed="true"]')?.closest(".prog-bar"));
+}
+
+// A section's heading: its letter, name and times played, a button that opens
+// it to edit; open, it holds the fields (2.4.1).
+function progSectionHead(section, s) {
+    const letter = element("span", "prog-letter", progLetter(s));
+    if (prog.sectionOpen === s) {
+        const head = element("div", "prog-section-head is-editing");
+        $("progSectionEdit").setAttribute("aria-label", `Section ${progLetter(s)}`);
+        head.append(letter, $("progSectionEdit"));
+        return head;
+    }
+    const head = element("button", "prog-section-head");
+    head.type = "button";
+    head.dataset.sectionHead = String(s);
+    head.setAttribute("aria-expanded", "false");
+    head.title = "Name the section, or set how many times it's played";
+    head.append(letter);
+    if (section.name) head.append(element("span", "prog-section-name", section.name));
+    if (section.repeat > 1) head.append(element("span", "prog-repeat", `×${section.repeat}`));
+    head.append(MaestroIcons.create("chevron-down"));
+    return head;
 }
 
 function renderProgEdit() {
@@ -789,9 +923,8 @@ function renderProgEdit() {
     $("progRemove").disabled = bars[bar].length === 1 && bars.length === 1 && sketch.sections.length === 1;
     const full = progTotalBars() >= MaestroHarmony.CHART_LIMITS.totalBars;
     $("progRepeatBar").disabled = full || bars.length >= MaestroHarmony.CHART_LIMITS.bars;
-    // The section of the chord picked.
-    const part = sketch.sections[section];
-    $("progSectionLabel").textContent = `Section ${progLetter(section)}`;
+    // The section open in its heading.
+    const part = sketch.sections[prog.sectionOpen ?? section];
     if (document.activeElement !== $("progSectionName")) $("progSectionName").value = part.name;
     $("progSectionRepeat").value = String(part.repeat);
     $("progAddSection").disabled = full || sketch.sections.length >= MaestroHarmony.CHART_LIMITS.sections;
@@ -814,26 +947,25 @@ function renderProgEdit() {
     document.querySelectorAll("#progChordSize [data-sevenths]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.sevenths === String(prog.settings.sevenths))));
 }
 
-// The side module: the chord picked, the keys, a prompt or the songs (2.4.0).
+// The side module: the chord picked, the keys or a prompt (2.4.0).
 function renderProgSide() {
     const side = prog.settings.side;
     document.querySelectorAll("#progSide [data-side]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.side === side)));
     $("progChordPane").hidden = side !== "chord";
-    $("progSongsPane").hidden = side !== "songs";
     $("progKeysPane").hidden = side !== "keys";
     $("progPromptPane").hidden = side !== "prompt";
     if (side !== "prompt") globalThis.closePromptMenu?.();
-    if (side === "songs") renderProgSongs();
-    else if (side === "prompt") globalThis.renderPrompt?.();
+    if (side === "prompt") globalThis.renderPrompt?.();
     else if (side === "keys") globalThis.renderProgKeys?.();
     else renderProgDetail();
 }
 
+// The title's menu (2.4.1): new, a copy, rename, print, and the songs to open.
 function renderProgSongs() {
-    $("progChordTitle").textContent = "Songs";
     const songs = prog.songs;
-    $("progChordHead").textContent = songs?.length ? `${songs.length} of ${PROG_SONGS_MAX}` : "";
+    $("progSongCount").textContent = songs?.length ? `${songs.length} of ${PROG_SONGS_MAX}` : "";
     $("progNewSong").disabled = songs === null;
+    $("progSaveCopy").disabled = songs === null;
     if (songs === null) {
         $("progSongs").replaceChildren(placeholderItem("list", 3));
         $("progSongsNote").textContent = "";
@@ -918,22 +1050,19 @@ function renderProgDetail() {
 function renderProgressions() {
     if (prog.timelineWeights !== progWeights()) rebuildProgTimeline();
     clampProgPick();
+    if (prog.sectionOpen !== null && !progSketch().sections[prog.sectionOpen]) prog.sectionOpen = null;
     askForProgSongs();
     renderProgBar();
     renderProgSheet();
     renderProgEdit();
     renderProgSide();
+    if (!$("progSongMenu").hidden) renderProgSongs();
     $("progProblem").hidden = true;
 }
 
 // ---- Wiring
 
 $("progRoot").replaceChildren(...MaestroMusic.ROOTS.map(root => {
-    const option = element("option", "", root);
-    option.value = root;
-    return option;
-}));
-$("progTranspose").replaceChildren(...MaestroMusic.ROOTS.map(root => {
     const option = element("option", "", root);
     option.value = root;
     return option;
@@ -952,11 +1081,30 @@ $("progScale").replaceChildren(...MaestroMusic.FAMILIES.map(family => {
     return group;
 }).filter(group => group.children.length));
 
-$("progRoot").addEventListener("change", () => setProgKey({ root: $("progRoot").value }));
+// 2.4.1: the popovers. The key and the song menu in the sheet's heading, Print
+// from the menu, and the bass beside Loop.
+wireProgPopover("key", $("progKeyButton"), $("progKeyPanel"), { onOpen: () => requestAnimationFrame(() => $("progRoot").focus()) });
+wireProgPopover("songs", $("progSongButton"), $("progSongMenu"), { onOpen: () => {
+    renderProgSongs();
+    requestAnimationFrame(() => $("progNewSong").focus());
+} });
+wireProgPopover("print", $("progMenuPrint"), $("progPrintPanel"), { returnTo: $("progSongButton"), onOpen: () => {
+    renderPrintPanel();
+    requestAnimationFrame(() => $("progPrint").focus());
+} });
+wireProgPopover("bass", $("progBassButton"), $("progBassPanel"), { onOpen: () => requestAnimationFrame(() => $("progBass").querySelector('[aria-pressed="true"]')?.focus()) });
+document.addEventListener("pointerdown", event => {
+    Object.entries(progPopovers).forEach(([name, pop]) => {
+        if (!pop.panel.hidden && !pop.panel.contains(event.target) && !pop.button.contains(event.target)) toggleProgPopover(name, false);
+    });
+});
+
+$("progRoot").addEventListener("change", () => setProgRoot($("progRoot").value));
 $("progScale").addEventListener("change", () => setProgKey({ scale: $("progScale").value }));
-$("progTranspose").addEventListener("change", () => {
-    if (MaestroMusic.ROOTS.includes($("progTranspose").value)) transposeProgression($("progTranspose").value);
-    $("progTranspose").value = progSketch().root;
+$("progMove").addEventListener("change", () => {
+    prog.settings.move = $("progMove").checked;
+    saveProgression();
+    renderProgBar();
 });
 document.querySelectorAll("#progShow [data-show]").forEach(button => button.addEventListener("click", () => {
     if (!PROG_SHOWS.includes(button.dataset.show)) return;
@@ -971,13 +1119,20 @@ $("progLoop").addEventListener("click", () => {
     if (!prog.settings.loop) cutProgLoop();
     renderProgressions();
 });
-document.querySelectorAll("#progBass [data-bass]").forEach(button => button.addEventListener("click", () => setProgBass(button.dataset.bass)));
+document.querySelectorAll("#progBass [data-bass]").forEach(button => button.addEventListener("click", () => {
+    setProgBass(button.dataset.bass);
+    toggleProgPopover("bass", false);
+}));
 document.querySelectorAll("#progChordSize [data-sevenths]").forEach(button => button.addEventListener("click", () => {
     prog.settings.sevenths = button.dataset.sevenths === "true";
     saveProgression();
     renderProgEdit();
 }));
 $("progSheet").addEventListener("click", event => {
+    // The drawer and a section's fields sit in the sheet; their own buttons answer.
+    if (event.target.closest("#progDrawer, #progSectionEdit")) return;
+    const head = event.target.closest("[data-section-head]");
+    if (head) return openProgSection(Number(head.dataset.sectionHead));
     const add = event.target.closest("[data-add-bar]");
     if (add) return addProgBar(Number(add.dataset.addBar));
     const same = event.target.closest("[data-write-out]");
@@ -1000,11 +1155,21 @@ $("progChordForm").addEventListener("submit", event => {
 $("progChordName").addEventListener("keydown", event => {
     if (event.key !== "Escape") return;
     event.stopPropagation();
-    $("progChordName").value = progChosen() ?? "";
+    // Escape puts the name back; with nothing to put back, it closes the drawer.
+    const was = progChosen() ?? "";
+    const typed = $("progChordName").value !== was || !$("progProblem").hidden;
+    $("progChordName").value = was;
     $("progProblem").hidden = true;
+    if (!typed) closeProgDrawer();
+});
+$("progDrawer").addEventListener("keydown", event => {
+    if (event.key !== "Escape" || event.target === $("progChordName")) return;
+    event.stopPropagation();
+    closeProgDrawer();
 });
 $("progSplit").addEventListener("click", splitProgBar);
 $("progRemove").addEventListener("click", removeProgChord);
+$("progDrawerDone").addEventListener("click", closeProgDrawer);
 
 // 2.4.0, chord charts: the title, sections, repeated bars, songs and printing.
 // A text field takes its change on Enter or leaving it; Escape puts it back.
@@ -1018,11 +1183,28 @@ function wireProgText(field, apply, current) {
         field.blur();
     });
 }
+// The title is renamed from its menu (2.4.1): the field stands in for it until left.
+function renameProgSong() {
+    toggleProgPopover("songs", false);
+    $("progSongButton").hidden = true;
+    $("progTitle").hidden = false;
+    $("progTitle").value = progSketch().title;
+    $("progTitle").focus();
+    $("progTitle").select();
+}
 wireProgText($("progTitle"), text => {
     setProgTitle(text);
     $("progTitle").value = progSketch().title;
 }, () => progSketch().title);
-wireProgText($("progSectionName"), text => setProgSection({ name: text.replace(/[\u0000-\u001F\u007F"]/g, "").trim().slice(0, MaestroHarmony.CHART_LIMITS.section) }), () => progSketch().sections[prog.at.section].name);
+$("progTitle").addEventListener("blur", event => {
+    $("progTitle").hidden = true;
+    $("progSongButton").hidden = false;
+    // Left with Enter or Escape, the focus comes back to the title; a click elsewhere keeps it.
+    if (!event.relatedTarget && $("progSheet").closest(".view.active")) $("progSongButton").focus({ preventScroll: true });
+});
+$("progRename").addEventListener("click", renameProgSong);
+const progSectionShown = () => prog.sectionOpen ?? prog.at.section;
+wireProgText($("progSectionName"), text => setProgSection(progSectionShown(), { name: text.replace(/[\u0000-\u001F\u007F"]/g, "").trim().slice(0, MaestroHarmony.CHART_LIMITS.section) }), () => progSketch().sections[progSectionShown()].name);
 $("progSectionRepeat").replaceChildren(...PROG_PLAYED.map((label, index) => {
     const option = element("option", "", label);
     option.value = String(index + 1);
@@ -1030,10 +1212,16 @@ $("progSectionRepeat").replaceChildren(...PROG_PLAYED.map((label, index) => {
 }));
 $("progSectionRepeat").addEventListener("change", () => {
     const repeat = Number($("progSectionRepeat").value);
-    if (Number.isInteger(repeat) && repeat >= 1 && repeat <= MaestroHarmony.CHART_LIMITS.repeat) setProgSection({ repeat });
+    if (Number.isInteger(repeat) && repeat >= 1 && repeat <= MaestroHarmony.CHART_LIMITS.repeat) setProgSection(progSectionShown(), { repeat });
+});
+$("progSectionEdit").addEventListener("keydown", event => {
+    if (event.key !== "Escape" || event.target === $("progSectionName")) return;
+    event.stopPropagation();
+    closeProgSection();
 });
 $("progAddSection").addEventListener("click", addProgSection);
-$("progRemoveSection").addEventListener("click", removeProgSection);
+$("progRemoveSection").addEventListener("click", () => removeProgSection(progSectionShown()));
+$("progSectionDone").addEventListener("click", closeProgSection);
 $("progRepeatBar").addEventListener("click", repeatProgBar);
 $("progSave").addEventListener("click", saveProgSong);
 document.querySelectorAll("#progSide [data-side]").forEach(button => button.addEventListener("click", () => {
@@ -1046,10 +1234,18 @@ $("progSongs").addEventListener("click", event => {
     const remove = event.target.closest("[data-song-delete]");
     if (remove) return deleteProgSong(remove.dataset.songDelete);
     const open = event.target.closest("[data-song-open]");
-    if (open) openProgSong(open.dataset.songOpen);
+    if (!open) return;
+    toggleProgPopover("songs", false);
+    openProgSong(open.dataset.songOpen);
 });
-$("progNewSong").addEventListener("click", newProgSong);
-$("progPrintButton").addEventListener("click", () => togglePrintPanel());
+$("progNewSong").addEventListener("click", () => {
+    toggleProgPopover("songs", false);
+    newProgSong();
+});
+$("progSaveCopy").addEventListener("click", () => {
+    toggleProgPopover("songs", false);
+    saveProgSongCopy();
+});
 $("progPrint").addEventListener("click", printProgChart);
 document.querySelectorAll("#progUnder [data-under]").forEach(button => button.addEventListener("click", () => {
     if (!PROG_UNDER.includes(button.dataset.under)) return;
@@ -1057,15 +1253,6 @@ document.querySelectorAll("#progUnder [data-under]").forEach(button => button.ad
     saveProgression();
     renderPrintPanel();
 }));
-$("progPrintPanel").addEventListener("keydown", event => {
-    if (event.key !== "Escape") return;
-    event.stopPropagation();
-    togglePrintPanel(false);
-    $("progPrintButton").focus();
-});
-document.addEventListener("pointerdown", event => {
-    if (!$("progPrintPanel").hidden && !event.target.closest("#progPrintPanel, #progPrintButton")) togglePrintPanel(false);
-});
 // The printed chart is drawn only for printing.
 window.addEventListener("afterprint", () => $("printChart")?.replaceChildren());
 $("progKeyChords").addEventListener("click", event => {
@@ -1097,3 +1284,4 @@ window.addEventListener("resize", () => {
 
 rebuildProgTimeline();
 if (consSections.current() === "progressions") renderConservatory();
+

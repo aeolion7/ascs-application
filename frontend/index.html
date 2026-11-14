@@ -27,6 +27,7 @@
   <link rel="stylesheet" href="styles/43-2.3.0-shell.css">
   <link rel="stylesheet" href="styles/44-2.3.0-chords.css">
   <link rel="stylesheet" href="styles/45-2.4.0-progressions.css">
+  <link rel="stylesheet" href="styles/46-2.4.1-conservatory.css">
 </head>
 <body>
   <div class="app-shell">
@@ -37,7 +38,7 @@
           <span>Aeolionware</span>
           <strong>Maestro</strong>
         </span>
-        <span id="sidebarVersion" hidden>Maestro <span>2.4.0</span></span>
+        <span id="sidebarVersion" hidden>Maestro <span>2.4.1</span></span>
       </div>
 
       <nav class="primary-nav" aria-label="Pages">
@@ -919,18 +920,6 @@
         <div class="cons-stage">
           <div class="cons-body" id="consBody">
             <div class="cons-toolbar">
-              <div class="cal-modes cons-instruments" id="consInstruments" role="group" aria-label="Instrument">
-                <button type="button" data-instrument="guitar">Guitar</button>
-                <button type="button" data-instrument="bass">Bass</button>
-                <button type="button" data-instrument="mandolin">Mandolin</button>
-                <button type="button" data-instrument="ukulele">Ukulele</button>
-                <button type="button" data-instrument="keyboard">Keyboard</button>
-              </div>
-              <label class="metro-field" for="consTuning" id="consTuningField"><span>Tuning</span><select id="consTuning"></select></label>
-              <div class="cons-neck-options" id="consNeckOptions">
-                <label class="metro-field cons-capo" for="consCapo" title="The neck from the capo up, and each chord's shape"><span>Capo</span><select id="consCapo"></select></label>
-                <button class="secondary cons-toggle" type="button" id="consLefty" aria-pressed="false" title="The nut on the right, as a left-handed player sees the neck">Left-handed</button>
-              </div>
               <div class="section-tabs cons-tabs" id="consTabs" role="tablist" aria-label="Conservatory sections">
                 <button type="button" role="tab" id="consTabScales" data-section-tab="scales" aria-controls="consScales" aria-selected="true">Scales</button>
                 <button type="button" role="tab" id="consTabChords" data-section-tab="chords" aria-controls="consChordsPanel" aria-selected="false">Chords</button>
@@ -939,14 +928,45 @@
                 <button type="button" role="tab" id="consTabQuiz" data-section-tab="quiz" aria-controls="consQuizPanel" aria-selected="false">Quiz</button>
                 <button type="button" role="tab" id="consTabTuning" data-section-tab="tuning" aria-controls="consTuningPanel" aria-selected="false">Tuning</button>
               </div>
+              <div class="cons-instbox">
+                <button class="secondary prog-chip cons-inst-chip" type="button" id="consInstButton" aria-haspopup="dialog" aria-expanded="false" aria-controls="consInstPanel" title="The instrument, its tuning, the capo and which hand"><svg data-icon="conservatory"></svg><span id="consInstName"></span><span class="prog-chip-label" id="consInstDetail"></span><svg data-icon="chevron-down"></svg></button>
+                <div class="prog-pop cons-inst-panel" id="consInstPanel" role="dialog" aria-labelledby="consInstTitle" hidden>
+                  <div class="module-head">
+                    <h2 id="consInstTitle">Instrument</h2>
+                  </div>
+                  <div class="cal-modes cons-instruments" id="consInstruments" role="group" aria-label="Instrument">
+                    <button type="button" data-instrument="guitar">Guitar</button>
+                    <button type="button" data-instrument="bass">Bass</button>
+                    <button type="button" data-instrument="mandolin">Mandolin</button>
+                    <button type="button" data-instrument="ukulele">Ukulele</button>
+                    <button type="button" data-instrument="keyboard">Keyboard</button>
+                  </div>
+                  <label class="metro-field" for="consTuning" id="consTuningField"><span>Tuning</span><select id="consTuning"></select></label>
+                  <div class="cons-neck-options" id="consNeckOptions">
+                    <label class="metro-field cons-capo" for="consCapo" title="The neck from the capo up, and each chord's shape"><span>Capo</span><select id="consCapo"></select></label>
+                    <button class="secondary cons-toggle" type="button" id="consLefty" aria-pressed="false" title="The nut on the right, as a left-handed player sees the neck">Left-handed</button>
+                  </div>
+                  <button class="link-button" type="button" id="consMakeTuning" title="A tuning of your own, on the Tuning tab">Make a tuning</button>
+                </div>
+              </div>
             </div>
             <section class="module cons-neck-module" id="consNeckModule" aria-label="Neck">
               <div class="cons-neck-holder" id="consNeck"></div>
             </section>
             <div class="cons-panel" id="consScales" role="tabpanel" aria-labelledby="consTabScales">
               <div class="cons-scalebar">
-                <label class="metro-field" for="consRoot"><span>Root</span><select id="consRoot"></select></label>
-                <label class="metro-field" for="consScale"><span>Scale</span><select id="consScale"></select></label>
+                <div class="cons-keybox">
+                  <button class="secondary prog-chip" type="button" id="consKeyButton" aria-haspopup="dialog" aria-expanded="false" aria-controls="consKeyPanel" title="The root and scale shown"><span class="prog-chip-label">Key</span><span id="consKeyName"></span><svg data-icon="chevron-down"></svg></button>
+                  <div class="prog-pop" id="consKeyPanel" role="dialog" aria-labelledby="consKeyTitle" hidden>
+                    <div class="module-head">
+                      <h2 id="consKeyTitle">Key</h2>
+                    </div>
+                    <div class="prog-pop-row">
+                      <label class="metro-field" for="consRoot"><span>Root</span><select id="consRoot"></select></label>
+                      <label class="metro-field" for="consScale"><span>Scale</span><select id="consScale"></select></label>
+                    </div>
+                  </div>
+                </div>
                 <label class="metro-field" for="consPosition" id="consPositionField" title="Mark one position of five frets, or the whole neck"><span>Position</span><select id="consPosition"></select></label>
                 <div class="cons-choice">
                   <span class="cons-choice-label" id="consShowLabel">Notes</span>
@@ -958,12 +978,9 @@
                 <div class="cons-choice">
                   <span class="cons-choice-label" id="consLabelsLabel">Labels</span>
                   <div class="cal-modes cons-labels" id="consLabels" role="group" aria-labelledby="consLabelsLabel">
-                    <button type="button" data-labels="names" title="Note names, spelled for the key: F♯ in G major">Names</button>
-                    <button type="button" data-labels="degrees" title="Each note's degree from the root">Degrees</button>
-                  </div>
-                  <div class="cal-modes cons-labels" id="consDegreeStyle" role="group" aria-label="Write degrees as" hidden>
-                    <button type="button" data-degree-style="flat" title="From the major scale: 1, ♭3, 5, ♭7">♭7</button>
-                    <button type="button" data-degree-style="interval" title="As intervals from the root: R, m3, P5, m7">m7</button>
+                    <button type="button" data-labels="names" aria-label="Names" title="Note names, spelled for the key: F♯ in G major">C E♭ G</button>
+                    <button type="button" data-labels="flat" aria-label="Degrees" title="Each note's degree, from the major scale: 1, ♭3, 5, ♭7">1 ♭3 5</button>
+                    <button type="button" data-labels="interval" aria-label="Intervals" title="Each note's interval from the root: R, m3, P5, m7">R m3 P5</button>
                   </div>
                 </div>
                 <div class="cons-hear" role="group" aria-label="Hear">
@@ -991,24 +1008,28 @@
               </div>
             </div>
             <div class="cons-panel" id="consChordsPanel" role="tabpanel" aria-labelledby="consTabChords" hidden>
-              <div class="cons-scalebar">
-                <label class="metro-field cons-chord-name" for="consChordName" title="A chord symbol, like E7#9 or C/E"><span>Name</span><input id="consChordName" type="text" maxlength="40" autocomplete="off" spellcheck="false"></label>
-                <label class="metro-field cons-chord-label-field" for="consChordLabel" title="Any words for it, besides its name"><span>Label</span><input id="consChordLabel" type="text" maxlength="40" autocomplete="off" placeholder="Optional"></label>
-                <button class="primary" type="button" id="consChordSave">Save chord</button>
-                <button class="link-button" type="button" id="consChordSaveNew" hidden>Save as new</button>
-                <button class="secondary" type="button" id="consChordStrum">Strum</button>
-                <button class="secondary" type="button" id="consChordClear">Clear</button>
-                <div class="cons-choice cons-chord-style">
-                  <span class="cons-choice-label" id="consChordStyleLabel">Write chords as</span>
-                  <div class="cal-modes" id="consChordStyle" role="group" aria-labelledby="consChordStyleLabel">
-                    <button type="button" data-chord-style="letters" aria-label="Letters" title="Letters: Cm7, Cmaj7, Cm7♭5">Letters</button>
-                    <button type="button" data-chord-style="signs" aria-label="Signs" title="Signs: C–7, C△7, Cø7">Signs</button>
-                  </div>
-                </div>
-              </div>
               <div class="cons-grid-2 cons-chords-grid">
-                <section class="module" aria-labelledby="consChordTitle">
-                  <div class="module-head"><h2 id="consChordTitle">Chord</h2></div>
+                <section class="module cons-chord-module" aria-labelledby="consChordTitle">
+                  <div class="module-head">
+                    <h2 id="consChordTitle">Chord</h2>
+                    <div class="cons-choice cons-chord-style" title="How chord symbols are written, on every tab">
+                      <span class="cons-choice-label" id="consChordStyleLabel">Write as</span>
+                      <div class="cal-modes" id="consChordStyle" role="group" aria-labelledby="consChordStyleLabel">
+                        <button type="button" data-chord-style="letters" aria-label="Letters" title="Letters: Cm7, Cmaj7, Cm7♭5">Letters</button>
+                        <button type="button" data-chord-style="signs" aria-label="Signs" title="Signs: C–7, C△7, Cø7">Signs</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="cons-chord-fields">
+                    <label class="metro-field cons-chord-name" for="consChordName" title="A chord symbol, like E7#9 or C/E"><span>Name</span><input id="consChordName" type="text" maxlength="40" autocomplete="off" spellcheck="false"></label>
+                    <label class="metro-field cons-chord-label-field" for="consChordLabel" title="Any words for it, besides its name"><span>Label</span><input id="consChordLabel" type="text" maxlength="40" autocomplete="off" placeholder="Optional"></label>
+                  </div>
+                  <div class="cons-chord-actions">
+                    <button class="primary" type="button" id="consChordSave">Save chord</button>
+                    <button class="link-button" type="button" id="consChordSaveNew" hidden>Save as new</button>
+                    <button class="secondary" type="button" id="consChordStrum">Strum</button>
+                    <button class="link-button" type="button" id="consChordClear">Clear</button>
+                  </div>
                   <div class="cons-chord-facts" id="consChordFacts"></div>
                   <div class="cons-chord-readings" id="consChordReadings"></div>
                   <p class="cons-note" id="consChordNote"></p>
@@ -1026,81 +1047,98 @@
               </div>
             </div>
             <div class="cons-panel" id="consProgPanel" role="tabpanel" aria-labelledby="consTabProgressions" hidden>
-              <div class="cons-scalebar">
-                <label class="metro-field" for="progRoot" title="The key the numerals count from; the chords stay as they are"><span>Key</span><select id="progRoot"></select></label>
-                <label class="metro-field" for="progScale"><span>Scale</span><select id="progScale"></select></label>
-                <div class="cons-choice">
-                  <span class="cons-choice-label" id="progShowLabel">Show</span>
-                  <div class="cal-modes cons-labels" id="progShow" role="group" aria-labelledby="progShowLabel">
-                    <button type="button" data-show="symbols" title="Chord symbols: Dm7, G7">Symbols</button>
-                    <button type="button" data-show="numerals" title="Each chord with its numeral in the key: ii7, V7">Numerals</button>
-                    <button type="button" data-show="nashville" title="Nashville numbers: 2m7, 57">Nashville</button>
-                  </div>
-                </div>
-                <button class="secondary cons-toggle" type="button" id="progLoop" aria-pressed="true" title="Play the chords with the metronome, around and around">Loop</button>
-                <div class="cons-choice">
-                  <span class="cons-choice-label" id="progBassLabel">Bass</span>
-                  <div class="cal-modes cons-labels" id="progBass" role="group" aria-labelledby="progBassLabel">
-                    <button type="button" data-bass="off" title="The chords alone">Off</button>
-                    <button type="button" data-bass="roots" title="Each chord's bass note as it starts">Roots</button>
-                    <button type="button" data-bass="walking" title="A note a beat through the chord, then a half step into the next">Walking</button>
-                  </div>
-                </div>
-                <label class="metro-field" for="progTranspose" title="Move every chord, and the key, to another root"><span>Transpose to</span><select id="progTranspose"></select></label>
-                <p class="cons-note-inline prog-capo" id="progCapo" hidden></p>
-              </div>
               <div class="cons-grid-2 prog-grid-2">
                 <section class="module prog-main" aria-labelledby="progTitleHead">
-                  <div class="module-head">
-                    <h2 class="prog-title" id="progTitleHead"><input id="progTitle" type="text" maxlength="60" autocomplete="off" spellcheck="false" aria-label="Song title" title="The song's title: click to rename"></h2>
-                    <span class="cons-note-inline" id="progFacts"></span>
-                    <div class="prog-song-actions">
-                      <button class="secondary" type="button" id="progSave" title="Keep this song in Maestro's data folder">Save song</button>
-                      <div class="prog-print">
-                        <button class="secondary" type="button" id="progPrintButton" aria-expanded="false" aria-controls="progPrintPanel">Print</button>
-                        <div class="prog-print-panel" id="progPrintPanel" role="dialog" aria-labelledby="progPrintTitle" hidden>
-                          <div class="module-head">
-                            <h2 id="progPrintTitle">Print</h2>
-                          </div>
-                          <div class="cons-choice">
-                            <span class="cons-choice-label" id="progUnderLabel">Beneath each chord</span>
-                            <div class="cal-modes cons-labels" id="progUnder" role="group" aria-labelledby="progUnderLabel">
-                              <button type="button" data-under="numerals" title="Its numeral in the key: ii7, V7">Numerals</button>
-                              <button type="button" data-under="nashville" title="Its Nashville number: 2m7, 57">Nashville</button>
-                              <button type="button" data-under="nothing" title="The chord symbols alone">Nothing</button>
-                            </div>
-                          </div>
-                          <p class="cons-note">The chart goes to Windows' print dialog. To make a PDF, choose Microsoft Print to PDF or Save as PDF there.</p>
-                          <button class="primary" type="button" id="progPrint">Print chart</button>
+                  <div class="module-head prog-head">
+                    <div class="prog-songbox">
+                      <h2 class="prog-title" id="progTitleHead">
+                        <button class="prog-title-button" type="button" id="progSongButton" aria-haspopup="dialog" aria-expanded="false" aria-controls="progSongMenu" title="New, open, rename and print songs"><span id="progTitleText"></span><svg data-icon="chevron-down"></svg></button>
+                        <input id="progTitle" type="text" maxlength="60" autocomplete="off" spellcheck="false" aria-label="Song title" hidden>
+                      </h2>
+                      <div class="prog-pop prog-song-menu" id="progSongMenu" role="dialog" aria-label="Songs" hidden>
+                        <button class="prog-menu-item" type="button" id="progNewSong" title="Start a new song in this key, with one bar"><svg data-icon="plus"></svg><span>New song</span></button>
+                        <button class="prog-menu-item" type="button" id="progSaveCopy" title="Keep the sheet as another song; the saved one stays as it was">Save as a new song</button>
+                        <button class="prog-menu-item" type="button" id="progRename">Rename</button>
+                        <button class="prog-menu-item" type="button" id="progMenuPrint" aria-haspopup="dialog" aria-expanded="false" aria-controls="progPrintPanel">Print…</button>
+                        <div class="prog-menu-head">
+                          <span class="cons-choice-label" id="progSongsLabel">Open</span>
+                          <span class="prog-menu-note" id="progSongCount"></span>
                         </div>
+                        <ul class="prog-songs" id="progSongs" aria-labelledby="progSongsLabel"></ul>
+                        <p class="cons-note" id="progSongsNote"></p>
+                      </div>
+                      <div class="prog-pop prog-print-panel" id="progPrintPanel" role="dialog" aria-labelledby="progPrintTitle" hidden>
+                        <div class="module-head">
+                          <h2 id="progPrintTitle">Print</h2>
+                        </div>
+                        <div class="cons-choice">
+                          <span class="cons-choice-label" id="progUnderLabel">Beneath each chord</span>
+                          <div class="cal-modes cons-labels" id="progUnder" role="group" aria-labelledby="progUnderLabel">
+                            <button type="button" data-under="numerals" title="Its numeral in the key: ii7, V7">Numerals</button>
+                            <button type="button" data-under="nashville" title="Its Nashville number: 2m7, 57">Nashville</button>
+                            <button type="button" data-under="nothing" title="The chord symbols alone">Nothing</button>
+                          </div>
+                        </div>
+                        <p class="cons-note">The chart goes to Windows' print dialog. To make a PDF, choose Microsoft Print to PDF or Save as PDF there.</p>
+                        <button class="primary" type="button" id="progPrint">Print chart</button>
+                      </div>
+                    </div>
+                    <span class="cons-note-inline" id="progFacts"></span>
+                    <div class="prog-keybox">
+                      <button class="secondary prog-chip" type="button" id="progKeyButton" aria-haspopup="dialog" aria-expanded="false" aria-controls="progKeyPanel" title="The key the numerals count from"><span class="prog-chip-label">Key</span><span id="progKeyName"></span><svg data-icon="chevron-down"></svg></button>
+                      <div class="prog-pop prog-key-panel" id="progKeyPanel" role="dialog" aria-labelledby="progKeyTitle" hidden>
+                        <div class="module-head">
+                          <h2 id="progKeyTitle">Key</h2>
+                        </div>
+                        <div class="prog-pop-row">
+                          <label class="metro-field" for="progRoot"><span>Root</span><select id="progRoot"></select></label>
+                          <label class="metro-field" for="progScale"><span>Scale</span><select id="progScale"></select></label>
+                        </div>
+                        <label class="metro-check" for="progMove"><input id="progMove" type="checkbox"><span>Move the chords too</span></label>
+                        <p class="cons-note" id="progMoveNote"></p>
+                      </div>
+                    </div>
+                    <button class="secondary prog-save" type="button" id="progSave" title="Keep this song in Maestro's data folder">Save song</button>
+                    <div class="cons-choice prog-head-show">
+                      <span class="cons-choice-label" id="progShowLabel">Show</span>
+                      <div class="cal-modes cons-labels" id="progShow" role="group" aria-labelledby="progShowLabel">
+                        <button type="button" data-show="symbols" title="Chord symbols: Dm7, G7">Symbols</button>
+                        <button type="button" data-show="numerals" title="Each chord with its numeral in the key: ii7, V7">Numerals</button>
+                        <button type="button" data-show="nashville" title="Nashville numbers: 2m7, 57">Nashville</button>
                       </div>
                     </div>
                   </div>
                   <div class="prog-sheet" id="progSheet"></div>
-                  <div class="prog-edit">
-                    <form class="prog-chord-form" id="progChordForm">
-                      <label class="metro-field prog-chord-field" for="progChordName"><span id="progWhere">Bar 1</span><input id="progChordName" type="text" maxlength="40" autocomplete="off" spellcheck="false" placeholder="Dm7, G7/B or ii7"></label>
-                      <button class="secondary" type="submit">Change</button>
-                    </form>
-                    <button class="secondary" type="button" id="progSplit" title="Share the bar with a second chord">Add to bar</button>
-                    <button class="secondary" type="button" id="progRemove" title="Take the chord out; a bar left empty goes">Remove</button>
-                    <button class="secondary" type="button" id="progRepeatBar" title="Add a bar after this one that plays it again">Repeat bar</button>
-                    <div class="cal-modes cons-chord-size prog-chord-size" id="progChordSize" role="group" aria-label="Chords in the key, of">
-                      <button type="button" data-sevenths="false" title="Three notes: root, third and fifth">Triads</button>
-                      <button type="button" data-sevenths="true" title="Four notes: the triad and its seventh">Sevenths</button>
+                  <div class="prog-foot">
+                    <button class="link-button prog-add-section" type="button" id="progAddSection" title="A section at the end, with one bar"><svg data-icon="plus"></svg><span>Add section</span></button>
+                    <p class="cons-note-inline prog-capo" id="progCapo" hidden></p>
+                  </div>
+                  <!-- Placed in the sheet while open: under a bar's line, or in a section's heading. -->
+                  <div class="prog-drawer" id="progDrawer" role="group" aria-labelledby="progWhere" hidden>
+                    <div class="prog-drawer-top">
+                      <form class="prog-chord-form" id="progChordForm">
+                        <label class="metro-field prog-chord-field" for="progChordName"><span id="progWhere">Bar 1</span><input id="progChordName" type="text" maxlength="40" autocomplete="off" spellcheck="false" placeholder="Dm7, G7/B or ii7"></label>
+                        <button class="primary" type="submit">Change</button>
+                      </form>
+                      <div class="cal-modes cons-chord-size prog-chord-size" id="progChordSize" role="group" aria-label="Chords in the key, of">
+                        <button type="button" data-sevenths="false" title="Three notes: root, third and fifth">Triads</button>
+                        <button type="button" data-sevenths="true" title="Four notes: the triad and its seventh">Sevenths</button>
+                      </div>
                     </div>
                     <p class="metro-trainer-problem" id="progProblem" role="alert" hidden></p>
+                    <div class="key-chords prog-key-chords" id="progKeyChords" role="group" aria-label="Chords in the key"></div>
+                    <div class="prog-drawer-links">
+                      <button class="link-button" type="button" id="progSplit" title="Share the bar with a second chord">Add to bar</button>
+                      <button class="link-button" type="button" id="progRepeatBar" title="Add a bar after this one that plays it again">Repeat bar</button>
+                      <button class="link-button prog-danger" type="button" id="progRemove" title="Take the chord out; a bar left empty goes">Remove</button>
+                      <button class="link-button prog-done" type="button" id="progDrawerDone">Done</button>
+                    </div>
                   </div>
-                  <div class="prog-section-row">
-                    <span class="cons-choice-label" id="progSectionLabel">Section A</span>
+                  <div class="prog-section-edit" id="progSectionEdit" role="group" aria-label="Section" hidden>
                     <label class="metro-field" for="progSectionName"><span>Name</span><input id="progSectionName" type="text" maxlength="24" autocomplete="off" spellcheck="false" placeholder="Verse"></label>
                     <label class="metro-field" for="progSectionRepeat" title="How many times the section is played before the next"><span>Played</span><select id="progSectionRepeat"></select></label>
-                    <button class="secondary" type="button" id="progAddSection" title="A section after this one, with one bar">New section</button>
-                    <button class="secondary" type="button" id="progRemoveSection" title="Take out this section and its bars">Remove section</button>
-                  </div>
-                  <div class="prog-key-row">
-                    <span class="cons-choice-label" id="progKeyLabel">In the key</span>
-                    <div class="key-chords prog-key-chords" id="progKeyChords" role="group" aria-labelledby="progKeyLabel"></div>
+                    <button class="link-button prog-danger" type="button" id="progRemoveSection" title="Take out this section and its bars">Remove section</button>
+                    <button class="link-button prog-done" type="button" id="progSectionDone">Done</button>
                   </div>
                 </section>
                 <section class="module prog-detail" aria-labelledby="progChordTitle">
@@ -1111,7 +1149,6 @@
                       <button type="button" data-side="chord" title="The chord picked: its scales, guide tones and chords to try">Chord</button>
                       <button type="button" data-side="keys" title="The circle of fifths, the keys the chords fit, and the chords two keys share">Keys</button>
                       <button type="button" data-side="prompt" title="A writing prompt, checked against the sketch">Prompt</button>
-                      <button type="button" data-side="songs" title="The songs kept in Maestro's data folder">Songs</button>
                     </div>
                   </div>
                   <div class="prog-pane" id="progChordPane">
@@ -1120,11 +1157,6 @@
                     <span class="cons-choice-label prog-try-label">Try instead</span>
                     <ul class="prog-ideas" id="progIdeas"></ul>
                     <p class="cons-note" id="progIdeasNote" hidden></p>
-                  </div>
-                  <div class="prog-pane" id="progSongsPane" hidden>
-                    <ul class="prog-songs" id="progSongs"></ul>
-                    <p class="cons-note" id="progSongsNote"></p>
-                    <button class="secondary prog-new-song" type="button" id="progNewSong" title="Start a new song in this key, with one bar"><svg data-icon="plus"></svg><span>New song</span></button>
                   </div>
                   <div class="prog-pane prog-keys-pane" id="progKeysPane" hidden>
                     <div class="prog-circle" id="progCircle" role="group" aria-label="The circle of fifths"></div>
@@ -1167,18 +1199,15 @@
               </div>
             </div>
             <div class="cons-panel" id="consFinderPanel" role="tabpanel" aria-labelledby="consTabFinder" hidden>
-              <div class="cons-scalebar">
-                <div class="cons-choice">
-                  <span class="cons-choice-label">Picked</span>
-                  <p class="cons-notes"><span class="cons-notes-list" id="consPicked"></span></p>
-                </div>
-                <button class="secondary" type="button" id="consPickStrum">Strum</button>
-                <button class="secondary" type="button" id="consPickClear">Clear</button>
-                <p class="cons-note" id="consFinderHint"></p>
-              </div>
               <div class="cons-grid-2">
                 <section class="module" aria-labelledby="consFoundChordsTitle">
-                  <div class="module-head"><h2 id="consFoundChordsTitle">Chords</h2></div>
+                  <div class="module-head cons-finder-head">
+                    <h2 id="consFoundChordsTitle">Chords</h2>
+                    <p class="cons-picked"><span class="cons-choice-label">Picked</span><span class="cons-notes-list" id="consPicked"></span></p>
+                    <button class="secondary" type="button" id="consPickStrum">Strum</button>
+                    <button class="link-button" type="button" id="consPickClear">Clear</button>
+                  </div>
+                  <p class="cons-note" id="consFinderHint"></p>
                   <div class="cons-found" id="consFoundChords"></div>
                   <p class="cons-note" id="consFoundChordsNote"></p>
                 </section>
@@ -1190,35 +1219,41 @@
               </div>
             </div>
             <div class="cons-panel" id="consQuizPanel" role="tabpanel" aria-labelledby="consTabQuiz" hidden>
-              <div class="cons-scalebar">
-                <div class="cal-modes" id="consQuizKind" role="group" aria-label="Quiz">
-                  <button type="button" data-quiz="note" title="A place on the neck is marked: name its note">Name the note</button>
-                  <button type="button" data-quiz="interval" title="Two notes are played: name the interval between them">Intervals by ear</button>
-                  <button type="button" data-quiz="quality" title="A chord is played: name its quality">Chords by ear</button>
-                  <button type="button" data-quiz="progression" title="Four chords are played, from I: name the other three">Progressions by ear</button>
-                </div>
-                <label class="metro-check" for="consQuizNaturals" id="consQuizNaturalsField"><input id="consQuizNaturals" type="checkbox"><span>Natural notes only</span></label>
-                <div class="cons-choice" id="consQuizChordsField">
-                  <span class="cons-choice-label" id="consQuizChordsLabel">Of</span>
-                  <div class="cal-modes" id="consQuizChords" role="group" aria-labelledby="consQuizChordsLabel">
-                    <button type="button" data-chords="triads" title="Three notes: major, minor, diminished, augmented, sus2 and sus4">Triads</button>
-                    <button type="button" data-chords="sevenths" title="Four notes: major, dominant, minor, half-diminished, diminished and minor-major sevenths">Sevenths</button>
-                    <button type="button" data-chords="both">Both</button>
-                  </div>
-                </div>
-                <div class="cons-choice" id="consQuizDirectionField">
-                  <span class="cons-choice-label" id="consQuizDirectionLabel">Played</span>
-                  <div class="cal-modes" id="consQuizDirection" role="group" aria-labelledby="consQuizDirectionLabel">
-                    <button type="button" data-direction="up">Up</button>
-                    <button type="button" data-direction="down">Down</button>
-                    <button type="button" data-direction="together">Together</button>
-                  </div>
-                </div>
-                <p class="cons-quiz-score" id="consQuizScore" role="status"></p>
-              </div>
               <section class="module cons-quiz-module" aria-labelledby="consQuizTitle">
-                <div class="module-head">
-                  <h2 id="consQuizTitle">Name the Note</h2>
+                <div class="module-head cons-quiz-head">
+                  <h2 class="sr-only" id="consQuizTitle">Name the Note</h2>
+                  <div class="cal-modes" id="consQuizKind" role="group" aria-label="Quiz">
+                    <button type="button" data-quiz="note" title="A place on the neck is marked: name its note">Name the note</button>
+                    <button type="button" data-quiz="interval" title="Two notes are played: name the interval between them">Intervals by ear</button>
+                    <button type="button" data-quiz="quality" title="A chord is played: name its quality">Chords by ear</button>
+                    <button type="button" data-quiz="progression" title="Four chords are played, from I: name the other three">Progressions by ear</button>
+                  </div>
+                  <div class="cons-quizbox">
+                    <button class="secondary prog-chip" type="button" id="consQuizOptionsButton" aria-haspopup="dialog" aria-expanded="false" aria-controls="consQuizOptionsPanel" title="What this quiz asks"><span class="prog-chip-label">Options</span><span id="consQuizOptionsName"></span><svg data-icon="chevron-down"></svg></button>
+                    <div class="prog-pop" id="consQuizOptionsPanel" role="dialog" aria-labelledby="consQuizOptionsTitle" hidden>
+                      <div class="module-head">
+                        <h2 id="consQuizOptionsTitle">Quiz Options</h2>
+                      </div>
+                      <label class="metro-check" for="consQuizNaturals" id="consQuizNaturalsField"><input id="consQuizNaturals" type="checkbox"><span>Natural notes only</span></label>
+                      <div class="cons-choice" id="consQuizChordsField">
+                        <span class="cons-choice-label" id="consQuizChordsLabel">Of</span>
+                        <div class="cal-modes" id="consQuizChords" role="group" aria-labelledby="consQuizChordsLabel">
+                          <button type="button" data-chords="triads" title="Three notes: major, minor, diminished, augmented, sus2 and sus4">Triads</button>
+                          <button type="button" data-chords="sevenths" title="Four notes: major, dominant, minor, half-diminished, diminished and minor-major sevenths">Sevenths</button>
+                          <button type="button" data-chords="both">Both</button>
+                        </div>
+                      </div>
+                      <div class="cons-choice" id="consQuizDirectionField">
+                        <span class="cons-choice-label" id="consQuizDirectionLabel">Played</span>
+                        <div class="cal-modes" id="consQuizDirection" role="group" aria-labelledby="consQuizDirectionLabel">
+                          <button type="button" data-direction="up">Up</button>
+                          <button type="button" data-direction="down">Down</button>
+                          <button type="button" data-direction="together">Together</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <p class="cons-quiz-score" id="consQuizScore" role="status"></p>
                   <div class="cons-quiz-actions">
                     <button class="secondary" type="button" id="consQuizUndo" title="Take back the last chord named (Backspace)" hidden>Undo</button>
                     <button class="secondary" type="button" id="consQuizHear">Hear it</button>
@@ -1236,12 +1271,23 @@
                 <section class="module" aria-labelledby="consTonesTitle">
                   <div class="module-head">
                     <h2 id="consTonesTitle">Reference Tones</h2>
-                    <label class="metro-field" for="consTone"><span>Sound</span><select id="consTone"><option value="pluck">Plucked string</option><option value="steady">Steady tone</option></select></label>
+                    <div class="cons-tone-settings">
+                      <div class="cons-pitchbox">
+                        <button class="secondary prog-chip" type="button" id="consA4Button" aria-haspopup="dialog" aria-expanded="false" aria-controls="consA4Panel" title="The pitch the tones are tuned to"><span class="prog-chip-label">A4</span><span id="consA4Name"></span><svg data-icon="chevron-down"></svg></button>
+                        <div class="prog-pop" id="consA4Panel" role="dialog" aria-labelledby="consA4Title" hidden>
+                          <div class="module-head">
+                            <h2 id="consA4Title">Concert Pitch</h2>
+                          </div>
+                          <label class="metro-field" for="consA4"><span>A4 =</span><input id="consA4" type="number" min="415" max="466" step="1" inputmode="numeric"><span>Hz</span></label>
+                          <p class="cons-note">415 to 466 Hz; 440 unless changed.</p>
+                        </div>
+                      </div>
+                      <label class="metro-field" for="consTone"><span>Sound</span><select id="consTone"><option value="pluck">Plucked string</option><option value="steady">Steady tone</option></select></label>
+                    </div>
                   </div>
                   <div class="tuning-strings" id="consStrings"></div>
-                  <div class="cons-tone-row">
-                    <label class="metro-field" for="consA4"><span>Concert pitch A4 =</span><input id="consA4" type="number" min="415" max="466" step="1" inputmode="numeric"><span>Hz</span></label>
-                    <button class="secondary" type="button" id="consToneStop" hidden>Stop the tone</button>
+                  <div class="cons-tone-row" id="consToneRow" hidden>
+                    <button class="secondary" type="button" id="consToneStop">Stop the tone</button>
                   </div>
                 </section>
                 <section class="module" id="consTuningsModule" aria-labelledby="consTuningsTitle">
@@ -1265,6 +1311,22 @@
           </div>
           <div class="metro-bar" id="metroBar" role="group" aria-label="Metronome">
             <button class="primary metro-play" type="button" id="metroPlay" aria-pressed="false" title="Start the metronome" aria-label="Start the metronome"><svg data-icon="play" data-size="24"></svg></button>
+            <div class="prog-transport" id="progTransport" hidden>
+              <div class="prog-split">
+                <button class="prog-split-main" type="button" id="progLoop" aria-pressed="true" title="Play the chords with the metronome, around and around">Loop</button>
+                <button class="prog-split-more" type="button" id="progBassButton" aria-haspopup="dialog" aria-expanded="false" aria-controls="progBassPanel" title="A bass line under the loop"><span class="prog-chip-label">Bass</span><span id="progBassNow">Off</span><svg data-icon="chevron-down"></svg></button>
+              </div>
+              <div class="prog-pop prog-bass-panel" id="progBassPanel" role="dialog" aria-labelledby="progBassTitle" hidden>
+                <div class="module-head">
+                  <h2 id="progBassTitle">Bass</h2>
+                </div>
+                <div class="cal-modes cons-labels" id="progBass" role="group" aria-labelledby="progBassTitle">
+                  <button type="button" data-bass="off" title="The chords alone">Off</button>
+                  <button type="button" data-bass="roots" title="Each chord's bass note as it starts">Roots</button>
+                  <button type="button" data-bass="walking" title="A note a beat through the chord, then a half step into the next">Walking</button>
+                </div>
+              </div>
+            </div>
             <div class="metro-tempo" id="metroTempoBox">
               <button class="secondary metro-step" type="button" id="metroSlower" title="Slower by 1 BPM" aria-label="Slower by 1 BPM"><svg data-icon="minus"></svg></button>
               <label class="metro-bpm" for="metroTempo"><input id="metroTempo" type="number" min="30" max="300" step="1" value="96" inputmode="numeric" autocomplete="off"><span id="metroTempoName">BPM</span></label>

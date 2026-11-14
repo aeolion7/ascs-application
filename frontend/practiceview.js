@@ -67,6 +67,8 @@ function renderFinder() {
     if (!notes.length) $("consPicked").append(element("span", "is-none", "None yet"));
     $("consPickClear").disabled = $("consPickStrum").disabled = !notes.length;
     $("consPickStrum").textContent = consChordVerb();
+    // How to pick shows until a note is picked (2.4.1).
+    $("consFinderHint").hidden = notes.length > 0;
     $("consFinderHint").textContent = consKeyboard()
         ? "Click keys to pick them, and again to drop one. The lowest is the bass."
         : "Click a fret on each string you'd play, as you'd finger the chord; another fret moves it, the same one clears the string. The lowest note is the bass.";
@@ -297,6 +299,13 @@ function renderQuiz() {
     $("consQuizNaturalsField").hidden = !note;
     $("consQuizDirectionField").hidden = note || kind === "progression";
     $("consQuizChordsField").hidden = !chords;
+    // The options chip (2.4.1) says what this kind of quiz is set to.
+    const word = { triads: "Triads", sevenths: "Sevenths", both: "Triads and sevenths", up: "Up", down: "Down", together: "Together" };
+    const { quizChords, quizDirection } = cons.settings;
+    $("consQuizOptionsName").textContent = note ? (cons.settings.quizNaturals ? "Natural notes" : "All notes")
+        : kind === "interval" ? word[quizDirection]
+        : kind === "quality" ? `${word[quizChords]} · ${word[quizDirection]}`
+        : word[quizChords];
     $("consQuizHear").hidden = note;
     // Shown throughout a progression question, so the buttons beside it never move.
     $("consQuizUndo").hidden = kind !== "progression";
@@ -381,6 +390,7 @@ document.querySelectorAll("#consQuizDirection [data-direction]").forEach(button 
     saveConsSettings();
     renderQuiz();
 }));
+wireConsPopover("quiz", $("consQuizOptionsButton"), $("consQuizOptionsPanel"));
 $("consQuizNaturals").addEventListener("change", () => setConsQuiz({ quizNaturals: $("consQuizNaturals").checked }));
 $("consQuizHear").addEventListener("click", () => playQuizQuestion());
 $("consQuizUndo").addEventListener("click", undoQuizPick);

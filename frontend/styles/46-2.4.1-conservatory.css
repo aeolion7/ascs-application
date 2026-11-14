@@ -1,0 +1,579 @@
+/* ==== 2.4.1: a simpler Conservatory ====
+   Fewer controls at once. On Progressions the song's title opens its menu,
+   the key is one chip, a bar picked opens a drawer under its line, a section
+   is edited in its heading, and Loop and Bass sit beside the metronome's
+   Play. Each popover shares one look. */
+
+/* ---- Popovers ---- */
+
+.prog-songbox,
+.prog-keybox,
+.prog-transport {
+  position: relative;
+}
+
+.prog-pop {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 22px;
+  border: 1px solid var(--line-button);
+  border-radius: var(--radius-module);
+  background: linear-gradient(180deg, var(--surface-overlay), var(--surface-module) 180px);
+  box-shadow: var(--highlight), var(--elevation-2);
+}
+
+.prog-pop[hidden] {
+  display: none;
+}
+
+.prog-pop .module-head {
+  margin: 0;
+}
+
+.prog-pop .cons-note {
+  margin: 0;
+}
+
+.prog-pop-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 22px;
+}
+
+/* A chip: what it holds, a word before it, and a caret. */
+:root .prog-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px 0 14px;
+}
+
+.prog-chip-label {
+  color: var(--text-soft);
+  font-weight: 400;
+}
+
+/* ---- The sheet's heading: title, facts, Key, Save and Show ---- */
+
+:root .prog-head {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+}
+
+:root .prog-title-button,
+#progFacts {
+  white-space: nowrap;
+}
+
+:root .prog-title-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: auto;
+  min-height: 44px;
+  margin-left: -11px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-strong);
+  font: inherit;
+}
+
+:root .prog-title-button:hover,
+:root .prog-title-button[aria-expanded="true"] {
+  background: var(--surface-hover);
+}
+
+.prog-title-button svg,
+.prog-chip svg,
+.prog-section-head svg,
+.prog-split-more svg {
+  flex: none;
+  color: var(--text-soft);
+}
+
+:root .prog-title-button[hidden],
+:root #progTitle[hidden] {
+  display: none;
+}
+
+/* Saved reads as a word; with changes it's a button. */
+:root .prog-save {
+  margin-left: auto;
+}
+
+:root .prog-save.is-saved {
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-soft);
+  font-weight: 400;
+  opacity: 1;
+  cursor: default;
+}
+
+.prog-key-panel {
+  width: 560px;
+}
+
+/* ---- The title's menu ---- */
+
+.prog-song-menu {
+  gap: 2px;
+  width: 460px;
+  max-height: 640px;
+  padding: 10px;
+}
+
+:root .prog-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-strong);
+  font-weight: 400;
+  text-align: left;
+}
+
+:root .prog-menu-item:hover:not(:disabled),
+:root .prog-menu-item:focus-visible {
+  background: var(--surface-hover);
+}
+
+.prog-menu-head {
+  display: flex;
+  align-self: stretch;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 10px 14px 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.prog-menu-note {
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+.prog-song-menu .prog-songs {
+  flex: 0 1 auto;
+  align-self: stretch;
+  gap: 2px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+:root .prog-song-menu .prog-song-open {
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 52px 8px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+}
+
+:root .prog-song-menu .prog-song-open:hover {
+  background: var(--surface-hover);
+}
+
+:root .prog-song-menu .prog-song-open[aria-current="true"] {
+  box-shadow: none;
+}
+
+.prog-song-menu .prog-song-open strong {
+  font-family: inherit;
+  font-size: var(--t-body);
+}
+
+.prog-song-menu .prog-song-open[aria-current="true"] strong {
+  color: var(--brand-tint-text);
+}
+
+.prog-song-menu .prog-song-open span {
+  flex: none;
+}
+
+.prog-song-menu #progSongsNote {
+  margin: 4px 14px;
+}
+
+/* Print opens where the menu was. */
+:root .prog-print-panel {
+  top: calc(100% + 10px);
+  right: auto;
+  left: 0;
+}
+
+/* ---- Sections: the heading opens its fields ---- */
+
+:root .prog-section-head {
+  align-self: flex-start;
+  height: auto;
+  min-height: 0;
+  padding: 3px 10px 3px 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  font: inherit;
+}
+
+:root button.prog-section-head:hover {
+  background: var(--surface-hover);
+}
+
+.prog-section-head.is-editing {
+  align-self: stretch;
+  padding: 8px 10px 8px 0;
+  background: var(--surface-hover);
+}
+
+.prog-section-edit {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 22px;
+}
+
+.prog-section-edit[hidden] {
+  display: none;
+}
+
+:root .prog-section-edit input {
+  width: 200px;
+  padding: 0 12px;
+}
+
+:root .prog-done {
+  margin-left: auto;
+}
+
+:root .prog-danger {
+  color: var(--brand-burgundy-text);
+}
+
+/* Under the sheet: add a section; a capo that would help. */
+.prog-foot {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-top: 10px;
+}
+
+:root .prog-add-section {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+:root .prog-add-section:disabled {
+  opacity: .5;
+  text-decoration: none;
+  cursor: default;
+}
+
+.prog-foot .prog-capo {
+  margin-left: auto;
+}
+
+/* ---- A bar picked: its drawer under its line, the notch at the chord ---- */
+
+.prog-drawer {
+  --notch: 50%;
+  position: relative;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 14px;
+  margin: 10px 0 6px;
+  padding: 18px 20px;
+  border: 1px solid var(--line-button);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  container-type: inline-size;
+}
+
+.prog-drawer[hidden] {
+  display: none;
+}
+
+.prog-drawer::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  left: calc(var(--notch) - 8px);
+  width: 14px;
+  height: 14px;
+  border-top: 1px solid var(--line-button);
+  border-left: 1px solid var(--line-button);
+  background: var(--surface-raised);
+  transform: rotate(45deg);
+}
+
+.prog-drawer-top {
+  display: flex;
+  align-items: center;
+  gap: 14px 22px;
+}
+
+:root .prog-drawer .prog-chord-size {
+  margin-left: auto;
+}
+
+.prog-drawer .metro-trainer-problem {
+  margin: 0;
+}
+
+.prog-drawer .metro-trainer-problem[hidden] {
+  display: none;
+}
+
+/* Narrow, the key's seven chords share the row equally, numeral over name,
+   so triads and sevenths take the same room. */
+@container (max-width: 1000px) {
+  :root .prog-drawer .prog-key-chords {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  :root .prog-drawer .prog-key-chords .key-chord {
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+    padding: 6px 4px 4px;
+  }
+}
+
+.prog-drawer-links {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+:root .prog-drawer-links .link-button:disabled {
+  opacity: .5;
+  text-decoration: none;
+  cursor: default;
+}
+
+/* ---- Loop and Bass beside Play ---- */
+
+.prog-transport[hidden] {
+  display: none;
+}
+
+.prog-split {
+  display: inline-flex;
+  height: var(--height-control);
+  border: 1px solid var(--line-button);
+  border-radius: var(--radius-control);
+}
+
+:root .prog-split > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 0;
+  background: var(--surface-raised);
+  box-shadow: none;
+  color: var(--text-strong);
+}
+
+:root .prog-split > :first-child {
+  border-radius: calc(var(--radius-control) - 1px) 0 0 calc(var(--radius-control) - 1px);
+}
+
+:root .prog-split > :last-child {
+  border-radius: 0 calc(var(--radius-control) - 1px) calc(var(--radius-control) - 1px) 0;
+}
+
+:root .prog-split > button:hover {
+  background: var(--surface-hover);
+}
+
+:root .prog-split > .prog-split-main[aria-pressed="true"] {
+  background: var(--fill-primary);
+  color: #fff;
+}
+
+:root .prog-split > .prog-split-more {
+  border-left: 1px solid var(--line-button);
+  font-weight: 400;
+}
+
+/* The bass opens upward, as the metronome's Practice does. */
+:root .prog-bass-panel {
+  top: auto;
+  bottom: calc(100% + 26px);
+}
+
+/* Room for Loop and Bass on the metronome's one line. */
+:root .metro-bar:has(> .prog-transport:not([hidden])) {
+  column-gap: 18px;
+}
+
+/* Off, Roots or Walking in one width, so a choice moves nothing after it. */
+#progBassNow {
+  min-width: 3.6em;
+  text-align: left;
+}
+
+/* The chord picked scrolls inside its module, as the sheet does, so a chord
+   with more to say doesn't make the panel taller. */
+#progChordPane:not([hidden]) {
+  flex: 1 1 0;
+  min-height: 132px;
+  margin: -6px;
+  padding: 6px;
+  overflow-y: auto;
+  contain: size;
+}
+
+/* ---- The shared top bar: the tabs at left, the instrument chip at right ---- */
+
+:root .cons-tabs {
+  margin-left: 0;
+}
+
+.cons-instbox {
+  position: relative;
+  margin-left: auto;
+}
+
+.cons-inst-chip svg:first-child {
+  color: var(--brand-tint-text);
+}
+
+.cons-inst-chip .prog-chip-label:empty {
+  display: none;
+}
+
+/* Its popover hangs from the chip's right edge, stacked so it covers only the
+   neck's corner. */
+:root .cons-inst-panel {
+  right: 0;
+  left: auto;
+  width: max-content;
+}
+
+:root .cons-inst-panel .cons-instruments {
+  margin-left: 0;
+}
+
+/* ---- Stage 5: the same rules on every tab ---- */
+
+/* A tab's panel scrolls, so it clips: a little room on every side keeps the
+   focus ring of a control at its edge whole (a chip, or a button starting a
+   wrapped line), with nothing moved. */
+:root .cons-panel {
+  margin: -6px;
+  padding: 6px;
+}
+
+.cons-keybox {
+  position: relative;
+}
+
+/* Chords: the name, label and actions in the Chord module, the way chords
+   are written in its heading. */
+
+.cons-chord-fields,
+.cons-chord-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 22px;
+}
+
+:root .cons-chord-module .cons-chord-name input,
+:root .cons-chord-module .cons-chord-label-field input {
+  width: 200px;
+}
+
+#consChordClear {
+  margin-left: auto;
+}
+
+/* Finder: what's picked, with Strum and Clear, heads the chords it makes. */
+:root .cons-finder-head {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+}
+
+.cons-picked {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0 auto 0 8px;
+}
+
+#consFinderHint[hidden] {
+  display: none;
+}
+
+/* Quiz: the kind heads its module, its options in a chip beside it. */
+:root .cons-quiz-head {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+}
+
+:root .cons-quiz-head #consQuizKind {
+  margin-left: 0;
+}
+
+.cons-quizbox {
+  position: relative;
+}
+
+.cons-quiz-module .prog-pop .cons-choice[hidden],
+.cons-quiz-module .prog-pop .metro-check[hidden] {
+  display: none;
+}
+
+/* Tuning: concert pitch, set once, as a chip beside the tones' sound. */
+.cons-tone-settings {
+  display: flex;
+  align-items: center;
+  gap: 14px 22px;
+}
+
+.cons-pitchbox {
+  position: relative;
+}
+
+:root .cons-pitchbox .prog-pop {
+  right: 0;
+  left: auto;
+  width: max-content;
+}
+
+.cons-tone-row[hidden] {
+  display: none;
+}

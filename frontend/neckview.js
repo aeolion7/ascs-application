@@ -535,12 +535,20 @@ function renderConsToolbar() {
     const select = $("consTuning");
     $("consTuningField").hidden = consKeyboard();
     $("consNeckOptions").hidden = consKeyboard();
+    $("consMakeTuning").hidden = consKeyboard();
     // Chords are built at their real frets, and Progressions marks a chord's
     // notes everywhere, so the capo isn't offered there.
-    $("consCapo").closest("label").hidden = ["chords", "progressions"].includes(consSections.current());
+    const capoAside = ["chords", "progressions"].includes(consSections.current());
+    $("consCapo").closest("label").hidden = capoAside;
+    // Loop and Bass sit beside Play on Progressions alone (2.4.1).
+    $("progTransport").hidden = consSections.current() !== "progressions";
     $("consCapo").value = String(cons.settings.capo);
     $("consLefty").setAttribute("aria-pressed", String(cons.settings.lefty));
-    if (consKeyboard()) return;
+    $("consInstName").textContent = document.querySelector(`#consInstruments [data-instrument="${instrument}"]`)?.textContent ?? "";
+    if (consKeyboard()) {
+        $("consInstDetail").textContent = "";
+        return;
+    }
     const current = MaestroMusic.currentTuning(cons.settings);
     const option = tuning => {
         const node = element("option", "", `${tuning.label ?? tuning.name} · ${MaestroMusic.tuningNotes(tuning)}`);
@@ -559,16 +567,69 @@ function renderConsToolbar() {
         select.replaceChildren(...builtIn);
     }
     select.value = current.id;
+    // The chip says what's set: the tuning, then the capo where it applies, and the hand.
+    const detail = [select.selectedOptions[0]?.textContent ?? ""];
+    if (cons.settings.capo && !capoAside) detail.push(`Capo ${cons.settings.capo}`);
+    if (cons.settings.lefty) detail.push("Left-handed");
+    $("consInstDetail").textContent = detail.filter(Boolean).join(" · ");
+}
+
+// ---- Popovers (2.4.1): settings made now and then, each behind a chip: the
+// instrument (at the right of the tabs), the key on Scales, and others on
+// their tabs. One is open at a time, Progressions' included; a click outside
+// it or Escape closes it.
+
+const consPopovers = {};
+
+function wireConsPopover(name, button, panel, { onOpen = null } = {}) {
+    consPopovers[name] = { button, panel, onOpen };
+    button.addEventListener("click", () => toggleConsPopover(name));
+    panel.addEventListener("keydown", event => {
+        if (event.key !== "Escape") return;
+        event.stopPropagation();
+        toggleConsPopover(name, false);
+        button.focus();
+    });
+}
+
+function toggleConsPopover(name, open = consPopovers[name].panel.hidden) {
+    const pop = consPopovers[name];
+    if (pop.panel.hidden === !open) return;
+    if (open) {
+        closeConsPopovers(name);
+        globalThis.closeProgPopovers?.();
+    }
+    pop.panel.hidden = !open;
+    pop.button.setAttribute("aria-expanded", String(open));
+    if (open) requestAnimationFrame(() => (pop.onOpen?.() ?? pop.panel.querySelector('[aria-pressed="true"], select, input'))?.focus());
+}
+
+function closeConsPopovers(except = null) {
+    Object.keys(consPopovers).forEach(name => {
+        if (name !== except) toggleConsPopover(name, false);
+    });
+}
+
+// The instrument, tuning, capo and hand, settings made once a session.
+// Stacked, the popover covers only the neck's corner (the high frets, on a
+// right-handed neck).
+const toggleConsInstPanel = open => toggleConsPopover("instrument", open);
+
+function makeConsTuning() {
+    closeConsPopovers();
+    consSections.show("tuning");
+    openConsTuningForm();
 }
 
 function renderConsScales() {
     const { root, scale, labels } = cons.settings;
     $("consRoot").value = root;
     $("consScale").value = scale;
-    document.querySelectorAll("#consLabels [data-labels]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.labels === labels)));
+    $("consKeyName").textContent = `${root} ${MaestroMusic.SCALES[scale].label.replace(/ \(.*\)$/, "").toLowerCase()}`;
+    // One choice of three (2.4.1): names, or degrees written either way.
+    const labelChoice = labels === "degrees" ? cons.settings.degreeStyle : "names";
+    document.querySelectorAll("#consLabels [data-labels]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.labels === labelChoice)));
     document.querySelectorAll("#consShow [data-show]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.show === cons.settings.show)));
-    document.querySelectorAll("#consDegreeStyle [data-degree-style]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.degreeStyle === cons.settings.degreeStyle)));
-    $("consDegreeStyle").hidden = labels !== "degrees";
     $("consPositionField").hidden = consKeyboard();
     if (!consKeyboard()) {
         const starts = MaestroMusic.positionsFor(MaestroMusic.INSTRUMENTS[cons.settings.instrument].frets);
@@ -641,7 +702,8 @@ function renderConsStrings() {
     strings.dataset.count = String(tuning.pitches.length);
     $("consTone").value = cons.settings.tone;
     if (document.activeElement !== $("consA4")) $("consA4").value = String(cons.settings.a4);
-    $("consToneStop").hidden = !cons.steady;
+    $("consA4Name").textContent = `${cons.settings.a4} Hz`;
+    $("consToneRow").hidden = !cons.steady;
     if ($("conservatory").classList.contains("active") && consSections.current() === "tuning") renderConsNeck();
 }
 
@@ -826,14 +888,24 @@ document.querySelectorAll("#consInstruments [data-instrument]").forEach(button =
 $("consTuning").addEventListener("change", () => chooseConsTuning($("consTuning").value));
 $("consRoot").addEventListener("change", () => { if (MaestroMusic.ROOTS.includes($("consRoot").value)) setConsScale({ root: $("consRoot").value }); });
 $("consScale").addEventListener("change", () => { if (Object.hasOwn(MaestroMusic.SCALES, $("consScale").value)) setConsScale({ scale: $("consScale").value }); });
-document.querySelectorAll("#consLabels [data-labels]").forEach(button => button.addEventListener("click", () => setConsScale({ labels: button.dataset.labels })));
+document.querySelectorAll("#consLabels [data-labels]").forEach(button => button.addEventListener("click", () => {
+    const choice = button.dataset.labels;
+    setConsScale(choice === "names" ? { labels: "names" } : { labels: "degrees", degreeStyle: choice });
+}));
 document.querySelectorAll("#consShow [data-show]").forEach(button => button.addEventListener("click", () => setConsScale({ show: button.dataset.show })));
-document.querySelectorAll("#consDegreeStyle [data-degree-style]").forEach(button => button.addEventListener("click", () => setConsScale({ degreeStyle: button.dataset.degreeStyle })));
 $("consCapo").addEventListener("change", () => {
     const capo = Number($("consCapo").value);
     if (Number.isInteger(capo) && capo >= 0 && capo <= MaestroMusic.CAPO_MAX) setConsNeck({ capo });
 });
 $("consLefty").addEventListener("click", () => setConsNeck({ lefty: !cons.settings.lefty }));
+wireConsPopover("instrument", $("consInstButton"), $("consInstPanel"));
+wireConsPopover("key", $("consKeyButton"), $("consKeyPanel"), { onOpen: () => $("consRoot") });
+$("consMakeTuning").addEventListener("click", makeConsTuning);
+document.addEventListener("pointerdown", event => {
+    Object.entries(consPopovers).forEach(([name, pop]) => {
+        if (!pop.panel.hidden && !pop.panel.contains(event.target) && !pop.button.contains(event.target)) toggleConsPopover(name, false);
+    });
+});
 document.querySelectorAll("#consChordSize [data-sevenths]").forEach(button => button.addEventListener("click", () => {
     cons.chord = -1;
     setConsScale({ sevenths: button.dataset.sevenths === "true" });
@@ -883,6 +955,7 @@ $("consA4").addEventListener("change", () => {
     renderConsStrings();
 });
 $("consToneStop").addEventListener("click", stopSteadyTone);
+wireConsPopover("a4", $("consA4Button"), $("consA4Panel"), { onOpen: () => $("consA4") });
 $("consTunings").addEventListener("click", event => {
     const remove = event.target.closest("[data-delete-tuning]");
     if (remove) return deleteConsTuning(remove.dataset.deleteTuning);

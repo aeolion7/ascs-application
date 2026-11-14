@@ -273,7 +273,7 @@ $("paletteForm").addEventListener("submit", event => {
     saveCommandSettings();
 });
 
-enableTabWheel($("commandsTabs"), "[role='tab']");
+enableDragScroll($("commandsTabs"));
 $("commandSearch").hidden = commandsSections.current() !== "keymap";
 renderCommandLists();
 renderKeyDetail();

@@ -6,11 +6,6 @@
   grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
 }
 
-/* Room inside the panel's scroll for a focus ring on the top row. */
-#consProgPanel > .cons-scalebar {
-  padding-top: 4px;
-}
-
 .prog-main,
 .prog-detail {
   min-width: 0;
@@ -170,14 +165,6 @@
 }
 
 /* Changing the chord picked */
-.prog-edit {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 14px;
-  margin-top: 16px;
-}
-
 .prog-chord-form {
   display: flex;
   align-items: center;
@@ -188,27 +175,7 @@
   width: 190px;
 }
 
-.prog-edit .metro-trainer-problem {
-  flex-basis: 100%;
-  margin: 0;
-}
-
-.prog-edit .metro-trainer-problem[hidden] {
-  display: none;
-}
-
-:root .prog-chord-size {
-  margin-left: auto;
-}
-
 /* The key's chords, one compact row: numeral, then name. */
-.prog-key-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-top: 12px;
-}
-
 :root .prog-key-chords,
 :root .prog-key-chords.is-sevenths {
   display: flex;
@@ -441,17 +408,6 @@
   background-color: var(--surface-field);
 }
 
-.prog-song-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-left: auto;
-}
-
-.prog-print {
-  position: relative;
-}
-
 .prog-print-panel {
   position: absolute;
   top: calc(100% + 12px);
@@ -506,21 +462,7 @@
   line-height: 1;
 }
 
-/* The section of the chord picked */
-.prog-section-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 14px;
-  margin-top: 12px;
-}
-
-:root .prog-section-row input {
-  width: 200px;
-  padding: 0 12px;
-}
-
-/* The side module switches between the chord and the songs. */
+/* The side module switches between the chord, the keys and a prompt. */
 :root .prog-side {
   margin-left: auto;
 }
@@ -603,11 +545,6 @@
 
 #progSongsNote:empty {
   display: none;
-}
-
-:root .prog-new-song {
-  align-self: flex-start;
-  margin-top: 4px;
 }
 
 /* ---- The chart as printed: drawn only when printing, black on white ---- */
@@ -764,27 +701,6 @@
   padding: 6px;
   overflow-y: auto;
   contain: size;
-}
-
-/* The songs, likewise, beside it. */
-#progSongsPane:not([hidden]) {
-  display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  min-height: 132px;
-  contain: size;
-}
-
-#progSongsPane .prog-songs {
-  flex: 0 1 auto;
-  min-height: 0;
-  margin: -6px;
-  padding: 6px;
-  overflow-y: auto;
-}
-
-#progSongsPane .prog-new-song {
-  flex: none;
 }
 
 /* ==== 2.4.0: writing prompts (stage 6) ====

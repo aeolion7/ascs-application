@@ -261,6 +261,8 @@ const PreviewScenes = (() => {
     const progScene = (changes = {}, at = { section: 0, bar: 2, slot: 0 }, then, consChanges = {}) => () => {
         prog.settings = { ...parseProgression(null), ...changes, sketch: MaestroHarmony.cleanChart(STUDY) };
         prog.at = at;
+        prog.barOpen = false;
+        prog.sectionOpen = null;
         prog.scale = null;
         prog.playing = null;
         consScene({ tab: "progressions", ...consChanges })();
@@ -476,14 +478,21 @@ const PreviewScenes = (() => {
         "progressions-scale": progScene({}, { section: 0, bar: 2, slot: 1 }, () => { prog.scale = { root: "G", scale: "mixolydian" }; }),
         "progressions-playing": progScene({}, undefined, () => { prog.playing = prog.timeline.find(event => event.section === 1 && event.written === 1); }),
         "progressions-keyboard": progScene({}, undefined, undefined, { instrument: "keyboard" }),
-        // 2.4.0, chord charts: songs beside the sheet, a repeated bar, and Print's choices.
-        "progressions-songs": progScene({ side: "songs", song: "autumnstudy1" }, undefined, () => {
+        // 2.4.1: a bar's drawer under its line, a section open in its heading, the
+        // key, and the bass beside Loop.
+        "progressions-drawer": progScene({}, { section: 0, bar: 2, slot: 0 }, () => { prog.barOpen = true; }),
+        "progressions-section": progScene({}, undefined, () => { prog.sectionOpen = 1; }),
+        "progressions-key": progScene({}, undefined, () => toggleProgPopover("key", true)),
+        "progressions-bass-menu": progScene({ bass: "walking" }, undefined, () => toggleProgPopover("bass", true)),
+        // 2.4.0, chord charts: the songs (in the title's menu since 2.4.1), a repeated bar, and Print's choices.
+        "progressions-songs": progScene({ song: "autumnstudy1" }, undefined, () => {
             prog.asked = true;
             receiveCharts([
                 { id: "autumnstudy1", text: MaestroHarmony.chartText({ ...MaestroHarmony.cleanChart(STUDY), meter: "4/4" }) },
                 { id: "bluesinbflat", text: "Maestro chart 1\nBlues in B♭\tB♭\tmixolydian\t4/4\nHead\t2\tB♭7\tE♭7\tB♭7\t%\tE♭7\t%\tB♭7\tG7\tCm7\tF7\tB♭7 G7\tCm7 F7" },
                 { id: "waltzfordawn", text: "Maestro chart 1\nWaltz for Dawn\tD\tmajor\t3/4\nA\t1\tDmaj7\tBm7\tEm7\tA7\nB\t1\tGmaj7\tF♯m7\tEm7\tA7" }
             ]);
+            toggleProgPopover("songs", true);
         }),
         "progressions-repeat": progScene({}, { section: 1, bar: 1, slot: 0 }, () => {
             progSketch().sections[1].bars.splice(1, 1, [MaestroHarmony.REPEAT_BAR]);
@@ -505,7 +514,7 @@ const PreviewScenes = (() => {
         "progressions-print": progScene({}, undefined, () => {
             prog.asked = true;
             receiveCharts([]);
-            togglePrintPanel(true);
+            toggleProgPopover("print", true);
         }),
         "conservatory-chord": consScene({}, () => $("consKeyChords").children[4].dispatchEvent(new MouseEvent("click", { bubbles: true }))),
         "conservatory-intervals": consScene({ root: "D", scale: "dorian", labels: "degrees", degreeStyle: "interval" }),
@@ -515,6 +524,11 @@ const PreviewScenes = (() => {
         "conservatory-sevenths-capo": consScene({ root: "A", scale: "major", sevenths: true, capo: 2 }),
         "conservatory-lefty": consScene({ root: "E", scale: "minorPentatonic", lefty: true, capo: 5 }),
         "conservatory-position": consScene({ root: "A", scale: "minorPentatonic", position: 5 }),
+        // 2.4.1: the instrument chip at the right of the tabs, its popover open.
+        "conservatory-instrument": consScene({ capo: 2 }, () => toggleConsInstPanel(true)),
+        "conservatory-instrument-lefty": consScene({ capo: 2, lefty: true }, () => toggleConsInstPanel(true)),
+        "conservatory-instrument-keyboard": consScene({ instrument: "keyboard" }, () => toggleConsInstPanel(true)),
+        "progressions-instrument": progScene({}, undefined, () => toggleConsInstPanel(true)),
         "conservatory-finder": consScene({ tab: "finder" }, () => { finder.picked = [[1, 3, 48], [2, 2, 52], [3, 0, 55], [4, 0, 59], [5, 0, 64]].map(([string, fret, midi]) => ({ string, fret, midi })); renderFinder(); renderConsNeck(); }),
         // 2.3.0: the Chords tab, with a library of saved chords.
         "conservatory-chords": chordScene({}, [null, 3, 2, 0, 1, 0], 1),

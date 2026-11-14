@@ -14,7 +14,7 @@ Suspend(true)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 2.4.0
+; Version 2.4.1
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -24,7 +24,7 @@ Suspend(true)
 ; GLOBAL VARIABLES
 ; ==========================================
 
-global ASCS_Version := "2.4.0"
+global ASCS_Version := "2.4.1"
 global ASCS_App := ""
 global ASCS_WindowIcon := 0
 global ASCS_IconPath := A_ScriptDir "\frontend\assets\ascs.ico"

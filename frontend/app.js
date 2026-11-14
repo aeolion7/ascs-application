@@ -5417,46 +5417,92 @@ document.addEventListener("keydown", event => {
 const WHEEL_STEP = 40;          // pixels of sideways movement per step
 const WHEEL_COOLDOWN = 160;     // ms between steps
 
+function isChosen(button) {
+    return button.getAttribute("aria-selected") === "true" || button.getAttribute("aria-pressed") === "true";
+}
+
 function selectedIndex(buttons) {
-    return buttons.findIndex(button =>
-        button.getAttribute("aria-selected") === "true" || button.getAttribute("aria-pressed") === "true");
+    return buttons.findIndex(isChosen);
+}
+
+// Chooses the button one step along from the chosen one, stopping at the ends.
+function stepChoice(buttons, direction) {
+    const current = selectedIndex(buttons);
+    const next = buttons[Math.max(0, Math.min(buttons.length - 1, (current < 0 ? 0 : current) + direction))];
+    if (next && buttons.indexOf(next) !== current) {
+        next.click();
+        next.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+    }
 }
 
 function enableTabWheel(strip, selector) {
-    enableWheelStep(strip, direction => {
-        const buttons = [...strip.querySelectorAll(selector)].filter(button => !button.disabled && !button.hidden);
-        const current = selectedIndex(buttons);
-        const next = buttons[Math.max(0, Math.min(buttons.length - 1, (current < 0 ? 0 : current) + direction))];
-        if (next && buttons.indexOf(next) !== current) {
-            next.click();
-            next.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
-        }
-    });
+    enableWheelStep(strip, direction =>
+        stepChoice([...strip.querySelectorAll(selector)].filter(button => !button.disabled && !button.hidden), direction));
     enableDragScroll(strip);
 }
 
+// The sideways travel of a wheel event in pixels, or 0 when it's mostly
+// vertical. The thumb wheel's sign is flipped to match how it feels on the MX
+// Master (rolling right steps right); Shift + wheel: down steps right.
+function sidewaysTravel(event) {
+    const sideways = event.deltaX !== 0 && Math.abs(event.deltaX) > Math.abs(event.deltaY)
+        ? -event.deltaX
+        : (event.shiftKey ? event.deltaY : 0);
+    const scale = event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? 400 : 1;
+    return sideways * scale;
+}
+
+// Adds travel to a gesture's state ({ travel, lastStep }); returns -1 or 1
+// when that makes a step, or 0.
+function wheelStep(state, travel) {
+    state.travel += travel;
+    const now = performance.now();
+    if (Math.abs(state.travel) < WHEEL_STEP || now - state.lastStep < WHEEL_COOLDOWN) return 0;
+    const direction = Math.sign(state.travel);
+    state.travel = 0;
+    state.lastStep = now;
+    return direction;
+}
+
 // One step per notch of a sideways gesture over an element; onStep gets -1 or 1.
+// A gesture something inside already used (a toggle, below) isn't used again.
 function enableWheelStep(strip, onStep) {
-    let travel = 0;
-    let lastStep = 0;
+    const state = { travel: 0, lastStep: 0 };
     strip.addEventListener("wheel", event => {
-        // The thumb wheel's sign is flipped to match how it feels on the MX
-        // Master (rolling right steps right); Shift + wheel: down steps right.
-        const sideways = event.deltaX !== 0 && Math.abs(event.deltaX) > Math.abs(event.deltaY)
-            ? -event.deltaX
-            : (event.shiftKey ? event.deltaY : 0);
-        if (!sideways) return;
+        const travel = sidewaysTravel(event);
+        if (!travel || event.defaultPrevented) return;
         event.preventDefault();
-        const scale = event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? 400 : 1;
-        travel += sideways * scale;
-        const now = performance.now();
-        if (Math.abs(travel) < WHEEL_STEP || now - lastStep < WHEEL_COOLDOWN) return;
-        const direction = Math.sign(travel);
-        travel = 0;
-        lastStep = now;
-        onStep(direction);
+        const direction = wheelStep(state, travel);
+        if (direction) onStep(direction);
     }, { passive: false });
 }
+
+// Every one-of-many toggle steps with the sideways wheel too (2.4.1): section
+// tabs and segmented choices, including ones drawn later. It listens first
+// (capture), so a toggle inside an area with its own sideways step, such as
+// the Calendar's modes, steps the toggle rather than the area. A group with
+// none or several pressed is a set of separate switches and is left alone.
+const CHOICE_GROUPS = '[role="tablist"], .cal-modes, .note-modes, .keymap-layers, .logs-sources, .logs-levels';
+const choiceWheels = new WeakMap();
+
+function choiceButtons(group) {
+    const tabs = [...group.querySelectorAll("[role='tab']")];
+    return (tabs.length ? tabs : [...group.querySelectorAll("button[aria-pressed]")])
+        .filter(button => !button.disabled && button.checkVisibility());
+}
+
+document.addEventListener("wheel", event => {
+    const group = event.target instanceof Element ? event.target.closest(CHOICE_GROUPS) : null;
+    if (!group) return;
+    const travel = sidewaysTravel(event);
+    if (!travel) return;
+    const buttons = choiceButtons(group);
+    if (buttons.filter(isChosen).length !== 1) return;
+    event.preventDefault();
+    if (!choiceWheels.has(group)) choiceWheels.set(group, { travel: 0, lastStep: 0 });
+    const direction = wheelStep(choiceWheels.get(group), travel);
+    if (direction) stepChoice(buttons, direction);
+}, { capture: true, passive: false });
 
 // Click and drag moves a horizontal strip that overflows. A press only
 // becomes a drag after 6 px of movement, so ordinary clicks still work; the
@@ -5495,11 +5541,12 @@ function enableDragScroll(strip) {
     strip.addEventListener("pointercancel", end);
 }
 
-enableTabWheel(document.querySelector("#logs .logs-sources"), "[data-log-source]");
-enableTabWheel(document.querySelector("#logs .logs-levels"), "[data-log-level]");
-enableTabWheel($("gamesTabs"), "[role='tab']");
-enableTabWheel(document.querySelector(".games-toolbar .logs-sources"), "[data-game-filter]");
-enableTabWheel(document.querySelector(".games-toolbar .logs-levels"), "[data-game-sort]");
+// These toggles step through CHOICE_GROUPS; dragging moves them when they overflow.
+enableDragScroll(document.querySelector("#logs .logs-sources"));
+enableDragScroll(document.querySelector("#logs .logs-levels"));
+enableDragScroll($("gamesTabs"));
+enableDragScroll(document.querySelector(".games-toolbar .logs-sources"));
+enableDragScroll(document.querySelector(".games-toolbar .logs-levels"));
 // Sideways over the almanac strip steps through its items (1.9.2).
 enableWheelStep($("homeAlmanac"), direction => {
     stepAlmanac(direction);
