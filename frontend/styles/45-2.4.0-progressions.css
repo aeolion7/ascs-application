@@ -1,0 +1,1201 @@
+/* ==== 2.4.0: Progressions on the Conservatory ====
+   A sketch of chords bar by bar, the chord picked with what fits it, and the
+   loop. The neck above is drawn shorter on this tab (neckview.js). */
+
+.prog-grid-2 {
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+}
+
+/* Room inside the panel's scroll for a focus ring on the top row. */
+#consProgPanel > .cons-scalebar {
+  padding-top: 4px;
+}
+
+.prog-main,
+.prog-detail {
+  min-width: 0;
+}
+
+.prog-main .module-head {
+  justify-content: flex-start;
+  gap: 18px;
+}
+
+.prog-capo {
+  margin: 0;
+  color: var(--gold-text);
+}
+
+.prog-capo[hidden] {
+  display: none;
+}
+
+/* The sheet: sections, then their bars, four to a line, and a bar to add. */
+.prog-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prog-section-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.prog-letter {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1.5px solid var(--brand-tint);
+  border-radius: 6px;
+  color: var(--text-strong);
+  font-family: "Libre Bodoni", serif;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.prog-section-name {
+  color: var(--text-soft);
+  font-family: var(--font-display);
+  font-size: var(--t-sub);
+}
+
+.prog-repeat {
+  color: var(--gold-text);
+  font-family: var(--font-display);
+  font-size: var(--t-sub);
+}
+
+.prog-bars {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) 52px;
+}
+
+.prog-bars > :first-child {
+  border-left: 2px solid var(--line-control);
+}
+
+.prog-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+  min-height: 58px;
+  padding: 4px 8px;
+  border-right: 2px solid var(--line-control);
+  border-block: 1px solid rgba(255, 255, 255, .04);
+}
+
+.prog-bar.is-playing {
+  background: rgba(123, 92, 240, .12);
+  box-shadow: inset 0 -3px 0 var(--brand-tint);
+}
+
+:root .prog-chord {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  min-width: 0;
+  height: auto;
+  min-height: 0;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-strong);
+}
+
+:root .prog-chord:hover {
+  background: var(--surface-hover);
+}
+
+:root .prog-chord[aria-pressed="true"] {
+  border-color: var(--brand-tint);
+  background: rgba(123, 92, 240, .18);
+}
+
+/* Room above for the symbol's raised part, so it sits in the middle. */
+.prog-chord .csym {
+  padding-top: 6px;
+}
+
+.prog-chord-label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.prog-numeral {
+  color: var(--text-muted);
+  font-family: "Libre Bodoni", serif;
+  font-size: 18px;
+  white-space: nowrap;
+}
+
+.prog-nashville {
+  color: var(--text-strong);
+  font-family: "Libre Bodoni", serif;
+  font-size: 26px;
+  white-space: nowrap;
+}
+
+.prog-same {
+  align-self: center;
+  margin: 0 auto;
+  color: var(--text-soft);
+  font-family: "Bravura Text";
+  font-size: 34px;
+  line-height: 1;
+}
+
+:root .prog-add {
+  display: grid;
+  place-items: center;
+  height: auto;
+  min-height: 58px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+:root .prog-add:hover {
+  background: var(--surface-hover);
+  color: var(--text-strong);
+}
+
+/* Changing the chord picked */
+.prog-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 14px;
+  margin-top: 16px;
+}
+
+.prog-chord-form {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.prog-chord-field input {
+  width: 190px;
+}
+
+.prog-edit .metro-trainer-problem {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.prog-edit .metro-trainer-problem[hidden] {
+  display: none;
+}
+
+:root .prog-chord-size {
+  margin-left: auto;
+}
+
+/* The key's chords, one compact row: numeral, then name. */
+.prog-key-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+:root .prog-key-chords,
+:root .prog-key-chords.is-sevenths {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+:root .prog-key-chords .key-chord {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 8px;
+  height: auto;
+  padding: 6px 12px 4px;
+}
+
+:root .prog-key-chords .key-name {
+  font-size: var(--t-module);
+}
+
+/* The chord picked: its scales, guide tones and other chords to try */
+.prog-detail-head {
+  justify-content: flex-start;
+  gap: 16px;
+}
+
+/* The heading holds a chord symbol, taller than its text. */
+#progChordTitle {
+  display: flex;
+  align-items: baseline;
+  padding-bottom: 4px;
+}
+
+.prog-detail-numeral {
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: var(--t-sub);
+}
+
+.prog-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-bottom: 12px;
+}
+
+.prog-scales {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+:root .prog-scales .cons-found-item {
+  padding: 6px 12px;
+}
+
+:root .prog-scales .is-in-key {
+  border-color: var(--brand-tint);
+}
+
+:root .prog-scales [aria-pressed="true"] {
+  background: rgba(123, 92, 240, .22);
+}
+
+.prog-guide {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  color: var(--text-soft);
+  font-family: var(--font-display);
+  font-size: var(--t-sub);
+  white-space: nowrap;
+}
+
+.prog-guide .is-here {
+  color: var(--text-strong);
+}
+
+.prog-guide-arrow {
+  color: var(--text-muted);
+}
+
+.prog-try-label {
+  display: block;
+  margin: 6px 0 8px;
+}
+
+.prog-ideas {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.prog-idea {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+}
+
+:root .prog-idea-chords {
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
+  align-items: center;
+  height: auto;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--line-control);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  color: var(--text-strong);
+}
+
+:root .prog-idea-chords:hover:not(:disabled) {
+  border-color: var(--brand-tint);
+}
+
+.prog-idea-words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: var(--t-floor);
+}
+
+.prog-idea-words strong {
+  color: var(--text-soft);
+  font-family: var(--font-display);
+  font-size: var(--t-sub);
+  font-weight: 600;
+}
+
+
+/* ==== 2.4.0 fixes to the Conservatory's other tabs ==== */
+
+/* A flat or sharp comes from a fallback font with taller lines; a set line
+   height keeps every chip in a row (Finder, Progressions) the same height. */
+:root .cons-found-item > strong,
+:root .cons-found-item > span:not(.csym) {
+  line-height: 1.2;
+}
+
+/* "Write chords as": room inside each button for the symbol's raised part. */
+:root #consChordStyle button {
+  align-items: center;
+  padding: 0 14px;
+}
+
+#consChordStyle .csym {
+  padding-top: 10px;
+}
+
+/* Chords: a label besides the name (2.4.0). */
+:root .cons-chord-label-field input {
+  width: 260px;
+  padding: 0 12px;
+  font-size: var(--t-button);
+}
+
+.cons-chord-card-label {
+  margin: 0;
+  color: var(--text-soft);
+  font-family: var(--font-display);
+  font-size: var(--t-module);
+  text-align: center;
+}
+
+.cons-chord-words {
+  margin: 0;
+  color: var(--text-strong);
+  font-family: "Libre Bodoni", serif;
+  font-size: 34px;
+  text-align: center;
+}
+
+.cons-saved-words {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-family: var(--font-body);
+  font-size: var(--t-floor);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cons-saved-label.is-words .cons-saved-words {
+  color: var(--text-strong);
+  font-family: "Libre Bodoni", serif;
+  font-size: 22px;
+  white-space: normal;
+}
+
+#consChordNote.is-problem {
+  color: var(--brand-burgundy-text);
+}
+
+
+/* ==== 2.4.0: chord charts (stage 5) ====
+   The song's title, Save and Print in the sheet's heading; sections and
+   repeated bars; the songs beside the sheet; and the chart as printed. */
+
+/* The title is a field that reads as the heading until it's hovered. */
+.prog-title {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+:root #progTitle {
+  width: 16ch;
+  max-width: 100%;
+  min-height: 44px;
+  margin-left: -11px;
+  padding: 0 10px;
+  border-color: transparent;
+  background-color: transparent;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+:root #progTitle:hover,
+:root #progTitle:focus {
+  border-color: var(--line-control);
+  background-color: var(--surface-field);
+}
+
+.prog-song-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.prog-print {
+  position: relative;
+}
+
+.prog-print-panel {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  width: 600px;
+  padding: var(--space-module);
+  border: 1px solid var(--line-button);
+  border-radius: var(--radius-module);
+  background: linear-gradient(180deg, var(--surface-overlay), var(--surface-module) 180px);
+  box-shadow: var(--highlight), var(--elevation-2);
+}
+
+.prog-print-panel[hidden] {
+  display: none;
+}
+
+.prog-print-panel .cons-note {
+  margin: 0;
+}
+
+.prog-print-panel .cons-choice-label {
+  white-space: nowrap;
+}
+
+/* A repeated bar: its sign, a button that writes the bar out. */
+:root .prog-same {
+  display: grid;
+  flex: 1 1 0;
+  place-items: center;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-soft);
+}
+
+:root .prog-same:hover {
+  background: var(--surface-hover);
+  color: var(--text-strong);
+}
+
+.prog-same-sign {
+  font-family: "Bravura Text";
+  font-size: 34px;
+  line-height: 1;
+}
+
+/* The section of the chord picked */
+.prog-section-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 14px;
+  margin-top: 12px;
+}
+
+:root .prog-section-row input {
+  width: 200px;
+  padding: 0 12px;
+}
+
+/* The side module switches between the chord and the songs. */
+:root .prog-side {
+  margin-left: auto;
+}
+
+.prog-pane[hidden] {
+  display: none;
+}
+
+.prog-songs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.prog-song {
+  position: relative;
+}
+
+:root .prog-song-open {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  padding: 10px 52px 10px 16px;
+  border: 1px solid var(--line-control);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  text-align: left;
+}
+
+:root .prog-song-open:hover {
+  border-color: var(--brand-tint);
+}
+
+:root .prog-song-open[aria-current="true"] {
+  border-color: var(--brand-tint);
+  box-shadow: 0 0 0 1px var(--brand-tint);
+}
+
+.prog-song-open strong {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--text-strong);
+  font-family: "Libre Bodoni", serif;
+  font-size: 22px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prog-song-open span {
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: var(--t-floor);
+}
+
+:root .prog-song-delete {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  min-height: 34px;
+  padding: 0;
+  opacity: 0;
+  transform: translateY(-50%);
+}
+
+.prog-song:hover .prog-song-delete,
+.prog-song-delete:focus-visible {
+  opacity: 1;
+}
+
+#progSongsNote:empty {
+  display: none;
+}
+
+:root .prog-new-song {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+/* ---- The chart as printed: drawn only when printing, black on white ---- */
+
+.print-chart {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 16mm 14mm;
+  }
+
+  html,
+  body {
+    min-height: 0;
+    height: auto;
+    overflow: visible;
+    background: #ffffff !important;
+  }
+
+  body > :not(#printChart) {
+    display: none !important;
+  }
+
+  .print-chart {
+    display: block;
+    color: #000000;
+    font-family: "Libre Bodoni", serif;
+  }
+
+  /* The page's own heading and text colors are for the dark screen. */
+  .print-chart * {
+    color: #000000;
+  }
+
+  .print-head {
+    margin-bottom: 8mm;
+    padding-bottom: 3mm;
+    border-bottom: 1px solid #000000;
+  }
+
+  .print-head h1 {
+    margin: 0;
+    font-size: 26pt;
+    font-weight: 600;
+  }
+
+  .print-head p {
+    margin: 2mm 0 0;
+    font-family: Lato, sans-serif;
+    font-size: 11pt;
+  }
+
+  .print-section {
+    margin-bottom: 6mm;
+    break-inside: avoid;
+  }
+
+  .print-section-head {
+    display: flex;
+    align-items: center;
+    gap: 3mm;
+    margin-bottom: 2mm;
+  }
+
+  .print-letter {
+    display: grid;
+    place-items: center;
+    width: 8mm;
+    height: 8mm;
+    border: 1.5px solid #000000;
+    border-radius: 1.5mm;
+    font-size: 14pt;
+    font-weight: 600;
+  }
+
+  .print-name {
+    font-size: 14pt;
+    font-style: italic;
+  }
+
+  .print-repeat {
+    font-family: Lato, sans-serif;
+    font-size: 11pt;
+  }
+
+  .print-bars {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-left: 1.5px solid #000000;
+    break-inside: avoid;
+  }
+
+  .print-bar {
+    display: flex;
+    align-items: flex-start;
+    gap: 3mm;
+    min-height: 16mm;
+    padding: 2mm 3mm;
+    border-right: 1.5px solid #000000;
+  }
+
+  /* The chart's last bar ends with a double bar line. */
+  .print-bar.is-last {
+    border-right: 4px double #000000;
+  }
+
+  .print-chord {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 1mm;
+    min-width: 0;
+  }
+
+  .print-chart .csym {
+    color: #000000;
+    font-size: 20pt;
+  }
+
+  .print-under {
+    font-size: 12pt;
+  }
+
+  .print-same {
+    align-self: center;
+    margin: 0 auto;
+    font-family: "Bravura Text";
+    font-size: 26pt;
+    line-height: 1;
+  }
+}
+
+/* ==== 2.4.0: the sheet scrolls inside its module ====
+   The modules fill the panel's height; the sheet takes what's left in its
+   module and scrolls, so the rows below it stay in place however long the
+   song. contain: size keeps the sheet's bars out of the module's least
+   height, which is its other rows and the sheet's own least. */
+#consProgPanel > .prog-grid-2 {
+  flex: 1 1 0;
+  grid-template-rows: minmax(min-content, 1fr);
+}
+
+.prog-main > *:not(.prog-sheet) {
+  flex: none;
+}
+
+.prog-sheet {
+  flex: 1 1 0;
+  min-height: 132px;
+  /* Room for a focused chord's ring inside the scroll. */
+  margin: -6px;
+  padding: 6px;
+  overflow-y: auto;
+  contain: size;
+}
+
+/* The songs, likewise, beside it. */
+#progSongsPane:not([hidden]) {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 132px;
+  contain: size;
+}
+
+#progSongsPane .prog-songs {
+  flex: 0 1 auto;
+  min-height: 0;
+  margin: -6px;
+  padding: 6px;
+  overflow-y: auto;
+}
+
+#progSongsPane .prog-new-song {
+  flex: none;
+}
+
+/* ==== 2.4.0: writing prompts (stage 6) ====
+   The prompt as a sentence of chips in Libre Bodoni; a chip opens a small
+   menu below it. Locked parts are gold, like anything pinned; a part the
+   sketch meets is underlined in the brand tint. */
+.prog-detail {
+  position: relative;
+}
+
+#progPromptPane:not([hidden]) {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 132px;
+  margin: -6px;
+  padding: 6px;
+  overflow-y: auto;
+  contain: size;
+}
+
+.prompt-level {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.prompt-brief {
+  margin: 0;
+  color: var(--text-strong);
+  font-family: "Libre Bodoni", serif;
+  font-size: 26px;
+  line-height: 1.9;
+}
+
+:root .prompt-chip {
+  display: inline;
+  height: auto;
+  min-height: 0;
+  /* Libre Bodoni sits high in its line: more room above than below centers it. */
+  padding: 5px 8px 0;
+  border: 1px solid var(--line-control);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--text-strong);
+  font: inherit;
+  line-height: 1.3;
+}
+
+:root .prompt-chip:hover,
+:root .prompt-chip[aria-expanded="true"] {
+  border-color: var(--brand-tint);
+}
+
+:root .prompt-chip.is-met {
+  box-shadow: inset 0 -3px 0 var(--brand-tint);
+}
+
+:root .prompt-chip.is-locked {
+  border-color: var(--gold-text);
+  color: var(--gold-text);
+}
+
+.prompt-chip .csym {
+  color: inherit;
+  font-size: inherit;
+}
+
+.prompt-numeral {
+  font-family: "Libre Bodoni", serif;
+}
+
+.prompt-tie {
+  white-space: nowrap;
+}
+
+.prompt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 14px;
+}
+
+:root #promptDraw,
+:root #promptRedraw {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.prompt-menu {
+  position: absolute;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 600px;
+  max-width: calc(100% - 32px);
+  padding: 18px 20px;
+  border: 1px solid var(--line-button);
+  border-radius: var(--radius-module);
+  background: linear-gradient(180deg, var(--surface-overlay), var(--surface-module) 180px);
+  box-shadow: var(--highlight), var(--elevation-2);
+}
+
+.prompt-menu[hidden] {
+  display: none;
+}
+
+.prompt-menu-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.prompt-menu-title {
+  margin: 0;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-tab);
+}
+
+.prompt-menu-status {
+  margin: 0;
+  color: var(--text-soft);
+  font-family: var(--font-body);
+  font-size: var(--t-sub);
+}
+
+.prompt-menu-status.is-met {
+  color: var(--brand-tint-text);
+}
+
+.prompt-menu-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+:root .prompt-choose {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+:root .prompt-choose select {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ==== 2.4.0: chords and progressions by ear (stage 7) ==== */
+#consQuizChordsField[hidden] {
+  display: none;
+}
+
+/* A key's seven chords, one row. */
+.cons-quiz-answers.is-numerals {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+:root .cons-quiz-answers.is-numerals .cons-quiz-answer {
+  /* Libre Bodoni sits high: more room above centers it. */
+  padding: 16px 8px 12px;
+  font-family: "Libre Bodoni", serif;
+  font-size: 26px;
+}
+
+/* A progression's chords so far: I – vi – ? – ? */
+.cons-quiz-line {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin: 0 0 18px;
+  color: var(--text-strong);
+  font-family: "Libre Bodoni", serif;
+  font-size: 34px;
+  line-height: 1.2;
+}
+
+.cons-quiz-line[hidden] {
+  display: none;
+}
+
+.cons-quiz-dash {
+  color: var(--text-muted);
+}
+
+.cons-quiz-step.is-right {
+  color: var(--brand-tint-text);
+}
+
+.cons-quiz-step.is-wrong {
+  color: var(--brand-burgundy-text);
+  text-decoration: line-through;
+}
+
+/* ==== 2.4.0: Keys ====
+   The circle of fifths, major keys around their relative minors. The
+   sketch's key is lit, its tonic most; a key with a chord in the sketch has
+   its name in white with a dot; a key picked to move toward is lighter. */
+#progKeysPane:not([hidden]) {
+  display: grid;
+  flex: 1 1 0;
+  grid-template-columns: 332px minmax(0, 1fr);
+  align-items: start;
+  gap: 28px;
+  min-height: 132px;
+  margin: -6px;
+  padding: 6px;
+  overflow-y: auto;
+  contain: size;
+}
+
+.prog-circle {
+  position: relative;
+  width: 332px;
+  height: 332px;
+}
+
+.prog-circle svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.prog-circle-cell {
+  fill: var(--surface-raised);
+  stroke: var(--surface-module);
+  stroke-width: 2;
+}
+
+.prog-circle-cell.is-minor {
+  fill: #23263a;
+}
+
+.prog-circle-cell.is-toward {
+  fill: rgba(182, 165, 251, .4);
+}
+
+.prog-circle-cell.is-key {
+  fill: rgba(123, 92, 240, .26);
+}
+
+.prog-circle-cell.is-tonic {
+  fill: rgba(123, 92, 240, .62);
+}
+
+:root .prog-circle-key {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 62px;
+  height: 44px;
+  min-height: 0;
+  /* Libre Bodoni sits high in its line: more room above centers it. */
+  padding: 4px 0 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-soft);
+  transform: translate(-50%, -50%);
+}
+
+:root .prog-circle-key.is-minor {
+  width: 54px;
+  height: 38px;
+  padding-top: 2px;
+}
+
+:root .prog-circle-key:hover {
+  background: rgba(255, 255, 255, .07);
+  color: var(--text-strong);
+}
+
+:root .prog-circle-key.is-used,
+:root .prog-circle-key.is-tonic,
+:root .prog-circle-key.is-toward {
+  color: var(--text-strong);
+}
+
+/* A key whose chord is in the sketch. */
+.prog-circle-key.is-used::after {
+  position: absolute;
+  bottom: 1px;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  border-radius: 50%;
+  background: var(--brand-tint-text);
+  content: "";
+}
+
+.prog-circle-key.is-minor .csym.is-list {
+  font-size: 22px;
+}
+
+.prog-circle-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 156px;
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.prog-circle-root {
+  color: var(--text-strong);
+  line-height: 1.1;
+}
+
+.prog-circle-mode {
+  color: var(--text-strong);
+  font-size: var(--t-body);
+}
+
+.prog-circle-signature {
+  color: var(--text-muted);
+  font-size: var(--t-floor);
+}
+
+.prog-keys-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.prog-key-fits {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+:root .prog-key-fit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  height: auto;
+  min-height: 0;
+  padding: 8px 14px;
+  border: 1px solid var(--line-control);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  text-align: left;
+}
+
+:root .prog-key-fit:hover {
+  border-color: var(--brand-tint);
+}
+
+:root .prog-key-fit[aria-pressed="true"] {
+  border-color: var(--brand-tint);
+  box-shadow: 0 0 0 1px var(--brand-tint);
+}
+
+.prog-key-fit strong {
+  color: var(--text-strong);
+  font-size: var(--t-button);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.prog-key-fit span {
+  color: var(--text-muted);
+  font-size: var(--t-floor);
+  white-space: nowrap;
+}
+
+:root .prog-key-outside {
+  margin: 0 0 8px;
+}
+
+:root .prog-pivots {
+  flex: none;
+}
+
+.prog-pivots:empty,
+#progPivotNote:empty {
+  display: none;
+}
+
+#progPivotNote {
+  margin: 0;
+}
+
+.prog-pivot-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 46px;
+}
+
+#progKeysPane .key-numeral {
+  white-space: nowrap;
+}

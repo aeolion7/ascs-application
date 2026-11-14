@@ -129,6 +129,8 @@ function bookMetroClicks() {
         const weight = counting ? (metro.position.sub ? 0 : 2) : MaestroMetronome.pulseWeight(metro.position, meter);
         const muted = !counting && MaestroMetronome.barIsMuted(metro.bars, metro.settings.gap);
         if (!muted && !(counting && metro.position.sub)) playMetroClick(metro.nextAt, weight);
+        // Progressions (2.4.0) plays its chords on the beats, muted bars too.
+        if (!counting && !metro.position.sub) globalThis.bookProgressionBeat?.(metro.nextAt, metro.bars, metro.position.beat);
         metro.booked.push({ at: metro.nextAt, beat: metro.position.beat, weight });
         metro.nextAt += MaestroMetronome.secondsPerClick(metro.settings.tempo, count);
         const next = MaestroMetronome.advance(metro.position, meter, count);
@@ -195,6 +197,7 @@ function stopMetronome() {
     // Clicks already booked go silent with their output; a tone playing goes on.
     metro.run?.disconnect();
     metro.run = null;
+    globalThis.progressionStopped?.();
     restConsAudio();
     saveMetroSettings();
     renderMetro();
@@ -235,6 +238,7 @@ function metroFrame() {
     metro.frame = null;
     if (!metro.running || !metroLightsShown()) return;
     lightDueMetroBeat();
+    globalThis.lightDueProgression?.();
     metro.frame = requestAnimationFrame(metroFrame);
 }
 
@@ -290,6 +294,8 @@ function setMetroTempo(value) {
     saveMetroSettings();
     renderMetroTempo();
     renderMetroTrainer();
+    // A writing prompt's tempo is checked against the metronome's (2.4.0).
+    globalThis.renderPrompt?.();
 }
 
 function setMetroMeter(meter) {
@@ -299,6 +305,8 @@ function setMetroMeter(meter) {
     if (metro.position.beat >= MaestroMetronome.METERS[meter].length) metro.position = { beat: 0, sub: 0 };
     saveMetroSettings();
     renderMetro();
+    // Progressions' bars are the metronome's.
+    globalThis.renderProgressions?.();
 }
 
 function tapMetroTempo() {
@@ -387,7 +395,7 @@ function renderMetro() {
     const running = metro.running;
     const play = $("metroPlay");
     play.setAttribute("aria-pressed", String(running));
-    play.title = running ? "Stop the metronome" : "Start the metronome";
+    play.title = running ? "Stop the metronome (Space)" : "Start the metronome (Space)";
     play.setAttribute("aria-label", play.title);
     play.replaceChildren(MaestroIcons.create(running ? "stop" : "play", 24));
     $("homeMetroPlay").textContent = running ? "Stop" : "Start";

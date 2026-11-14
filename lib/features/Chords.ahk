@@ -3,7 +3,8 @@
 ; ==========================================
 ; Chords saved on the Conservatory page, in data\chords.ini. The page asks for
 ; them once, when its Chords tab first opens, and sends the whole list back on
-; each change. Every entry is checked by ValidateChord as it's read and saved.
+; each change. Every entry is checked by ValidateChord as it's read and saved;
+; a name saved before 2.4.0 that isn't a chord symbol is read as its label.
 
 LoadChords() {
     global ASCS_ChordsFile
@@ -18,11 +19,13 @@ LoadChords() {
     Loop Min(Max(count, 0), 200) {
         section := "Chord" A_Index
         try {
+            named := MigrateChordName(IniRead(ASCS_ChordsFile, section, "name", ""), IniRead(ASCS_ChordsFile, section, "label", ""))
             ASCS_Chords.Push(ValidateChord(
-                IniRead(ASCS_ChordsFile, section, "name", ""),
+                named[1],
                 IniRead(ASCS_ChordsFile, section, "instrument", ""),
                 IniRead(ASCS_ChordsFile, section, "tuning", ""),
-                IniRead(ASCS_ChordsFile, section, "shape", "")
+                IniRead(ASCS_ChordsFile, section, "shape", ""),
+                named[2]
             ))
         } catch as err {
             WriteLog("Skipped saved chord " A_Index ": " err.Message)
@@ -49,7 +52,7 @@ SaveChords(content) {
             FileDelete(tempPath)
         IniWrite(chords.Length, tempPath, "Chords", "Count")
         for index, chord in chords {
-            for field in ["name", "instrument", "tuning", "shape"]
+            for field in ["name", "label", "instrument", "tuning", "shape"]
                 IniWrite(chord[field], tempPath, "Chord" index, field)
         }
         FileMove(tempPath, ASCS_ChordsFile, 1)

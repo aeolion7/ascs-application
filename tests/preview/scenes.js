@@ -253,6 +253,20 @@ const PreviewScenes = (() => {
         then?.();
         renderChords();
     };
+    // 2.4.0: Progressions with a sketch of two sections, a chord picked.
+    const STUDY = { title: "Autumn Study", root: "C", scale: "major", beats: 4, sections: [
+        { name: "Verse", repeat: 2, bars: [["Cmaj7"], ["Am7"], ["Dm7", "G7"], ["Cmaj7"]] },
+        { name: "Bridge", repeat: 1, bars: [["Fmaj7"], ["Fm6"], ["Em7", "A7"], ["Dm7", "G7"]] }
+    ] };
+    const progScene = (changes = {}, at = { section: 0, bar: 2, slot: 0 }, then, consChanges = {}) => () => {
+        prog.settings = { ...parseProgression(null), ...changes, sketch: MaestroHarmony.cleanChart(STUDY) };
+        prog.at = at;
+        prog.scale = null;
+        prog.playing = null;
+        consScene({ tab: "progressions", ...consChanges })();
+        then?.();
+        renderConservatory();
+    };
     const calendar = mode => () => { baseData(); calendarData(mode); navigate("calendar"); calState.server = { state: "running", message: "" }; renderCalendar(); };
     // Layout shift: what's on screen before its data arrives, against after. Any
     // module that moved or changed width is listed in the audit's "shift".
@@ -456,6 +470,43 @@ const PreviewScenes = (() => {
         "metronome-chip": open("notes", () => { metro.running = true; setMetroMeter("7/8"); renderMetroChip(); }),
         "metronome-chip-collapsed": open("games", () => { applySidebar(true); metro.running = true; renderMetroChip(); }),
         // 2.3.0: the instruments, Scales and Tuning.
+        "progressions": progScene(),
+        "progressions-numerals": progScene({ show: "numerals" }),
+        "progressions-nashville": progScene({ show: "nashville" }, { section: 1, bar: 2, slot: 1 }),
+        "progressions-scale": progScene({}, { section: 0, bar: 2, slot: 1 }, () => { prog.scale = { root: "G", scale: "mixolydian" }; }),
+        "progressions-playing": progScene({}, undefined, () => { prog.playing = prog.timeline.find(event => event.section === 1 && event.written === 1); }),
+        "progressions-keyboard": progScene({}, undefined, undefined, { instrument: "keyboard" }),
+        // 2.4.0, chord charts: songs beside the sheet, a repeated bar, and Print's choices.
+        "progressions-songs": progScene({ side: "songs", song: "autumnstudy1" }, undefined, () => {
+            prog.asked = true;
+            receiveCharts([
+                { id: "autumnstudy1", text: MaestroHarmony.chartText({ ...MaestroHarmony.cleanChart(STUDY), meter: "4/4" }) },
+                { id: "bluesinbflat", text: "Maestro chart 1\nBlues in B♭\tB♭\tmixolydian\t4/4\nHead\t2\tB♭7\tE♭7\tB♭7\t%\tE♭7\t%\tB♭7\tG7\tCm7\tF7\tB♭7 G7\tCm7 F7" },
+                { id: "waltzfordawn", text: "Maestro chart 1\nWaltz for Dawn\tD\tmajor\t3/4\nA\t1\tDmaj7\tBm7\tEm7\tA7\nB\t1\tGmaj7\tF♯m7\tEm7\tA7" }
+            ]);
+        }),
+        "progressions-repeat": progScene({}, { section: 1, bar: 1, slot: 0 }, () => {
+            progSketch().sections[1].bars.splice(1, 1, [MaestroHarmony.REPEAT_BAR]);
+            progSketch().sections[1].repeat = 2;
+        }),
+        // 2.4.0, writing prompts: the brief with one part locked, and a chip's menu open.
+        "progressions-prompt": progScene({ side: "prompt", prompt: { level: 3, form: "aaba32", key: { root: "C", scale: "major" }, meter: "4/4", tempo: 92, begin: "1", use: "secondary", use2: "borrowed", avoid: "noFive" }, locked: ["key"] }),
+        "progressions-prompt-menu": progScene({ side: "prompt", prompt: { level: 3, form: "aaba32", key: { root: "C", scale: "major" }, meter: "4/4", tempo: 92, begin: "1", use: "secondary", use2: "borrowed", avoid: "noFive" }, locked: ["key"] }, undefined,
+            () => document.fonts.ready.then(() => setTimeout(() => openPromptMenu("avoid"), 300))),
+        // 2.4.0: Keys, the circle of fifths: the sketch's key, then G major picked to move toward; and the bass under the loop.
+        "progressions-keys": progScene({ side: "keys" }, undefined, () => { keysState.toward = null; }),
+        "progressions-keys-toward": progScene({ side: "keys" }, undefined, () => { keysState.toward = { index: 1, ring: "major" }; }),
+        "progressions-bass": progScene({ bass: "walking" }),
+        // The chart as printed: render it with msedge --print-to-pdf, which uses the print styles.
+        "progressions-printed": progScene({}, undefined, () => {
+            progSketch().sections[1].bars.splice(1, 1, [MaestroHarmony.REPEAT_BAR]);
+            drawPrintChart();
+        }),
+        "progressions-print": progScene({}, undefined, () => {
+            prog.asked = true;
+            receiveCharts([]);
+            togglePrintPanel(true);
+        }),
         "conservatory-chord": consScene({}, () => $("consKeyChords").children[4].dispatchEvent(new MouseEvent("click", { bubbles: true }))),
         "conservatory-intervals": consScene({ root: "D", scale: "dorian", labels: "degrees", degreeStyle: "interval" }),
         "conservatory-every-note": consScene({ show: "all", root: "A", scale: "minorPentatonic" }),
@@ -477,6 +528,10 @@ const PreviewScenes = (() => {
         "conservatory-finder-empty": consScene({ tab: "finder" }, () => { finder.picked = []; renderFinder(); renderConsNeck(); }),
         "conservatory-quiz": consScene({ tab: "quiz", quizKind: "note", position: 5 }, () => { resetQuizScore(); Object.assign(quiz, { right: 6, asked: 8, streak: 3 }); quiz.question = { string: 3, fret: 7, midi: 62 }; renderQuiz(); renderConsNeck(); }),
         "conservatory-quiz-wrong": consScene({ tab: "quiz", quizKind: "note" }, () => { resetQuizScore(); quiz.question = { string: 1, fret: 4, midi: 49 }; quiz.answered = 0; Object.assign(quiz, { right: 2, asked: 3 }); renderQuiz(); renderConsNeck(); }),
+        // 2.4.0: chords by ear, answered; a progression with two chords named, and one answered wrong.
+        "conservatory-quiz-chords": consScene({ tab: "quiz", quizKind: "quality", quizChords: "sevenths", quizDirection: "together" }, () => { resetQuizScore(); quiz.question = { id: "m7b5", root: "B", name: "Bm7♭5", midis: [59, 62, 65, 69] }; quiz.answered = "m7b5"; Object.assign(quiz, { right: 5, asked: 6, streak: 2 }); renderQuiz(); renderConsNeck(); }),
+        "conservatory-quiz-progression": consScene({ tab: "quiz", quizKind: "progression", quizChords: "triads" }, () => { resetQuizScore(); quiz.question = MaestroMusic.quizProgression("triads", -1, () => 0.1); quiz.picks = [quiz.question.degrees[1], quiz.question.degrees[2]]; renderQuiz(); renderConsNeck(); }),
+        "conservatory-quiz-progression-wrong": consScene({ tab: "quiz", quizKind: "progression", quizChords: "sevenths" }, () => { resetQuizScore(); quiz.question = MaestroMusic.quizProgression("sevenths", -1, () => 0.3); quiz.picks = [quiz.question.degrees[1], quiz.question.degrees[2], (quiz.question.degrees[3] + 2) % 7]; quiz.answered = [...quiz.picks]; Object.assign(quiz, { right: 3, asked: 5 }); renderQuiz(); renderConsNeck(); }),
         "conservatory-quiz-interval": consScene({ tab: "quiz", quizKind: "interval", quizDirection: "up" }, () => { resetQuizScore(); quiz.question = { low: 52, high: 59, semis: 7 }; quiz.answered = 7; Object.assign(quiz, { right: 4, asked: 4, streak: 4 }); renderQuiz(); renderConsNeck(); }),
         "conservatory-drone": consScene({ root: "D", scale: "dorian" }, () => { cons.drone = { midi: 38 }; cons.scalePlay = { voices: [], timer: null }; renderConsHear(); }),
         "conservatory-bass": consScene({ instrument: "bass", tunings: { bass: "five" }, root: "E", scale: "minorPentatonic" }),

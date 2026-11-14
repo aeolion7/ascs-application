@@ -14,7 +14,7 @@ Suspend(true)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 2.3.0
+; Version 2.4.0
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -24,7 +24,7 @@ Suspend(true)
 ; GLOBAL VARIABLES
 ; ==========================================
 
-global ASCS_Version := "2.3.0"
+global ASCS_Version := "2.4.0"
 global ASCS_App := ""
 global ASCS_WindowIcon := 0
 global ASCS_IconPath := A_ScriptDir "\frontend\assets\ascs.ico"
@@ -45,6 +45,7 @@ global ASCS_NoticeWindow := 0
 global ASCS_StartedAt := A_TickCount   ; 2.0.0: Super waits for the page until 30 s after this; 2.3.0: the daily backup, 5 min
 global ASCS_CommandsFile := ASCS_DataDir "\commands.ini"
 global ASCS_ChordsFile := ASCS_DataDir "\chords.ini"     ; 2.3.0: the Conservatory's saved chords
+global ASCS_ChartsDir := ASCS_DataDir "\charts"          ; 2.4.0: the Conservatory's songs, a file each
 global ASCS_Chords := 0                                  ; 0 = not read yet
 global ASCS_ActivityFile := ASCS_DataDir "\activity.log"
 
@@ -1285,6 +1286,24 @@ HandleWebMessage(sender, args) {
                 else
                     WriteLog("Rejected oversized chords payload.")
 
+            case "GetCharts":
+                if (content = "")
+                    SendCharts()
+                else
+                    WriteLog("Rejected GetCharts payload.")
+
+            case "SaveChart":
+                if (StrLen(content) <= 65536)
+                    SaveChart(content)
+                else
+                    WriteLog("Rejected oversized chart payload.")
+
+            case "DeleteChart":
+                if (StrLen(content) <= 24)
+                    DeleteChart(content)
+                else
+                    WriteLog("Rejected DeleteChart payload.")
+
             case "GetCommands":
                 SendCustomCommands()
 
@@ -1534,4 +1553,5 @@ SendToFrontend(json) {
 #Include lib\features\PaletteWindows.ahk
 #Include lib\features\QuickActions.ahk
 #Include lib\features\Chords.ahk
+#Include lib\features\Charts.ahk
 #Include lib\features\Backups.ahk

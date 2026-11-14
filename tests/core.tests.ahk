@@ -1210,10 +1210,21 @@ Equal("chord name trimmed, kept with its signs", chord["name"], "G7(♯5,♭9)")
 Equal("chord shape kept", chord["shape"], "3 x 3 4 4 4")
 Equal("chord numbers written plainly", ValidateChord("C", "guitar", "40 045 50 55 59 64", "x 03 2 0 1 0")["shape"], "x 3 2 0 1 0")
 Equal("keyboard chord", ValidateChord("C", "keyboard", "", "48 52 55")["shape"], "48 52 55")
-Throws("chord without a name rejected", () => ValidateChord("  ", "guitar", "40 45 50 55 59 64", "x 3 2 0 1 0"), "name")
+Throws("chord without a name or a label rejected", () => ValidateChord("  ", "guitar", "40 45 50 55 59 64", "x 3 2 0 1 0"), "name or a label")
+Equal("chord with only a label kept", ValidateChord("", "guitar", "40 45 50 55 59 64", "x 3 2 0 1 0", " Hendrix chord ")["label"], "Hendrix chord")
+Equal("chord with a name and a label", ValidateChord("E7♯9", "guitar", "40 45 50 55 59 64", "0 7 6 7 8 x", "Hendrix chord")["name"], "E7♯9")
+Throws("chord name that isn't a symbol rejected", () => ValidateChord("Hendrix", "guitar", "40 45 50 55 59 64", "x 3 2 0 1 0"), "symbol")
+Throws("chord name with a space rejected", () => ValidateChord("G7 alt", "guitar", "40 45 50 55 59 64", "x 3 2 0 1 0"), "symbol")
+Throws("chord label too long rejected", () => ValidateChord("C", "guitar", "40 45 50 55 59 64", "x 3 2 0 1 0", Format("{:041}", 0)), "label")
+Throws("chord label with a quote rejected", () => ValidateChord("C", "guitar", "40 45 50 55 59 64", "x 3 2 0 1 0", 'my "C"'), "label")
+Throws("chord label with a line break rejected", () => ValidateChord("C", "guitar", "40 45 50 55 59 64", "x 3 2 0 1 0", "a`nb"), "label")
+Equal("an old free name becomes the label", JoinArray(MigrateChordName("G7 alt", ""), "|"), "|G7 alt")
+Equal("an old free name with a label already is dropped", JoinArray(MigrateChordName("G7 alt", "Mine"), "|"), "|Mine")
+Equal("an old symbol name stays the name", JoinArray(MigrateChordName("Am7", ""), "|"), "Am7|")
+Equal("an old long name is cut to a label's length", StrLen(MigrateChordName("My favorite voicing of the dominant ninth", "")[2]), 40)
 Throws("chord name too long rejected", () => ValidateChord(Format("{:033}", 0), "guitar", "40 45 50 55 59 64", "x 3 2 0 1 0"), "name")
-Throws("chord name with a quote rejected", () => ValidateChord('C"', "guitar", "40 45 50 55 59 64", "x 3 2 0 1 0"), "name")
-Throws("chord name with a tab rejected", () => ValidateChord("C`tD", "guitar", "40 45 50 55 59 64", "x 3 2 0 1 0"), "name")
+Throws("chord name with a quote rejected", () => ValidateChord('C"', "guitar", "40 45 50 55 59 64", "x 3 2 0 1 0"), "symbol")
+Throws("chord name with a tab rejected", () => ValidateChord("C`tD", "guitar", "40 45 50 55 59 64", "x 3 2 0 1 0"), "symbol")
 Throws("unknown instrument rejected", () => ValidateChord("C", "banjo", "40 45 50 55 59 64", "x 3 2 0 1 0"), "instrument")
 Throws("three strings rejected", () => ValidateChord("C", "guitar", "40 45 50", "x 3 2"), "4 to 7")
 Throws("eight strings rejected", () => ValidateChord("C", "guitar", "40 45 50 55 59 64 69 74", "x 3 2 0 1 0 0 0"), "4 to 7")
@@ -1227,12 +1238,56 @@ Throws("keyboard with a tuning rejected", () => ValidateChord("C", "keyboard", "
 Throws("keyboard keys out of order rejected", () => ValidateChord("C", "keyboard", "", "55 52 48"), "rise")
 Throws("keyboard key out of range rejected", () => ValidateChord("C", "keyboard", "", "12 52"), "rise")
 Throws("eleven keys rejected", () => ValidateChord("C", "keyboard", "", "40 41 42 43 44 45 46 47 48 49 50"), "1 to 10")
-Equal("chords payload parsed", ParseChordsPayload("C`tguitar`t40 45 50 55 59 64`tx 3 2 0 1 0`r`n`nC`tkeyboard`t`t48 52 55`n").Length, 2)
+Equal("chords payload parsed", ParseChordsPayload("C`tguitar`t40 45 50 55 59 64`tx 3 2 0 1 0`t`r`n`nC`tkeyboard`t`t48 52 55`tMiddle C`n").Length, 2)
+Equal("chords payload keeps a label", ParseChordsPayload("`tkeyboard`t`t48 52 55`tMiddle C")[1]["label"], "Middle C")
 Equal("empty chords payload clears the library", ParseChordsPayload("").Length, 0)
 Throws("chords payload with a missing field rejected", () => ParseChordsPayload("C`tguitar`tx 3 2 0 1 0"), "malformed")
-Throws("too many chords rejected", () => ParseChordsPayload("C`tkeyboard`t`t48`nD`tkeyboard`t`t50`nE`tkeyboard`t`t52", 2), "At most 2")
-Equal("chords as JSON", ChordsJson([ValidateChord("G7(♯5,♭9)", "guitar", "40 45 50 55 59 64", "3 x 3 4 4 4"), ValidateChord('C', "keyboard", "", "48 52 55")]),
-    '[{"name":"G7(♯5,♭9)","instrument":"guitar","tuning":[40,45,50,55,59,64],"shape":[3,null,3,4,4,4]},{"name":"C","instrument":"keyboard","tuning":[],"shape":[48,52,55]}]')
+Throws("chords payload without its label field rejected", () => ParseChordsPayload("C`tkeyboard`t`t48 52 55"), "malformed")
+Throws("too many chords rejected", () => ParseChordsPayload("C`tkeyboard`t`t48`t`nD`tkeyboard`t`t50`t`nE`tkeyboard`t`t52`t", 2), "At most 2")
+Equal("chords as JSON", ChordsJson([ValidateChord("G7(♯5,♭9)", "guitar", "40 45 50 55 59 64", "3 x 3 4 4 4"), ValidateChord('C', "keyboard", "", "48 52 55", "Middle C")]),
+    '[{"name":"G7(♯5,♭9)","label":"","instrument":"guitar","tuning":[40,45,50,55,59,64],"shape":[3,null,3,4,4,4]},{"name":"C","label":"Middle C","instrument":"keyboard","tuning":[],"shape":[48,52,55]}]')
+
+; Chord charts (2.4.0)
+chartGood := "Maestro chart 1`nAutumn Study`tC`tmajor`t4/4`nVerse`t2`tCmaj7`tAm7`tDm7 G7`t%`n`t1`tF♯m7♭5 B7(♯5,♭9)`tE7♯9"
+Equal("chart kept, line breaks made plain", ValidateChartText(StrReplace(chartGood, "`n", "`r`n") "`r`n"), chartGood)
+Equal("chart in 7/8 grouped", SubStr(ValidateChartText(StrReplace(chartGood, "4/4", "7/8:3+2+2")), 1, 40), SubStr(StrReplace(chartGood, "4/4", "7/8:3+2+2"), 1, 40))
+Throws("chart without its first line rejected", () => ValidateChartText(SubStr(chartGood, 17)), "malformed")
+Throws("chart from a later version rejected", () => ValidateChartText(StrReplace(chartGood, "chart 1", "chart 2")), "malformed")
+Throws("chart without a title rejected", () => ValidateChartText(StrReplace(chartGood, "Autumn Study", "")), "title")
+Throws("chart title with a quote rejected", () => ValidateChartText(StrReplace(chartGood, "Autumn Study", 'My "tune"')), "title")
+Throws("chart title too long rejected", () => ValidateChartText(StrReplace(chartGood, "Autumn Study", Format("{:061}", 0))), "title")
+Throws("chart key unknown rejected", () => ValidateChartText(StrReplace(chartGood, "`tC`t", "`tH`t")), "key")
+Throws("chart scale with a path rejected", () => ValidateChartText(StrReplace(chartGood, "major", "..\x")), "scale")
+Equal("chart in a scale named in camelCase kept", SubStr(ValidateChartText(StrReplace(chartGood, "major", "phrygianDominant")), 1, 50), SubStr(StrReplace(chartGood, "major", "phrygianDominant"), 1, 50))
+Throws("chart scale starting with a capital rejected", () => ValidateChartText(StrReplace(chartGood, "major", "Major")), "scale")
+Throws("chart time signature unknown rejected", () => ValidateChartText(StrReplace(chartGood, "4/4", "four")), "time")
+Throws("chart section played 9 times rejected", () => ValidateChartText(StrReplace(chartGood, "Verse`t2", "Verse`t9")), "1 to 8")
+Throws("chart section name too long rejected", () => ValidateChartText(StrReplace(chartGood, "Verse", Format("{:025}", 0))), "24")
+Throws("chart bar of five chords rejected", () => ValidateChartText(StrReplace(chartGood, "Dm7 G7", "C D E F G")), "1 to 4")
+Throws("chart chord that isn't a symbol rejected", () => ValidateChartText(StrReplace(chartGood, "Am7", "Hendrix")), "symbols")
+Throws("chart empty chord rejected", () => ValidateChartText(StrReplace(chartGood, "Dm7 G7", "Dm7  G7")), "symbols")
+Throws("chart section starting with % rejected", () => ValidateChartText(StrReplace(chartGood, "Cmaj7`tAm7", "%`tAm7")), "repeated")
+Throws("chart % sharing a bar rejected", () => ValidateChartText(StrReplace(chartGood, "`t%", "`t% C")), "repeated")
+Throws("chart section with no bars rejected", () => ValidateChartText(chartGood "`nCoda`t1"), "malformed")
+manySections := "Maestro chart 1`nT`tC`tmajor`t4/4"
+Loop 13
+    manySections .= "`nA`t1`tC"
+Throws("chart of 13 sections rejected", () => ValidateChartText(manySections), "12")
+longSection := "Maestro chart 1`nT`tC`tmajor`t4/4`nA`t1"
+Loop 65
+    longSection .= "`tC"
+Throws("chart section of 65 bars rejected", () => ValidateChartText(longSection), "64")
+manyBars := "Maestro chart 1`nT`tC`tmajor`t4/4"
+Loop 5 {
+    manyBars .= "`nA`t1"
+    Loop 52
+        manyBars .= "`tC"
+}
+Throws("chart of 260 bars rejected", () => ValidateChartText(manyBars), "256")
+Equal("song id kept", ValidateChartId("k3x9q2m7ab"), "k3x9q2m7ab")
+Throws("song id with a path rejected", () => ValidateChartId("..\..\x"), "id")
+Throws("song id with capitals rejected", () => ValidateChartId("ABCDEFGH"), "id")
+Throws("song id too short rejected", () => ValidateChartId("abc"), "id")
 
 report := "PASS " Passed " FAIL " Failures.Length "`n"
 for failure in Failures

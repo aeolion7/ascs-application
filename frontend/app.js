@@ -1874,6 +1874,15 @@ function handleWebMessage(event) {
         case "chords":
             receiveChords(data.items);
             break;
+        case "charts":
+            receiveCharts(data.items);
+            break;
+        case "chartSaved":
+            if (typeof data.id === "string") chartSaved(data.id);
+            break;
+        case "chartDeleted":
+            if (typeof data.id === "string") chartDeleted(data.id);
+            break;
         case "quickActions":
             quickActionIds = Array.isArray(data.items) ? data.items.filter(id => typeof id === "string") : null;
             renderQuickActions();
@@ -2071,6 +2080,7 @@ function handleWebMessage(event) {
             if (data.scope === "almanac") {
                 setAlmanacStatus(typeof data.message === "string" ? data.message : "The almanac could not be saved.");
             }
+            if (data.scope === "charts") globalThis.chartsFailed?.();
             if (data.scope === "settings") {
                 globalThis.drivesSaveFailed?.(data.message);
                 quietSettingsSave = "";
@@ -5534,11 +5544,19 @@ const HELP_INSIDE = [
     [["Ctrl", "E"], "New calendar event"],
     [["Ctrl", "F"], "Search this page"],
     [["Ctrl", "Shift", "M"], "Start or stop the metronome, from any page"],
+    [["Space"], "Start or stop the metronome, on the Conservatory"],
     [["Enter"], "In Quick Notes' filter: the next match in the open note (Shift + Enter, the one before)"],
     [["F1"], "Open or close this help"],
     [["Esc"], "Close a dialog or the palette"]
 ];
 const VIEW_SEARCH = { notes: "notesFilter", games: "gameSearch", sounds: "soundSearch", commands: "commandSearch", dashboard: "logSearch" };
+
+// Whether Space, pressed with this element focused, is free for the metronome.
+function spaceStartsMetronome(focused) {
+    if (!focused || focused === document.body) return true;
+    if (focused.closest("input, textarea, select, [contenteditable=''], [contenteditable='true'], [role='listbox'], [role='menu']")) return false;
+    return !focused.matches(":focus-visible");
+}
 
 function sidebarViews() {
     return [...document.querySelectorAll(".primary-nav .nav[data-view]")].map(button => button.dataset.view).filter(view => validViews.has(view));
@@ -5622,6 +5640,15 @@ document.addEventListener("keydown", event => {
     if (event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey && event.key.toLowerCase() === "m") {
         event.preventDefault();
         toggleMetronome();
+        return;
+    }
+    // On the Conservatory, Space starts and stops it too (2.4.0), except where
+    // Space already means something: typing, a list or menu, or a control
+    // reached with the keyboard, which Space presses. A control just clicked
+    // with the mouse keeps the focus without its ring, and doesn't count.
+    if (event.key === " " && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey && $("conservatory").classList.contains("active") && spaceStartsMetronome(document.activeElement)) {
+        event.preventDefault();
+        if (!event.repeat) toggleMetronome();
         return;
     }
 

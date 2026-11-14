@@ -114,7 +114,7 @@ globalThis.MaestroMusic = (() => {
     // A position is five frets from its first; -1 is the whole neck.
     const POSITION_SPAN = 5;
     const POSITION_LAST = 11;
-    const TABS = Object.freeze(["scales", "chords", "finder", "quiz", "tuning"]);
+    const TABS = Object.freeze(["scales", "chords", "progressions", "finder", "quiz", "tuning"]);
     // The positions an instrument with `frets` frets offers.
     const positionsFor = frets => Array.from({ length: Math.max(0, frets - POSITION_SPAN + 2) }, (_, from) => from).filter(from => from <= POSITION_LAST);
 
@@ -413,7 +413,55 @@ globalThis.MaestroMusic = (() => {
         return { low, high: low + semis, semis };
     }
 
-    const QUIZ_KINDS = Object.freeze(["note", "interval"]);
+    // Chords by ear (2.4.0): a quality's notes above the root, its suffix as
+    // Maestro writes it, and its name. Triads and sevenths.
+    const QUIZ_QUALITIES = Object.freeze([
+        ["major", "triads", [0, 4, 7], "", "Major", "Major"], ["minor", "triads", [0, 3, 7], "m", "Minor", "Minor"],
+        ["diminished", "triads", [0, 3, 6], "°", "Diminished", "Dim"], ["augmented", "triads", [0, 4, 8], "+", "Augmented", "Aug"],
+        ["sus2", "triads", [0, 2, 7], "sus2", "Suspended second", "Sus2"], ["sus4", "triads", [0, 5, 7], "sus4", "Suspended fourth", "Sus4"],
+        ["maj7", "sevenths", [0, 4, 7, 11], "maj7", "Major seventh", "Maj7"], ["dom7", "sevenths", [0, 4, 7, 10], "7", "Dominant seventh", "Dom7"],
+        ["m7", "sevenths", [0, 3, 7, 10], "m7", "Minor seventh", "Min7"], ["m7b5", "sevenths", [0, 3, 6, 10], "m7♭5", "Half-diminished seventh", "Half-dim7"],
+        ["dim7", "sevenths", [0, 3, 6, 9], "°7", "Diminished seventh", "Dim7"], ["mMaj7", "sevenths", [0, 3, 7, 11], "m(maj7)", "Minor-major seventh", "Min(maj7)"]
+    ].map(([id, set, semis, suffix, name, short]) => Object.freeze({ id, set, semis: Object.freeze(semis), suffix, name, short })));
+    const QUIZ_CHORD_SETS = Object.freeze(["triads", "sevenths", "both"]);
+    const QUIZ_ROOTS = Object.freeze(["C", "D♭", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"]);
+    const qualitiesOf = set => QUIZ_QUALITIES.filter(quality => set === "both" || quality.set === set);
+
+    // A chord to hear: a quality from the set, on a root from C3 to B3, never
+    // the same quality twice running. { id, root, name, midis }.
+    function quizQuality(set = "triads", avoid = "", random = Math.random) {
+        const list = qualitiesOf(QUIZ_CHORD_SETS.includes(set) ? set : "triads");
+        const pick = () => list[Math.min(list.length - 1, Math.floor(random() * list.length))];
+        let quality = pick();
+        if (quality.id === avoid) quality = pick();
+        if (quality.id === avoid) quality = list[(list.indexOf(quality) + 1) % list.length];
+        const low = 48 + Math.min(11, Math.floor(random() * 12));
+        const root = QUIZ_ROOTS[low % 12];
+        return { id: quality.id, root, name: root + quality.suffix, midis: quality.semis.map(semis => low + semis) };
+    }
+
+    // Progressions by ear (2.4.0): common progressions of four chords from I,
+    // as degrees of a major key.
+    const QUIZ_PROGRESSIONS = Object.freeze([
+        [0, 3, 4, 0], [0, 4, 5, 3], [0, 5, 3, 4], [0, 5, 1, 4], [0, 3, 5, 4], [0, 1, 4, 0], [0, 3, 1, 4],
+        [0, 4, 3, 0], [0, 3, 0, 4], [0, 1, 3, 4], [0, 2, 5, 3], [0, 2, 3, 4], [0, 5, 2, 3]
+    ].map(degrees => Object.freeze(degrees)));
+    const QUIZ_KEYS = Object.freeze(["C", "G", "D", "A", "E", "F", "B♭", "E♭"]);
+
+    // A progression to hear: one of them in a major key, never the same twice
+    // running; triads or sevenths (both: either). { key, size, index, degrees, chords }.
+    function quizProgression(set = "triads", avoid = -1, random = Math.random) {
+        const pickFrom = list => list[Math.min(list.length - 1, Math.floor(random() * list.length))];
+        let index = Math.min(QUIZ_PROGRESSIONS.length - 1, Math.floor(random() * QUIZ_PROGRESSIONS.length));
+        if (index === avoid) index = (index + 1) % QUIZ_PROGRESSIONS.length;
+        const key = pickFrom(QUIZ_KEYS);
+        const size = set === "sevenths" ? 4 : set === "both" ? pickFrom([3, 4]) : 3;
+        const inKey = chordsInKey(key, "major", size);
+        const degrees = [...QUIZ_PROGRESSIONS[index]];
+        return { key, size, index, degrees, chords: degrees.map(degree => inKey[degree].name), numerals: inKey.map(chord => chord.numeral) };
+    }
+
+    const QUIZ_KINDS = Object.freeze(["note", "interval", "quality", "progression"]);
     const QUIZ_DIRECTIONS = Object.freeze(["up", "down", "together"]);
 
     // Every note's labels, for showing all twelve: a note of the scale keeps
@@ -514,23 +562,26 @@ globalThis.MaestroMusic = (() => {
     const SIGN = Object.freeze({ major: "\uE873", minor: "\uE874", half: "\uE871", dim: "\uE870", aug: "\uE872" });
     const minorOf = style => style === "signs" ? SIGN.minor : "m";
     const majorOf = style => style === "signs" ? SIGN.major : "maj";
-    // Each kind's parts after the root: q beside it, sup raised, stack two
-    // raised one over the other (a 6 over a 9).
+    // Each kind's parts after the root, by one rule (2.4.0): q, level with the
+    // root, is the chord's quality (m, maj, \u00B0, +; in signs \u2013, \u25B3, \u00B0, +, \u00F8);
+    // sup, raised, is its numbers with the words and signs that go with a
+    // number (sus4, add9, \u266D5) and anything in brackets, which adds to it;
+    // stack is two raised one over the other (a 6 over a 9).
     const SYMBOL_KINDS = Object.freeze({
         "": () => ({}),
         "m": style => ({ q: minorOf(style) }),
-        "\u00B0": () => ({ sup: SIGN.dim }),
-        "+": () => ({ sup: SIGN.aug }),
+        "\u00B0": () => ({ q: SIGN.dim }),
+        "+": () => ({ q: SIGN.aug }),
         "sus2": () => ({ sup: "sus2" }),
         "sus4": () => ({ sup: "sus4" }),
         "5": () => ({ sup: "5" }),
         "7": () => ({ sup: "7" }),
-        "maj7": style => ({ sup: majorOf(style) + "7" }),
+        "maj7": style => ({ q: majorOf(style), sup: "7" }),
         "m7": style => ({ q: minorOf(style), sup: "7" }),
-        "m7\u266D5": style => style === "signs" ? { sup: SIGN.half + "7" } : { q: "m", sup: "7\u266D5" },
-        "\u00B07": () => ({ sup: SIGN.dim + "7" }),
-        "m(maj7)": style => style === "signs" ? { q: SIGN.minor, sup: SIGN.major + "7" } : { q: "m", sup: "(maj7)" },
-        "+maj7": style => ({ sup: SIGN.aug + majorOf(style) + "7" }),
+        "m7\u266D5": style => style === "signs" ? { q: SIGN.half, sup: "7" } : { q: "m", sup: "7\u266D5" },
+        "\u00B07": () => ({ q: SIGN.dim, sup: "7" }),
+        "m(maj7)": style => style === "signs" ? { q: SIGN.minor + SIGN.major, sup: "7" } : { q: "m", sup: "(maj7)" },
+        "+maj7": style => ({ q: SIGN.aug + majorOf(style), sup: "7" }),
         "7sus4": () => ({ sup: "7sus4" }),
         "6": () => ({ sup: "6" }),
         "m6": style => ({ q: minorOf(style), sup: "6" }),
@@ -541,15 +592,15 @@ globalThis.MaestroMusic = (() => {
         "6/9": () => ({ stack: ["6", "9"] }),
         "m6/9": style => ({ q: minorOf(style), stack: ["6", "9"] }),
         "9": () => ({ sup: "9" }),
-        "maj9": style => ({ sup: majorOf(style) + "9" }),
+        "maj9": style => ({ q: majorOf(style), sup: "9" }),
         "m9": style => ({ q: minorOf(style), sup: "9" }),
-        "m(maj9)": style => style === "signs" ? { q: SIGN.minor, sup: SIGN.major + "9" } : { q: "m", sup: "(maj9)" },
+        "m(maj9)": style => style === "signs" ? { q: SIGN.minor + SIGN.major, sup: "9" } : { q: "m", sup: "(maj9)" },
         "9sus4": () => ({ sup: "9sus4" }),
         "11": () => ({ sup: "11" }),
         "m11": style => ({ q: minorOf(style), sup: "11" }),
-        "maj7\u266F11": style => ({ sup: majorOf(style) + "7\u266F11" }),
+        "maj7\u266F11": style => ({ q: majorOf(style), sup: "7\u266F11" }),
         "13": () => ({ sup: "13" }),
-        "maj13": style => ({ sup: majorOf(style) + "13" }),
+        "maj13": style => ({ q: majorOf(style), sup: "13" }),
         "m13": style => ({ q: minorOf(style), sup: "13" })
     });
 
@@ -566,15 +617,19 @@ globalThis.MaestroMusic = (() => {
             if (altered) kind = altered[2] ? { sup: altered[1] + altered[2] } : { sup: altered[1], alterations: altered[3].split(",") };
         }
         // Any other name built of a quality and numbers (a key's rarer chords:
-        // m\u266F5, sus4\u266D5, \u00B0(maj7)) is written with the rest raised.
+        // m\u266F5, sus4\u266D5, \u00B0(maj7)) follows the same rule.
         if (!kind) {
             const general = /^(m(?!aj)|\u00B0|\+)?((?:maj|sus|add|[0-9\u266D\u266F\u{1D12A}\u{1D12B}(),])+)$/u.exec(suffix);
             if (!general) return null;
             const [, quality = "", rest] = general;
-            kind = {
-                q: quality === "m" ? minorOf(style) : "",
-                sup: (quality === "\u00B0" ? SIGN.dim : quality === "+" ? SIGN.aug : "") + (style === "signs" ? rest.replace("maj", SIGN.major) : rest)
-            };
+            let q = quality === "m" ? minorOf(style) : quality === "\u00B0" ? SIGN.dim : quality === "+" ? SIGN.aug : "";
+            let raised = rest;
+            // A major seventh is a quality; in brackets it's an addition, raised.
+            if (raised.startsWith("maj")) {
+                q += majorOf(style);
+                raised = raised.slice(3);
+            }
+            kind = { q, sup: style === "signs" ? raised.replace("maj", SIGN.major) : raised };
         }
         return { letter, accidental, q: "", sup: "", stack: null, alterations: null, ...kind, bass };
     }
@@ -647,26 +702,48 @@ globalThis.MaestroMusic = (() => {
     // to 96) and its shape a fret (0 to 24) or null (not played) per string,
     // at least one played; a keyboard chord's shape is 1 to 10 rising keys.
     // AHK checks the same on save and load.
+    // A chord symbol Maestro reads and writes (2.4.0); a saved chord's name is one, or none.
+    const isChordName = name => typeof name === "string" && name !== "" && cleanChordName(name) === name && chordSymbolParts(name) !== null;
+
+    // A saved chord's label (2.4.0): any words, without control or invisible
+    // characters or double quotes, up to 40 UTF-16 units (as AHK counts them).
+    const CHORD_LABEL_MAX = 40;
+    function cleanChordLabel(text) {
+        const tidy = String(text ?? "").replace(/[\u0000-\u001F\u007F"\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, "").replace(/\s+/g, " ").trim();
+        let label = "";
+        for (const character of tidy) {
+            if (label.length + character.length > CHORD_LABEL_MAX) break;
+            label += character;
+        }
+        return label.trim();
+    }
+
     function cleanSavedChord(raw) {
         if (!raw || typeof raw !== "object") return null;
-        const name = cleanChordName(raw.name);
-        if (!name || !Object.hasOwn(INSTRUMENTS, raw.instrument) || !Array.isArray(raw.tuning) || !Array.isArray(raw.shape)) return null;
+        let name = cleanChordName(raw.name);
+        let label = cleanChordLabel(raw.label);
+        // Before 2.4.0 a name could be any words: one that isn't a chord symbol becomes the label.
+        if (name && !isChordName(name)) {
+            if (!label) label = cleanChordLabel(name);
+            name = "";
+        }
+        if ((!name && !label) || !Object.hasOwn(INSTRUMENTS, raw.instrument) || !Array.isArray(raw.tuning) || !Array.isArray(raw.shape)) return null;
         if (raw.instrument === "keyboard") {
             const keys = raw.shape;
             if (raw.tuning.length || keys.length < 1 || keys.length > 10) return null;
             if (!keys.every((key, index) => Number.isInteger(key) && key >= KEY_LOW && key <= KEY_HIGH && (index === 0 || key > keys[index - 1]))) return null;
-            return { name, instrument: "keyboard", tuning: [], shape: [...keys] };
+            return { name, label, instrument: "keyboard", tuning: [], shape: [...keys] };
         }
         const { tuning, shape } = raw;
         if (tuning.length < 4 || tuning.length > 7 || shape.length !== tuning.length) return null;
         if (!tuning.every(pitch => Number.isInteger(pitch) && pitch >= 16 && pitch <= 96)) return null;
         if (!shape.every(fret => fret === null || (Number.isInteger(fret) && fret >= 0 && fret <= FRET_MAX))) return null;
         if (!shape.some(fret => fret !== null)) return null;
-        return { name, instrument: raw.instrument, tuning: [...tuning], shape: [...shape] };
+        return { name, label, instrument: raw.instrument, tuning: [...tuning], shape: [...shape] };
     }
 
-    // The line AHK reads for one chord: name, instrument, tuning, shape.
-    const savedChordLine = chord => [chord.name, chord.instrument, chord.tuning.join(" "), chord.shape.map(fret => fret === null ? "x" : fret).join(" ")].join("\t");
+    // The line AHK reads for one chord: name, instrument, tuning, shape, label (2.4.0).
+    const savedChordLine = chord => [chord.name, chord.instrument, chord.tuning.join(" "), chord.shape.map(fret => fret === null ? "x" : fret).join(" "), chord.label ?? ""].join("\t");
 
     // A chord's notes, low to high (each once).
     function savedChordNotes(chord) {
@@ -695,7 +772,7 @@ globalThis.MaestroMusic = (() => {
     }
 
     const DEFAULTS = Object.freeze({
-        instrument: "guitar", tunings: {}, own: [], root: "G", scale: "major", labels: "names", degreeStyle: "flat", show: "scale", sevenths: false, capo: 0, lefty: false, position: -1, quizKind: "note", quizNaturals: false, quizDirection: "up", chordStyle: "letters", tab: "scales", tone: "pluck", a4: 440
+        instrument: "guitar", tunings: {}, own: [], root: "G", scale: "major", labels: "names", degreeStyle: "flat", show: "scale", sevenths: false, capo: 0, lefty: false, position: -1, quizKind: "note", quizNaturals: false, quizDirection: "up", quizChords: "triads", chordStyle: "letters", tab: "scales", tone: "pluck", a4: 440
     });
 
     function tuningsFor(instrument, own) {
@@ -730,6 +807,7 @@ globalThis.MaestroMusic = (() => {
         if (QUIZ_KINDS.includes(stored.quizKind)) settings.quizKind = stored.quizKind;
         if (typeof stored.quizNaturals === "boolean") settings.quizNaturals = stored.quizNaturals;
         if (QUIZ_DIRECTIONS.includes(stored.quizDirection)) settings.quizDirection = stored.quizDirection;
+        if (QUIZ_CHORD_SETS.includes(stored.quizChords)) settings.quizChords = stored.quizChords;
         if (Object.hasOwn(CHORD_STYLES, stored.chordStyle)) settings.chordStyle = stored.chordStyle;
         if (stored.tone === "pluck" || stored.tone === "steady") settings.tone = stored.tone;
         if (Number.isInteger(stored.a4) && stored.a4 >= 415 && stored.a4 <= 466) settings.a4 = stored.a4;
@@ -743,8 +821,8 @@ globalThis.MaestroMusic = (() => {
     }
 
     return {
-        ROOTS, SCALES, FAMILIES, SHOWS, LABELS, DEGREE_STYLES, INSTRUMENTS, STRINGED, LOWEST, HIGHEST, OWN_MAX, CAPO_MAX, POSITION_SPAN, TABS, PLAIN_NAMES, CHORD_KINDS, QUIZ_INTERVALS, QUIZ_KINDS, QUIZ_DIRECTIONS, DEFAULTS, CHORD_STYLES, STAFF_BOTTOM, CHORDS_MAX, KEY_LOW, KEY_HIGH, FRET_MAX,
-        parseName, pitchClass, spell, degreeLabel, intervalLabel, scaleNotes, triadName, seventhName, chordsInKey, capoShape, findChords, alteredDominant, findScales, positionsFor, quizNote, quizInterval, everyNote, pitchName, spelledPitch, frequency, tuningNotes,
+        ROOTS, SCALES, FAMILIES, SHOWS, LABELS, DEGREE_STYLES, INSTRUMENTS, STRINGED, LOWEST, HIGHEST, OWN_MAX, CAPO_MAX, POSITION_SPAN, TABS, PLAIN_NAMES, CHORD_KINDS, QUIZ_INTERVALS, QUIZ_KINDS, QUIZ_DIRECTIONS, QUIZ_QUALITIES, QUIZ_CHORD_SETS, QUIZ_PROGRESSIONS, QUIZ_KEYS, DEFAULTS, CHORD_STYLES, STAFF_BOTTOM, CHORDS_MAX, KEY_LOW, KEY_HIGH, FRET_MAX, CHORD_LABEL_MAX, isChordName, cleanChordLabel,
+        parseName, pitchClass, spell, degreeLabel, intervalLabel, scaleNotes, triadName, seventhName, chordsInKey, capoShape, findChords, alteredDominant, findScales, positionsFor, quizNote, quizInterval, quizQuality, quizProgression, everyNote, pitchName, spelledPitch, frequency, tuningNotes,
         pluckPeriod, pluckSamples, cleanName, cleanOwnTuning, tuningsFor, parseSettings, currentTuning,
         chordSymbolParts, cleanChordName, staffStep, staffChord, cleanSavedChord, savedChordLine, savedChordNotes, shapeStart
     };

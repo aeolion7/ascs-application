@@ -174,6 +174,22 @@
     check("settings: the quiz's choices are kept", quizKept.quizKind === "interval" && quizKept.quizNaturals === true && quizKept.quizDirection === "down" && quizKept.tab === "quiz");
     const quizBad = M.parseSettings(JSON.stringify({ quizKind: "chords", quizNaturals: "no", quizDirection: "sideways" }));
     check("settings: and refused when wrong", quizBad.quizKind === "note" && quizBad.quizNaturals === false && quizBad.quizDirection === "up");
+    // 2.4.0: chords and progressions by ear.
+    equal("quiz: a chord to hear", JSON.stringify(M.quizQuality("triads", "", fixed(0, 0))), JSON.stringify({ id: "major", root: "C", name: "C", midis: [48, 52, 55] }));
+    equal("quiz: a chord's root from C3 to B3, spelled plainly", M.quizQuality("sevenths", "", fixed(0.2, 0.25)).name, "E♭7");
+    const sets = set => [...new Set(Array.from({ length: 60 }, (_, at) => M.quizQuality(set, "", fixed(at / 60, 0.5)).id))].sort().join();
+    equal("quiz: triads", sets("triads"), "augmented,diminished,major,minor,sus2,sus4");
+    equal("quiz: sevenths", sets("sevenths"), "dim7,dom7,m7,m7b5,mMaj7,maj7");
+    equal("quiz: both", sets("both").split(",").length, 12);
+    check("quiz: never the same quality twice running", M.QUIZ_QUALITIES.filter(quality => quality.set === "triads").every((quality, at) => M.quizQuality("triads", quality.id, fixed(at / 6, at / 6, 0)).id !== quality.id));
+    const unnamed = M.QUIZ_QUALITIES.filter(quality => M.findChords(quality.semis.map(semis => 48 + semis))[0]?.name !== `C${quality.suffix}`).map(quality => quality.id);
+    equal("quiz: each quality is the chord Maestro names from its notes", unnamed.join(), "");
+    equal("quiz: a progression to hear", JSON.stringify(M.quizProgression("triads", -1, fixed(0, 0))), JSON.stringify({ key: "C", size: 3, index: 0, degrees: [0, 3, 4, 0], chords: ["C", "F", "G", "C"], numerals: ["I", "ii", "iii", "IV", "V", "vi", "vii°"] }));
+    equal("quiz: in sevenths, in G", M.quizProgression("sevenths", -1, fixed(1 / 13 + 0.001, 1 / 8 + 0.001)).chords.join(" "), "Gmaj7 D7 Em7 Cmaj7");
+    check("quiz: every progression is four chords from I", M.QUIZ_PROGRESSIONS.every(degrees => degrees.length === 4 && degrees[0] === 0 && degrees.every(degree => degree >= 0 && degree < 7)));
+    check("quiz: never the same progression twice running", M.QUIZ_PROGRESSIONS.every((_, at) => M.quizProgression("triads", at, fixed(at / M.QUIZ_PROGRESSIONS.length + 0.001, 0)).index !== at));
+    const chordsKept = M.parseSettings(JSON.stringify({ quizKind: "progression", quizChords: "sevenths" }));
+    check("settings: the new quizzes and their chords are kept", chordsKept.quizKind === "progression" && chordsKept.quizChords === "sevenths" && M.parseSettings(JSON.stringify({ quizKind: "quality", quizChords: "ninths" })).quizChords === "triads");
     const practice = M.parseSettings(JSON.stringify({ sevenths: true, capo: 3, lefty: true }));
     check("settings: sevenths, the capo and the hand are kept", practice.sevenths === true && practice.capo === 3 && practice.lefty === true);
     const badPractice = M.parseSettings(JSON.stringify({ sevenths: "yes", capo: 12, lefty: 1 }));
@@ -261,19 +277,32 @@
     check("symbols: Cm7 in letters, m beside the root and 7 raised", cm7.letter === "C" && cm7.q === "m" && cm7.sup === "7" && !cm7.stack && !cm7.alterations);
     equal("symbols: Cm7 in signs, the minor sign", parts("Cm7", "signs").q, "\uE874");
     const half = parts(`Cm7${flat}5`, "signs");
-    check("symbols: Cm7\u266D5 in signs is half-diminished, with nothing beside the root", half.q === "" && half.sup === "\uE8717");
+    check("symbols: Cm7\u266D5 in signs is half-diminished, the sign level and 7 raised", half.q === "\uE871" && half.sup === "7");
     equal("symbols: Cm7\u266D5 in letters", parts(`Cm7${flat}5`, "letters").sup, `7${flat}5`);
-    equal("symbols: Cmaj7 in signs, the triangle", parts("Cmaj7", "signs").sup, "\uE8737");
-    equal("symbols: C\u00B07, the diminished sign", parts("C\u00B07", "letters").sup, "\uE8707");
+    check("symbols: Cmaj7 in letters, maj level as m is, 7 raised", parts("Cmaj7", "letters").q === "maj" && parts("Cmaj7", "letters").sup === "7");
+    check("symbols: Cmaj7 in signs, the triangle level", parts("Cmaj7", "signs").q === "\uE873" && parts("Cmaj7", "signs").sup === "7");
+    check("symbols: C\u00B07, the diminished sign level", parts("C\u00B07", "letters").q === "\uE870" && parts("C\u00B07", "letters").sup === "7");
+    check("symbols: C+maj7, both qualities level", parts("C+maj7", "letters").q === "\uE872maj" && parts("C+maj7", "letters").sup === "7");
+    check("symbols: Cm(maj7), the bracket an addition and raised; in signs both signs level", parts("Cm(maj7)", "letters").sup === "(maj7)" && parts("Cm(maj7)", "signs").q === "\uE874\uE873");
+    check("symbols: sus4 and add9 go with their numbers, raised", parts("Csus4").sup === "sus4" && parts("C7sus4").sup === "7sus4" && parts("Cadd9").sup === "add9" && !parts("Csus4").q);
+    // The rule, for every kind in both styles: nothing raised outside brackets
+    // is a quality, and nothing level is a number.
+    const misplaced = [];
+    for (const [suffix] of M.CHORD_KINDS) for (const style of ["letters", "signs"]) {
+        const each = parts(`C${suffix}`, style);
+        const open = (each.sup || "").replace(/\([^)]*\)/g, "");
+        if (/^m|maj|\u00B0|\+|[\uE870-\uE874]/.test(open) || /[0-9]/.test(each.q)) misplaced.push(`${suffix} (${style})`);
+    }
+    equal("symbols: one rule, qualities level and numbers raised, for every kind", misplaced.join(", "), "");
     equal("symbols: 6/9 is a 6 over a 9", JSON.stringify(parts("C6/9").stack), JSON.stringify(["6", "9"]));
     const altered = parts(`G7(${sharp}5,${flat}9)`);
     check("symbols: two alterations, listed lowest first", altered.sup === "7" && altered.alterations.join() === `${sharp}5,${flat}9`);
     check("symbols: one alteration is raised with the 7", parts(`G7${flat}9`).sup === `7${flat}9` && !parts(`G7${flat}9`).alterations);
     const slash = parts(`B${flat}maj7/D`);
-    check("symbols: an accidental on the root, and a bass after a slash", slash.letter === "B" && slash.accidental === flat && slash.sup === "maj7" && slash.bass === "D");
+    check("symbols: an accidental on the root, and a bass after a slash", slash.letter === "B" && slash.accidental === flat && slash.q === "maj" && slash.sup === "7" && slash.bass === "D");
     const rare = parts(`Cm${sharp}5`, "signs");
     check("symbols: a rarer chord, m\u266F5, keeps its quality and raises the rest", rare.q === "\uE874" && rare.sup === `${sharp}5`);
-    equal("symbols: \u00B0(maj7) in signs", parts("C\u00B0(maj7)", "signs").sup, "\uE870(\uE8737)");
+    check("symbols: \u00B0(maj7) in signs, the sign level and the bracket raised", parts("C\u00B0(maj7)", "signs").q === "\uE870" && parts("C\u00B0(maj7)", "signs").sup === "(\uE8737)");
     equal("symbols: a bass with an accidental", parts(`C/B${flat}`).bass, `B${flat}`);
     // Every altered dominant the Finder can name is written.
     const notWritten = [];
@@ -322,7 +351,17 @@
     const guitar = [40, 45, 50, 55, 59, 64];
     const good = M.cleanSavedChord({ name: " G7(#5,b9) ", instrument: "guitar", tuning: guitar, shape: [3, null, 3, 4, 4, 4] });
     check("saved: a guitar chord, its name tidied", good?.name === `G7(${sharp}5,${flat}9)` && good.shape[1] === null);
-    equal("saved: its line for AHK", M.savedChordLine(good), `G7(${sharp}5,${flat}9)\u0009guitar\u000940 45 50 55 59 64\u00093 x 3 4 4 4`);
+    equal("saved: its line for AHK, the label last", M.savedChordLine(good), `G7(${sharp}5,${flat}9)\u0009guitar\u000940 45 50 55 59 64\u00093 x 3 4 4 4\u0009`);
+    const labeled = M.cleanSavedChord({ name: "E7#9", label: ' Hendrix "chord"\u0007 ', instrument: "guitar", tuning: guitar, shape: [0, 7, 6, 7, 8, null] });
+    check("saved: a name and a label, both tidied", labeled?.name === `E7${sharp}9` && labeled.label === "Hendrix chord");
+    const old = M.cleanSavedChord({ name: "G7 alt", instrument: "guitar", tuning: guitar, shape: [3, null, 3, 4, 4, 4] });
+    check("saved: a name from before 2.4.0 that isn't a symbol becomes the label", old?.name === "" && old.label === "G7 alt");
+    check("saved: and with a label already, it's dropped", M.cleanSavedChord({ name: "G7 alt", label: "Mine", instrument: "guitar", tuning: guitar, shape: [3, null, 3, 4, 4, 4] })?.label === "Mine");
+    check("saved: a label alone is enough", M.cleanSavedChord({ name: "", label: "Drone", instrument: "keyboard", tuning: [], shape: [48] })?.label === "Drone");
+    equal("labels: at most 40 units, a pair never split", M.cleanChordLabel(`${"a".repeat(39)}\u{1F3B8}`), "a".repeat(39));
+    equal("labels: invisible characters dropped", M.cleanChordLabel("a\u200Bb\u202Ec"), "abc");
+    check("names: chord symbols are names", M.isChordName(`E7${sharp}9`) && M.isChordName("C/E") && M.isChordName(`B${flat}maj7`) && M.isChordName("C6/9"));
+    check("names: words aren't", !M.isChordName("Hendrix") && !M.isChordName("G7 alt") && !M.isChordName("E7#9") && !M.isChordName(""));
     equal("saved: its notes, low to high", M.savedChordNotes(good).join(), "43,53,59,63,68");
     check("saved: a keyboard chord", M.cleanSavedChord({ name: "C", instrument: "keyboard", tuning: [], shape: [48, 52, 55] })?.shape.join() === "48,52,55");
     const bad = [

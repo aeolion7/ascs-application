@@ -7,6 +7,7 @@
 const CONS_KEY = "maestro.conservatory";
 const CONS_PLUCK_CACHE = 64;
 const CONS_VOICES = 24;         // notes sounding at once; the oldest is damped past this
+const CONS_SHORT_FROM = 1800;   // px wide a neck must be to be drawn short (2.4.0)
 
 const cons = {
     settings: MaestroMusic.parseSettings((() => { try { return localStorage.getItem(CONS_KEY); } catch { return null; } })()),
@@ -27,11 +28,15 @@ function saveConsSettings() {
 }
 
 const consKeyboard = () => cons.settings.instrument === "keyboard";
+// A chord is strummed on strings, its notes a moment apart, and played on a
+// keyboard, its notes together (2.4.0).
+const consChordSpread = (strummed = 0.05) => consKeyboard() ? 0 : strummed;
+const consChordVerb = () => consKeyboard() ? "Play" : "Strum";
 
 // What another section shows on the neck, by its name (practiceview.js adds
-// Finder and Quiz, chordsview.js Chords): { mark(midi, string, fret), key(midi),
-// nameOf(midi), click(midi, { string, fret }), render(), lit() }, or draw() for
-// a section that draws the neck module itself.
+// Finder and Quiz, chordsview.js Chords, progressionview.js Progressions):
+// { mark(midi, string, fret), key(midi), nameOf(midi), click(midi, { string, fret }),
+// render(), lit(), short }, or draw() for a section that draws the neck module itself.
 const consNeckModes = {};
 
 // The position shown, as [first fret, last fret], or null for the whole neck.
@@ -102,9 +107,27 @@ function dampConsVoice(voice) {
     voice.source.stop(now + 0.08);
 }
 
+// One plucked note, started at `when` into `destination`; it lets go of its
+// nodes when it ends. The loop of Progressions books its chords with it too.
+function startConsVoice(context, midi, when, destination) {
+    const source = context.createBufferSource();
+    source.buffer = pluckBuffer(context, midi);
+    source.playbackRate.value = MaestroMusic.pluckPeriod(MaestroMusic.frequency(midi, cons.settings.a4), context.sampleRate).playbackRate;
+    const gain = context.createGain();
+    source.connect(gain).connect(destination);
+    source.addEventListener("ended", () => {
+        source.disconnect();
+        gain.disconnect();
+    });
+    source.start(when);
+    return { source, gain };
+}
+
 // Plucks notes together, each `spread` seconds after the last. The audio
 // thread is woken once, before any is booked.
-async function pluckConsNotes(midis, spread = 0) {
+// `spread` may instead list each note's start in seconds, and `ends` when each
+// is damped (2.4.0: a progression's chords, each stopping as the next sounds).
+async function pluckConsNotes(midis, spread = 0, ends = null) {
     cons.starting += 1;
     let context;
     try {
@@ -120,20 +143,16 @@ async function pluckConsNotes(midis, spread = 0) {
             dampConsVoice(oldest);
             cons.voices.delete(oldest);
         }
-        const source = context.createBufferSource();
-        source.buffer = pluckBuffer(context, midi);
-        source.playbackRate.value = MaestroMusic.pluckPeriod(MaestroMusic.frequency(midi, cons.settings.a4), context.sampleRate).playbackRate;
-        const gain = context.createGain();
-        source.connect(gain).connect(consToneOutput(context));
-        const voice = { source, gain };
+        const voice = startConsVoice(context, midi, now + (Array.isArray(spread) ? spread[at] : at * spread), consToneOutput(context));
+        if (ends?.[at] !== undefined && ends[at] !== null) {
+            voice.gain.gain.setTargetAtTime(0, now + ends[at], 0.04);
+            voice.source.stop(now + ends[at] + 0.3);
+        }
         cons.voices.add(voice);
-        source.addEventListener("ended", () => {
+        voice.source.addEventListener("ended", () => {
             cons.voices.delete(voice);
-            source.disconnect();
-            gain.disconnect();
             restConsAudio();
         });
-        source.start(now + at * spread);
         return voice;
     });
 }
@@ -373,10 +392,12 @@ function chordSymbol(name, size = "small", style = cons.settings.chordStyle) {
     return box;
 }
 
-function drawConsNeck(tuning, frets, mark, nameOf, { capo = 0, lefty = false, lit = null } = {}) {
+// Short (Progressions, 2.4.0) draws it wider for its height, so it stands
+// about two-thirds as tall across the same width.
+function drawConsNeck(tuning, frets, mark, nameOf, { capo = 0, lefty = false, lit = null, short = false } = {}) {
     const strings = tuning.pitches.length;
-    const width = 2000, left = 76, right = 26, top = 30;
-    const gap = strings >= 6 ? 46 : strings === 5 ? 50 : 56;
+    const width = short ? 2700 : 2000, left = 76, right = 26, top = 30;
+    const gap = Math.round((strings >= 6 ? 46 : strings === 5 ? 50 : 56) * (short ? 0.87 : 1));
     const bottom = top + gap * (strings - 1);
     const height = bottom + top + 36;
     const span = width - left - right;
@@ -498,7 +519,9 @@ function renderConsNeck() {
             : null;
         const position = consPosition();
         const scales = (midi, index, fret) => !position || (fret >= position[0] && fret <= position[1]) ? marked.get(midi % 12) : null;
-        if (mode) drawing = drawConsNeck(tuning, frets, mode.mark, mode.nameOf, { lefty: cons.settings.lefty, lit: mode.lit?.() ?? null });
+        // Shorter only where it's wide enough that its labels stay readable.
+        const short = Boolean(mode?.short) && $("consNeck").clientWidth >= CONS_SHORT_FROM;
+        if (mode) drawing = drawConsNeck(tuning, frets, mode.mark, mode.nameOf, { lefty: cons.settings.lefty, lit: mode.lit?.() ?? null, short });
         else if (tuningShown) drawing = drawConsNeck(tuning, frets, open, tuningNames, { lefty: cons.settings.lefty });
         else drawing = drawConsNeck(tuning, frets, scales, keyNames, { capo: cons.settings.capo, lefty: cons.settings.lefty, lit: position });
     }
@@ -512,8 +535,9 @@ function renderConsToolbar() {
     const select = $("consTuning");
     $("consTuningField").hidden = consKeyboard();
     $("consNeckOptions").hidden = consKeyboard();
-    // Chords are built at their real frets, so the capo isn't offered there.
-    $("consCapo").closest("label").hidden = consSections.current() === "chords";
+    // Chords are built at their real frets, and Progressions marks a chord's
+    // notes everywhere, so the capo isn't offered there.
+    $("consCapo").closest("label").hidden = ["chords", "progressions"].includes(consSections.current());
     $("consCapo").value = String(cons.settings.capo);
     $("consLefty").setAttribute("aria-pressed", String(cons.settings.lefty));
     if (consKeyboard()) return;

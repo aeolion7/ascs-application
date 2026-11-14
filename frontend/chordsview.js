@@ -9,6 +9,7 @@ const chords = {
     keys: [],           // a keyboard chord: its keys
     start: 1,           // the first of the five frets shown
     typed: "",          // a name typed, kept over the one found
+    label: "",          // any words for it besides its name (2.4.0)
     editing: -1,        // the saved chord open, by its place in the library
     fitted: "",         // the instrument and tuning the chord is for
     library: null,      // the saved chords, once AHK has sent them
@@ -35,8 +36,10 @@ function clearChord() {
     chords.keys = [];
     chords.start = 1;
     chords.typed = "";
+    chords.label = "";
     chords.editing = -1;
     $("consChordName").value = "";
+    $("consChordLabel").value = "";
 }
 
 // The chord's notes, low to high, each once.
@@ -52,8 +55,14 @@ function chordReadings() {
     return MaestroMusic.findChords(pitches);
 }
 
-// The name shown: the one typed, or the first reading.
-const chordName = () => chords.typed || chordReadings()[0]?.name || "";
+// A name typed that isn't a chord symbol (2.4.0): words go in the label.
+const chordTypedWrong = () => Boolean(chords.typed) && !MaestroMusic.isChordName(chords.typed);
+
+// The name shown: the one typed, if it's a chord symbol, or the first reading.
+const chordName = () => (chordTypedWrong() ? "" : chords.typed) || chordReadings()[0]?.name || "";
+
+// What a saved chord is called: its name, or its label.
+const savedTitle = chord => chord.name || chord.label;
 
 // Each note's name as the chord spells it: the reading named, or the first.
 function chordSpelling() {
@@ -297,7 +306,9 @@ function drawChordEditor() {
     const card = element("div", "cons-chord-card");
     const name = chordName();
     if (name) card.append(chordSymbol(name, "big"));
+    else if (chords.label && notes.length) card.append(element("p", "cons-chord-words", chords.label));
     else card.append(element("p", "cons-chord-empty", notes.length ? "No chord has these notes." : "Pick notes to build a chord."));
+    if (name && chords.label) card.append(element("p", "cons-chord-card-label", chords.label));
     card.append(drawChordStaff(notes, spelling.nameOf));
     editor.append(side, card);
     return editor;
@@ -317,12 +328,14 @@ function renderChordPanel() {
     const name = chordName();
     const input = $("consChordName");
     if (document.activeElement !== input) input.value = chords.typed;
+    if (document.activeElement !== $("consChordLabel")) $("consChordLabel").value = chords.label;
     input.placeholder = readings[0]?.name ?? "Name";
     $("consChordSave").textContent = chords.editing >= 0 ? "Save changes" : "Save chord";
-    $("consChordSave").disabled = !notes.length || !name || chords.library === null;
+    $("consChordSave").disabled = !notes.length || (!name && !chords.label) || chordTypedWrong() || chords.library === null;
     $("consChordSaveNew").hidden = chords.editing < 0;
     $("consChordSaveNew").disabled = $("consChordSave").disabled;
     $("consChordStrum").disabled = $("consChordClear").disabled = !notes.length && chords.editing < 0;
+    $("consChordStrum").textContent = consChordVerb();
     document.querySelectorAll("#consChordStyle [data-chord-style]").forEach(button => {
         button.setAttribute("aria-pressed", String(button.dataset.chordStyle === cons.settings.chordStyle));
         button.replaceChildren(chordSymbol("Cmaj7", "list", button.dataset.chordStyle));
@@ -355,15 +368,22 @@ function renderChordPanel() {
     }));
     $("consChordNote").textContent = !notes.length
         ? (consKeyboard() ? "Click keys to build a chord, and again to drop one." : "Click a fret on each string you'd play. Click the nut for an open string, and a note again to leave its string out.")
+        : chordTypedWrong() ? `"${chords.typed}" isn't a chord symbol. Name it as one, like E7#9 or C/E, and put other words in the label.`
         : chords.typed ? "Your name is kept. Clear it to use the one found."
         : readings.length ? "Named from its notes. Type a name, or pick a reading."
-        : "No chord Maestro knows has these notes. Name it to save it.";
+        : chords.label ? "No chord Maestro knows has these notes; it's saved by its label."
+        : "No chord Maestro knows has these notes. Name it, or give it a label, to save it.";
+    $("consChordNote").classList.toggle("is-problem", chordTypedWrong());
     renderChordLibrary();
 }
 
+// A saved chord's root: its name's, or with no name its lowest note (2.4.0;
+// a name was any words before, so "Dreamy" was filed under D).
 const savedRoot = chord => {
     const match = /^([A-G](?:\u266D|\u266F)?)/.exec(chord.name);
-    return match ? MaestroMusic.pitchClass(match[1]) : -1;
+    if (match) return MaestroMusic.pitchClass(match[1]);
+    const low = MaestroMusic.savedChordNotes(chord)[0];
+    return low === undefined ? -1 : ((low % 12) + 12) % 12;
 };
 
 function renderChordLibrary() {
@@ -376,17 +396,19 @@ function renderChordLibrary() {
     const instrument = cons.settings.instrument;
     const mine = chords.library.map((chord, index) => ({ chord, index })).filter(({ chord }) => chord.instrument === instrument);
     const query = MaestroMusic.cleanChordName(chords.search).toLowerCase();
-    const shown = mine.filter(({ chord }) => (!query || chord.name.toLowerCase().includes(query)) && (chords.root < 0 || savedRoot(chord) === chords.root));
+    const words = chords.search.trim().toLowerCase();
+    const shown = mine.filter(({ chord }) => (!words || chord.name.toLowerCase().includes(query) || chord.label.toLowerCase().includes(words)) && (chords.root < 0 || savedRoot(chord) === chords.root));
     const label = MaestroMusic.INSTRUMENTS[instrument].label.toLowerCase();
     list.replaceChildren(...shown.map(({ chord, index }) => {
         const item = element("li", `cons-saved-card${index === chords.editing ? " is-open" : ""}`);
         const open = element("button", "cons-saved-open");
         open.type = "button";
         open.dataset.savedOpen = String(index);
-        open.title = `Open ${chord.name}, and hear it`;
-        // The symbol (and a tuning other than the one chosen) beside the shape.
-        const label = element("span", "cons-saved-label");
-        label.append(chordSymbol(chord.name, "small"));
+        open.title = `Open ${savedTitle(chord)}, and hear it`;
+        // The symbol and label (and a tuning other than the one chosen) beside the shape.
+        const label = element("span", `cons-saved-label${chord.name ? "" : " is-words"}`);
+        if (chord.name) label.append(chordSymbol(chord.name, "small"));
+        if (chord.label) label.append(element("span", "cons-saved-words", chord.label));
         open.append(label);
         if (instrument === "keyboard") {
             open.append(element("span", "cons-saved-keys", MaestroMusic.savedChordNotes(chord).map(midi => MaestroMusic.PLAIN_NAMES[midi % 12]).join(" ")));
@@ -398,8 +420,8 @@ function renderChordLibrary() {
         const remove = element("button", "quiet cons-saved-delete");
         remove.type = "button";
         remove.dataset.savedDelete = String(index);
-        remove.setAttribute("aria-label", `Delete ${chord.name}`);
-        remove.title = `Delete ${chord.name}`;
+        remove.setAttribute("aria-label", `Delete ${savedTitle(chord)}`);
+        remove.title = `Delete ${savedTitle(chord)}`;
         remove.append(MaestroIcons.create("close"));
         item.append(open, remove);
         return item;
@@ -496,9 +518,11 @@ function saveChordList(list) {
 function saveChord(asNew) {
     const notes = chordNotes();
     const name = MaestroMusic.cleanChordName(chordName());
-    if (!notes.length || !name || chords.library === null) return;
+    const label = MaestroMusic.cleanChordLabel(chords.label);
+    if (!notes.length || (!name && !label) || chordTypedWrong() || chords.library === null) return;
     const chord = MaestroMusic.cleanSavedChord({
         name,
+        label,
         instrument: cons.settings.instrument,
         tuning: consKeyboard() ? [] : [...chordTuning().pitches],
         shape: consKeyboard() ? notes : [...chords.shape]
@@ -515,7 +539,7 @@ function saveChord(asNew) {
         chords.editing = list.length - 1;
     }
     saveChordList(list);
-    showToast(`Saved ${chord.name}.`);
+    showToast(`Saved ${savedTitle(chord)}.`);
     renderChords();
 }
 
@@ -526,7 +550,7 @@ function openSavedChord(index) {
         const tuning = MaestroMusic.tuningsFor(chord.instrument, cons.settings.own).find(each => each.pitches.join(" ") === chord.tuning.join(" "));
         if (tuning && tuning.id !== chordTuning().id) chooseConsTuning(tuning.id);
         else if (!tuning && chord.tuning.length !== chordTuning().pitches.length) {
-            showToast(`${chord.name} was saved in a tuning that's since been deleted.`);
+            showToast(`${savedTitle(chord)} was saved in a tuning that's since been deleted.`);
             return;
         }
     }
@@ -538,7 +562,9 @@ function openSavedChord(index) {
     }
     chords.editing = index;
     chords.typed = chord.name;
+    chords.label = chord.label;
     $("consChordName").value = chord.name;
+    $("consChordLabel").value = chord.label;
     renderChords();
     pluckConsNotes(chordNotes(), 0.05);
 }
@@ -551,7 +577,7 @@ function deleteSavedChord(index) {
     else if (chords.editing > index) chords.editing -= 1;
     saveChordList(list);
     renderChordPanel();
-    showToast(`Deleted ${gone.name}.`, { label: "Undo", run: () => {
+    showToast(`Deleted ${savedTitle(gone)}.`, { label: "Undo", run: () => {
         if (!chords.library || chords.library.length >= MaestroMusic.CHORDS_MAX) return;
         const back = [...chords.library];
         back.splice(Math.min(index, back.length), 0, gone);
@@ -561,9 +587,11 @@ function deleteSavedChord(index) {
     } });
 }
 
-// The library, as AHK sent it.
+// The library, as AHK sent it. A chord with no name (one whose old name was
+// words, now its label) is named from its notes, kept at the next save.
 function receiveChords(items) {
-    chords.library = (Array.isArray(items) ? items : []).map(MaestroMusic.cleanSavedChord).filter(Boolean).slice(0, MaestroMusic.CHORDS_MAX);
+    chords.library = (Array.isArray(items) ? items : []).map(MaestroMusic.cleanSavedChord).filter(Boolean).slice(0, MaestroMusic.CHORDS_MAX)
+        .map(chord => chord.name ? chord : { ...chord, name: MaestroMusic.findChords([...new Set(MaestroMusic.savedChordNotes(chord).map(midi => midi % 12))])[0]?.name ?? "" });
     if (chords.editing >= chords.library.length) chords.editing = -1;
     if (consSections.current() === "chords") renderChordPanel();
 }
@@ -578,9 +606,16 @@ $("consChordName").addEventListener("change", () => useChordName($("consChordNam
 $("consChordName").addEventListener("keydown", event => {
     if (event.key === "Enter" && !$("consChordSave").disabled) saveChord(false);
 });
+$("consChordLabel").addEventListener("input", () => {
+    chords.label = $("consChordLabel").value;
+    renderChords();
+});
+$("consChordLabel").addEventListener("keydown", event => {
+    if (event.key === "Enter" && !$("consChordSave").disabled) saveChord(false);
+});
 $("consChordSave").addEventListener("click", () => saveChord(false));
 $("consChordSaveNew").addEventListener("click", () => saveChord(true));
-$("consChordStrum").addEventListener("click", () => pluckConsNotes(chordNotes(), 0.05));
+$("consChordStrum").addEventListener("click", () => pluckConsNotes(chordNotes(), consChordSpread()));
 $("consChordClear").addEventListener("click", () => {
     clearChord();
     renderChords();

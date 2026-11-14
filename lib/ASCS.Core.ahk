@@ -212,16 +212,24 @@ ParseQuickActionsPayload(content, maxActions := 6) {
 ; Chord library (2.3.0)
 ; ------------------------------------------
 
-; A saved chord: a name of 1 to 32 characters (no control characters or double
-; quotes), an instrument, and its notes. A stringed instrument's chord has its
-; tuning, 4 to 7 open strings as MIDI numbers from 16 to 96, and for each string
-; a fret from 0 to 24 or "x" (not played), at least one played. A keyboard chord
-; has no tuning, and 1 to 10 keys from 21 to 108, low to high. Returns a Map of
-; the fields, numbers written plainly.
-ValidateChord(name, instrument, tuning, shape) {
+; A saved chord: a name, a label, an instrument, and its notes. The name
+; (2.4.0) is a chord symbol: up to 32 characters, a letter A to G first, with
+; no spaces, control characters or double quotes (the page checks it's one it
+; reads). The label is any words, up to 40 characters, without control
+; characters or double quotes. A chord has a name, a label or both. A stringed
+; instrument's chord has its tuning, 4 to 7 open strings as MIDI numbers from
+; 16 to 96, and for each string a fret from 0 to 24 or "x" (not played), at
+; least one played. A keyboard chord has no tuning, and 1 to 10 keys from 21 to
+; 108, low to high. Returns a Map of the fields, numbers written plainly.
+ValidateChord(name, instrument, tuning, shape, label := "") {
     name := Trim(name)
-    if (name = "" || StrLen(name) > 32 || RegExMatch(name, '[\x00-\x1F\x7F"]'))
-        throw Error("A chord's name must be 1 to 32 characters.")
+    label := Trim(label)
+    if !IsChordSymbolName(name)
+        throw Error("A chord's name must be a chord symbol of up to 32 characters, such as E7♯9.")
+    if (StrLen(label) > 40 || RegExMatch(label, '[\x00-\x1F\x7F"]'))
+        throw Error("A chord's label must be up to 40 characters.")
+    if (name = "" && label = "")
+        throw Error("A chord needs a name or a label.")
     if !RegExMatch(instrument, "^(guitar|bass|mandolin|ukulele|keyboard)$")
         throw Error("A chord's instrument isn't one Maestro knows.")
     tuning := Trim(tuning)
@@ -238,7 +246,7 @@ ValidateChord(name, instrument, tuning, shape) {
                 throw Error("A keyboard chord's keys must rise, from 21 to 108.")
             keys.Push(key)
         }
-        return Map("name", name, "instrument", instrument, "tuning", "", "shape", JoinArray(keys, " "))
+        return Map("name", name, "label", label, "instrument", instrument, "tuning", "", "shape", JoinArray(keys, " "))
     }
     if !RegExMatch(tuning, "^\d{1,3}( \d{1,3}){3,6}$")
         throw Error("A chord's tuning needs 4 to 7 strings.")
@@ -266,20 +274,109 @@ ValidateChord(name, instrument, tuning, shape) {
     }
     if !played
         throw Error("A chord needs at least one string played.")
-    return Map("name", name, "instrument", instrument, "tuning", JoinArray(pitches, " "), "shape", JoinArray(frets, " "))
+    return Map("name", name, "label", label, "instrument", instrument, "tuning", JoinArray(pitches, " "), "shape", JoinArray(frets, " "))
 }
 
-; One chord a line: name, instrument, tuning and shape, separated by tabs. At
-; most `maxChords`; an empty payload clears the library. Returns an Array.
+; A chord symbol as a saved chord's name (2.4.0), or no name.
+IsChordSymbolName(name) {
+    return name = "" || (StrLen(name) <= 32 && RegExMatch(name, '^[A-G][^\s\x00-\x1F\x7F"]*$'))
+}
+
+; A chord saved before 2.4.0 could have any name; one that isn't a chord
+; symbol becomes its label, and the page names the chord from its notes.
+; Returns [name, label].
+MigrateChordName(name, label) {
+    name := Trim(name)
+    label := Trim(label)
+    if IsChordSymbolName(name)
+        return [name, label]
+    return ["", label = "" ? SubStr(name, 1, 40) : label]
+}
+
+; ------------------------------------------
+; Chord charts (2.4.0)
+; ------------------------------------------
+
+; A song's id, as the page makes it: 8 to 24 lowercase letters and digits.
+; It names the song's file, so nothing else is accepted.
+ValidateChartId(id) {
+    if !RegExMatch(id, "^[a-z0-9]{8,24}$")
+        throw Error("A song's id is malformed.")
+    return id
+}
+
+; A chord chart as the page writes it: "Maestro chart 1"; then its title, key,
+; scale and time signature, separated by tabs; then one line a section: its
+; name, how many times it's played, and its bars, each one to four chords
+; (chord symbols, by IsChordSymbolName) separated by spaces, or "%" alone, the
+; bar before again. A title of 1 to 60 characters and section names of up to 24,
+; with no control characters or double quotes; 1 to 12 sections, each played 1
+; to 8 times, of up to 64 bars, and 256 bars in all; a section can't begin with
+; "%". Returns the text with plain line breaks.
+ValidateChartText(text) {
+    lines := StrSplit(Trim(StrReplace(text, "`r`n", "`n"), "`n"), "`n")
+    if (lines.Length < 3 || lines[1] !== "Maestro chart 1")
+        throw Error("A chart is malformed.")
+    head := StrSplit(lines[2], "`t")
+    if (head.Length != 4)
+        throw Error("A chart's heading is malformed.")
+    title := head[1]
+    if (title = "" || Trim(title) !== title || StrLen(title) > 60 || RegExMatch(title, '[\x00-\x1F\x7F"]'))
+        throw Error("A chart's title must be 1 to 60 characters.")
+    if !RegExMatch(head[2], "^[A-G][♭♯]?$")
+        throw Error("A chart's key isn't one Maestro knows.")
+    if !RegExMatch(head[3], "^[a-z][A-Za-z0-9]{0,39}$")
+        throw Error("A chart's scale isn't one Maestro knows.")
+    if !RegExMatch(head[4], "^\d{1,2}/\d{1,2}(:\d(\+\d){1,3})?$")
+        throw Error("A chart's time signature isn't one Maestro knows.")
+    if (lines.Length - 2 > 12)
+        throw Error("A chart has at most 12 sections.")
+    total := 0
+    Loop lines.Length - 2 {
+        fields := StrSplit(lines[A_Index + 2], "`t")
+        if (fields.Length < 3)
+            throw Error("A chart's section is malformed.")
+        name := fields[1]
+        if (StrLen(name) > 24 || Trim(name) !== name || RegExMatch(name, '[\x00-\x1F\x7F"]'))
+            throw Error("A section's name must be up to 24 characters.")
+        if !RegExMatch(fields[2], "^[1-8]$")
+            throw Error("A section is played 1 to 8 times.")
+        bars := fields.Length - 2
+        if (bars > 64)
+            throw Error("A section has at most 64 bars.")
+        total += bars
+        Loop bars {
+            bar := A_Index
+            chords := StrSplit(fields[bar + 2], " ")
+            if (chords.Length > 4)
+                throw Error("A bar has 1 to 4 chords.")
+            for chord in chords {
+                if (chord == "%") {
+                    if (chords.Length > 1 || bar = 1)
+                        throw Error("A repeated bar stands alone, after another.")
+                } else if (chord = "" || !IsChordSymbolName(chord)) {
+                    throw Error("A chart's chords must be chord symbols.")
+                }
+            }
+        }
+    }
+    if (total > 256)
+        throw Error("A chart has at most 256 bars.")
+    return JoinArray(lines, "`n")
+}
+
+; One chord a line: name, instrument, tuning, shape and label (2.4.0),
+; separated by tabs. At most `maxChords`; an empty payload clears the library.
+; Returns an Array.
 ParseChordsPayload(content, maxChords := 200) {
     chords := []
     for line in StrSplit(content, "`n", "`r") {
         if (Trim(line) = "")
             continue
         fields := StrSplit(line, "`t")
-        if (fields.Length != 4)
+        if (fields.Length != 5)
             throw Error("A saved chord is malformed.")
-        chords.Push(ValidateChord(fields[1], fields[2], fields[3], fields[4]))
+        chords.Push(ValidateChord(fields[1], fields[2], fields[3], fields[4], fields[5]))
         if (chords.Length > maxChords)
             throw Error("At most " maxChords " chords can be saved.")
     }
@@ -298,6 +395,7 @@ ChordsJson(chords) {
         }
         json .= (index > 1 ? "," : "")
             . '{"name":' JsonQuote(chord["name"])
+            . ',"label":' JsonQuote(chord["label"])
             . ',"instrument":' JsonQuote(chord["instrument"])
             . ',"tuning":[' StrReplace(chord["tuning"], " ", ",") ']'
             . ',"shape":[' shape ']}'
