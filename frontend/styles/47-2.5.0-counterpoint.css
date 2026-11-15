@@ -1,0 +1,386 @@
+/* ==== 2.5.0: Counterpoint ====
+   The Conservatory's Counterpoint tab: the exercise on its staff beside the
+   checker, under the short neck. The staff is drawn from MaestroNotation's
+   engraving in Bravura Text; rings under the heads mark the note selected,
+   problems and what's playing. */
+
+.cp-grid {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+
+#consCounterPanel > .cp-grid {
+  flex: 1 1 0;
+  grid-template-rows: minmax(min-content, 1fr);
+}
+
+.cp-main,
+.cp-side {
+  min-width: 0;
+}
+
+:root .cp-head {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 10px 18px;
+}
+
+.cp-voices {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+:root .cp-play {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cp-tools {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 22px;
+}
+
+.cp-tools .cons-choice[hidden] {
+  display: none;
+}
+
+:root .cp-tools .cal-modes {
+  margin-left: 0;
+}
+
+/* Clearing the exercise is destructive (with Undo): burgundy. */
+.cp-tools .link-button.is-danger {
+  color: var(--brand-burgundy-text);
+}
+
+:root .cp-accidentals button {
+  min-width: 46px;
+  font-family: "Libre Bodoni", serif;
+}
+
+/* Bravura's notes sit on the baseline with their stems far above it, so the
+   glyphs are pushed down, the button's height kept, to center what's drawn
+   rather than the em box. */
+:root #cpRhythms .cp-rhythm {
+  height: var(--height-control-small);
+  padding: 15px 12px 0;
+  font-family: "Bravura Text";
+  font-size: var(--t-name);
+  line-height: 1;
+  letter-spacing: 2px;
+}
+
+/* The staff fills its module and shows the whole lines that fit: never a
+   scroll bar; the wheel, Page Up and Page Down turn to the next line, and a
+   line cut by the bottom edge is hidden (from the script, which also keeps
+   it at least a line high). Focused, it takes the arrow keys. */
+.cp-staff {
+  flex: 1 1 0;
+  min-height: 160px;
+  overflow: hidden;
+  padding: 2px;
+  border-radius: 10px;
+  cursor: crosshair;
+}
+
+/* Where a click would write, faint. */
+.cp-score .cp-ghost {
+  opacity: .45;
+  pointer-events: none;
+}
+
+.cp-score .cp-ghost .staff-glyph {
+  fill: var(--brand-tint-text);
+}
+
+.cp-hintbar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 18px;
+}
+
+.cp-hintbar #cpHint {
+  flex: 1 1 320px;
+  margin: 0;
+}
+
+#cpLines[hidden],
+.cp-keys[hidden] {
+  display: none;
+}
+
+/* Keys and mouse, in as many columns as fit. */
+.cp-keys {
+  display: grid;
+  flex: none;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 8px 28px;
+  margin: 0;
+  padding: 0;
+  color: var(--text-soft);
+  list-style: none;
+}
+
+.cp-key {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cp-key-keys {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  min-width: 132px;
+}
+
+:root .cp-key kbd {
+  min-width: 26px;
+  min-height: 26px;
+  padding: 0 6px;
+}
+
+/* The neck's toggle beside the instrument (Progressions and Counterpoint). */
+.cons-instbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#consNeckModule[hidden],
+#consNeckToggle[hidden] {
+  display: none;
+}
+
+.cp-staff:focus-visible {
+  outline: 2px solid var(--brand-tint-text);
+  outline-offset: 2px;
+}
+
+.cp-score {
+  display: block;
+  stroke: none;
+}
+
+.cp-score .staff-line,
+.cp-score .staff-ledger,
+.cp-score .bar-line,
+.cp-score .staff-stem {
+  stroke: #c9c6da;
+  stroke-width: 1.2;
+}
+
+.cp-score .staff-stem {
+  stroke-width: 1.3;
+}
+
+.cp-score .staff-glyph {
+  fill: #e9e6f5;
+  font-family: "Bravura Text";
+  font-size: 50px;
+}
+
+.cp-score .staff-tie,
+.cp-score .staff-beam,
+.cp-score .bar-final {
+  fill: #e9e6f5;
+}
+
+.cp-column {
+  fill: var(--surface-hover);
+}
+
+.cp-ring {
+  fill: transparent;
+  stroke: transparent;
+  stroke-width: 2.2;
+}
+
+.cp-ring.is-warning {
+  stroke: var(--brand-gold-text);
+}
+
+.cp-ring.is-error {
+  stroke: var(--brand-burgundy-text);
+}
+
+.cp-ring.is-selected {
+  stroke: var(--brand-tint-text);
+  stroke-width: 2.6;
+}
+
+.cp-ring.is-playing {
+  fill: color-mix(in srgb, var(--brand-indigo-control) 70%, transparent);
+}
+
+.cp-beneath {
+  fill: var(--text-soft);
+  font-family: "Libre Bodoni", serif;
+  font-size: 15px;
+}
+
+.cp-figure-small,
+.cp-figure {
+  font-size: 11px;
+}
+
+.cp-analysis {
+  fill: var(--brand-tint-text);
+}
+
+/* ---- The checker */
+
+.cp-count {
+  color: var(--brand-burgundy-text);
+  font-weight: 600;
+}
+
+.cp-count.is-clear {
+  color: var(--text-soft);
+  font-weight: 400;
+}
+
+.cp-problems {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+:root .cp-problem-open {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  height: auto;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-strong);
+  font: inherit;
+  text-align: left;
+}
+
+:root .cp-problem-open:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+:root .cp-problem-open:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.cp-problem-bar {
+  flex: none;
+  min-width: 56px;
+  color: var(--text-soft);
+  font-weight: 600;
+}
+
+.cp-problem.is-error .cp-problem-bar {
+  color: var(--brand-burgundy-text);
+}
+
+.cp-problem.is-warning .cp-problem-bar {
+  color: var(--brand-gold-text);
+}
+
+.cp-problem.is-info .cp-problem-text {
+  color: var(--text-soft);
+}
+
+#cpProblemsNote[hidden] {
+  display: none;
+}
+
+/* The exercises in the title's menu: the title over its facts, which are
+   longer than a song's. */
+:root .prog-song-menu #cpExercises .prog-song-open {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+/* ---- A new exercise */
+
+.cp-new-panel {
+  width: 560px;
+}
+
+.cp-new-fields {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.cp-new-fields[hidden] {
+  display: none;
+}
+
+:root .cp-new-panel .cal-modes {
+  margin-left: 0;
+}
+
+:root #cpNewCantus,
+:root #cpNewKey {
+  min-width: 300px;
+}
+
+/* A cantus firmus's four fields, two to a row: mode and final, clef and length. */
+#cpNewCantusFields:not([hidden]) {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  align-items: center;
+  gap: 14px 28px;
+}
+
+:root #cpNewMode,
+:root #cpNewFinal {
+  min-width: 180px;
+}
+
+/* ---- Printed: the staff black on white, as wide as the page */
+
+@media print {
+  .print-exercise svg {
+    width: 100%;
+    height: auto;
+  }
+
+  .print-exercise .staff-line,
+  .print-exercise .staff-ledger,
+  .print-exercise .bar-line,
+  .print-exercise .staff-stem {
+    stroke: #000000;
+  }
+
+  .print-exercise .staff-glyph,
+  .print-exercise .staff-tie,
+  .print-exercise .staff-beam,
+  .print-exercise .bar-final,
+  .print-exercise .cp-beneath {
+    fill: #000000;
+  }
+
+  .print-exercise .cp-ring,
+  .print-exercise .cp-column {
+    display: none;
+  }
+}

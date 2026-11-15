@@ -1289,6 +1289,62 @@ Throws("song id with a path rejected", () => ValidateChartId("..\..\x"), "id")
 Throws("song id with capitals rejected", () => ValidateChartId("ABCDEFGH"), "id")
 Throws("song id too short rejected", () => ValidateChartId("abc"), "id")
 
+; Counterpoint (2.5.0): exercises as kept, and MusicXML exports.
+speciesGood := "Maestro exercise 1`nFirst species, Fux's Dorian`nkind`tspecies`t1`tbelow`nkey`t0`tdorian`nvoice`t1`ttreble`twritten`tCounterpoint`t26w 29w r.w`nvoice`t2`tbass`tgiven`tCantus firmus`t22w 24w 23w"
+speciesGood := StrReplace(speciesGood, "r.w", "rw")
+Equal("exercise kept, line breaks made plain", ValidateExerciseText(StrReplace(speciesGood, "`n", "`r`n") "`r`n"), speciesGood)
+fourGood := "Maestro exercise 1`nFigured bass in A minor`nkind`tfourpart`tfigured`t-`nkey`t0`tminor`nnumerals`ti iv V7 i viio7/V V65`nvoice`t1`ttreble`twritten`tSoprano`trh rh`nvoice`t1`ttreble`twritten`tAlto`trh rh`nvoice`t2`tbass`twritten`tTenor`trh rh`nvoice`t2`tbass`tgiven`tBass`t19h 21+1q~ 21+1q 33-1h."
+Equal("four-part exercise kept", ValidateExerciseText(fourGood), fourGood)
+cantusGood := "Maestro exercise 1`nA cantus in D dorian`nkind`tcantus`t-`t-`nkey`t0`tdorian`nvoice`t1`ttreble`twritten`tCantus firmus`t29w 31w 30w rw 29w"
+Equal("cantus firmus exercise kept", ValidateExerciseText(cantusGood), cantusGood)
+Throws("cantus firmus with a species rejected", () => ValidateExerciseText(StrReplace(cantusGood, "cantus`t-", "cantus`t1")), "kind")
+Throws("cantus firmus with a place rejected", () => ValidateExerciseText(StrReplace(cantusGood, "-`t-", "-`tbelow")), "kind")
+Throws("cantus firmus with a second voice rejected", () => ValidateExerciseText(cantusGood "`nvoice`t2`tbass`twritten`tMore`t22w"), "voices")
+Throws("cantus firmus with numerals rejected", () => ValidateExerciseText(StrReplace(cantusGood, "`nvoice", "`nnumerals`tI V`nvoice")), "voices")
+Throws("cantus firmus without its voice rejected", () => ValidateExerciseText(SubStr(cantusGood, 1, InStr(cantusGood, "`nvoice") - 1)), "malformed")
+Throws("exercise from a later version rejected", () => ValidateExerciseText(StrReplace(speciesGood, "exercise 1", "exercise 2")), "malformed")
+Throws("exercise title with a quote rejected", () => ValidateExerciseText(StrReplace(speciesGood, "First species, Fux's Dorian", 'A "study"')), "title")
+Throws("exercise title too long rejected", () => ValidateExerciseText(StrReplace(speciesGood, "First species, Fux's Dorian", Format("{:061}", 0))), "title")
+Throws("sixth species rejected", () => ValidateExerciseText(StrReplace(speciesGood, "species`t1", "species`t6")), "kind")
+Throws("cantus beside rejected", () => ValidateExerciseText(StrReplace(speciesGood, "below", "beside")), "kind")
+Throws("four parts as a chorale rejected", () => ValidateExerciseText(StrReplace(fourGood, "figured", "chorale")), "kind")
+Throws("eight sharps rejected", () => ValidateExerciseText(StrReplace(speciesGood, "key`t0", "key`t8")), "key")
+Throws("a mode with a path rejected", () => ValidateExerciseText(StrReplace(speciesGood, "dorian", "..\x")), "key")
+Throws("a numeral that isn't one rejected", () => ValidateExerciseText(StrReplace(fourGood, "V65", "X65")), "Roman")
+Throws("a figure that isn't one rejected", () => ValidateExerciseText(StrReplace(fourGood, "V65", "V66")), "Roman")
+Throws("one chord rejected", () => ValidateExerciseText(StrReplace(fourGood, "i iv V7 i viio7/V V65", "i")), "2 to 32")
+Throws("a third voice in species rejected", () => ValidateExerciseText(speciesGood "`nvoice`t2`tbass`twritten`tMore`t22w"), "voices")
+Throws("a missing voice in four parts rejected", () => ValidateExerciseText(SubStr(fourGood, 1, InStr(fourGood, "`nvoice`t2`tbass`tgiven") - 1)), "voices")
+Throws("a voice on a third staff rejected", () => ValidateExerciseText(StrReplace(speciesGood, "voice`t2`tbass", "voice`t3`tbass")), "voice")
+Throws("an alto clef rejected", () => ValidateExerciseText(StrReplace(speciesGood, "treble", "alto")), "voice")
+Throws("a voice's name with a quote rejected", () => ValidateExerciseText(StrReplace(speciesGood, "Counterpoint", 'A "voice"')), "name")
+Throws("a note that isn't one rejected", () => ValidateExerciseText(StrReplace(speciesGood, "26w", "26x")), "note")
+Throws("a triple sharp rejected", () => ValidateExerciseText(StrReplace(speciesGood, "26w", "26+3w")), "note")
+Throws("a note with a script rejected", () => ValidateExerciseText(StrReplace(speciesGood, "26w", "<script>")), "note")
+tooMany := "rq"
+Loop 512
+    tooMany .= " rq"
+Throws("513 notes rejected", () => ValidateExerciseText(StrReplace(speciesGood, "26w 29w rw", tooMany)), "512")
+Equal("exercise id kept", ValidateExerciseId("k3x9q2m7ab12"), "k3x9q2m7ab12")
+Throws("exercise id with a path rejected", () => ValidateExerciseId("..\..\x"), "id")
+Equal("export name from a title", ExportFileName("Second species, Fux's Dorian"), "Second species, Fux's Dorian")
+Equal("export name without a path", ExportFileName("..\..\Windows\evil"), "Windows evil")
+Equal("export name without forbidden characters", ExportFileName('A: "b" <c>|d?*'), "A b c d")
+Equal("export name never a device", ExportFileName("NUL"), "Exercise NUL")
+Equal("export name never a device, with an extension", ExportFileName("com1.txt"), "Exercise com1.txt")
+Equal("export name when nothing is left", ExportFileName("..."), "Exercise")
+Equal("export name at most 60 characters", StrLen(ExportFileName(Format("{:070}", 0))), 60)
+xmlGood := MusicXmlHead() "`n  <part-list></part-list>`n</score-partwise>`n"
+Equal("MusicXML kept", ValidateMusicXml(xmlGood), xmlGood)
+Throws("MusicXML without its declaration rejected", () => ValidateMusicXml(SubStr(xmlGood, 10)), "MusicXML")
+Throws("MusicXML with an entity rejected", () => ValidateMusicXml(StrReplace(xmlGood, "<part-list>", "<!ENTITY x SYSTEM 'file:///c:/'><part-list>")), "MusicXML")
+Throws("MusicXML unfinished rejected", () => ValidateMusicXml(SubStr(xmlGood, 1, -20)), "MusicXML")
+Throws("MusicXML with a control character rejected", () => ValidateMusicXml(StrReplace(xmlGood, "<part-list>", Chr(1) "<part-list>")), "MusicXML")
+bigXml := MusicXmlHead()
+Loop 600
+    bigXml .= Format("{:01000}", 0)
+Throws("MusicXML over 512 KB rejected", () => ValidateMusicXml(bigXml "</score-partwise>"), "large")
+
 report := "PASS " Passed " FAIL " Failures.Length "`n"
 for failure in Failures
     report .= "FAIL: " failure "`n"

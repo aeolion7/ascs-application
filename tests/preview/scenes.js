@@ -230,6 +230,25 @@ const PreviewScenes = (() => {
 
     const open = (view, setup) => () => { baseData(); navigate(view); setup?.(); };
     // 2.3.0: the Conservatory with these settings.
+    // 2.5.0: the Counterpoint tab with an exercise written partway (each
+    // voice's notes in order, null left unwritten), a note selected.
+    const cpWrite = (exercise, voices) => voices.reduce((done, names, voice) => names.reduce((each, name, index) => (name ? MaestroCounterpoint.setNote(each, voice, index, MaestroNotation.parsePitch(name)) : each), done), exercise);
+    const cpScene = (make, at, then) => () => {
+        baseData();
+        navigate("conservatory");
+        cons.settings = { ...MaestroMusic.parseSettings(null), tab: "counterpoint" };
+        consSections.show("counterpoint");
+        const exercise = make();
+        if (exercise) {
+            cp.exercise = exercise;
+            cp.id = null;
+            cp.savedText = null;
+        }
+        if (at) cp.at = at;
+        cp.saved = [];
+        renderConservatory();
+        then?.();
+    };
     const consScene = (changes, after) => () => {
         baseData();
         navigate("conservatory");
@@ -529,6 +548,50 @@ const PreviewScenes = (() => {
         "conservatory-instrument-lefty": consScene({ capo: 2, lefty: true }, () => toggleConsInstPanel(true)),
         "conservatory-instrument-keyboard": consScene({ instrument: "keyboard" }, () => toggleConsInstPanel(true)),
         "progressions-instrument": progScene({}, undefined, () => toggleConsInstPanel(true)),
+        // 2.5.0: Counterpoint, species and four parts, written partway, with the checker.
+        "counterpoint": cpScene(() => {
+            const fux = MaestroCounterpoint.speciesExercise({ species: 1, cantus: MaestroCounterpoint.fuxNotes(MaestroCounterpoint.FUX[0]), cantusBelow: true, mode: "dorian", final: "D", title: "First species, Fux's Dorian" });
+            return cpWrite(fux, [["A3", "D4", "C4", "D4", "D4", "A3", "C4"]]);
+        }, { voice: 0, index: 7 }),
+        // The neck hidden on this tab, and the keys and mouse listed.
+        "counterpoint-noneck": cpScene(() => {
+            const fux = MaestroCounterpoint.speciesExercise({ species: 1, cantus: MaestroCounterpoint.fuxNotes(MaestroCounterpoint.FUX[0]), cantusBelow: true, mode: "dorian", final: "D", title: "First species, Fux's Dorian" });
+            return cpWrite(fux, [["A3", "D4", "C4", "D4", "D4", "A3", "C4"]]);
+        }, { voice: 0, index: 7 }, () => {
+            cons.settings.neckHidden = ["counterpoint"];
+            cp.showKeys = true;
+            renderConservatory();
+        }),
+        "counterpoint-fourth": cpScene(() => cpWrite(MaestroCounterpoint.speciesExercise({ species: 4, cantus: MaestroCounterpoint.fuxNotes(MaestroCounterpoint.FUX[4]), cantusBelow: true, mode: "aeolian", final: "A", title: "Fourth species, Fux's Aeolian" }),
+            [[null, "E4", "E4", "A4", "A4", "G4", "G4", "F4", "F4", "E4"]]), { voice: 0, index: 9 }),
+        "counterpoint-fifth": cpScene(() => {
+            let five = MaestroCounterpoint.speciesExercise({ species: 5, cantus: MaestroCounterpoint.fuxNotes(MaestroCounterpoint.FUX[5]), cantusBelow: false, mode: "ionian", final: "C", title: "Fifth species, Fux's Ionian" });
+            five = MaestroCounterpoint.setBarRhythm(five, 1, MaestroCounterpoint.FIFTH_BARS[6]);
+            return cpWrite(five, [[], [null, "C3", "E3", "G3", "F3", "E3", "D3", "C3"]]);
+        }, { voice: 1, index: 5 }),
+        "counterpoint-figured": cpScene(() => {
+            const figured = MaestroCounterpoint.fourPartExercise({ form: "figured", tonic: "A", mode: "minor", progression: ["i", "iv6", "V7", "i", "VI", "iio6", "V", "i"], random: () => 0.4, title: "Figured bass in A minor" });
+            return cpWrite(figured, [["E5", "D5"], ["C5", "A4"], ["A3", "A3"]]);
+        }, { voice: 0, index: 2 }),
+        "counterpoint-soprano": cpScene(() => MaestroCounterpoint.fourPartExercise({ form: "soprano", tonic: "G", mode: "major", progression: ["I", "IV", "ii6", "V7", "I", "vi", "ii65", "V", "I"], random: () => 0.6, title: "Harmonizing a soprano in G major" }), { voice: 1, index: 0 }),
+        "counterpoint-numerals": cpScene(() => cpWrite(MaestroCounterpoint.fourPartExercise({ form: "numerals", tonic: "C", mode: "major", progression: ["I", "IV", "V", "I"], title: "From numerals in C major" }),
+            [["C5", "C5", "B4", "G4"], ["E4", "F4", "D4", "E4"], ["G3", "C4", "B3", "C4"], ["C3", "F3", "G3", "C3"]]), { voice: 0, index: 2 }),
+        "counterpoint-new": cpScene(() => null, null, () => toggleConsPopover("cpNew", true)),
+        // A cantus firmus of one's own, written partway, with the checker's
+        // suggestions; and New exercise choosing one, with a saved cantus listed.
+        "counterpoint-cantus": cpScene(() => cpWrite(MaestroCounterpoint.cantusExercise({ mode: "dorian", final: "D", clef: "treble", length: 11, title: "A cantus in D dorian" }),
+            [["D4", "F4", "E4", "A4", null]]), { voice: 0, index: 4 }),
+        "counterpoint-new-cantus": cpScene(() => null, null, () => {
+            const own = cpWrite(MaestroCounterpoint.cantusExercise({ mode: "phrygian", final: "E", clef: "bass", length: 9, title: "Phrygian, for the bass" }), [["E3", "G3", "F3", "A3", "C4", "B3", "G3", "F3", "E3"]]);
+            receiveExercises([{ id: "phrygianbass1", text: MaestroCounterpoint.exerciseText(own) }]);
+            Object.assign(cpNew, { kind: "cantus", mode: "mixolydian", final: "G", clef: "bass", length: 12 });
+            renderCpNewPanel();
+            toggleConsPopover("cpNew", true);
+        }),
+        "counterpoint-menu": cpScene(() => null, null, () => {
+            receiveExercises([{ id: "fuxdorian01", text: MaestroCounterpoint.exerciseText(cp.exercise) }]);
+            toggleConsPopover("cpMenu", true);
+        }),
         "conservatory-finder": consScene({ tab: "finder" }, () => { finder.picked = [[1, 3, 48], [2, 2, 52], [3, 0, 55], [4, 0, 59], [5, 0, 64]].map(([string, fret, midi]) => ({ string, fret, midi })); renderFinder(); renderConsNeck(); }),
         // 2.3.0: the Chords tab, with a library of saved chords.
         "conservatory-chords": chordScene({}, [null, 3, 2, 0, 1, 0], 1),

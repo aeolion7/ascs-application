@@ -247,6 +247,11 @@
     equal("settings: the chosen own tuning is current", M.currentTuning(kept).name, "Mine");
     equal("settings: the chord style is kept", M.parseSettings(JSON.stringify({ chordStyle: "signs", tab: "chords" })).chordStyle, "signs");
     equal("settings: the Chords tab is kept", M.parseSettings(JSON.stringify({ tab: "chords" })).tab, "chords");
+    equal("settings: the Counterpoint tab is kept", M.parseSettings(JSON.stringify({ tab: "counterpoint" })).tab, "counterpoint");
+    equal("settings: the neck is shown everywhere at first", M.parseSettings(null).neckHidden.join(), "");
+    equal("settings: the neck hidden is kept, only where it can be", M.parseSettings(JSON.stringify({ neckHidden: ["counterpoint", "scales", "counterpoint", "__proto__", 4] })).neckHidden.join(), "counterpoint");
+    equal("settings: a neck list that isn't one is ignored", M.parseSettings(JSON.stringify({ neckHidden: "progressions" })).neckHidden.join(), "");
+    check("settings: each reading has its own neck list", M.parseSettings(null).neckHidden !== M.parseSettings(null).neckHidden && M.parseSettings(null).neckHidden !== M.DEFAULTS.neckHidden);
     equal("settings: an unknown chord style falls back to letters", M.parseSettings(JSON.stringify({ chordStyle: "runes" })).chordStyle, "letters");
     const wrong = M.parseSettings(JSON.stringify({ instrument: "__proto__", root: "H", scale: "constructor", labels: 5, tab: "melody", tone: "loud", a4: 1000, own: "lots" }));
     check("settings: each wrong value falls back alone", wrong.instrument === "guitar" && wrong.root === "G" && wrong.scale === "major" && wrong.labels === "names" && wrong.tab === "scales" && wrong.tone === "pluck" && wrong.a4 === 440 && wrong.own.length === 0);

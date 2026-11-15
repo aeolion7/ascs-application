@@ -28,6 +28,7 @@
   <link rel="stylesheet" href="styles/44-2.3.0-chords.css">
   <link rel="stylesheet" href="styles/45-2.4.0-progressions.css">
   <link rel="stylesheet" href="styles/46-2.4.1-conservatory.css">
+  <link rel="stylesheet" href="styles/47-2.5.0-counterpoint.css">
 </head>
 <body>
   <div class="app-shell">
@@ -38,7 +39,7 @@
           <span>Aeolionware</span>
           <strong>Maestro</strong>
         </span>
-        <span id="sidebarVersion" hidden>Maestro <span>2.4.1</span></span>
+        <span id="sidebarVersion" hidden>Maestro <span>2.5.0</span></span>
       </div>
 
       <nav class="primary-nav" aria-label="Pages">
@@ -924,11 +925,13 @@
                 <button type="button" role="tab" id="consTabScales" data-section-tab="scales" aria-controls="consScales" aria-selected="true">Scales</button>
                 <button type="button" role="tab" id="consTabChords" data-section-tab="chords" aria-controls="consChordsPanel" aria-selected="false">Chords</button>
                 <button type="button" role="tab" id="consTabProgressions" data-section-tab="progressions" aria-controls="consProgPanel" aria-selected="false">Progressions</button>
+                <button type="button" role="tab" id="consTabCounterpoint" data-section-tab="counterpoint" aria-controls="consCounterPanel" aria-selected="false">Counterpoint</button>
                 <button type="button" role="tab" id="consTabFinder" data-section-tab="finder" aria-controls="consFinderPanel" aria-selected="false">Finder</button>
                 <button type="button" role="tab" id="consTabQuiz" data-section-tab="quiz" aria-controls="consQuizPanel" aria-selected="false">Quiz</button>
                 <button type="button" role="tab" id="consTabTuning" data-section-tab="tuning" aria-controls="consTuningPanel" aria-selected="false">Tuning</button>
               </div>
               <div class="cons-instbox">
+                <button class="secondary cons-toggle cons-neck-toggle" type="button" id="consNeckToggle" aria-pressed="true" aria-controls="consNeckModule" hidden>Neck</button>
                 <button class="secondary prog-chip cons-inst-chip" type="button" id="consInstButton" aria-haspopup="dialog" aria-expanded="false" aria-controls="consInstPanel" title="The instrument, its tuning, the capo and which hand"><svg data-icon="conservatory"></svg><span id="consInstName"></span><span class="prog-chip-label" id="consInstDetail"></span><svg data-icon="chevron-down"></svg></button>
                 <div class="prog-pop cons-inst-panel" id="consInstPanel" role="dialog" aria-labelledby="consInstTitle" hidden>
                   <div class="module-head">
@@ -1195,6 +1198,119 @@
                       <label class="metro-field prompt-choose" for="promptChoose"><span>Choose</span><select id="promptChoose"></select></label>
                     </div>
                   </div>
+                </section>
+              </div>
+            </div>
+            <div class="cons-panel" id="consCounterPanel" role="tabpanel" aria-labelledby="consTabCounterpoint" hidden>
+              <div class="cons-grid-2 cp-grid">
+                <section class="module cp-main" aria-labelledby="cpTitleHead">
+                  <div class="module-head cp-head">
+                    <div class="prog-songbox">
+                      <h2 class="prog-title" id="cpTitleHead">
+                        <button class="prog-title-button" type="button" id="cpTitleButton" aria-haspopup="dialog" aria-expanded="false" aria-controls="cpMenu" title="New, open, rename, print and export exercises"><span id="cpTitleText"></span><svg data-icon="chevron-down"></svg></button>
+                        <input id="cpTitleInput" type="text" maxlength="60" autocomplete="off" spellcheck="false" aria-label="Exercise title" hidden>
+                      </h2>
+                      <div class="prog-pop prog-song-menu" id="cpMenu" role="dialog" aria-label="Exercises" hidden>
+                        <button class="prog-menu-item" type="button" id="cpMenuNew" aria-haspopup="dialog" aria-expanded="false" aria-controls="cpNewPanel"><svg data-icon="plus"></svg><span>New exercise…</span></button>
+                        <button class="prog-menu-item" type="button" id="cpSaveCopy" title="Keep the exercise as another; the saved one stays as it was">Save as a new exercise</button>
+                        <button class="prog-menu-item" type="button" id="cpRename">Rename</button>
+                        <button class="prog-menu-item" type="button" id="cpPrint" title="Print the exercise, black on white, or save it as a PDF">Print…</button>
+                        <button class="prog-menu-item" type="button" id="cpExport" title="Write it as MusicXML into data\exports, for a notation program">Export MusicXML</button>
+                        <div class="prog-menu-head">
+                          <span class="cons-choice-label" id="cpExercisesLabel">Open</span>
+                        </div>
+                        <ul class="prog-songs" id="cpExercises" aria-labelledby="cpExercisesLabel"></ul>
+                        <p class="cons-note" id="cpExercisesNote"></p>
+                      </div>
+                      <div class="prog-pop cp-new-panel" id="cpNewPanel" role="dialog" aria-labelledby="cpNewTitle" hidden>
+                        <div class="module-head">
+                          <h2 id="cpNewTitle">New Exercise</h2>
+                        </div>
+                        <div class="cal-modes" id="cpNewKind" role="group" aria-label="Kind">
+                          <button type="button" data-kind="species">Species</button>
+                          <button type="button" data-kind="fourpart">Four parts</button>
+                          <button type="button" data-kind="cantus" title="Write a cantus firmus of your own, checked as you go">Cantus firmus</button>
+                        </div>
+                        <div class="cp-new-fields" id="cpNewSpeciesFields">
+                          <div class="cons-choice">
+                            <span class="cons-choice-label" id="cpNewSpeciesLabel">Species</span>
+                            <div class="cal-modes" id="cpNewSpecies" role="group" aria-labelledby="cpNewSpeciesLabel">
+                              <button type="button" data-species="1" title="Note against note">1</button>
+                              <button type="button" data-species="2" title="Two notes against one">2</button>
+                              <button type="button" data-species="3" title="Four notes against one">3</button>
+                              <button type="button" data-species="4" title="Syncopation and suspensions">4</button>
+                              <button type="button" data-species="5" title="Florid: the others mixed">5</button>
+                            </div>
+                          </div>
+                          <label class="metro-field" for="cpNewCantus"><span>Cantus firmus</span><select id="cpNewCantus"></select></label>
+                          <div class="cons-choice">
+                            <span class="cons-choice-label" id="cpNewPlaceLabel">The cantus</span>
+                            <div class="cal-modes" id="cpNewPlace" role="group" aria-labelledby="cpNewPlaceLabel">
+                              <button type="button" data-below="true">Below</button>
+                              <button type="button" data-below="false">Above</button>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="cp-new-fields" id="cpNewFourFields" hidden>
+                          <div class="cal-modes" id="cpNewForm" role="group" aria-label="Given">
+                            <button type="button" data-form="numerals" title="Write all four voices to the numerals">Numerals</button>
+                            <button type="button" data-form="figured" title="Write the upper voices over a figured bass">Figured bass</button>
+                            <button type="button" data-form="soprano" title="Harmonize a soprano: choose the chords, write the lower voices">Soprano</button>
+                          </div>
+                          <label class="metro-field" for="cpNewKey"><span>Key</span><select id="cpNewKey"></select></label>
+                        </div>
+                        <div class="cp-new-fields" id="cpNewCantusFields" hidden>
+                          <label class="metro-field" for="cpNewMode"><span>Mode</span><select id="cpNewMode"></select></label>
+                          <label class="metro-field" for="cpNewFinal"><span>Final</span><select id="cpNewFinal"></select></label>
+                          <div class="cons-choice">
+                            <span class="cons-choice-label" id="cpNewClefLabel">Clef</span>
+                            <div class="cal-modes" id="cpNewClef" role="group" aria-labelledby="cpNewClefLabel">
+                              <button type="button" data-clef="treble">Treble</button>
+                              <button type="button" data-clef="bass">Bass</button>
+                            </div>
+                          </div>
+                          <label class="metro-field" for="cpNewLength"><span>Notes</span><select id="cpNewLength"></select></label>
+                        </div>
+                        <button class="primary" type="button" id="cpNewStart">Start</button>
+                      </div>
+                    </div>
+                    <span class="cons-note-inline" id="cpFacts"></span>
+                    <button class="secondary prog-save" type="button" id="cpSave" title="Keep this exercise in Maestro's data folder">Save exercise</button>
+                    <div class="cp-voices" id="cpVoices" role="group" aria-label="Voices heard"></div>
+                    <button class="secondary cp-play" type="button" id="cpPlay" aria-pressed="false" title="Play the voices heard, at the metronome's tempo"><svg data-icon="play"></svg><span>Play</span></button>
+                  </div>
+                  <div class="cp-tools">
+                    <div class="cons-choice" id="cpWritingField" hidden>
+                      <span class="cons-choice-label" id="cpWritingLabel">Writing</span>
+                      <div class="cal-modes" id="cpWriting" role="group" aria-labelledby="cpWritingLabel"></div>
+                    </div>
+                    <div class="cal-modes cp-accidentals" id="cpAccidentals" role="group" aria-label="The note's accidental">
+                      <button type="button" data-alter="-1" aria-label="Flat" title="Flat (Shift and Down)">♭</button>
+                      <button type="button" data-alter="0" aria-label="Natural" title="Natural">♮</button>
+                      <button type="button" data-alter="1" aria-label="Sharp" title="Sharp (Shift and Up)">♯</button>
+                    </div>
+                    <button class="link-button" type="button" id="cpClearNote" title="Clear the note (Delete or right-click)">Clear note</button>
+                    <button class="link-button is-danger" type="button" id="cpClearAll" title="Empty what's written and keep what's given, to start again (Undo or Ctrl+Z brings it back)">Clear exercise</button>
+                    <div class="cons-choice" id="cpRhythmField" hidden>
+                      <span class="cons-choice-label" id="cpRhythmLabel">Bar</span>
+                      <div class="cal-modes cp-rhythms" id="cpRhythms" role="group" aria-labelledby="cpRhythmLabel"></div>
+                    </div>
+                  </div>
+                  <div class="cp-staff" id="cpStaff" tabindex="0" aria-describedby="cpHint"></div>
+                  <div class="cp-hintbar">
+                    <p class="cons-note" id="cpHint"></p>
+                    <span class="cons-note-inline" id="cpLines" title="The wheel on the staff, or Page Up and Page Down, shows the next line" hidden></span>
+                    <button class="link-button" type="button" id="cpKeysButton" aria-expanded="false" aria-controls="cpKeys">Keys and mouse</button>
+                  </div>
+                  <ul class="cp-keys" id="cpKeys" aria-label="Keys and mouse on the staff" hidden></ul>
+                </section>
+                <section class="module cp-side" aria-labelledby="cpCheckTitle">
+                  <div class="module-head">
+                    <h2 id="cpCheckTitle">Checker</h2>
+                    <span class="cp-count" id="cpCount" role="status"></span>
+                  </div>
+                  <ul class="cp-problems" id="cpProblems"></ul>
+                  <p class="cons-note" id="cpProblemsNote">Each problem is named here, with its bar, as it's written.</p>
                 </section>
               </div>
             </div>
@@ -1744,6 +1860,8 @@
   <script src="conservatoryview.js"></script>
   <script src="music.js"></script>
   <script src="harmony.js"></script>
+  <script src="notation.js"></script>
+  <script src="counterpoint.js"></script>
   <script src="prompts.js"></script>
   <script src="neckview.js"></script>
   <script src="practiceview.js"></script>
@@ -1751,6 +1869,7 @@
   <script src="progressionview.js"></script>
   <script src="promptview.js"></script>
   <script src="keysview.js"></script>
+  <script src="counterpointview.js"></script>
   <script src="segmented.js"></script>
   <script src="motion.js"></script>
 </body>

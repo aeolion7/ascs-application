@@ -1157,6 +1157,275 @@
                             prog.scale = null;
                             rebuildProgTimeline();
                         }
+                        // 2.5.0: Counterpoint. An exercise written on the staff, by the keys
+                        // and on the neck, checked as it's written; kept, exported and
+                        // printed through AHK; heard; a new one started.
+                        const savedCp = localStorage.getItem(CP_KEY);
+                        const realPrint = window.print;
+                        try {
+                            consSections.show("counterpoint");
+                            checks.push(["Counterpoint asks AHK for the exercises, and Save waits for them", sent.has("GetExercises") && $("cpSave").disabled ? [] : [sent.has("GetExercises")]]);
+                            receiveExercises([]);
+                            setCpExercise(MaestroCounterpoint.speciesExercise({ species: 1, cantus: MaestroCounterpoint.fuxNotes(MaestroCounterpoint.FUX[0]), cantusBelow: true, mode: "dorian", final: "D", title: "Smoke species" }));
+                            const cpNotes = (voice = 0) => MaestroNotation.voicesOf(cp.exercise.score)[voice].notes.map(note => (note.p ? MaestroNotation.pitchName(note.p) : "-")).join(" ");
+                            checks.push(["a species exercise: two staves, the cantus given", $("cpStaff").querySelectorAll(".staff-line").length % 10 === 0 && $("cpStaff").querySelectorAll(".cp-ring.is-given").length === 11 ? [] : [$("cpStaff").querySelectorAll(".cp-ring.is-given").length]]);
+                            checks.push(["the checker says what's left", $("cpProblems").textContent.includes("11 notes still to write") && $("cpCount").textContent === "Nothing wrong so far" ? [] : [$("cpProblems").textContent]]);
+                            // A pointer event on the staff at a moment, a staff and a step; true
+                            // unless the page cancelled it.
+                            const staffEvent = (type, time, staff, step, extra = {}) => {
+                                const svg = $("cpStaff").querySelector("svg");
+                                const box = svg.getBoundingClientRect();
+                                const column = cp.drawn.columns.find(each => each.time === time);
+                                const system = cp.drawn.systems[column.system];
+                                const clef = cp.exercise.score.staves[staff].clef;
+                                const y = system.staffY[staff] - (step - (clef === "treble" ? 30 : 18)) * cp.drawn.space / 2;
+                                const init = { bubbles: true, cancelable: true, button: type === "contextmenu" ? 2 : 0, clientX: box.left + (column.x + 0.75 * cp.drawn.space) / cp.drawn.width * box.width, clientY: box.top + y / cp.drawn.height * box.height, ...extra };
+                                return $("cpStaff").dispatchEvent(type === "wheel" ? new WheelEvent(type, init) : new MouseEvent(type, init));
+                            };
+                            const staffClick = (time, staff, step) => staffEvent("click", time, staff, step);
+                            staffClick(0, 0, 26);
+                            checks.push(["a click on the staff writes the note there", cpNotes().startsWith("A3 -") && cp.at.index === 0 ? [] : [cpNotes()]]);
+                            const key = (name, shift = false, ctrl = false) => $("cpStaff").dispatchEvent(new KeyboardEvent("keydown", { key: name, shiftKey: shift, ctrlKey: ctrl, bubbles: true, cancelable: true }));
+                            // A right-click clears a note, with no menu; Ctrl+Z and Ctrl+Y take it back and forth.
+                            const menuShown = staffEvent("contextmenu", 0, 0, 27);
+                            checks.push(["a right-click on a note clears it, and no menu opens", cpNotes().startsWith("- -") && !menuShown ? [] : [cpNotes(), menuShown]]);
+                            key("z", false, true);
+                            checks.push(["Ctrl+Z brings it back, selected", cpNotes().startsWith("A3 -") && cp.at.voice === 0 && cp.at.index === 0 ? [] : [cpNotes()]]);
+                            key("y", false, true);
+                            checks.push(["Ctrl+Y clears it again", cpNotes().startsWith("- -") ? [] : [cpNotes()]]);
+                            key("z", false, true);
+                            key("Z", true, true);
+                            checks.push(["and Ctrl+Shift+Z redoes too", cpNotes().startsWith("- -") ? [] : [cpNotes()]]);
+                            key("z", false, true);
+                            const cantusBefore = cpNotes(1), historyBefore = cp.history.past.length;
+                            staffEvent("contextmenu", 0, 1, 15);
+                            staffEvent("contextmenu", 8, 0, 26);
+                            checks.push(["a right-click on the cantus or an empty beat changes nothing", cpNotes(1) === cantusBefore && cpNotes().startsWith("A3 -") && cp.history.past.length === historyBefore ? [] : [cpNotes(1), cpNotes()]]);
+                            cp.at = { voice: 0, index: 0 };
+                            renderCounterpoint();
+                            // The pointer: a faint note where a click would write, gone when it leaves.
+                            staffEvent("pointermove", 8, 0, 28);
+                            const ghostPending = cpGhost.frame !== 0;
+                            // The frame it waits for, drawn now (headless Edge may hold frames back).
+                            cancelAnimationFrame(cpGhost.frame);
+                            drawCpGhost();
+                            checks.push(["the pointer's note waits for the next frame", ghostPending ? [] : ["drawn at once"]]);
+                            const ghost = $("cpStaff").querySelector(".cp-ghost .staff-glyph");
+                            const ghostColumn = cp.drawn.columns.find(each => each.time === 8);
+                            const ghostY = cp.drawn.systems[ghostColumn.system].staffY[0] - (28 - 30) * cp.drawn.space / 2 + MaestroNotation.LIFT;
+                            checks.push(["the pointer shows a faint note where a click would write", ghost && Math.abs(Number(ghost.getAttribute("y")) - ghostY) < 0.01 && Number(ghost.getAttribute("x")) === ghostColumn.x && cpNotes().startsWith("A3 -") ? [] : [ghost?.getAttribute("y"), ghostY]]);
+                            $("cpStaff").dispatchEvent(new MouseEvent("pointerleave"));
+                            checks.push(["and it's gone when the pointer leaves", !$("cpStaff").querySelector(".cp-ghost") ? [] : ["still there"]]);
+                            // The wheel on the selected note: a step, or with Shift a half step.
+                            const wheel = (time, step, deltaY, shift = false) => staffEvent("wheel", time, 0, step, shift ? { deltaX: deltaY, shiftKey: true } : { deltaY });
+                            const turned = !wheel(0, 26, -100);
+                            checks.push(["the wheel up on the selected note moves it a step", turned && cpNotes().startsWith("B3 -") ? [] : [turned, cpNotes()]]);
+                            wheel(0, 27, 100);
+                            checks.push(["and down, back", cpNotes().startsWith("A3 -") ? [] : [cpNotes()]]);
+                            wheel(0, 26, -100, true);
+                            checks.push(["with Shift, a half step", cpNotes().startsWith(`A${String.fromCodePoint(0x266F)}3 -`) ? [] : [cpNotes()]]);
+                            wheel(0, 26, 100, true);
+                            wheel(0, 26, -40);
+                            checks.push(["a trackpad's small turn waits for a notch's worth", cpNotes().startsWith("A3 -") ? [] : [cpNotes()]]);
+                            wheel(0, 26, 40);
+                            checks.push(["the staff is at least a line high", $("cpStaff").clientHeight + 1 >= cpLineEnd(0) - cpLineTop(0) ? [] : [$("cpStaff").clientHeight, cpLineEnd(0) - cpLineTop(0)]]);
+                            // Lines of staves: with room for all, the wheel scrolls the page; on a
+                            // narrow, short staff, the wheel and Page Down turn to the next line.
+                            const sizeStaff = style => {
+                                Object.assign($("cpStaff").style, style);
+                                cp.lines.top = 0;
+                                drawCpStaff();
+                                fitCpLines();
+                            };
+                            sizeStaff({ flex: "none", width: "", height: "2000px" });
+                            const scrolled = wheel(8, 26, 100);
+                            checks.push(["with every line shown, at full size, the wheel on an empty beat scrolls the page", scrolled && cp.scale === CP_SCALE && $("cpLines").hidden && cp.lines.clip === 0 && cpNotes().startsWith("A3 -") ? [] : [scrolled, cp.scale, $("cpLines").textContent, cpNotes()]]);
+                            sizeStaff({ flex: "none", width: "560px", height: "10px" });
+                            const lineCount = cp.drawn.systems.length;
+                            checks.push(["a short staff draws smaller and shows one whole line, and says so", lineCount > 1 && Math.abs(cp.scale - CP_MIN_SCALE) < 0.01 && !$("cpLines").hidden && $("cpLines").textContent === `Line 1 of ${lineCount}` && cp.lines.clip > 0 ? [] : [lineCount, cp.scale, $("cpLines").textContent, cp.lines.clip]]);
+                            const turnedLine = !wheel(8, 26, 100);
+                            checks.push(["the wheel off the selected note turns to the next line", turnedLine && cp.lines.top === 1 && $("cpLines").textContent === `Line 2 of ${lineCount}` && cpNotes().startsWith("A3 -") ? [] : [turnedLine, cp.lines.top]]);
+                            key("PageUp");
+                            checks.push(["Page Up turns back", cp.lines.top === 0 ? [] : [cp.lines.top]]);
+                            const firstOnLine2 = MaestroNotation.timed(cpVoices()[0].notes).findIndex(entry => cp.drawn.columns.find(each => each.time === entry.onset)?.system === 1);
+                            cp.at = { voice: 0, index: firstOnLine2 - 1 };
+                            key("ArrowRight");
+                            checks.push(["the selection moving to the next line turns to it", cp.lines.top === 1 ? [] : [cp.lines.top, firstOnLine2]]);
+                            cp.at = { voice: 0, index: 0 };
+                            sizeStaff({ flex: "none", width: "", height: "2000px" });
+                            renderCounterpoint();
+                            checks.push(["and with room again, every line shows from the first", cp.lines.top === 0 && $("cpLines").hidden && cp.lines.clip === 0 ? [] : [cp.lines.top, $("cpLines").textContent]]);
+                            sizeStaff({ flex: "", width: "", height: "" });
+                            // Keys and mouse: listed under the staff on request, and remembered.
+                            $("cpKeysButton").click();
+                            checks.push(["Keys and mouse lists what each does", !$("cpKeys").hidden && $("cpKeys").textContent.includes("Right-click") && $("cpKeysButton").getAttribute("aria-expanded") === "true" && JSON.parse(localStorage.getItem(CP_KEY)).showKeys === true ? [] : [$("cpKeys").hidden]]);
+                            $("cpKeysButton").click();
+                            checks.push(["and hides it again", $("cpKeys").hidden && $("cpKeysButton").getAttribute("aria-expanded") === "false" ? [] : ["shown"]]);
+                            // The neck hidden on this tab alone, and remembered.
+                            checks.push(["Counterpoint offers to hide the neck", !$("consNeckToggle").hidden && $("consNeckToggle").getAttribute("aria-pressed") === "true" ? [] : ["not offered"]]);
+                            $("consNeckToggle").click();
+                            checks.push(["the neck hides, on this tab", $("consNeckModule").hidden && cons.settings.neckHidden.join() === "counterpoint" && $("consNeckToggle").getAttribute("aria-pressed") === "false" && JSON.parse(localStorage.getItem(CONS_KEY)).neckHidden.join() === "counterpoint" ? [] : [cons.settings.neckHidden.join()]]);
+                            consSections.show("progressions");
+                            const onProgressions = !$("consNeckModule").hidden && !$("consNeckToggle").hidden;
+                            consSections.show("scales");
+                            const onScales = !$("consNeckModule").hidden && $("consNeckToggle").hidden;
+                            consSections.show("counterpoint");
+                            checks.push(["Progressions keeps its neck, Scales can't hide it, Counterpoint's stays hidden", onProgressions && onScales && $("consNeckModule").hidden ? [] : [onProgressions, onScales]]);
+                            $("consNeckToggle").click();
+                            checks.push(["and it shows again", !$("consNeckModule").hidden && !cons.settings.neckHidden.length && $("consNeck").children.length > 0 ? [] : [cons.settings.neckHidden.join()]]);
+                            key("ArrowRight");
+                            key("d");
+                            checks.push(["Right goes to the next note, a letter writes the nearest", cpNotes().startsWith("A3 D4 -") ? [] : [cpNotes()]]);
+                            key("ArrowUp");
+                            key("ArrowDown", true);
+                            checks.push(["Up moves it a step, Shift and Down a half step", cpNotes().startsWith(`A3 E${String.fromCodePoint(0x266D)}4`) ? [] : [cpNotes()]]);
+                            key("Delete");
+                            checks.push(["Delete clears it", cpNotes().startsWith("A3 - ") ? [] : [cpNotes()]]);
+                            consNeckModes.counterpoint.click(62);
+                            checks.push(["a note on the neck is written into the selected one, and marked there", cpNotes().startsWith("A3 D4 ") && [...$("consNeck").querySelectorAll(".cons-dot")].some(dot => Number(dot.dataset.midi) === 62) ? [] : [cpNotes()]]);
+                            for (const letter of ["C", "D", "B", "A", "C", "E", "D", "C"]) {
+                                key("ArrowRight");
+                                key(letter.toLowerCase());
+                            }
+                            key("ArrowUp", true);
+                            key("ArrowRight");
+                            key("d");
+                            checks.push(["a good first species, written by the keys, has no problems", cpNotes() === `A3 D4 C4 D4 B3 A3 C4 E4 D4 C${String.fromCodePoint(0x266F)}4 D4` && $("cpCount").textContent === "No problems" && !$("cpProblems").children.length ? [] : [cpNotes(), $("cpCount").textContent]]);
+                            checks.push(["the intervals are written beneath", [...$("cpStaff").querySelectorAll(".cp-beneath")].map(text => text.textContent).join(" ") === "5 6 6 8 3 3 3 6 6 6 8" ? [] : [[...$("cpStaff").querySelectorAll(".cp-beneath")].map(text => text.textContent).join(" ")]]);
+                            // Clear exercise: the counterpoint emptied, the cantus kept, with Undo.
+                            const writtenCp = cpNotes(), cantusCp = cpNotes(1);
+                            $("cpClearAll").click();
+                            checks.push(["Clear exercise empties the counterpoint and keeps the cantus", cpNotes() === Array(11).fill("-").join(" ") && cpNotes(1) === cantusCp && $("cpClearAll").disabled && cp.at.index === 0 ? [] : [cpNotes(), $("cpClearAll").disabled]]);
+                            $("toast").querySelector(".toast-action")?.click();
+                            checks.push(["and its Undo brings it all back", cpNotes() === writtenCp && !$("cpClearAll").disabled ? [] : [cpNotes()]]);
+                            cp.at = { voice: 0, index: 1 };
+                            key("c");
+                            checks.push(["parallel fifths are named, and ringed", $("cpProblems").textContent.includes("Parallel fifths") && $("cpStaff").querySelectorAll(".cp-ring.is-error").length >= 2 ? [] : [$("cpProblems").textContent]]);
+                            cp.at = { voice: 0, index: 9 };
+                            renderCounterpoint();
+                            $("cpProblems").querySelector("[data-voice]").click();
+                            checks.push(["a problem clicked selects its note", cp.at.index === 0 && document.activeElement === $("cpStaff") ? [] : [cp.at.index]]);
+                            cp.at = { voice: 0, index: 1 };
+                            key("d");
+                            // Saved through AHK, with its id; deleted, with Undo.
+                            const cpFrom = messages.length;
+                            $("cpSave").click();
+                            const saveMessage = messages.slice(cpFrom).find(message => message.startsWith("SaveExercise\n"))?.split("\n") ?? [];
+                            checks.push(["Save sends the exercise to AHK under a new id", /^[a-z0-9]{12}$/.test(saveMessage[1] ?? "") && saveMessage[2] === MaestroCounterpoint.HEADER && saveMessage[3] === "Smoke species" ? [] : [saveMessage.slice(0, 4).join(" | ")]]);
+                            exerciseSaved(saveMessage[1]);
+                            checks.push(["and once AHK has it, it reads Saved", $("cpSave").textContent === "Saved" && $("cpSave").disabled && cp.saved.length === 1 ? [] : [$("cpSave").textContent]]);
+                            $("cpTitleButton").click();
+                            checks.push(["the title opens the menu, the exercise listed", !$("cpMenu").hidden && $("cpExercises").querySelector("[aria-current]")?.textContent.startsWith("Smoke species") ? [] : [$("cpExercises").textContent]]);
+                            const deleteFrom = messages.length;
+                            $("cpExercises").querySelector("[data-exercise-delete]").click();
+                            checks.push(["delete asks AHK, by its id", messages.slice(deleteFrom).includes(`DeleteExercise\n${saveMessage[1]}`) ? [] : [messages.slice(deleteFrom).join(" | ")]]);
+                            exerciseDeleted(saveMessage[1]);
+                            const undoFrom = messages.length;
+                            $("toast").querySelector(".toast-action")?.click();
+                            checks.push(["Undo saves it again", messages.slice(undoFrom).some(message => message.startsWith(`SaveExercise\n${saveMessage[1]}\n`)) ? [] : ["not saved"]]);
+                            // MusicXML into data\exports, then Show in folder.
+                            const exportFrom = messages.length;
+                            $("cpExport").click();
+                            const exportMessage = messages.slice(exportFrom).find(message => message.startsWith("ExportMusicXml\n")) ?? "";
+                            const xml = exportMessage.split("\n").slice(2).join("\n");
+                            checks.push(["Export MusicXML sends the title and the score, never a path", exportMessage.split("\n")[1] === "Smoke species" && xml.startsWith('<?xml version="1.0" encoding="UTF-8" standalone="no"?>') && !new DOMParser().parseFromString(xml, "application/xml").querySelector("parsererror") ? [] : [exportMessage.slice(0, 80)]]);
+                            exerciseExported("Smoke species.musicxml");
+                            const showFrom = messages.length;
+                            checks.push(["AHK's answer names the file", $("toast").textContent.includes("data\\exports\\Smoke species.musicxml") ? [] : [$("toast").textContent]]);
+                            $("toast").querySelector(".toast-action")?.click();
+                            checks.push(["and Show in folder asks for Explorer, sending nothing", messages.slice(showFrom).some(message => message.split("\n")[0] === "ShowExport") ? [] : [messages.slice(showFrom).join(" | ")]]);
+                            // Printed alone, through the print dialog.
+                            const printedCp = [];
+                            window.print = () => printedCp.push($("printChart").cloneNode(true));
+                            $("cpPrint").click();
+                            checks.push(["Print draws the exercise for the page", printedCp[0]?.querySelector("h1")?.textContent === "Smoke species" && printedCp[0]?.querySelector(".print-exercise svg .staff-line") ? [] : ["nothing printed"]]);
+                            window.dispatchEvent(new Event("afterprint"));
+                            checks.push(["and the screen's staff is drawn again", $("cpStaff").querySelector("svg") !== null ? [] : ["gone"]]);
+                            // Heard: Play books the notes and turns into Stop; a voice can be left out.
+                            $("cpVoices").querySelector('[data-hear="1"]').click();
+                            checks.push(["a voice left out isn't heard", cp.hear[1] === false && $("cpVoices").querySelector('[data-hear="1"]').getAttribute("aria-pressed") === "false" ? [] : [cp.hear.join()]]);
+                            $("cpVoices").querySelector('[data-hear="0"]').dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+                            checks.push(["a double-click hears one voice alone", cp.hear.join() === "true,false,false,false" ? [] : [cp.hear.join()]]);
+                            await playCpExercise();
+                            checks.push(["Play plays, and turns into Stop", cp.playing !== null && $("cpPlay").textContent.includes("Stop") ? [] : [cp.playing]]);
+                            stopCpPlaying();
+                            checks.push(["Stop stops", cp.playing === null && $("cpPlay").textContent.includes("Play") ? [] : ["playing"]]);
+                            cp.hear = [true, true, true, true];
+                            // A new exercise: four parts over a figured bass.
+                            toggleConsPopover("cpMenu", true);
+                            $("cpMenuNew").click();
+                            checks.push(["New exercise opens in the menu's place", !$("cpNewPanel").hidden && $("cpMenu").hidden ? [] : ["closed"]]);
+                            $("cpNewKind").querySelector('[data-kind="fourpart"]').click();
+                            $("cpNewForm").querySelector('[data-form="figured"]').click();
+                            $("cpNewStart").click();
+                            checks.push(["Start makes a figured-bass exercise, the bass given", cp.exercise.kind === "fourpart" && cp.exercise.form === "figured" && $("cpNewPanel").hidden && $("cpWriting").querySelector('[data-writing="3"]').disabled && !$("cpWritingField").hidden ? [] : [cp.exercise.kind]]);
+                            // Its progression is drawn at random; root-position triads have no figures, so
+                            // every figure the exercise has must be drawn, however many that is.
+                            const figuresWanted = MaestroCounterpoint.figuredBass(cp.exercise).flat().filter(Boolean).length;
+                            checks.push(["its figures under the bass", $("cpStaff").querySelectorAll(".cp-figure").length === figuresWanted ? [] : [$("cpStaff").querySelectorAll(".cp-figure").length, figuresWanted]]);
+                            key("4");
+                            checks.push(["the given bass can't be chosen to write", cp.at.voice !== 3 ? [] : ["chosen"]]);
+                            key("3");
+                            checks.push(["3 chooses the tenor", cp.at.voice === 2 && $("cpWriting").querySelector('[aria-pressed="true"]')?.dataset.writing === "2" ? [] : [cp.at.voice]]);
+                            // A cantus firmus of one's own: made, written, checked, kept, and then sung against.
+                            toggleConsPopover("cpMenu", true);
+                            $("cpMenuNew").click();
+                            $("cpNewKind").querySelector('[data-kind="cantus"]').click();
+                            checks.push(["Cantus firmus offers a mode, a final, a clef and a length", !$("cpNewCantusFields").hidden && $("cpNewSpeciesFields").hidden && $("cpNewMode").options.length === 8 && $("cpNewLength").options[0].value === "8" ? [] : [$("cpNewMode").options.length]]);
+                            $("cpNewMode").value = "phrygian";
+                            $("cpNewMode").dispatchEvent(new Event("change"));
+                            $("cpNewFinal").value = "E";
+                            $("cpNewFinal").dispatchEvent(new Event("change"));
+                            $("cpNewClef").querySelector('[data-clef="bass"]').click();
+                            $("cpNewLength").value = "9";
+                            $("cpNewLength").dispatchEvent(new Event("change"));
+                            $("cpNewStart").click();
+                            checks.push(["Start makes a blank cantus in E phrygian, nine notes in the bass", cp.exercise.kind === "cantus" && $("cpFacts").textContent === "Cantus firmus · E phrygian · 9 notes" && cp.exercise.score.staves[0].clef === "bass" && $("cpWritingField").hidden && $("cpProblems").textContent.includes("9 notes still to write") ? [] : [$("cpFacts").textContent]]);
+                            for (const [at, letter] of ["e", "g", "f", "a", "c", "b", "g", "f", "e"].entries()) {
+                                if (at) key("ArrowRight");
+                                key(letter);
+                            }
+                            checks.push(["written by the keys, a sound cantus has no problems", cpNotes() === "E3 G3 F3 A3 C4 B3 G3 F3 E3" && $("cpCount").textContent === "No problems" ? [] : [cpNotes(), $("cpCount").textContent, $("cpProblems").textContent]]);
+                            checks.push(["its degrees are written beneath", [...$("cpStaff").querySelectorAll(".cp-beneath")].map(text => text.textContent).join(" ") === "1 3 2 4 6 5 3 2 1" ? [] : [[...$("cpStaff").querySelectorAll(".cp-beneath")].map(text => text.textContent).join(" ")]]);
+                            cp.at = { voice: 0, index: 7 };
+                            key("d");
+                            checks.push(["approached from below in phrygian, the close is named", $("cpProblems").textContent.includes("In Phrygian, reach the final from above") ? [] : [$("cpProblems").textContent]]);
+                            key("z", false, true);
+                            const cantusFrom = messages.length;
+                            $("cpSave").click();
+                            const cantusSave = messages.slice(cantusFrom).find(message => message.startsWith("SaveExercise\n"))?.split("\n") ?? [];
+                            checks.push(["a cantus is saved like any exercise", cantusSave[4] === "kind\tcantus\t-\t-" && cantusSave[5] === "key\t0\tphrygian" ? [] : [cantusSave.slice(2, 6).join(" | ")]]);
+                            exerciseSaved(cantusSave[1]);
+                            toggleConsPopover("cpMenu", true);
+                            $("cpMenuNew").click();
+                            $("cpNewKind").querySelector('[data-kind="species"]').click();
+                            const ownOption = $("cpNewCantus").querySelector(`option[value="own:${cantusSave[1]}"]`);
+                            checks.push(["it's offered as a cantus, under Yours", ownOption && !ownOption.disabled && ownOption.parentElement.label === "Yours" ? [] : [$("cpNewCantus").textContent]]);
+                            $("cpNewCantus").value = `own:${cantusSave[1]}`;
+                            $("cpNewCantus").dispatchEvent(new Event("change"));
+                            $("cpNewSpecies").querySelector('[data-species="1"]').click();
+                            $("cpNewPlace").querySelector('[data-below="true"]').click();
+                            $("cpNewStart").click();
+                            checks.push(["and a species exercise is written against it", cp.exercise.kind === "species" && cp.exercise.title === "First species, A cantus in E phrygian" && cp.exercise.score.key.mode === "phrygian" && cpNotes(1).split(" ").map(text => text.replace(/\d/, "")).join(" ") === "E G F A C B G F E" ? [] : [cp.exercise.title, cpNotes(1)]]);
+                            // A phrase of chant as the cantus.
+                            toggleConsPopover("cpMenu", true);
+                            $("cpMenuNew").click();
+                            const chantGroup = [...$("cpNewCantus").querySelectorAll("optgroup")].find(group => group.label === "Chant");
+                            checks.push(["four phrases of chant are offered, each with its page", chantGroup?.children.length === 4 && chantGroup.textContent.includes("Liber Usualis, p. 256") ? [] : [chantGroup?.textContent]]);
+                            $("cpNewCantus").value = "chant-lucis-creator";
+                            $("cpNewCantus").dispatchEvent(new Event("change"));
+                            $("cpNewStart").click();
+                            checks.push(["a species exercise is written against Lucis Creator", cp.exercise.title === "First species, Lucis Creator optime" && cp.exercise.score.key.mode === "mixolydian" && cpNotes(1).split(" ").length === 14 ? [] : [cp.exercise.title, cpNotes(1)]]);
+                        } finally {
+                            window.print = realPrint;
+                            stopCpPlaying();
+                            closeConsPopovers();
+                            if (savedCp === null) localStorage.removeItem(CP_KEY); else localStorage.setItem(CP_KEY, savedCp);
+                            cp.exercise = null;
+                            cp.saved = null;
+                            cp.asked = false;
+                            cp.saving.clear();
+                        }
                     } finally {
                         stopSteadyTone();
                         stopConsDrone();
@@ -3218,9 +3487,9 @@
             // One icon set (2.2.0): every drawing that's an icon comes from icons.js,
             // isn't empty, and is drawn at 20 or 24 px. The logo, the window
             // controls (Windows' own caption glyphs), charts, the keyboard map, the
-            // almanac's sun and moon, and the Conservatory's neck, keys, staff and
+            // almanac's sun and moon, and the Conservatory's neck, keys, staves and
             // chord diagrams are drawings, not icons.
-            const NOT_ICONS = ".brand-mark, .window-control, .chart-plot, .keymap, .alm-moon, .alm-sun, .cons-neck, .cons-keys, .cons-map, .cons-staff, .cons-mini";
+            const NOT_ICONS = ".brand-mark, .window-control, .chart-plot, .keymap, .alm-moon, .alm-sun, .cons-neck, .cons-keys, .cons-map, .cons-staff, .cons-mini, .cp-score";
             const iconProblems = new Set();
             const iconCheck = place => {
                 [document.querySelector(".view.active"), document.querySelector(".sidebar"), document.querySelector(".topbar")].forEach((area, index) => {

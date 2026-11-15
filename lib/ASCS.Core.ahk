@@ -365,6 +365,123 @@ ValidateChartText(text) {
     return JoinArray(lines, "`n")
 }
 
+; ------------------------------------------
+; Counterpoint (2.5.0)
+; ------------------------------------------
+
+; An exercise's id, as the page makes it: 8 to 24 lowercase letters and
+; digits. It names the exercise's file, so nothing else is accepted.
+ValidateExerciseId(id) {
+    if !RegExMatch(id, "^[a-z0-9]{8,24}$")
+        throw Error("An exercise's id is malformed.")
+    return id
+}
+
+; A counterpoint exercise as the page writes it: "Maestro exercise 1"; its
+; title (1 to 60 characters, no control characters or double quotes); its
+; kind (species 1 to 5 with the cantus below or above, four parts from
+; numerals, a figured bass or a soprano, or a cantus firmus to write); its
+; key (fifths and mode); for four parts, its numerals (2 to 32, each a
+; numeral with its quality, figure and target); then a line a voice (two for
+; species, four for four parts, one for a cantus firmus): its
+; staff, clef, whether it's given, a name of up to 24 characters, and up to
+; 512 notes, each a step, an alteration, a duration, a dot and a tie. Fields
+; are separated by tabs. Returns the text with plain line breaks.
+ValidateExerciseText(text) {
+    lines := StrSplit(Trim(StrReplace(text, "`r`n", "`n"), "`n"), "`n")
+    if (lines.Length < 5 || lines.Length > 9 || lines[1] !== "Maestro exercise 1")
+        throw Error("An exercise is malformed.")
+    title := lines[2]
+    if (title = "" || Trim(title) !== title || StrLen(title) > 60 || RegExMatch(title, '[\x00-\x1F\x7F"]'))
+        throw Error("An exercise's title must be 1 to 60 characters.")
+    kind := StrSplit(lines[3], "`t")
+    if (kind.Length != 4 || kind[1] !== "kind")
+        throw Error("An exercise's kind is malformed.")
+    if (kind[2] == "species" && RegExMatch(kind[3], "^[1-5]$") && RegExMatch(kind[4], "^(below|above)$")) {
+        voices := 2
+        first := 5
+    } else if (kind[2] == "fourpart" && RegExMatch(kind[3], "^(numerals|figured|soprano)$") && kind[4] == "-") {
+        voices := 4
+        first := 6
+    } else if (kind[2] == "cantus" && kind[3] == "-" && kind[4] == "-") {
+        voices := 1
+        first := 5
+    } else {
+        throw Error("An exercise's kind isn't one Maestro knows.")
+    }
+    if !RegExMatch(lines[4], "^key\t-?[0-7]\t(major|minor|ionian|dorian|phrygian|lydian|mixolydian|aeolian)$")
+        throw Error("An exercise's key isn't one Maestro knows.")
+    if (voices = 4) {
+        fields := StrSplit(lines[5], "`t")
+        if (fields.Length != 2 || fields[1] !== "numerals")
+            throw Error("An exercise's numerals are malformed.")
+        numerals := StrSplit(fields[2], " ")
+        if (numerals.Length < 2 || numerals.Length > 32)
+            throw Error("An exercise has 2 to 32 chords.")
+        roman := "(VII|VI|V|IV|III|II|I|vii|vi|v|iv|iii|ii|i)"
+        for numeral in numerals {
+            if !RegExMatch(numeral, "^" roman "(o|h|\+)?(7|65|43|42|64|6)?(/" roman ")?$")
+                throw Error("An exercise's numerals must be Roman numerals.")
+        }
+    }
+    if (lines.Length != first - 1 + voices)
+        throw Error("An exercise has the wrong number of voices.")
+    Loop voices {
+        fields := StrSplit(lines[first - 1 + A_Index], "`t")
+        if (fields.Length != 6 || fields[1] !== "voice" || !RegExMatch(fields[2], "^[12]$") || !RegExMatch(fields[3], "^(treble|bass)$") || !RegExMatch(fields[4], "^(given|written)$"))
+            throw Error("An exercise's voice is malformed.")
+        name := fields[5]
+        if (name = "" || StrLen(name) > 24 || Trim(name) !== name || RegExMatch(name, '[\x00-\x1F\x7F"]'))
+            throw Error("A voice's name must be 1 to 24 characters.")
+        notes := fields[6] = "" ? [] : StrSplit(fields[6], " ")
+        if (notes.Length > 512)
+            throw Error("A voice has at most 512 notes.")
+        for note in notes {
+            if !RegExMatch(note, "^(r|\d{1,2}([+-][12])?)[whqe]\.?~?$")
+                throw Error("An exercise's note is malformed.")
+        }
+    }
+    return JoinArray(lines, "`n")
+}
+
+; The file name an exported exercise takes from its title: no characters
+; Windows forbids in a name, no control characters, no leading or trailing
+; dots or spaces, at most 60 characters, and never a device's name (CON,
+; NUL, COM1 and so on). "Exercise" when nothing is left.
+ExportFileName(title) {
+    name := RegExReplace(title, '[\x00-\x1F\x7F<>:"/\\|?*]', " ")
+    name := Trim(RegExReplace(name, "\s+", " "), " .")
+    if (StrLen(name) > 60)
+        name := Trim(SubStr(name, 1, 60), " .")
+    if (name = "")
+        return "Exercise"
+    if RegExMatch(name, "i)^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\..*)?$")
+        return "Exercise " name
+    return name
+}
+
+; MusicXML as the page writes it: its own first three lines exactly (the
+; declaration, MusicXML 4.0's partwise DOCTYPE and the score's opening tag),
+; ending with the score's closing tag; no entity or element declarations and
+; no control characters; at most 512 KB.
+MusicXmlHead() {
+    return '<?xml version="1.0" encoding="UTF-8" standalone="no"?>' "`n"
+        . '<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">' "`n"
+        . '<score-partwise version="4.0">'
+}
+
+ValidateMusicXml(xml) {
+    xml := StrReplace(xml, "`r`n", "`n")
+    if (StrLen(xml) > 524288)
+        throw Error("An export is too large.")
+    head := MusicXmlHead()
+    if (SubStr(xml, 1, StrLen(head)) !== head || !RegExMatch(xml, "</score-partwise>\n?$"))
+        throw Error("An export isn't MusicXML from Maestro.")
+    if (InStr(xml, "<!ENTITY") || InStr(xml, "<!ELEMENT") || InStr(xml, "<!ATTLIST") || RegExMatch(xml, "[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]"))
+        throw Error("An export isn't MusicXML from Maestro.")
+    return xml
+}
+
 ; One chord a line: name, instrument, tuning, shape and label (2.4.0),
 ; separated by tabs. At most `maxChords`; an empty payload clears the library.
 ; Returns an Array.

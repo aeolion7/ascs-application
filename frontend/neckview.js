@@ -492,7 +492,16 @@ function drawConsKeys(low, high, mark, label, nameOf) {
 
 // ---- Drawing the page
 
+// The neck hidden on this tab (2.5.0), where it's only a way to write.
+const consNeckHidden = () => MaestroMusic.NECK_OPTIONAL.includes(consSections.current()) && cons.settings.neckHidden.includes(consSections.current());
+
 function renderConsNeck() {
+    const hidden = consNeckHidden();
+    $("consNeckModule").hidden = hidden;
+    if (hidden) {
+        $("consNeck").replaceChildren();
+        return;
+    }
     // Chords draws its own: five frets (or the keys) and the chord as written.
     const draw = consNeckModes[consSections.current()]?.draw;
     if (draw) {
@@ -536,12 +545,19 @@ function renderConsToolbar() {
     $("consTuningField").hidden = consKeyboard();
     $("consNeckOptions").hidden = consKeyboard();
     $("consMakeTuning").hidden = consKeyboard();
-    // Chords are built at their real frets, and Progressions marks a chord's
-    // notes everywhere, so the capo isn't offered there.
-    const capoAside = ["chords", "progressions"].includes(consSections.current());
+    // Chords are built at their real frets, Progressions marks a chord's notes
+    // everywhere, and Counterpoint its notes as written, so the capo isn't
+    // offered there.
+    const capoAside = ["chords", "progressions", "counterpoint"].includes(consSections.current());
     $("consCapo").closest("label").hidden = capoAside;
     // Loop and Bass sit beside Play on Progressions alone (2.4.1).
     $("progTransport").hidden = consSections.current() !== "progressions";
+    // The neck (or the keys) can be hidden where it's only a way to write.
+    const neckName = consKeyboard() ? "Keys" : "Neck";
+    $("consNeckToggle").hidden = !MaestroMusic.NECK_OPTIONAL.includes(consSections.current());
+    $("consNeckToggle").textContent = neckName;
+    $("consNeckToggle").setAttribute("aria-pressed", String(!consNeckHidden()));
+    $("consNeckToggle").title = `${consNeckHidden() ? "Show" : "Hide"} the ${neckName.toLowerCase()} on this tab`;
     $("consCapo").value = String(cons.settings.capo);
     $("consLefty").setAttribute("aria-pressed", String(cons.settings.lefty));
     $("consInstName").textContent = document.querySelector(`#consInstruments [data-instrument="${instrument}"]`)?.textContent ?? "";
@@ -898,6 +914,14 @@ $("consCapo").addEventListener("change", () => {
     if (Number.isInteger(capo) && capo >= 0 && capo <= MaestroMusic.CAPO_MAX) setConsNeck({ capo });
 });
 $("consLefty").addEventListener("click", () => setConsNeck({ lefty: !cons.settings.lefty }));
+$("consNeckToggle").addEventListener("click", () => {
+    const tab = consSections.current();
+    const hidden = cons.settings.neckHidden.filter(each => each !== tab);
+    cons.settings.neckHidden = consNeckHidden() ? hidden : [...hidden, tab];
+    saveConsSettings();
+    renderConsToolbar();
+    renderConsNeck();
+});
 wireConsPopover("instrument", $("consInstButton"), $("consInstPanel"));
 wireConsPopover("key", $("consKeyButton"), $("consKeyPanel"), { onOpen: () => $("consRoot") });
 $("consMakeTuning").addEventListener("click", makeConsTuning);

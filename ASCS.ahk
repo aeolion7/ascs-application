@@ -14,7 +14,7 @@ Suspend(true)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 2.4.1
+; Version 2.5.0
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -24,7 +24,7 @@ Suspend(true)
 ; GLOBAL VARIABLES
 ; ==========================================
 
-global ASCS_Version := "2.4.1"
+global ASCS_Version := "2.5.0"
 global ASCS_App := ""
 global ASCS_WindowIcon := 0
 global ASCS_IconPath := A_ScriptDir "\frontend\assets\ascs.ico"
@@ -46,6 +46,8 @@ global ASCS_StartedAt := A_TickCount   ; 2.0.0: Super waits for the page until 3
 global ASCS_CommandsFile := ASCS_DataDir "\commands.ini"
 global ASCS_ChordsFile := ASCS_DataDir "\chords.ini"     ; 2.3.0: the Conservatory's saved chords
 global ASCS_ChartsDir := ASCS_DataDir "\charts"          ; 2.4.0: the Conservatory's songs, a file each
+global ASCS_ExercisesDir := ASCS_DataDir "\counterpoint" ; 2.5.0: counterpoint exercises, a file each
+global ASCS_ExportsDir := ASCS_DataDir "\exports"        ; 2.5.0: MusicXML written for notation programs
 global ASCS_Chords := 0                                  ; 0 = not read yet
 global ASCS_ActivityFile := ASCS_DataDir "\activity.log"
 
@@ -1304,6 +1306,36 @@ HandleWebMessage(sender, args) {
                 else
                     WriteLog("Rejected DeleteChart payload.")
 
+            case "GetExercises":
+                if (content = "")
+                    SendExercises()
+                else
+                    WriteLog("Rejected GetExercises payload.")
+
+            case "SaveExercise":
+                if (StrLen(content) <= 65536)
+                    SaveExercise(content)
+                else
+                    WriteLog("Rejected oversized exercise payload.")
+
+            case "DeleteExercise":
+                if (StrLen(content) <= 24)
+                    DeleteExercise(content)
+                else
+                    WriteLog("Rejected DeleteExercise payload.")
+
+            case "ExportMusicXml":
+                if (StrLen(content) <= 524288 + 256)
+                    ExportMusicXml(content)
+                else
+                    WriteLog("Rejected oversized export payload.")
+
+            case "ShowExport":
+                if (content = "")
+                    ShowExport()
+                else
+                    WriteLog("Rejected ShowExport payload.")
+
             case "GetCommands":
                 SendCustomCommands()
 
@@ -1554,4 +1586,5 @@ SendToFrontend(json) {
 #Include lib\features\QuickActions.ahk
 #Include lib\features\Chords.ahk
 #Include lib\features\Charts.ahk
+#Include lib\features\Counterpoint.ahk
 #Include lib\features\Backups.ahk

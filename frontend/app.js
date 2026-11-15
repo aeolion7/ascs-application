@@ -1883,6 +1883,18 @@ function handleWebMessage(event) {
         case "chartDeleted":
             if (typeof data.id === "string") chartDeleted(data.id);
             break;
+        case "exercises":
+            globalThis.receiveExercises?.(data.items);
+            break;
+        case "exerciseSaved":
+            if (typeof data.id === "string") globalThis.exerciseSaved?.(data.id);
+            break;
+        case "exerciseDeleted":
+            if (typeof data.id === "string") globalThis.exerciseDeleted?.(data.id);
+            break;
+        case "exported":
+            if (typeof data.file === "string") globalThis.exerciseExported?.(data.file);
+            break;
         case "quickActions":
             quickActionIds = Array.isArray(data.items) ? data.items.filter(id => typeof id === "string") : null;
             renderQuickActions();
@@ -2081,6 +2093,7 @@ function handleWebMessage(event) {
                 setAlmanacStatus(typeof data.message === "string" ? data.message : "The almanac could not be saved.");
             }
             if (data.scope === "charts") globalThis.chartsFailed?.();
+            if (data.scope === "counterpoint") globalThis.exercisesFailed?.();
             if (data.scope === "settings") {
                 globalThis.drivesSaveFailed?.(data.message);
                 quietSettingsSave = "";

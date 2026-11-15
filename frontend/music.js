@@ -114,7 +114,10 @@ globalThis.MaestroMusic = (() => {
     // A position is five frets from its first; -1 is the whole neck.
     const POSITION_SPAN = 5;
     const POSITION_LAST = 11;
-    const TABS = Object.freeze(["scales", "chords", "progressions", "finder", "quiz", "tuning"]);
+    const TABS = Object.freeze(["scales", "chords", "progressions", "counterpoint", "finder", "quiz", "tuning"]);
+    // The tabs whose short neck is only a way to write, so it can be hidden
+    // (2.5.0); elsewhere the neck is what the tab shows.
+    const NECK_OPTIONAL = Object.freeze(["progressions", "counterpoint"]);
     // The positions an instrument with `frets` frets offers.
     const positionsFor = frets => Array.from({ length: Math.max(0, frets - POSITION_SPAN + 2) }, (_, from) => from).filter(from => from <= POSITION_LAST);
 
@@ -772,7 +775,7 @@ globalThis.MaestroMusic = (() => {
     }
 
     const DEFAULTS = Object.freeze({
-        instrument: "guitar", tunings: {}, own: [], root: "G", scale: "major", labels: "names", degreeStyle: "flat", show: "scale", sevenths: false, capo: 0, lefty: false, position: -1, quizKind: "note", quizNaturals: false, quizDirection: "up", quizChords: "triads", chordStyle: "letters", tab: "scales", tone: "pluck", a4: 440
+        instrument: "guitar", tunings: {}, own: [], root: "G", scale: "major", labels: "names", degreeStyle: "flat", show: "scale", sevenths: false, capo: 0, lefty: false, position: -1, quizKind: "note", quizNaturals: false, quizDirection: "up", quizChords: "triads", chordStyle: "letters", tab: "scales", tone: "pluck", a4: 440, neckHidden: []
     });
 
     function tuningsFor(instrument, own) {
@@ -782,7 +785,7 @@ globalThis.MaestroMusic = (() => {
     function parseSettings(text) {
         let stored = null;
         try { stored = JSON.parse(text); } catch { stored = null; }
-        const settings = { ...DEFAULTS, tunings: {}, own: [] };
+        const settings = { ...DEFAULTS, tunings: {}, own: [], neckHidden: [] };
         if (!stored || typeof stored !== "object" || Array.isArray(stored)) return settings;
         if (Object.hasOwn(INSTRUMENTS, stored.instrument)) settings.instrument = stored.instrument;
         const seen = new Set();
@@ -811,6 +814,7 @@ globalThis.MaestroMusic = (() => {
         if (Object.hasOwn(CHORD_STYLES, stored.chordStyle)) settings.chordStyle = stored.chordStyle;
         if (stored.tone === "pluck" || stored.tone === "steady") settings.tone = stored.tone;
         if (Number.isInteger(stored.a4) && stored.a4 >= 415 && stored.a4 <= 466) settings.a4 = stored.a4;
+        if (Array.isArray(stored.neckHidden)) settings.neckHidden = NECK_OPTIONAL.filter(tab => stored.neckHidden.includes(tab));
         return settings;
     }
 
@@ -821,7 +825,7 @@ globalThis.MaestroMusic = (() => {
     }
 
     return {
-        ROOTS, SCALES, FAMILIES, SHOWS, LABELS, DEGREE_STYLES, INSTRUMENTS, STRINGED, LOWEST, HIGHEST, OWN_MAX, CAPO_MAX, POSITION_SPAN, TABS, PLAIN_NAMES, CHORD_KINDS, QUIZ_INTERVALS, QUIZ_KINDS, QUIZ_DIRECTIONS, QUIZ_QUALITIES, QUIZ_CHORD_SETS, QUIZ_PROGRESSIONS, QUIZ_KEYS, DEFAULTS, CHORD_STYLES, STAFF_BOTTOM, CHORDS_MAX, KEY_LOW, KEY_HIGH, FRET_MAX, CHORD_LABEL_MAX, isChordName, cleanChordLabel,
+        ROOTS, SCALES, FAMILIES, SHOWS, LABELS, DEGREE_STYLES, INSTRUMENTS, STRINGED, LOWEST, HIGHEST, OWN_MAX, CAPO_MAX, POSITION_SPAN, TABS, NECK_OPTIONAL, PLAIN_NAMES, CHORD_KINDS, QUIZ_INTERVALS, QUIZ_KINDS, QUIZ_DIRECTIONS, QUIZ_QUALITIES, QUIZ_CHORD_SETS, QUIZ_PROGRESSIONS, QUIZ_KEYS, DEFAULTS, CHORD_STYLES, STAFF_BOTTOM, CHORDS_MAX, KEY_LOW, KEY_HIGH, FRET_MAX, CHORD_LABEL_MAX, isChordName, cleanChordLabel,
         parseName, pitchClass, spell, degreeLabel, intervalLabel, scaleNotes, triadName, seventhName, chordsInKey, capoShape, findChords, alteredDominant, findScales, positionsFor, quizNote, quizInterval, quizQuality, quizProgression, everyNote, pitchName, spelledPitch, frequency, tuningNotes,
         pluckPeriod, pluckSamples, cleanName, cleanOwnTuning, tuningsFor, parseSettings, currentTuning,
         chordSymbolParts, cleanChordName, staffStep, staffChord, cleanSavedChord, savedChordLine, savedChordNotes, shapeStart
