@@ -314,7 +314,7 @@ Every request names the client `Maestro/<version> (Aeolionware)` with no contact
 
 ### Developing and running apart
 
-Maestro runs from the folder it's in, so `C:\Maestro` stays on `master` as the copy in use, and branch work happens in a version's checkout inside it (`C:\Maestro\_X.Y`, ignored by git). The `maestro` command (`tools\cli\Maestro-Cli.ps1`, through `C:\Scripts\maestro.cmd`) manages that; `maestro help` lists everything. `check`, `bump` and `commit-release` on a version's checkout run that checkout's own copy of the command, so a release is checked by its own rules.
+Maestro runs from the folder it's in, so `C:\Maestro` stays on `master` as the copy in use, and branch work happens in a version's checkout inside it (`C:\Maestro\_X.Y`, ignored by git). The `maestro` command (`tools\cli\Maestro-Cli.ps1`) manages that; `maestro help` lists everything. `C:\Scripts\maestro.cmd` runs it through a launcher beside it (a copy of `tools\cli\maestro.ps1`), which picks the newest copy: a version's checkout newer than `master`, else `master`'s, so a release in progress is never judged by older rules and nothing needs running by hand. `check`, `bump` and `commit-release` on an older version's checkout run that checkout's own copy. `maestro doctor` says if the installed launcher differs from the repo's.
 
 | Command | What it does |
 | --- | --- |
@@ -323,7 +323,7 @@ Maestro runs from the folder it's in, so `C:\Maestro` stays on `master` as the c
 | `maestro new-release <version> [branch]` | A version's checkout on a new branch off `master`, with its CHANGELOG heading |
 | `maestro bump <version>` | Writes the version in its four places |
 | `maestro commit-release [version]` / `cut-release` | Commits a release in your name after `check --release` / pushes it and fast-forwards `master` |
-| `maestro clean` | Removes checkouts whose branches are merged and pushed |
+| `maestro clean` | Removes checkouts whose branches are merged and pushed, and forgets ones whose folders were deleted |
 | `maestro try [version or folder]` / `try --end` | Runs a version's checkout (`try 2.7.1`) on a copy of your data / ends it and starts your real Maestro |
 | `maestro backup-data` / `restore-data` | Copies `data\` to the backups folder / puts a backup back (Maestro closed) |
 | `maestro doctor` | Checks what Maestro needs and the sign-in side, changing nothing |

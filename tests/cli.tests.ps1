@@ -468,6 +468,15 @@ Add-Check 'clean: the branch stays on the remote, and the others stay' ((Get-Ori
 Add-Check 'clean: the main folder is never touched' ((Test-Path "$($r.work)\ASCS.ahk") -and (Get-Changes $r.work).Count -eq 0)
 $run = Invoke-Cli $r @('clean', '--force')
 Add-Check 'clean: an unknown option is refused' ($run.code -ne 0) $run.text
+# A checkout whose folder was deleted (2.7.2): status names it, clean forgets it.
+Invoke-QuietGit -C $r.work worktree add "$($r.work)\_1.6" -b feat/v1.6.0
+[IO.Directory]::Delete("$($r.work)\_1.6", $true)
+$run = Invoke-Cli $r @('status')
+Add-Check 'status: a checkout whose folder is gone is named, without git errors' ($run.code -eq 0 -and $run.text -match 'Missing:\s+its folder is gone' -and $run.text -notmatch 'fatal') $run.text
+$run = Invoke-Cli $r @('clean', '--dry-run')
+Add-Check 'clean: a dry run lists it to forget' ($run.text -match 'Forgetting:.*_1\.6' -and (& git -C $r.work worktree list) -match '_1\.6') $run.text
+$run = Invoke-Cli $r @('clean', '--yes')
+Add-Check 'clean: forgets it, and keeps its branch' ($run.code -eq 0 -and -not ((& git -C $r.work worktree list) -match '_1\.6') -and (& git -C $r.work branch --list feat/v1.6.0)) $run.text
 
 # A main folder that doesn't ignore the checkout would list it as a new file.
 $r = New-VersionedRepo unignored
@@ -563,6 +572,43 @@ $r = $ready.repo; $dev = $ready.folder
 $run = Invoke-Cli $r @('commit-release', '1.3.0', '--cut', '--yes', '--no-check')
 $tip = Get-Rev $r feat/v1.3.0
 Add-Check 'commit-release --cut: committed, pushed, and master moved to it' ($run.code -eq 0 -and (Get-Subject $dev) -eq 'v1.3.0' -and (Get-OriginRev $r feat/v1.3.0) -eq $tip -and (Get-OriginRev $r master) -eq $tip -and (Get-Rev $r master) -eq $tip) $run.text
+
+# ---- the launcher (2.7.1): maestro.cmd runs the newest copy of the command line
+$launcher = Join-Path (Split-Path $cli) 'maestro.ps1'
+$launchMain = Join-Path $scratch 'launch'
+function New-LaunchCopy([string]$folder, [string]$says, [switch]$worktree, [string]$text = '') {
+    [IO.Directory]::CreateDirectory("$folder\tools\cli") | Out-Null
+    if ($worktree) { [IO.File]::WriteAllText("$folder\.git", 'gitdir: elsewhere') }
+    $body = if ($text) { $text } else { "`$line = if (`$args -contains 'ask') { [Console]::In.ReadLine() } else { '' }`r`n`"${says}: `$(`$args -join '|') line=`$line`"`r`nexit 4`r`n" }
+    [IO.File]::WriteAllText("$folder\tools\cli\Maestro-Cli.ps1", $body)
+}
+function Invoke-Launcher([string[]]$arguments, [string]$stdin = '') {
+    $env:MAESTRO_MAIN = $launchMain
+    try {
+        $output = if ($stdin) { $stdin | & pwsh -NoProfile -File $launcher @arguments 2>&1 } else { & pwsh -NoProfile -File $launcher @arguments 2>&1 }
+        $code = $LASTEXITCODE
+    } finally { Remove-Item Env:\MAESTRO_MAIN }
+    return @{ code = $code; text = ($output | ForEach-Object { "$_" }) -join "`n" }
+}
+New-LaunchCopy $launchMain 'main'
+[IO.File]::WriteAllText("$launchMain\ASCS.ahk", "global ASCS_Version := `"1.2.3`"`r`n")
+$run = Invoke-Launcher @('status')
+Add-Check "launcher: with no newer checkout, the main folder's copy runs, its exit code kept" ($run.code -eq 4 -and $run.text -match '(?m)^main: status') $run.text
+New-LaunchCopy "$launchMain\_1.2" 'old' -worktree
+New-LaunchCopy "$launchMain\_1.3" 'v1.3' -worktree
+New-LaunchCopy "$launchMain\_1.9" 'v1.9' -worktree
+New-LaunchCopy "$launchMain\_1.10" 'v1.10'
+$run = Invoke-Launcher @('commit-release', '1.9.0', '--cut', 'ask') 'y'
+Add-Check "launcher: the newest checkout's copy runs, by number (1.9 over 1.3), every option and the answer passed on" ($run.code -eq 4 -and $run.text -match '(?m)^v1\.9: commit-release\|1\.9\.0\|--cut\|ask line=y') $run.text
+Add-Check "launcher: a folder that isn't a checkout (no .git) is left alone" ($run.text -notmatch 'v1\.10') $run.text
+New-LaunchCopy "$launchMain\_1.9.1" '' -worktree -text "this { isn't closed`r`n"
+$run = Invoke-Launcher @('check')
+Add-Check "launcher: a copy that doesn't parse is passed over, and said so" ($run.code -eq 4 -and $run.text -match '(?m)^v1\.9: check' -and $run.text -match '_1\.9\.1 has errors') $run.text
+[IO.File]::WriteAllText("$launchMain\ASCS.ahk", "global ASCS_Version := `"1.9.1`"`r`n")
+$run = Invoke-Launcher @('status')
+Add-Check 'launcher: checkouts no newer than the main folder are left alone' ($run.text -match '(?m)^main: status' -and $run.text -notmatch 'has errors') $run.text
+$text = [IO.File]::ReadAllText($launcher)
+Add-Check 'launcher: ASCII, in CRLF' (-not ($text -match '[^\x00-\x7F]') -and -not ($text -replace "`r`n", '').Contains("`n")) ''
 
 # ---- doctor (2.2.0): it reads this PC, so only what a stand-in repo decides is checked
 $r = New-TestRepo doctor

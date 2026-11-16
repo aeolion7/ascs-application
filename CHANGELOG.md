@@ -2,6 +2,13 @@
 
 All notable changes to Aeolionware Maestro (code name ASCS; before 2.0.0, the Aeolionware Super Command System). The newest release is first. For current behavior, see [README.md](README.md).
 
+## Version 2.7.2
+
+**Summary.** A patch for the `maestro` command line. Plain `maestro` commands now run the newest copy of the command line, so a release in progress is tried, checked and committed by its own rules with no command run by hand, and a checkout whose folder was deleted no longer confuses `status` or `clean`. There was no manual pass, since manual testing is suspended until one large pass. Checks at release: core 964, timers 37, startup 11, frontend 2476, smoke 1160, cli 237. Nothing moved out.
+
+- **The newest command line, without workarounds:** `maestro` (`C:\Scripts\maestro.cmd`) ran `master`'s copy of the command line, a release behind while one was being made, so 2.7.1 couldn't be tried by its version or committed with plain `maestro` commands. `maestro.cmd` now runs a small launcher beside it (`tools\cli\maestro.ps1`, copied to `C:\Scripts`), which runs the newest copy: a version's checkout newer than `master` (by its folder's version, so 2.10 comes after 2.9), else `master`'s. A copy that doesn't parse is passed over with a warning, and a folder that isn't a checkout is ignored. With 2.7.1's hand-off, an older checkout's `check`, `bump` and `commit-release` still run its own copy. `maestro doctor` says if `maestro.cmd` doesn't run the launcher, or the installed launcher differs from the repo's.
+- **A checkout whose folder was deleted:** `maestro status` printed git errors and a "DISAGREES" version for it; it now says the folder is gone. `maestro clean` forgets such a checkout (`git worktree prune`) and keeps its branch.
+
 ## Version 2.7.1
 
 **Summary.** A patch for Maestro on another virtual desktop, the Conservatory's neck as one setting for the page, a staff's ledger lines no longer cut off, `maestro try` by version, and a shorter README. Super no longer stops with "Target window not found" when Maestro's window is on another desktop, and Vivaldi, Terminal and Explorer are brought forward from another desktop the same way. The neck shows or hides on every tab at once, so moving between tabs and quiz kinds no longer moves the page. The README describes the app at a macro level; release records stay here. There was no manual pass, since manual testing is suspended until one large pass; switching to another desktop to bring a window forward wasn't exercised in testing, since it would move the screen, and is left for daily use. Checks at release: core 964, timers 37, startup 11, frontend 2476, smoke 1160, cli 228. Nothing moved out.

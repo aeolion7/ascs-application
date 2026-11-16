@@ -1,4 +1,6 @@
-# The Maestro command line, run through C:\Scripts\maestro.cmd: maestro <command> [options]
+# The Maestro command line, run through C:\Scripts\maestro.cmd and the launcher
+# beside it (maestro.ps1 here; 2.7.1), which runs the newest copy of this file:
+# maestro <command> [options]
 # To add a command: write a function, then add it to $Commands below.
 # Keep this file ASCII. Only `try` starts or closes Maestro, and only
 # `commit-release` commits: a release's checkout, as you, after showing what it
@@ -508,6 +510,12 @@ function Get-VersionSpots([string]$folder) {
 
 function Invoke-Status {
     foreach ($checkout in (Get-Checkouts)) {
+        # A checkout whose folder was deleted (2.7.2): git still lists it.
+        if (-not (Test-Path -LiteralPath $checkout.Path)) {
+            Write-Host "Checkout:   $($checkout.Path)"
+            Write-Host "  Missing:  its folder is gone. maestro clean forgets it; $($checkout.Branch) stays."
+            continue
+        }
         $changes = @(& git -C $checkout.Path status --porcelain).Count
         $branch = if ($checkout.Branch) { $checkout.Branch } else { '(no branch)' }
         $ahead = [int](& git -C $checkout.Path rev-list --count "$Main..HEAD")
@@ -1056,12 +1064,15 @@ function Invoke-Clean([string[]]$options) {
     $running = @(Get-RunningBuilds)
     $here = (Get-Location).ProviderPath.TrimEnd('\')
     $finished = @()
+    $gone = @()
     foreach ($checkout in $others) {
+        # Nothing can be lost with a folder already gone (2.7.2): git forgets
+        # it, and its branch stays.
+        if (-not (Test-Path -LiteralPath $checkout.Path)) { $gone += $checkout; continue }
         # A checkout goes only when nothing in it could be lost: its branch is
         # all in the main branch, and on the remote as it is here.
         $why = ''
-        if (-not (Test-Path -LiteralPath $checkout.Path)) { $why = 'its folder is missing (see: git worktree prune)' }
-        elseif (-not $checkout.Branch) { $why = "it isn't on a branch" }
+        if (-not $checkout.Branch) { $why = "it isn't on a branch" }
         elseif (@(& git -C $checkout.Path status --porcelain).Count) { $why = 'it has uncommitted work' }
         elseif (Measure-Commits "$Main..$($checkout.Branch)") { $why = "its branch isn't merged into $Main" }
         else {
@@ -1076,9 +1087,10 @@ function Invoke-Clean([string[]]$options) {
         if ($why) { Write-Host "Keeping:  $($checkout.Path) [$($checkout.Branch)], because $why." }
         else { $finished += $checkout }
     }
-    if (-not $finished.Count) { Write-Host 'Nothing to clean.'; return }
+    if (-not $finished.Count -and -not $gone.Count) { Write-Host 'Nothing to clean.'; return }
 
     Write-Host ''
+    foreach ($checkout in $gone) { Write-Host "Forgetting: $($checkout.Path), whose folder is gone (the branch $($checkout.Branch) stays)" }
     foreach ($checkout in $finished) { Write-Host "Removing: $($checkout.Path), and the local branch $($checkout.Branch) (merged into $Main; it stays on the remote)" }
     Write-Host ''
     if ($dryRun) {
@@ -1092,6 +1104,11 @@ function Invoke-Clean([string[]]$options) {
             Write-Host 'Stopped. Nothing was changed.'
             return
         }
+    }
+    if ($gone.Count) {
+        # Prune touches only checkouts whose folders are gone.
+        Invoke-Git worktree prune | Out-Null
+        foreach ($checkout in $gone) { Write-Host "Forgot $($checkout.Path)." }
     }
     foreach ($checkout in $finished) {
         # Without --force: git refuses if anything there is new or changed.
@@ -1207,9 +1224,13 @@ function Invoke-Doctor([string[]]$options) {
     if (-not $scripts) {
         Write-Finding '--' "No maestro.cmd on your PATH, so the sign-in scripts beside it weren't checked"
     } else {
-        $cli = Join-Path $Repo 'tools\cli\Maestro-Cli.ps1'
-        if ([IO.File]::ReadAllText($command.Source).IndexOf($cli, [StringComparison]::OrdinalIgnoreCase) -ge 0) { Write-Finding 'OK' "maestro.cmd in $scripts runs this Maestro" }
-        else { Write-Finding '!!' "$($command.Source) doesn't run $cli" "Point it at $cli." }
+        # maestro.cmd runs the launcher beside it (2.7.1), the same as this copy's.
+        $launcher = Join-Path $scripts 'maestro.ps1'
+        $source = Join-Path $PSScriptRoot 'maestro.ps1'
+        $sameText = { param($a, $b) (Test-Path -LiteralPath $a) -and (Test-Path -LiteralPath $b) -and ([IO.File]::ReadAllText($a) -replace "`r`n", "`n") -ceq ([IO.File]::ReadAllText($b) -replace "`r`n", "`n") }
+        if ([IO.File]::ReadAllText($command.Source) -notmatch 'maestro\.ps1') { Write-Finding '!!' "$($command.Source) runs one copy of the command line, not the launcher, so it's a release behind while one is made" "Copy $source to $scripts, and have maestro.cmd run: pwsh -NoLogo -NoProfile -File `"%~dp0maestro.ps1`" %*" }
+        elseif (-not (& $sameText $launcher $source)) { Write-Finding '!!' "$launcher isn't the same as $source" "Copy $source over it." }
+        else { Write-Finding 'OK' "maestro.cmd in $scripts runs the newest copy of the command line" }
         $readers = @(Join-Path $scripts 'SignIn.ahk')
         if (Test-Path -LiteralPath (Join-Path $startup 'Shutdown Sound.ahk')) { $readers += Join-Path $startup 'Shutdown Sound.ahk' }
         $settings = Join-Path $data 'startup-sounds.ini'
@@ -1555,7 +1576,8 @@ own copy of this command, so a release follows the rules it was made with.
 
   clean [--dry-run] [--yes]
       Removes each second checkout whose branch is merged into master and
-      pushed, with its local branch; the branch stays on the remote. Keeps any
+      pushed, with its local branch; the branch stays on the remote. Forgets a
+      checkout whose folder was deleted, keeping its branch. Keeps any
       with uncommitted work, a copy of your data, or a build running, and says
       why. Asks first.
         --dry-run, -n   Show what would happen, and change nothing
@@ -1658,8 +1680,8 @@ $Commands = @{
 
 # A command about a version's checkout runs that checkout's own command line
 # (2.7.1), so a release is checked, bumped and committed by the rules it was
-# made with, not by an older copy's: maestro.cmd runs the main folder's, which
-# is a release behind while a new one is being made. Once, never in a chain.
+# made with, not by a newer or older copy's: the launcher runs the newest copy,
+# and a fix release may be made beside a newer one. Once, never in a chain.
 function Get-CommandCheckout([string]$command, [string[]]$options) {
     if ($command -in 'check', 'bump') { return Get-HereCheckout }
     if ($command -eq 'commit-release') {
