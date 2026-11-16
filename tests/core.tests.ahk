@@ -1408,6 +1408,13 @@ Loop 600
     bigXml .= Format("{:01000}", 0)
 Throws("MusicXML over 512 KB rejected", () => ValidateMusicXml(bigXml "</score-partwise>"), "large")
 
+; Bringing an app's window forward (2.7.1).
+focusWindow := (hwnd, here, desktop) => Map("hwnd", hwnd, "here", here, "desktop", desktop)
+Equal("focus: a window on this desktop first", PickFocusWindow([focusWindow(1, false, 2), focusWindow(2, true, 0), focusWindow(3, true, 0)])["hwnd"], 2)
+Equal("focus: else the first on a desktop known", PickFocusWindow([focusWindow(1, false, -1), focusWindow(2, false, 3)])["hwnd"], 2)
+Equal("focus: one pinned or unknown doesn't stop the rest", PickFocusWindow([focusWindow(1, false, -1), focusWindow(2, false, -1)])["hwnd"], 1)
+Equal("focus: no windows, nothing", PickFocusWindow([]), "")
+
 report := "PASS " Passed " FAIL " Failures.Length "`n"
 for failure in Failures
     report .= "FAIL: " failure "`n"

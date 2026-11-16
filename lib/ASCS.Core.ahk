@@ -3113,6 +3113,22 @@ TopEntries(list, n) {
     return sorted
 }
 
+; ---- Bringing an app's window forward (2.7.1) ----
+
+; Which of an app's windows to bring forward: the first on this desktop,
+; else the first whose desktop is known, else the first. Each is a Map of
+; "hwnd", "here" (shown on this desktop) and "desktop" (0-based, or -1 when
+; unknown or pinned to every desktop). Returns that Map, or "" for none.
+PickFocusWindow(windows) {
+    for window in windows
+        if window["here"]
+            return window
+    for window in windows
+        if (window["desktop"] >= 0)
+            return window
+    return windows.Length ? windows[1] : ""
+}
+
 ; ==========================================
 ; BACKUPS (2.1.0)
 ; ==========================================

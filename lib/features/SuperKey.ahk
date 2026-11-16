@@ -958,89 +958,60 @@ PlaceWorkspaceWindow(hwnd, record) {
 }
 
 
+; Super + a number goes to that desktop; with Shift, the active window goes
+; there too and stays in front. Both go through Desktops.ahk's wrappers
+; (2.7.1), which log a failing call and never throw.
 SwitchVirtualDesktop(number, thisHotkey := "") {
-    global ASCS_VirtualDesktopDllPath
-    global ASCS_DesktopAccessorWarningShown
-
-    if (number < 1 || number > 9)
+    if !DesktopForShortcut(number, "switch desktops")
         return
-
-    if !FileExist(ASCS_VirtualDesktopDllPath) {
-        if !ASCS_DesktopAccessorWarningShown {
-            WriteLog("Virtual desktop switching is disabled: VirtualDesktopAccessor.dll is missing.")
-            ASCS_DesktopAccessorWarningShown := true
-        }
-        ShowNotice("Add VirtualDesktopAccessor.dll to lib to switch desktops.")
-        return
-    }
-
-    try {
-        dll := ASCS_VirtualDesktopDllPath
-        desktopCount := DllCall(dll "\GetDesktopCount", "Int")
-        if (desktopCount < 1) {
-            throw Error("VirtualDesktopAccessor returned an invalid desktop count.")
-        }
-
-        if (number > desktopCount) {
-            ShowMissingDesktopTooltip(number, desktopCount)
-            return
-        }
-
-        switched := DllCall(
-            dll "\GoToDesktopNumber",
-            "Int", number - 1,
-            "Int"
-        )
-        if (switched < 0)
-            throw Error("VirtualDesktopAccessor could not switch desktops.")
-    } catch as err {
-        WriteLog("VirtualDesktopAccessor failed; desktop switch was not performed: " err.Message)
+    if !GoToDesktop(number - 1)
         ShowNotice("Virtual desktop switch failed.")
-    }
 }
 
 MoveActiveWindowToDesktop(number, thisHotkey := "") {
-    global ASCS_VirtualDesktopDllPath
-
     hwnd := GetActiveResizableWindow()
     if !hwnd
         return
-
-    if !FileExist(ASCS_VirtualDesktopDllPath) {
-        ShowNotice("Add VirtualDesktopAccessor.dll to move windows between desktops.")
+    if !DesktopForShortcut(number, "move windows between desktops")
+        return
+    if !MoveWindowToDesktop(hwnd, number - 1) {
+        ShowNotice("Unable to move the window to that desktop.")
         return
     }
+    ; Following the window there (ActivateWindow waits for the shell to show
+    ; it) keeps it in front; Windows would otherwise bring forward whatever
+    ; was last used on that desktop. A window pinned to every desktop isn't
+    ; hidden, so the desktop is switched to by number as well.
+    if !ActivateWindow(hwnd)
+        WriteLog("The moved window couldn't be brought forward on desktop " number ".")
+    if (CurrentDesktop() != number - 1 && !GoToDesktop(number - 1))
+        ShowNotice("The window moved, but switching to desktop " number " failed.")
+}
 
-    try {
-        dll := ASCS_VirtualDesktopDllPath
-        desktopCount := DllCall(dll "\GetDesktopCount", "Int")
-        if (desktopCount < 1)
-            throw Error("VirtualDesktopAccessor returned an invalid desktop count.")
-        if (number < 1 || number > desktopCount) {
-            ShowMissingDesktopTooltip(number, desktopCount)
-            return
+; True when desktop `number` (from 1) can be reached by a shortcut; otherwise
+; says why (the DLL missing, the desktops uncounted, or too few) and is false.
+DesktopForShortcut(number, doing) {
+    global ASCS_VirtualDesktopDllPath
+    global ASCS_DesktopAccessorWarningShown
+
+    if !FileExist(ASCS_VirtualDesktopDllPath) {
+        if !ASCS_DesktopAccessorWarningShown {
+            WriteLog("Virtual desktop shortcuts are disabled: VirtualDesktopAccessor.dll is missing.")
+            ASCS_DesktopAccessorWarningShown := true
         }
-
-        moved := DllCall(
-            dll "\MoveWindowToDesktopNumber",
-            "Ptr", hwnd,
-            "Int", number - 1,
-            "Int"
-        )
-        if (moved < 0)
-            throw Error("VirtualDesktopAccessor rejected the window move.")
-
-        switched := DllCall(
-            dll "\GoToDesktopNumber",
-            "Int", number - 1,
-            "Int"
-        )
-        if (switched < 0)
-            throw Error("VirtualDesktopAccessor could not switch desktops.")
-    } catch as err {
-        WriteLog("Window desktop move failed: " err.Message)
-        ShowNotice("Unable to move the window to that desktop.")
+        ShowNotice("Add VirtualDesktopAccessor.dll to lib to " doing ".")
+        return false
     }
+    desktopCount := DesktopCount()
+    if (desktopCount < 1) {
+        ShowNotice("The virtual desktops couldn't be counted.")
+        return false
+    }
+    if (number < 1 || number > desktopCount) {
+        ShowMissingDesktopTooltip(number, desktopCount)
+        return false
+    }
+    return true
 }
 
 ShowMissingDesktopTooltip(number, desktopCount) {

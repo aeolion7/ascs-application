@@ -141,3 +141,16 @@
 .prog-sheet > * {
   flex-shrink: 0;
 }
+
+/* The Quiz's module reaches the metronome's bar, as every tab's modules do,
+   with the neck shown or hidden (2.7.1); short of room, the tab scrolls. */
+#consQuizPanel > .cons-quiz-module {
+  flex: 1 0 auto;
+}
+
+/* A note high or low on a staff (the one a click would write, too) keeps its
+   ledger lines past the drawing's edge, wherever its holder has the room
+   (2.7.1); a holder that turns its lines still clips at its own edge. */
+.cp-score {
+  overflow: visible;
+}

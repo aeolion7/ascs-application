@@ -195,9 +195,13 @@ function quizSpots() {
 }
 
 consNeckModes.quiz = {
+    // The short neck (2.7.1), the same for every kind, so the tallest kinds
+    // (Reading, Progressions written) fit under it at the window's full size.
+    short: true,
+    // Rhythms mark nothing: the neck is there to play (2.7.1).
     mark(midi, string, fret) {
         const { question, answered } = quiz;
-        if (!question) return null;
+        if (!question || quizRhythmic()) return null;
         if (quizKind() === "note") {
             if (string !== question.string || fret !== question.fret) return null;
             if (answered === null) return { kind: "quiz", label: "?" };
@@ -218,7 +222,7 @@ consNeckModes.quiz = {
     },
     key(midi) {
         const { question, answered } = quiz;
-        if (!question) return null;
+        if (!question || quizRhythmic()) return null;
         if (quizKind() === "note") {
             if (midi !== question.midi) return null;
             return answered === null ? { kind: "quiz", label: "?" } : { kind: answered === midi % 12 ? "root" : "missed", label: MaestroMusic.PLAIN_NAMES[midi % 12] };
@@ -301,7 +305,7 @@ function playQuizQuestion() {
 // Named one at a time, the first given: a progression's chords.
 const QUIZ_PICKED = Object.freeze(["progression"]);
 const quizPicked = () => QUIZ_PICKED.includes(quizKind()) && !quizWriting();
-const quizRhythmic = () => MaestroMusic.QUIZ_NECKLESS.includes(quizKind());
+const quizRhythmic = () => MaestroMusic.QUIZ_RHYTHMIC.includes(quizKind());
 // The pulse under a bar (its first beat a little louder), and the bar's notes.
 const QUIZ_PULSE = Object.freeze({ sound: "hatClosed", level: 0.3, accent: 0.5 });
 const QUIZ_HIT = Object.freeze({ sound: "clave", level: 0.85 });

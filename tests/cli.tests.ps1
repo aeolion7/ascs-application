@@ -330,7 +330,7 @@ $run = Invoke-Cli $r @('restore-data', $before[0].Name, '--yes')
 Add-Check 'restore: a restore can be undone, by name' ($run.code -eq 0 -and (Get-Content "$data\notes.json") -eq 'changed' -and (Test-Path "$data\added-later.txt")) $run.text
 
 # ---- new-release, bump, check --release and clean
-# A repository with the version in its five places, and a stand-in test runner
+# A repository with the version in its four places (and a README, which nothing reads), and a stand-in test runner
 # that reports whatever counts.txt holds.
 function New-VersionedRepo([string]$name) {
     $repo = New-TestRepo $name
@@ -340,7 +340,7 @@ function New-VersionedRepo([string]$name) {
     [IO.File]::WriteAllText("$work\ASCS.ahk", "; A stand-in`r`n; Version 1.2.3`r`n#Requires AutoHotkey v2.0 64-bit`r`n#SingleInstance Force`r`nglobal ASCS_Version := `"1.2.3`"`r`n")
     [IO.File]::WriteAllText("$work\frontend\index.html", "<span id=`"sidebarVersion`" hidden>Maestro <span>1.2.3</span></span>`r`n")
     [IO.File]::WriteAllText("$work\frontend\calendar.js", "a = `"-//Aeolionware//ASCS 1.2.3//EN`";`r`nb = { name: `"VERSION`", value: `"2.0`" };`r`nc = `"-//Aeolionware//ASCS 1.2.3//EN`";`r`n")
-    [IO.File]::WriteAllText("$work\README.md", "# App`r`n`r`n**Version:** 1.2.3  `r`n**Status:** 1.2.3 is complete.`r`n`r`n- ``tests\core.tests.ahk`` covers the core (5 checks).`r`n`r`nAutomated: core 5, cli 7.`r`n")
+    [IO.File]::WriteAllText("$work\README.md", "# App`r`n`r`n- ``tests\core.tests.ahk`` covers the core.`r`n")
     [IO.File]::WriteAllText("$work\CHANGELOG.md", "# Log`r`n`r`nThe newest release is first.`r`n`r`n## Version 1.2.3`r`n`r`nChecks at release: core 5, cli 7.`r`n")
     [IO.File]::WriteAllText("$work\tests\counts.txt", "core       PASS 5 FAIL 0`r`ncli        PASS 7 FAIL 0`r`n")
     [IO.File]::WriteAllText("$work\tests\run-tests.ps1", "Get-Content (Join-Path `$PSScriptRoot 'counts.txt') | ForEach-Object { Write-Host `$_ }`r`nif ((Get-Content (Join-Path `$PSScriptRoot 'counts.txt') -Raw) -match 'FAIL [1-9]') { exit 1 }`r`n")
@@ -357,7 +357,7 @@ Add-Check 'new-release: a checkout inside the main folder, on its branch' ($run.
 Add-Check 'new-release: the heading goes above the last release, in the file''s line endings' ($log.Contains("first.`r`n`r`n## Version 1.3.0 (in progress)`r`n`r`n## Version 1.2.3`r`n") -and -not ($log -replace "`r`n", '').Contains("`n")) $log
 Add-Check 'new-release: nothing is committed, and only the CHANGELOG changed' ((Get-Rev $r feat/v1.3.0) -eq (Get-Rev $r master) -and ((Get-Changes $dev) -join '|') -eq ' M CHANGELOG.md') ((Get-Changes $dev) -join '|')
 Add-Check 'new-release: the main folder is untouched' ((Get-Changes $r.work).Count -eq 0 -and (& git -C $r.work branch --show-current) -eq 'master')
-Add-Check 'new-release: the version waits for bump' ([IO.File]::ReadAllText("$dev\README.md").Contains('**Version:** 1.2.3'))
+Add-Check 'new-release: the version waits for bump' ([IO.File]::ReadAllText("$dev\ASCS.ahk").Contains('ASCS_Version := "1.2.3"'))
 $run = Invoke-Cli $r @('new-release', '1.3.0')
 Add-Check 'new-release: a version that has a branch is refused' ($run.code -ne 0 -and $run.text -match 'already a branch') $run.text
 $run = Invoke-Cli $r @('new-release', '1.2.3')
@@ -381,16 +381,34 @@ Add-Check 'bump: a version needs three numbers' ($run.code -ne 0 -and $run.text 
 $sidebar = [IO.File]::ReadAllText("$dev\frontend\index.html")
 [IO.File]::WriteAllText("$dev\frontend\index.html", "<span>nothing here</span>`r`n")
 $run = Invoke-Cli $r @('bump', '1.3.0') '' $dev
-Add-Check 'bump: a missing place is named, and nothing changes' ($run.code -ne 0 -and $run.text -match 'sidebar' -and [IO.File]::ReadAllText("$dev\ASCS.ahk").Contains('ASCS_Version := "1.2.3"') -and [IO.File]::ReadAllText("$dev\README.md").Contains('1.2.3')) $run.text
+Add-Check 'bump: a missing place is named, and nothing changes' ($run.code -ne 0 -and $run.text -match 'sidebar' -and [IO.File]::ReadAllText("$dev\ASCS.ahk").Contains('ASCS_Version := "1.2.3"') -and [IO.File]::ReadAllText("$dev\frontend\calendar.js").Contains('ASCS 1.2.3//EN')) $run.text
 [IO.File]::WriteAllText("$dev\frontend\index.html", $sidebar)
 $run = Invoke-Cli $r @('bump', '1.3.0') '' $dev
 $ahkText = [IO.File]::ReadAllText("$dev\ASCS.ahk"); $calendar = [IO.File]::ReadAllText("$dev\frontend\calendar.js")
-Add-Check 'bump: all five places' ($run.code -eq 0 -and $ahkText.Contains("; Version 1.3.0`r`n") -and $ahkText.Contains('ASCS_Version := "1.3.0"') -and [IO.File]::ReadAllText("$dev\frontend\index.html").Contains('Maestro <span>1.3.0</span>') -and [IO.File]::ReadAllText("$dev\README.md").Contains("**Version:** 1.3.0  `r`n")) $run.text
+Add-Check 'bump: all four places, and not the README (2.7.1)' ($run.code -eq 0 -and $ahkText.Contains("; Version 1.3.0`r`n") -and $ahkText.Contains('ASCS_Version := "1.3.0"') -and [IO.File]::ReadAllText("$dev\frontend\index.html").Contains('Maestro <span>1.3.0</span>') -and [IO.File]::ReadAllText("$dev\README.md") -ceq [IO.File]::ReadAllText("$($r.work)\README.md")) $run.text
 Add-Check 'bump: both calendar ids, and not the iCalendar version' ([regex]::Matches($calendar, 'ASCS 1\.3\.0//EN').Count -eq 2 -and $calendar.Contains('value: "2.0"')) $calendar
 Add-Check 'bump: no byte order mark, and the rest of each file as it was' ([IO.File]::ReadAllBytes("$dev\ASCS.ahk")[0] -eq 0x3B -and $ahkText.Replace('1.3.0', '1.2.3') -ceq [IO.File]::ReadAllText("$($r.work)\ASCS.ahk"))
 Add-Check 'bump: commits nothing' ((Get-Rev $r feat/v1.3.0) -eq (Get-Rev $r master))
 $run = Invoke-Cli $r @('status')
 Add-Check 'bump: status reads what it wrote' ($run.text -match 'Version:\s+1\.3\.0, the same everywhere' -and $run.text -match 'Version:\s+1\.2\.3, the same everywhere') $run.text
+
+# A version's checkout with its own command line (2.7.1): check, bump and
+# commit-release hand over to it, once, with the input; the rest stay here.
+[IO.Directory]::CreateDirectory("$dev\tools\cli") | Out-Null
+[IO.File]::WriteAllText("$dev\tools\cli\Maestro-Cli.ps1", "`$line = if (`$args[0] -eq 'commit-release') { [Console]::In.ReadLine() } else { '' }`r`n`"handed: `$(`$args -join ' ') guard=`$env:MAESTRO_HANDED_OFF line=`$line`"`r`nexit 3`r`n")
+$run = Invoke-Cli $r @('check', '--quick') '' $dev
+Add-Check "hand-off: check in a version's checkout runs its own command line" ($run.code -eq 3 -and $run.text -match 'handed: check --quick guard=1') $run.text
+$run = Invoke-Cli $r @('bump', '1.3.0') '' $dev
+Add-Check 'hand-off: and bump' ($run.code -eq 3 -and $run.text -match 'handed: bump 1\.3\.0') $run.text
+$run = Invoke-Cli $r @('commit-release', '1.3.0', '--dry-run') 'y'
+Add-Check 'hand-off: commit-release names its version from anywhere, and the answer goes along' ($run.code -eq 3 -and $run.text -match 'handed: commit-release 1\.3\.0 --dry-run guard=1 line=y') $run.text
+$run = Invoke-Cli $r @('status') '' $dev
+Add-Check 'hand-off: status stays with the main folder' ($run.code -eq 0 -and $run.text -notmatch 'handed:') $run.text
+$env:MAESTRO_HANDED_OFF = '1'
+$run = Invoke-Cli $r @('check') '' $dev
+Remove-Item Env:\MAESTRO_HANDED_OFF
+Add-Check 'hand-off: once, never in a chain' ($run.code -eq 0 -and $run.text -notmatch 'handed:' -and $run.text -match 'Counts:') $run.text
+[IO.Directory]::Delete("$dev\tools", $true)
 
 # check: the counts, and what a release still needs.
 $run = Invoke-Cli $r @('check') '' $dev
@@ -398,9 +416,7 @@ Add-Check 'check: ends with the counts' ($run.code -eq 0 -and $run.text -match '
 $run = Invoke-Cli $r @('check', '--release', '--quick') '' $dev
 Add-Check 'check --release: needs the tests' ($run.code -ne 0 -and $run.text -match 'Leave out --quick') $run.text
 $run = Invoke-Cli $r @('check', '--release') '' $dev
-Add-Check 'check --release: an "in progress" heading and an old Status line fail' ($run.code -ne 0 -and $run.text -match 'NOT READY' -and $run.text -match 'in progress' -and $run.text -match "Status line doesn't name 1\.3\.0" -and $run.text -match "newest entry doesn't have this run's counts") $run.text
-$readme = [IO.File]::ReadAllText("$dev\README.md").Replace('**Status:** 1.2.3', '**Status:** 1.3.0')
-[IO.File]::WriteAllText("$dev\README.md", $readme)
+Add-Check 'check --release: an "in progress" heading fails' ($run.code -ne 0 -and $run.text -match 'NOT READY' -and $run.text -match 'in progress' -and $run.text -match "newest entry doesn't have this run's counts") $run.text
 [IO.File]::WriteAllText("$dev\CHANGELOG.md", $log.Replace('1.3.0 (in progress)', "1.3.0`r`n`r`nChecks at release: core 5, cli 7."))
 Set-Content "$dev\added.txt" new
 $run = Invoke-Cli $r @('check', '--release') '' $dev
@@ -408,8 +424,19 @@ Add-Check 'check --release: passes once the docs agree' ($run.code -eq 0 -and $r
 Add-Check 'check --release: says a new file is not staged' ($run.text -match '1 new file\(s\)') $run.text
 [IO.File]::WriteAllText("$dev\tests\counts.txt", "core       PASS 6 FAIL 0`r`ncli        PASS 7 FAIL 0`r`n")
 $run = Invoke-Cli $r @('check', '--release') '' $dev
-Add-Check 'check --release: counts from an older run fail, in both files and by suite' ($run.code -ne 0 -and $run.text -match "README doesn't have this run's counts: core 6, cli 7" -and $run.text -match 'CHANGELOG' -and $run.text -match 'says 5 checks for core') $run.text
+Add-Check 'check --release: counts from an older run fail' ($run.code -ne 0 -and $run.text -match "CHANGELOG's newest entry doesn't have this run's counts: core 6, cli 7") $run.text
 [IO.File]::WriteAllText("$dev\tests\counts.txt", "core       PASS 5 FAIL 0`r`ncli        PASS 7 FAIL 0`r`n")
+# Nothing reads the README (2.7.1): whatever it says, or with none, the release passes.
+$readme = [IO.File]::ReadAllText("$dev\README.md")
+[IO.File]::WriteAllText("$dev\README.md", "**Version:** 0.0.1  `r`n**Status:** 0.0.1 is complete (5 checks).`r`n")
+$run = Invoke-Cli $r @('check', '--release') '' $dev
+Add-Check "check --release: the README isn't read (2.7.1)" ($run.code -eq 0 -and $run.text -match 'All good') $run.text
+$run = Invoke-Cli $r @('status')
+Add-Check 'status: a README out of step is no disagreement' ($run.text -notmatch 'DISAGREES') $run.text
+[IO.File]::Delete("$dev\README.md")
+$run = Invoke-Cli $r @('check', '--release') '' $dev
+Add-Check 'check --release: nor needed' ($run.code -eq 0 -and $run.text -match 'All good') $run.text
+[IO.File]::WriteAllText("$dev\README.md", $readme)
 [IO.File]::WriteAllText("$dev\frontend\index.html", $sidebar)
 $run = Invoke-Cli $r @('check', '--release') '' $dev
 Add-Check 'check --release: a version that disagrees fails' ($run.code -ne 0 -and $run.text -match "isn't the same everywhere" -and $run.text -match 'sidebar 1\.2\.3') $run.text
@@ -470,7 +497,6 @@ function New-ReadyRelease([string]$name) {
     $folder = "$($repo.work)\_1.3"
     Invoke-Cli $repo @('new-release', '1.3.0') | Out-Null
     Invoke-Cli $repo @('bump', '1.3.0') '' $folder | Out-Null
-    [IO.File]::WriteAllText("$folder\README.md", [IO.File]::ReadAllText("$folder\README.md").Replace('**Status:** 1.2.3', '**Status:** 1.3.0'))
     [IO.File]::WriteAllText("$folder\CHANGELOG.md", [IO.File]::ReadAllText("$folder\CHANGELOG.md").Replace('1.3.0 (in progress)', "1.3.0`r`n`r`nChecks at release: core 5, cli 7."))
     Set-Content "$folder\added.txt" new
     return @{ repo = $repo; folder = $folder }
@@ -765,12 +791,13 @@ try {
     $run = Invoke-Cli $r @('status')
     Add-Check 'status: counts only errors since the last start' ($run.text -match '1 problem' -and $run.text -match 'new one' -and $run.text -notmatch 'error: old') $run.text
     Invoke-QuietGit -C $main checkout -- ASCS.ahk
-    [IO.File]::WriteAllText("$main\README.md", "**Version:** 1.0.0`r`n")
+    [IO.Directory]::CreateDirectory("$main\frontend") | Out-Null
+    [IO.File]::WriteAllText("$main\frontend\index.html", "Maestro <span>1.0.0</span>`r`n")
     [IO.File]::WriteAllText("$main\ASCS.ahk", $standIn + "`r`n; Version 1.0.1`r`n")
     $run = Invoke-Cli $r @('status')
     Add-Check 'status: a version that disagrees is flagged' ($run.text -match 'DISAGREES') $run.text
     Invoke-QuietGit -C $main checkout -- ASCS.ahk
-    [IO.File]::Delete("$main\README.md")
+    [IO.File]::Delete("$main\frontend\index.html")
 
     # An ASCS that won't close: nothing else happens.
     (Get-StandIns $main) | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
@@ -780,6 +807,19 @@ try {
     $run = Invoke-Cli $r @('try')
     Add-Check "try: an ASCS that won't close stops it" ($run.code -ne 0 -and $run.text -match 'did not close') $run.text
     Add-Check 'try: and nothing was copied or started' (-not (Test-Path "$dev\data") -and (Get-StandIns $dev).Count -eq 0)
+
+    # A version names its checkout (2.7.1): with two about, the list says how.
+    $release = "$main\_9.1"
+    Invoke-QuietGit -C $main worktree add $release -b feat/v9.1.0
+    $run = Invoke-Cli $r @('try')
+    Add-Check 'try: with two checkouts, names them, a version by its number' ($run.code -ne 0 -and $run.text -match 'maestro try 9\.1\b' -and $run.text -match [regex]::Escape("maestro try $dev")) $run.text
+    $run = Invoke-Cli $r @('try', '9.9.9')
+    Add-Check "try: a version with no checkout says so" ($run.code -ne 0 -and $run.text -match 'no checkout for 9\.9\.9') $run.text
+    foreach ($version in '9.1.0', '9.1') {
+        $run = Invoke-Cli $r @('try', $version)
+        Add-Check "try: $version finds its checkout (and stops at the ASCS that won't close)" ($run.code -ne 0 -and $run.text -match 'did not close' -and $run.text -notmatch 'no checkout') $run.text
+    }
+    Add-Check "try: and nothing was copied to the version's checkout" (-not (Test-Path "$release\data"))
 } finally {
     Remove-Item Env:\ASCS_REPO -ErrorAction SilentlyContinue
     # Only stand-ins under this run's temp folder.

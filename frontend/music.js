@@ -128,11 +128,16 @@ globalThis.MaestroMusic = (() => {
         if (!figures) return [...Array.from({ length: n + 1 }, (_, i) => at(i)), ...Array.from({ length: n }, (_, i) => at(n - 1 - i))];
         return [...Array.from({ length: n }, (_, i) => figures.map(step => at(i + step))).flat(), at(n)];
     }
-    // Tabs that don't use the neck at all (2.6.0), so it isn't shown.
-    const NECKLESS = Object.freeze(["rhythm"]);
-    // The tabs whose short neck is only a way to write, so it can be hidden
-    // (2.5.0); elsewhere the neck is what the tab shows.
-    const NECK_OPTIONAL = Object.freeze(["progressions", "counterpoint"]);
+    // The neck (or the keys) is one setting for the whole page, neckShown
+    // (2.7.1). These tabs can't work without it, so it shows there whatever
+    // the setting: Scales shows the scale on it, Chords builds the chord on
+    // it, the Finder picks notes on it; and the Quiz's Notes asks about a
+    // place on it.
+    const NECK_NEEDED = Object.freeze(["scales", "chords", "finder"]);
+    // And the Rhythm tab never shows it: it doesn't use it, and its
+    // sequencer needs the room.
+    const NECK_UNUSED = Object.freeze(["rhythm"]);
+    const QUIZ_NECK_NEEDED = Object.freeze(["note"]);
     // The positions an instrument with `frets` frets offers.
     const positionsFor = frets => Array.from({ length: Math.max(0, frets - POSITION_SPAN + 2) }, (_, from) => from).filter(from => from <= POSITION_LAST);
 
@@ -524,8 +529,8 @@ globalThis.MaestroMusic = (() => {
 
     const QUIZ_KINDS = Object.freeze(["note", "interval", "quality", "progression", "rhythm", "reading", "melody"]);
     const QUIZ_RHYTHMS = Object.freeze(["easy", "middle", "triplets", "mixed"]);
-    // Quizzes that don't use the neck: rhythms are written and tapped (2.6.0).
-    const QUIZ_NECKLESS = Object.freeze(["rhythm", "reading"]);
+    // The quizzes that are written and tapped, not played (2.6.0).
+    const QUIZ_RHYTHMIC = Object.freeze(["rhythm", "reading"]);
     const QUIZ_DIRECTIONS = Object.freeze(["up", "down", "together"]);
 
     // Every note's labels, for showing all twelve: a note of the scale keeps
@@ -836,7 +841,7 @@ globalThis.MaestroMusic = (() => {
     }
 
     const DEFAULTS = Object.freeze({
-        instrument: "guitar", tunings: {}, own: [], root: "G", scale: "major", labels: "names", degreeStyle: "flat", show: "scale", sevenths: false, capo: 0, lefty: false, position: -1, quizKind: "note", quizNaturals: false, quizDirection: "up", quizChords: "triads", chordStyle: "letters", tab: "scales", tone: "pluck", a4: 440, neckHidden: [], drill: "straight", quizRhythm: "easy", quizMelody: 5, quizWrite: "numerals"
+        instrument: "guitar", tunings: {}, own: [], root: "G", scale: "major", labels: "names", degreeStyle: "flat", show: "scale", sevenths: false, capo: 0, lefty: false, neckShown: true, position: -1, quizKind: "note", quizNaturals: false, quizDirection: "up", quizChords: "triads", chordStyle: "letters", tab: "scales", tone: "pluck", a4: 440, neckHidden: [], drill: "straight", quizRhythm: "easy", quizMelody: 5, quizWrite: "numerals"
     });
 
     function tuningsFor(instrument, own) {
@@ -846,7 +851,7 @@ globalThis.MaestroMusic = (() => {
     function parseSettings(text) {
         let stored = null;
         try { stored = JSON.parse(text); } catch { stored = null; }
-        const settings = { ...DEFAULTS, tunings: {}, own: [], neckHidden: [] };
+        const settings = { ...DEFAULTS, tunings: {}, own: [] };
         if (!stored || typeof stored !== "object" || Array.isArray(stored)) return settings;
         if (Object.hasOwn(INSTRUMENTS, stored.instrument)) settings.instrument = stored.instrument;
         const seen = new Set();
@@ -879,7 +884,7 @@ globalThis.MaestroMusic = (() => {
         if (Object.hasOwn(CHORD_STYLES, stored.chordStyle)) settings.chordStyle = stored.chordStyle;
         if (stored.tone === "pluck" || stored.tone === "steady") settings.tone = stored.tone;
         if (Number.isInteger(stored.a4) && stored.a4 >= 415 && stored.a4 <= 466) settings.a4 = stored.a4;
-        if (Array.isArray(stored.neckHidden)) settings.neckHidden = NECK_OPTIONAL.filter(tab => stored.neckHidden.includes(tab));
+        if (typeof stored.neckShown === "boolean") settings.neckShown = stored.neckShown;
         return settings;
     }
 
@@ -906,7 +911,7 @@ globalThis.MaestroMusic = (() => {
     }
 
     return {
-        ROOTS, SCALES, FAMILIES, SHOWS, LABELS, DEGREE_STYLES, INSTRUMENTS, STRINGED, LOWEST, HIGHEST, OWN_MAX, CAPO_MAX, POSITION_SPAN, TABS, NECK_OPTIONAL, NECKLESS, DRILLS, drillNotes, PLAIN_NAMES, CHORD_KINDS, QUIZ_INTERVALS, QUIZ_KINDS, QUIZ_DIRECTIONS, QUIZ_QUALITIES, QUIZ_CHORD_SETS, QUIZ_PROGRESSIONS, QUIZ_KEYS, QUIZ_WRITES, QUIZ_RHYTHMS, QUIZ_NECKLESS, QUIZ_MELODY_LENGTHS, quizMelody, DEFAULTS, CHORD_STYLES, STAFF_BOTTOM, STAFF_WRITING, staffWriting, CHORDS_MAX, KEY_LOW, KEY_HIGH, FRET_MAX, CHORD_LABEL_MAX, isChordName, cleanChordLabel,
+        ROOTS, SCALES, FAMILIES, SHOWS, LABELS, DEGREE_STYLES, INSTRUMENTS, STRINGED, LOWEST, HIGHEST, OWN_MAX, CAPO_MAX, POSITION_SPAN, TABS, NECK_NEEDED, NECK_UNUSED, QUIZ_NECK_NEEDED, DRILLS, drillNotes, PLAIN_NAMES, CHORD_KINDS, QUIZ_INTERVALS, QUIZ_KINDS, QUIZ_DIRECTIONS, QUIZ_QUALITIES, QUIZ_CHORD_SETS, QUIZ_PROGRESSIONS, QUIZ_KEYS, QUIZ_WRITES, QUIZ_RHYTHMS, QUIZ_RHYTHMIC, QUIZ_MELODY_LENGTHS, quizMelody, DEFAULTS, CHORD_STYLES, STAFF_BOTTOM, STAFF_WRITING, staffWriting, CHORDS_MAX, KEY_LOW, KEY_HIGH, FRET_MAX, CHORD_LABEL_MAX, isChordName, cleanChordLabel,
         parseName, pitchClass, spell, degreeLabel, intervalLabel, scaleNotes, triadName, seventhName, chordsInKey, capoShape, findChords, alteredDominant, findScales, positionsFor, quizNote, quizInterval, quizQuality, quizProgression, everyNote, pitchName, spelledPitch, frequency, tuningNotes,
         pluckPeriod, pluckSamples, cleanName, cleanOwnTuning, tuningsFor, parseSettings, currentTuning,
         chordSymbolParts, cleanChordName, staffStep, staffChord, cleanSavedChord, savedChordLine, savedChordNotes, shapeStart

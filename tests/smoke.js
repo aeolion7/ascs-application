@@ -1023,7 +1023,7 @@
                         checks.push(["named right: the melody given in its key, its notes on the neck, and it stays", /^Right: .+ in .+ major\.$/.test($("consQuizResult").textContent) && [...pcs(dots())].sort((a, b) => a - b).join() === [...new Set(tune2.midis.map(midi => midi % 12))].sort((a, b) => a - b).join() && quiz.answered !== null ? [] : [$("consQuizResult").textContent, [...pcs(dots())].join()]]);
                         document.querySelector('#consQuizKind [data-quiz="rhythm"]').click();
                         const bar = quiz.question;
-                        checks.push(["Rhythms by ear: the neck set aside, the bar's steps a beat to a group, Check, and the staff drawn", $("consNeckModule").hidden && $("consQuizAnswers").hidden && !$("consQuizRhythm").hidden && $("consQuizGrid").querySelectorAll(".cons-quiz-cell").length === bar.cells.length && $("consQuizGrid").children.length === bar.cells.length / bar.steps && !$("consQuizCheck").hidden && $("consQuizPad").hidden && $("consQuizWrittenStaff").querySelector("svg") && $("consQuizPlayed").hidden && !$("consQuizLevelField").hidden ? [] : [$("consNeckModule").hidden, $("consQuizGrid").children.length]]);
+                        checks.push(["Rhythms by ear: the neck stays where it was (2.7.1), the bar's steps a beat to a group, Check, and the staff drawn", !$("consNeckModule").hidden && $("consQuizAnswers").hidden && !$("consQuizRhythm").hidden && $("consQuizGrid").querySelectorAll(".cons-quiz-cell").length === bar.cells.length && $("consQuizGrid").children.length === bar.cells.length / bar.steps && !$("consQuizCheck").hidden && $("consQuizPad").hidden && $("consQuizWrittenStaff").querySelector("svg") && $("consQuizPlayed").hidden && !$("consQuizLevelField").hidden ? [] : [$("consNeckModule").hidden, $("consQuizGrid").children.length]]);
                         await startMetronome();
                         await pause(40);
                         const barBefore = heard.clicks;
@@ -1651,18 +1651,34 @@
                             sizeStaff({ flex: "", width: "", height: "" });
                             // Keys and mouse: listed under the staff on request, and remembered.
                             checks.push(["the staff's tooltip lists its keys; no list under it", $("cpStaff").title.includes("A to G: write that letter") && !$("cpKeys") && !$("cpHint") ? [] : [$("cpStaff").title]]);
-                            // The neck hidden on this tab alone, and remembered.
-                            checks.push(["Counterpoint offers to hide the neck", !$("consNeckToggle").hidden && $("consNeckToggle").getAttribute("aria-pressed") === "true" ? [] : ["not offered"]]);
+                            // 2.7.1: the neck is one setting for the whole page, its switch on every tab.
+                            checks.push(["the neck's switch is offered, pressed", !$("consNeckToggle").hidden && !$("consNeckToggle").disabled && $("consNeckToggle").getAttribute("aria-pressed") === "true" ? [] : ["not offered"]]);
                             $("consNeckToggle").click();
-                            checks.push(["the neck hides, on this tab", $("consNeckModule").hidden && cons.settings.neckHidden.join() === "counterpoint" && $("consNeckToggle").getAttribute("aria-pressed") === "false" && JSON.parse(localStorage.getItem(CONS_KEY)).neckHidden.join() === "counterpoint" ? [] : [cons.settings.neckHidden.join()]]);
-                            consSections.show("progressions");
-                            const onProgressions = !$("consNeckModule").hidden && !$("consNeckToggle").hidden;
-                            consSections.show("scales");
-                            const onScales = !$("consNeckModule").hidden && $("consNeckToggle").hidden;
+                            checks.push(["the neck hides, and that's kept", $("consNeckModule").hidden && cons.settings.neckShown === false && $("consNeckToggle").getAttribute("aria-pressed") === "false" && JSON.parse(localStorage.getItem(CONS_KEY)).neckShown === false ? [] : [cons.settings.neckShown]]);
+                            const neckOn = tab => {
+                                consSections.show(tab);
+                                return { shown: !$("consNeckModule").hidden, still: $("consNeckToggle").disabled, pressed: $("consNeckToggle").getAttribute("aria-pressed") };
+                            };
+                            const neckTabs = Object.fromEntries(["progressions", "rhythm", "tuning", "scales", "chords", "finder"].map(tab => [tab, neckOn(tab)]));
                             consSections.show("counterpoint");
-                            checks.push(["Progressions keeps its neck, Scales can't hide it, Counterpoint's stays hidden", onProgressions && onScales && $("consNeckModule").hidden ? [] : [onProgressions, onScales]]);
+                            const hiddenOn = ["progressions", "tuning"].every(tab => !neckTabs[tab].shown && !neckTabs[tab].still && neckTabs[tab].pressed === "false");
+                            const neededOn = ["scales", "chords", "finder"].every(tab => neckTabs[tab].shown && neckTabs[tab].still && neckTabs[tab].pressed === "true");
+                            const rhythmOff = !neckTabs.rhythm.shown && neckTabs.rhythm.still;
+                            checks.push(["hidden on every tab, but where the tab works on it: Scales, Chords and the Finder keep it, their switch pressed and still; Rhythm never has it", hiddenOn && neededOn && rhythmOff && $("consNeckModule").hidden ? [] : [JSON.stringify(neckTabs)]]);
                             $("consNeckToggle").click();
-                            checks.push(["and it shows again", !$("consNeckModule").hidden && !cons.settings.neckHidden.length && $("consNeck").children.length > 0 ? [] : [cons.settings.neckHidden.join()]]);
+                            checks.push(["and it shows again, everywhere", !$("consNeckModule").hidden && cons.settings.neckShown === true && $("consNeck").children.length > 0 ? [] : [cons.settings.neckShown]]);
+                            // And the Quiz's module keeps its place from kind to kind, with the neck shown.
+                            consSections.show("quiz");
+                            const kindBefore = cons.settings.quizKind;
+                            const quizTop = kind => {
+                                document.querySelector(`#consQuizKind [data-quiz="${kind}"]`).click();
+                                const module = $("consQuizPanel").querySelector(".cons-quiz-module").getBoundingClientRect();
+                                return Math.round(module.top);
+                            };
+                            const quizTops = ["note", "interval", "quality", "progression", "melody", "rhythm", "reading"].map(quizTop);
+                            document.querySelector(`#consQuizKind [data-quiz="${kindBefore}"]`).click();
+                            consSections.show("counterpoint");
+                            checks.push(["the Quiz's module stays put from kind to kind, the neck there for each", quizTops.every(each => each === quizTops[0]) ? [] : [quizTops.join(" ")]]);
                             key("ArrowRight");
                             key("d");
                             checks.push(["Right goes to the next note, a letter writes the nearest", cpNotes().startsWith("A3 D4 -") ? [] : [cpNotes()]]);
@@ -1971,7 +1987,7 @@
                         const savedRh = localStorage.getItem(RH_KEY);
                         try {
                             consSections.show("rhythm");
-                            checks.push(["Rhythm shows no neck, and asks AHK for the rhythms", $("consNeckModule").hidden && sent.has("GetRhythms") && $("rhSave").disabled ? [] : [$("consNeckModule").hidden, sent.has("GetRhythms")]]);
+                            checks.push(["Rhythm shows no neck, its switch still (2.7.1), and asks AHK for the rhythms", $("consNeckModule").hidden && $("consNeckToggle").disabled && sent.has("GetRhythms") && $("rhSave").disabled ? [] : [$("consNeckModule").hidden, sent.has("GetRhythms")]]);
                             receiveRhythms([]);
                             setRhythm(MaestroRhythm.newRhythm({ title: "Smoke rhythm", meter: "4/4", steps: 4 }), { id: null, savedText: null });
                             const cells = row => [...$("rhRows").querySelectorAll(`[data-cell^="${row}:"]`)];

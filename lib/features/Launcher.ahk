@@ -105,66 +105,7 @@ GetTerminalWindows() {
     return windows
 }
 
-FocusExistingApplication(windows, applicationName) {
-    global ASCS_VirtualDesktopDllPath
-
-    if !FileExist(ASCS_VirtualDesktopDllPath) {
-        ShowNotice(
-            "Add VirtualDesktopAccessor.dll to focus apps across desktops."
-        )
-        throw Error(
-            applicationName " is already open, but cross-desktop focus "
-            "requires VirtualDesktopAccessor.dll."
-        )
-    }
-
-    dll := ASCS_VirtualDesktopDllPath
-    currentDesktop := DllCall(dll "\GetCurrentDesktopNumber", "Int")
-    if (currentDesktop < 0)
-        throw Error("Unable to determine the current virtual desktop.")
-
-    selectedWindow := 0
-    selectedDesktop := -1
-    for hwnd in windows {
-        desktop := DllCall(
-            dll "\GetWindowDesktopNumber",
-            "Ptr", hwnd,
-            "Int"
-        )
-        if (desktop < 0)
-            throw Error("Unable to determine an " applicationName " window's desktop.")
-
-        if (desktop = currentDesktop) {
-            selectedWindow := hwnd
-            selectedDesktop := desktop
-            break
-        }
-
-        if !selectedWindow {
-            selectedWindow := hwnd
-            selectedDesktop := desktop
-        }
-    }
-
-    if !selectedWindow
-        return false
-
-    if (selectedDesktop != currentDesktop) {
-        switched := DllCall(
-            dll "\GoToDesktopNumber",
-            "Int", selectedDesktop,
-            "Int"
-        )
-        if (switched < 0)
-            throw Error("Unable to switch to the " applicationName " desktop.")
-    }
-
-    window := "ahk_id " selectedWindow
-    WinActivate(window)
-    if !WinWaitActive(window,, 2)
-        throw Error("Unable to focus the existing " applicationName " window.")
-    return true
-}
+FocusExistingApplication(windows, applicationName) => FocusAppWindow(windows, applicationName)
 
 RunAndActivateExplorer(
     target,
@@ -474,58 +415,7 @@ GetVivaldiWindows() {
     return visibleWindows
 }
 
-FocusVivaldiWindow(windows) {
-    global ASCS_VirtualDesktopDllPath
-
-    if !FileExist(ASCS_VirtualDesktopDllPath)
-        throw Error(
-            "Vivaldi is open, but its virtual desktop cannot be detected. "
-            "Install VirtualDesktopAccessor.dll with GetCurrentDesktopNumber "
-            "and GetWindowDesktopNumber exports."
-        )
-
-    dll := ASCS_VirtualDesktopDllPath
-    currentDesktop := DllCall(dll "\GetCurrentDesktopNumber", "Int")
-    if (currentDesktop < 0)
-        throw Error("Unable to determine the current virtual desktop.")
-
-    currentDesktopWindow := 0
-    firstWindow := windows[1]
-    firstWindowDesktop := -1
-    for hwnd in windows {
-        desktop := DllCall(
-            dll "\GetWindowDesktopNumber",
-            "Ptr", hwnd,
-            "Int"
-        )
-        if (desktop < 0)
-            throw Error("Unable to determine a Vivaldi window's virtual desktop.")
-
-        if (hwnd = firstWindow)
-            firstWindowDesktop := desktop
-        if (desktop = currentDesktop) {
-            currentDesktopWindow := hwnd
-            break
-        }
-    }
-
-    hwnd := currentDesktopWindow ? currentDesktopWindow : firstWindow
-
-    if (!currentDesktopWindow && firstWindowDesktop != currentDesktop) {
-        switched := DllCall(
-            dll "\GoToDesktopNumber",
-            "Int", firstWindowDesktop,
-            "Int"
-        )
-        if (switched < 0)
-            throw Error("Unable to switch to Vivaldi's virtual desktop.")
-    }
-
-    window := "ahk_id " hwnd
-    WinActivate(window)
-    if !WinWaitActive(window,, 2)
-        throw Error("An existing Vivaldi window could not be activated.")
-}
+FocusVivaldiWindow(windows) => FocusAppWindow(windows, "Vivaldi")
 
 FindVivaldi() {
     localAppData := EnvGet("LOCALAPPDATA")

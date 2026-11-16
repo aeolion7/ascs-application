@@ -14,7 +14,7 @@ Suspend(true)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 2.7.0
+; Version 2.7.1
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -24,7 +24,7 @@ Suspend(true)
 ; GLOBAL VARIABLES
 ; ==========================================
 
-global ASCS_Version := "2.7.0"
+global ASCS_Version := "2.7.1"
 global ASCS_App := ""
 global ASCS_WindowIcon := 0
 global ASCS_IconPath := A_ScriptDir "\frontend\assets\ascs.ico"
@@ -433,8 +433,11 @@ ShowASCS(view := "") {
         else if (ASCS_AscsSoundMode = "show")
             PlayAscsSound("show")
     }
+    ; Maestro's window may be on another desktop (2.7.1), where a plain
+    ; WinActivate can't find it: ActivateWindow goes there first.
+    if !ActivateWindow(ASCS_App.Hwnd)
+        WriteLog("Maestro's window could not be brought forward.")
     EnsureWindowUsable()
-    WinActivate("ahk_id " ASCS_App.Hwnd)
 
     try {
         ASCS_App.MoveFocus(0)
@@ -463,6 +466,9 @@ ShowASCS(view := "") {
 EnsureWindowUsable() {
     global ASCS_App
     hwnd := "ahk_id " ASCS_App.Hwnd
+    ; Left on another desktop, the window counts as hidden (2.7.1).
+    previous := A_DetectHiddenWindows
+    DetectHiddenWindows(true)
     try {
         state := WinGetMinMax(hwnd)
         if (state = -1) {
@@ -494,6 +500,8 @@ EnsureWindowUsable() {
         WinMove(left + (right - left - width) // 2, top + (bottom - top - height) // 2, width, height, hwnd)
     } catch as err {
         WriteLog("Window check failed: " err.Message)
+    } finally {
+        DetectHiddenWindows(previous)
     }
 }
 
@@ -1535,13 +1543,10 @@ IsDashboardWindowVisible() {
     ; Asked before the window exists while starting (2.0.0): no window, nothing to show.
     if !IsObject(ASCS_App)
         return false
-    try {
-        return (DllCall("IsWindowVisible", "Ptr", ASCS_App.Hwnd, "Int")
-            && WinGetMinMax("ahk_id " ASCS_App.Hwnd) != -1)
-    } catch as err {
-        WriteLog("Dashboard visibility check failed: " err.Message)
-        return false
-    }
+    ; Asked of the window itself (2.7.1): found by its handle, a window on
+    ; another desktop counted as missing ("Target window not found").
+    return DllCall("IsWindowVisible", "Ptr", ASCS_App.Hwnd, "Int")
+        && !DllCall("IsIconic", "Ptr", ASCS_App.Hwnd, "Int")
 }
 
 HandleWindowAction(action) {

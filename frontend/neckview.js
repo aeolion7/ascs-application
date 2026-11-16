@@ -555,17 +555,34 @@ function drawConsKeys(low, high, mark, label, nameOf) {
 
 // ---- Drawing the page
 
-// The neck hidden on this tab (2.5.0), where it's only a way to write.
-const consNeckHidden = () => {
+// The neck (or the keys) is one setting for the whole page (2.7.1), so
+// moving between tabs or quiz kinds never moves the page. Hidden, it still
+// shows where the tab can't work without it; the Rhythm tab never has it.
+const consNeckNeeded = () => {
     const tab = consSections.current();
-    if (MaestroMusic.NECKLESS.includes(tab)) return true;
-    // The Quiz's rhythms are written and tapped (2.6.0).
-    if (tab === "quiz") return MaestroMusic.QUIZ_NECKLESS.includes(cons.settings.quizKind);
-    return MaestroMusic.NECK_OPTIONAL.includes(tab) && cons.settings.neckHidden.includes(tab);
+    return MaestroMusic.NECK_NEEDED.includes(tab) || (tab === "quiz" && MaestroMusic.QUIZ_NECK_NEEDED.includes(cons.settings.quizKind));
 };
+const consNeckUnused = () => MaestroMusic.NECK_UNUSED.includes(consSections.current());
+const consNeckHidden = () => consNeckUnused() || (!cons.settings.neckShown && !consNeckNeeded());
+
+// The switch beside the instrument's chip, on every tab: pressed while the
+// neck shows; still where the tab decides (pressed where it needs the neck).
+function renderConsNeckToggle() {
+    const toggle = $("consNeckToggle");
+    const name = consKeyboard() ? "Keys" : "Neck";
+    const needed = consNeckNeeded();
+    const unused = consNeckUnused();
+    toggle.textContent = name;
+    toggle.disabled = needed || unused;
+    toggle.setAttribute("aria-pressed", String(!consNeckHidden()));
+    toggle.title = needed ? `The ${name.toLowerCase()} stays on this tab, which works on it; it can be hidden on the others`
+        : unused ? `This tab doesn't use the ${name.toLowerCase()}, so it has the room; it shows on the others as set`
+        : `${consNeckHidden() ? "Show" : "Hide"} the ${name.toLowerCase()} on every tab`;
+}
 
 function renderConsNeck() {
     const hidden = consNeckHidden();
+    renderConsNeckToggle();
     $("consNeckModule").hidden = hidden;
     if (hidden) {
         $("consNeck").replaceChildren();
@@ -621,12 +638,6 @@ function renderConsToolbar() {
     $("consCapo").closest("label").hidden = capoAside;
     // Loop and Bass sit beside Play on Progressions alone (2.4.1).
     $("progTransport").hidden = consSections.current() !== "progressions";
-    // The neck (or the keys) can be hidden where it's only a way to write.
-    const neckName = consKeyboard() ? "Keys" : "Neck";
-    $("consNeckToggle").hidden = !MaestroMusic.NECK_OPTIONAL.includes(consSections.current());
-    $("consNeckToggle").textContent = neckName;
-    $("consNeckToggle").setAttribute("aria-pressed", String(!consNeckHidden()));
-    $("consNeckToggle").title = `${consNeckHidden() ? "Show" : "Hide"} the ${neckName.toLowerCase()} on this tab`;
     $("consCapo").value = String(cons.settings.capo);
     $("consLefty").setAttribute("aria-pressed", String(cons.settings.lefty));
     $("consInstName").textContent = document.querySelector(`#consInstruments [data-instrument="${instrument}"]`)?.textContent ?? "";
@@ -993,9 +1004,8 @@ $("consCapo").addEventListener("change", () => {
 });
 $("consLefty").addEventListener("click", () => setConsNeck({ lefty: !cons.settings.lefty }));
 $("consNeckToggle").addEventListener("click", () => {
-    const tab = consSections.current();
-    const hidden = cons.settings.neckHidden.filter(each => each !== tab);
-    cons.settings.neckHidden = consNeckHidden() ? hidden : [...hidden, tab];
+    if (consNeckNeeded() || consNeckUnused()) return;
+    cons.settings.neckShown = !cons.settings.neckShown;
     saveConsSettings();
     renderConsToolbar();
     renderConsNeck();

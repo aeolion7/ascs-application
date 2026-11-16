@@ -601,12 +601,26 @@ const PreviewScenes = (() => {
         }, { voice: 0, index: 7 }, () => openCpClefMenu(0)),
         "counterpoint-clefs-sharps": cpScene(() => MaestroCounterpoint.withClef(MaestroCounterpoint.melodyExercise({ tonic: "E", mode: "major", instrument: "concert", notes: ["E3", "G#3", "B3", "E4", "D#4", "C#4", "B3", "A3"].map(text => ({ p: MaestroNotation.parsePitch(text), d: "q", dot: false, tie: false })), title: "Sharps on a tenor clef" }), 0, "tenor"), { voice: 0, index: 0 }, () => { cpMelody.chords = "off"; cpMelody.view = "concert"; renderCounterpoint(); }),
         "counterpoint-clefs-flats": cpScene(() => MaestroCounterpoint.withClef(MaestroCounterpoint.melodyExercise({ tonic: "Eb", mode: "major", instrument: "concert", notes: ["Eb4", "G4", "Bb4", "Eb4", "F4", "Ab4", "G4", "Eb4"].map(text => ({ p: MaestroNotation.parsePitch(text), d: "q", dot: false, tie: false })), title: "Flats on an alto clef" }), 0, "alto"), { voice: 0, index: 0 }, () => { cpMelody.chords = "off"; cpMelody.view = "concert"; renderCounterpoint(); }),
+        // A note to write high above the staff: its ledger lines past the
+        // drawing's top, into the room above (2.7.1).
+        "counterpoint-ghost-high": cpScene(() => {
+            const fux = MaestroCounterpoint.speciesExercise({ species: 1, cantus: MaestroCounterpoint.fuxNotes(MaestroCounterpoint.FUX[0]), cantusBelow: true, mode: "dorian", final: "D", title: "First species, Fux's Dorian" });
+            return cpWrite(fux, [["A3", "D4", "C4", "D4", "D4", "A3", "C4"]]);
+        }, { voice: 0, index: 7 }, () => setTimeout(() => {
+            // Once the page has settled: the pointer between the holder's top
+            // and the drawing's, where only this release shows the note.
+            const column = cp.drawn.columns.find(each => each.system === 0 && each.time > 0);
+            const box = $("cpStaff").querySelector("svg").getBoundingClientRect();
+            const top = $("cpStaff").getBoundingClientRect().top;
+            cpGhost.at = { clientX: box.left + (column.x + 0.75 * cp.drawn.space) * box.width / cp.drawn.width, clientY: (top + box.top) / 2 };
+            drawCpGhost();
+        }, 1200)),
         // The neck hidden on this tab.
         "counterpoint-noneck": cpScene(() => {
             const fux = MaestroCounterpoint.speciesExercise({ species: 1, cantus: MaestroCounterpoint.fuxNotes(MaestroCounterpoint.FUX[0]), cantusBelow: true, mode: "dorian", final: "D", title: "First species, Fux's Dorian" });
             return cpWrite(fux, [["A3", "D4", "C4", "D4", "D4", "A3", "C4"]]);
         }, { voice: 0, index: 7 }, () => {
-            cons.settings.neckHidden = ["counterpoint"];
+            cons.settings.neckShown = false;
             renderConservatory();
         }),
         "counterpoint-fourth": cpScene(() => cpWrite(MaestroCounterpoint.speciesExercise({ species: 4, cantus: MaestroCounterpoint.fuxNotes(MaestroCounterpoint.FUX[4]), cantusBelow: true, mode: "aeolian", final: "A", title: "Fourth species, Fux's Aeolian" }),
@@ -701,6 +715,16 @@ const PreviewScenes = (() => {
         "conservatory-ukulele": consScene({ instrument: "ukulele", root: "C", scale: "major" }),
         "conservatory-keyboard": consScene({ instrument: "keyboard", root: "E♭", scale: "harmonic" }),
         "conservatory-tuning": consScene({ tab: "tuning", tone: "steady", own: [{ id: "own-p1", name: "Open C", instrument: "guitar", pitches: [36, 43, 48, 55, 60, 64], own: true }] }, () => { cons.steady = { midi: 55 }; renderConsStrings(); }),
+        // 2.7.1: the neck hidden (one setting for the page) on every tab and quiz kind that can do without it.
+        "noneck-progressions": progScene({}, undefined, undefined, { neckShown: false }),
+        "noneck-progressions-staff": progScene({ view: "staff" }, { section: 0, bar: 1, slot: 0 }, undefined, { neckShown: false }),
+        "noneck-quiz-interval": consScene({ neckShown: false, tab: "quiz", quizKind: "interval", quizDirection: "up" }, () => { resetQuizScore(); quiz.question = { low: 52, high: 59, semis: 7 }; quiz.answered = 7; Object.assign(quiz, { right: 4, asked: 4, streak: 4 }); renderQuiz(); renderConsNeck(); }),
+        "noneck-quiz-chords": consScene({ neckShown: false, tab: "quiz", quizKind: "quality", quizChords: "sevenths", quizDirection: "together" }, () => { resetQuizScore(); quiz.question = { id: "m7b5", root: "B", name: "Bm7♭5", midis: [59, 62, 65, 69] }; quiz.answered = "m7b5"; Object.assign(quiz, { right: 5, asked: 6, streak: 2 }); renderQuiz(); renderConsNeck(); }),
+        "noneck-quiz-dictation": consScene({ neckShown: false, tab: "quiz", quizKind: "progression", quizChords: "triads", quizWrite: "outer" }, () => { resetQuizScore(); quiz.question = MaestroMusic.quizProgression("triads", -1, () => 0.1); startQuizDictation(quiz.question); quiz.written[1] = quizAsked(quiz.question.voicings[1]); quiz.written[2] = [quiz.question.voicings[2][0]]; Object.assign(quiz, { chordAt: 2, noteAt: quiz.written[2][0] }); renderQuiz(); renderConsNeck(); }),
+        "noneck-quiz-melody": consScene({ neckShown: false, tab: "quiz", quizKind: "melody", quizMelody: 5 }, () => { resetQuizScore(); quiz.question = MaestroMusic.quizMelody(5, "", () => 0.3); startQuizMelody(quiz.question); quiz.notes = quiz.question.pitches.map((p, at) => (at < 3 ? p : null)); quiz.at = 3; renderQuiz(); renderConsNeck(); }),
+        "noneck-quiz-rhythm": consScene({ neckShown: false, tab: "quiz", quizKind: "rhythm", quizRhythm: "middle" }, () => { resetQuizScore(); quiz.question = { meter: "4/4", steps: 4, cells: [1, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1, 0] }; quiz.cells = [1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]; renderQuiz(); renderConsNeck(); }),
+        "noneck-quiz-reading": consScene({ neckShown: false, tab: "quiz", quizKind: "reading", quizRhythm: "easy" }, () => { resetQuizScore(); quiz.question = { meter: "4/4", steps: 2, cells: [1, 1, 1, 0, 0, 1, 1, 1] }; renderQuiz(); renderConsNeck(); }),
+        "noneck-tuning": consScene({ neckShown: false, tab: "tuning", tone: "steady", own: [{ id: "own-p1", name: "Open C", instrument: "guitar", pitches: [36, 43, 48, 55, 60, 64], own: true }] }, () => { cons.steady = { midi: 55 }; renderConsStrings(); }),
         "conservatory-tuning-new": consScene({ tab: "tuning", tunings: { guitar: "own-p1" }, own: [{ id: "own-p1", name: "Open C", instrument: "guitar", pitches: [36, 43, 48, 55, 60, 64], own: true }] }, () => openConsTuningForm()),
         "conservatory-tuning-keyboard": consScene({ instrument: "keyboard", tab: "tuning" }),
         "home-metronome": () => {
