@@ -140,7 +140,8 @@ function drawStaffGhost(svg, drawn, { x, staffY, clef, step, d }) {
 const quiz = {
     // name the note: { string, fret, midi }; intervals: { low, high, semis };
     // chords (2.4.0): { id, root, name, midis }; progressions: music.js's quizProgression;
-    // melodies (2.6.0): its quizMelody; rhythms and reading: rhythm.js's quizBar
+    // melodies (2.6.0): its quizMelody; rhythms and reading: rhythm.js's quizBar.
+    // A progression also has its voicings as played (2.7.0).
     question: null,
     // the answer given, once given: a pitch class, semitones, a quality's id,
     // the degrees picked, a bar's cells, or reading's taps graded
@@ -150,14 +151,16 @@ const quiz = {
     at: 1,              // the melody's note selected
     undo: [],           // the melody's notes before each change
     drawn: null,        // the melody's staff as engraved
+    written: [],        // a progression as it's written on the staff (2.7.0): each chord's MIDI numbers, the first given
+    chordAt: 1,         // its chord selected
+    noteAt: null,       // and that chord's note selected, by MIDI number
+    dict: null,         // its staff as engraved, and the hands' notes
     cells: [],          // a rhythm as it's written
     sound: null,        // what's sounding: { run } or { out, timers, start, end, step, tapping, count }
     right: 0,
     asked: 0,
-    streak: 0,
-    timer: null         // the next question, after a right answer
+    streak: 0
 };
-const QUIZ_NEXT_AFTER = 900;    // ms a right answer shows before the next question
 
 const quizKind = () => cons.settings.quizKind;
 const QUIZ_TITLES = Object.freeze({ note: "Name the Note", interval: "Intervals by Ear", quality: "Chords by Ear", progression: "Progressions by Ear", melody: "Melodies by Ear", rhythm: "Rhythms by Ear", reading: "Reading Rhythms" });
@@ -172,7 +175,7 @@ function quizTruth(question = quiz.question) {
         case "rhythm": return question.cells;
         case "reading": return true;
         case "melody": return question.midis.slice(1);
-        default: return question.degrees.slice(1).map(quizDegree);
+        default: return quizWriting() ? question.voicings.slice(1).map(midis => quizAsked(midis)) : question.degrees.slice(1).map(quizDegree);
     }
 }
 const quizIsRight = answer => quizKind() === "reading" ? answer?.all === true : JSON.stringify(answer) === JSON.stringify(quizTruth());
@@ -228,9 +231,11 @@ consNeckModes.quiz = {
     },
     // Nothing is given away by a tooltip before it's answered.
     nameOf: midi => quiz.answered === null ? "?" : finderName(midi),
-    // A melody's next note, at the pitch clicked (2.6.0); otherwise it's heard.
+    // A melody's next note, at the pitch clicked (2.6.0), or a note of the
+    // progression's chord selected (2.7.0); otherwise it's heard.
     click: midi => {
         if (quizMelodyShown() && quiz.answered === null) writeQuizNote(quiz.at, MaestroNotation.pitchFromMidi(midi, quiz.question.fifths, "major"), { advance: true });
+        else if (quizDictShown() && quiz.answered === null) toggleQuizDictPitch(midi);
         else pluckConsNote(midi);
     },
     lit: () => quizKind() === "note" && !consKeyboard() ? consPosition() : null,
@@ -242,7 +247,7 @@ consNeckModes.quiz = {
             ? asked.string === undefined || asked.string >= spots.pitches.length || asked.fret < spots.from || asked.fret > spots.to || spots.pitches[asked.string] + asked.fret !== asked.midi
             : quizKind() === "interval" ? asked.semis === undefined
             : quizKind() === "quality" ? asked.id === undefined
-            : quizKind() === "progression" ? asked.numerals === undefined
+            : quizKind() === "progression" ? asked.numerals === undefined || !asked.voicings || asked.low !== quizLowest()
             : quizKind() === "melody" ? asked.pitches === undefined
             : asked.cells === undefined);
         if (stale) newQuizQuestion({ play: false });
@@ -281,10 +286,7 @@ function playQuizQuestion() {
         return;
     }
     const notes = [], starts = [], ends = [];
-    let before = null;
-    quiz.question.chords.forEach((name, at) => {
-        const voiced = MaestroHarmony.voiceChord(name, before);
-        before = voiced;
+    (quiz.question.voicings ?? quizVoicings(quiz.question.chords)).forEach((voiced, at) => {
         voiced.forEach((midi, index) => {
             notes.push(midi);
             starts.push(at * QUIZ_CHORD_GAP + index * 0.012);
@@ -298,7 +300,7 @@ function playQuizQuestion() {
 
 // Named one at a time, the first given: a progression's chords.
 const QUIZ_PICKED = Object.freeze(["progression"]);
-const quizPicked = () => QUIZ_PICKED.includes(quizKind());
+const quizPicked = () => QUIZ_PICKED.includes(quizKind()) && !quizWriting();
 const quizRhythmic = () => MaestroMusic.QUIZ_NECKLESS.includes(quizKind());
 // The pulse under a bar (its first beat a little louder), and the bar's notes.
 const QUIZ_PULSE = Object.freeze({ sound: "hatClosed", level: 0.3, accent: 0.5 });
@@ -613,6 +615,340 @@ function drawQuizGhost() {
     drawStaffGhost(svg, quiz.drawn, { x: hit.column.x, staffY: quiz.drawn.systems[hit.column.system].staffY[0], clef: "treble", step: hit.step, d: "q" });
 }
 
+// ---- A progression written on a staff (2.7.0), as the instrument is
+// written (a keyboard's on a grand staff): the first chord given, and of
+// the rest the bass, the outer voices or every note, at the pitch heard, by
+// the staff, the neck or the keys.
+
+// Drawn as large as the melody's staff, or smaller, down to the least, so
+// the staves fit under the question in the room the tab has.
+const QUIZ_DICT_SCALE = 1.5;
+const QUIZ_DICT_LEAST = 0.8;
+const QUIZ_DICT_BAR_ROOM = [1, 1.5];   // spaces each bar is widened before and after its chord
+const QUIZ_DICT_HEADROOM = 3.6;     // spaces above the staff for the numerals
+const QUIZ_DICT_LABEL = 19;         // the numerals' size, in the score's units
+const QUIZ_WRITE_WORDS = Object.freeze({ numerals: "Numerals", bass: "Bass line", outer: "Outer voices", all: "Every note" });
+// The most notes a chord takes as written: the bass, the two outer voices,
+// or as many as a staff holds.
+const QUIZ_WRITE_MOST = Object.freeze({ bass: 1, outer: 2, all: 8 });
+const quizWriting = () => quizKind() === "progression" && cons.settings.quizWrite !== "numerals";
+const quizDictShown = () => quizWriting() && Boolean(quiz.question?.voicings);
+const quizKeyOf = question => ({ root: question.key, scale: "major" });
+const quizSameNotes = (a, b) => a.length === b.length && a.every((midi, at) => midi === b[at]);
+
+// What's asked of a chord as played: its bass, its lowest and highest notes, or all of it.
+function quizAsked(midis, write = cons.settings.quizWrite) {
+    if (write === "bass") return [midis[0]];
+    if (write === "outer") return [midis[0], midis.at(-1)];
+    return [...midis];
+}
+
+// A progression's chords as they're played, each voiced to move as little
+// as it can from the one before, from the instrument's lowest string (a
+// keyboard's from E2), so a mandolin's or a ukulele's sit on its staff.
+const quizLowest = () => (consKeyboard() ? 40 : Math.min(...MaestroMusic.currentTuning(cons.settings).pitches));
+function quizVoicings(chords, low = quizLowest()) {
+    let before = null;
+    return chords.map(name => (before = MaestroHarmony.voiceChord(name, before, low)));
+}
+
+// A new progression: its voicings, and the first chord written.
+function startQuizDictation(question) {
+    question.low = quizLowest();
+    question.voicings = quizVoicings(question.chords, question.low);
+    quiz.written = question.voicings.map((midis, at) => (at === 0 ? [...midis] : []));
+    quiz.chordAt = 1;
+    quiz.noteAt = null;
+    quiz.undo = [];
+}
+
+// The chords as whole notes, a bar each, on the instrument's staff or split
+// between a keyboard's hands at middle C; a chord named is spelled as it spells its notes, the rest as the key does.
+function quizDictScore(chords, names) {
+    const key = quizKeyOf(quiz.question);
+    const [whole] = MaestroHarmony.staffLengths(8);
+    const { clefs } = MaestroMusic.staffWriting(cons.settings);
+    const hands = chords.map((midis, at) => MaestroHarmony.staffHands(names[at] ?? "", [...midis].sort((a, b) => a - b), key, clefs.length));
+    const voice = hand => hands.map(both => {
+        const notes = both[hand];
+        return notes.length
+            ? { p: notes[0].p, more: notes.slice(1).map(each => each.p), d: whole.d, dot: whole.dot, tie: false }
+            : { p: null, d: whole.d, dot: whole.dot, tie: false };
+    });
+    const score = MaestroNotation.cleanScore({
+        title: "", key: { fifths: MaestroHarmony.keySignature(key), mode: "major" }, meter: { beats: 4, unit: 4 },
+        staves: clefs.map((clef, hand) => ({ clef, voices: [{ name: clefs.length === 1 ? "Chords" : hand === 0 ? "Right hand" : "Left hand", notes: voice(hand) }] }))
+    });
+    return score ? { score, hands: hands.map(both => both.map(notes => notes.map(each => each.midi))) } : null;
+}
+
+// Where a chord's notes are drawn: its column, and its heads by MIDI number.
+function quizDictPlace(made, at) {
+    const timed = MaestroNotation.timed(MaestroNotation.voicesOf(made.score)[0].notes);
+    const onset = timed.find(entry => entry.index === at)?.onset;
+    const column = made.drawn.columns.find(each => each.time === onset);
+    if (!column) return null;
+    const heads = made.drawn.heads.filter(head => head.index === at && head.voice <= 1).map(head => ({ ...head, midi: made.hands[at][head.voice][head.at] }));
+    return { column, heads };
+}
+
+// rings: for each chord, a class for each MIDI number ringed; labels over
+// each chord, with a class; picked: the chord and note selected.
+function drawQuizDict(holder, chords, { label, names, labels, rings = null, picked = null, scale = QUIZ_DICT_SCALE }) {
+    const made = quizDictScore(chords, names);
+    if (!made) {
+        holder.replaceChildren();
+        return null;
+    }
+    made.drawn = MaestroNotation.engrave(made.score, { headroom: QUIZ_DICT_HEADROOM * MaestroNotation.SPACE, barPadding: () => QUIZ_DICT_BAR_ROOM });
+    const { drawn } = made;
+    const space = drawn.space;
+    made.scale = typeof scale === "function" ? scale(drawn) : scale;
+    const svg = svgNode("svg", { class: "cp-score prog-staff-svg", viewBox: `0 0 ${drawn.width} ${drawn.height}`, width: Math.round(drawn.width * made.scale), height: Math.round(drawn.height * made.scale), role: "img", "aria-label": label });
+    const system = drawn.systems[0];
+    chords.forEach((_, at) => {
+        const place = quizDictPlace(made, at);
+        if (!place) return;
+        if (picked?.chord === at) {
+            const top = system.top + (QUIZ_DICT_HEADROOM - 2.4) * space;
+            svg.append(svgNode("rect", { class: "prog-staff-pick", x: place.column.x - 1.4 * space, y: top, width: 4 * space, height: system.bottom - top, rx: 0.6 * space }));
+        }
+        place.heads.forEach(head => {
+            const kind = picked?.chord === at && head.midi === picked.note ? "is-selected" : rings?.[at]?.get(head.midi);
+            if (kind) svg.append(svgNode("ellipse", { class: `cp-ring ${kind}`, cx: head.x + 0.6 * space, cy: head.y, rx: 1.25 * space, ry: 0.95 * space }));
+        });
+        const words = labels[at];
+        if (!words) return;
+        const node = svgNode("text", { x: place.column.x, y: system.top + (QUIZ_DICT_HEADROOM - 0.7) * space, class: `prog-staff-chord${words.kind ? ` ${words.kind}` : ""}`, "font-size": QUIZ_DICT_LABEL });
+        node.textContent = words.text;
+        svg.append(node);
+    });
+    drawScoreItems(svg, drawn);
+    holder.replaceChildren(svg);
+    return made;
+}
+
+// The scale that fits the staff in the tab's room under the question, with
+// a line left for the result.
+function quizDictFit(drawn) {
+    const panel = $("consQuizPanel");
+    const holder = $("consQuizDictStaff");
+    if (!panel.clientHeight || !drawn.height) return QUIZ_DICT_SCALE;
+    const top = holder.getBoundingClientRect().top - panel.getBoundingClientRect().top + panel.scrollTop;
+    const result = $("consQuizResult");
+    const below = (parseFloat(getComputedStyle(result).lineHeight) || 28) + 24;
+    const room = panel.clientHeight - top - below;
+    return Math.max(QUIZ_DICT_LEAST, Math.min(QUIZ_DICT_SCALE, room / drawn.height));
+}
+
+const quizChordWords = midis => (midis.length ? midis.map(midi => MaestroMusic.PLAIN_NAMES[midi % 12] + (Math.floor(midi / 12) - 1)).join(" ") : "nothing written");
+
+function renderQuizDictation() {
+    const question = quiz.question;
+    if (!quizDictShown()) return;
+    const answered = quiz.answered !== null;
+    const numerals = question.degrees.map(degree => question.numerals[quizDegree(degree)]);
+    const truth = question.voicings.map(midis => quizAsked(midis));
+    const right = at => quizSameNotes(quiz.written[at], truth[at]);
+    const labels = numerals.map((text, at) => (at === 0 ? { text } : !answered ? { text: "?" } : { text, kind: right(at) ? "is-right" : "is-wrong" }));
+    const rings = answered ? quiz.written.map((midis, at) => new Map(at === 0 ? [] : midis.map(midi => [midi, truth[at].includes(midi) ? "is-right" : "is-wrong"]))) : null;
+    const yours = quiz.written.map((midis, at) => `${at === 0 ? numerals[0] : `chord ${at + 1}`}: ${quizChordWords(midis)}`).join("; ");
+    quiz.dict = drawQuizDict($("consQuizDictStaff"), quiz.written, {
+        label: `The progression as you've written it: ${yours}`, names: [question.chords[0]], labels, rings,
+        picked: answered ? null : { chord: quiz.chordAt, note: quiz.noteAt }, scale: quizDictFit
+    });
+    $("consQuizDictPlayed").hidden = !answered;
+    if (answered) {
+        const played = question.voicings.map((midis, at) => `${numerals[at]}: ${quizChordWords(midis)}`).join("; ");
+        drawQuizDict($("consQuizDictPlayedStaff"), question.voicings, { label: `The progression as played: ${played}`, names: question.chords, labels: numerals.map(text => ({ text })), scale: quiz.dict?.scale ?? QUIZ_DICT_SCALE });
+    }
+    if (quizDictGhost.at && !quizDictGhost.frame) quizDictGhost.frame = requestAnimationFrame(drawQuizDictGhost);
+}
+
+// Every chord has the notes asked for: one for the bass, two for the outer
+// voices, any for every note (how many is part of what's heard).
+function quizDictReady() {
+    if (!quizDictShown()) return false;
+    const most = QUIZ_WRITE_MOST[cons.settings.quizWrite];
+    return quiz.written.slice(1).every(midis => (most < QUIZ_WRITE_MOST.all ? midis.length === most : midis.length > 0));
+}
+
+// A chord's notes written (from E0 to C8, each once), the chord and its note selected.
+function setQuizChord(at, midis, note) {
+    if (!quizDictShown() || quiz.answered !== null || !Number.isInteger(at) || at < 1 || at >= quiz.written.length) return false;
+    const next = [...new Set(midis)].filter(midi => Number.isInteger(midi) && midi >= MaestroHarmony.VOICING_LOW && midi <= MaestroHarmony.VOICING_HIGH).sort((a, b) => a - b);
+    const changed = !quizSameNotes(next, quiz.written[at]);
+    if (changed) {
+        quiz.undo.push(quiz.written.map(each => [...each]));
+        quiz.written = quiz.written.map((each, index) => (index === at ? next : each));
+    }
+    quiz.chordAt = at;
+    quiz.noteAt = next.includes(note) ? note : null;
+    renderQuiz();
+    return changed;
+}
+
+// A note written into a chord, heard, or one there selected. With as many as
+// the level takes, it takes the selected note's place (or the nearest).
+function addQuizDictNote(at, midi) {
+    const notes = quiz.written[at];
+    if (!notes) return;
+    if (notes.includes(midi)) return selectQuizDictNote(at, midi);
+    let kept = notes;
+    if (notes.length >= QUIZ_WRITE_MOST[cons.settings.quizWrite]) {
+        const out = quiz.chordAt === at && notes.includes(quiz.noteAt) ? quiz.noteAt : notes.reduce((best, each) => (Math.abs(each - midi) < Math.abs(best - midi) ? each : best));
+        kept = notes.filter(each => each !== out);
+    }
+    if (setQuizChord(at, [...kept, midi], midi)) pluckConsNote(midi);
+}
+
+function removeQuizDictNote(at, midi) {
+    const notes = quiz.written[at];
+    if (!notes?.includes(midi)) return;
+    const rest = notes.filter(each => each !== midi);
+    setQuizChord(at, rest, rest.filter(each => each < midi).at(-1) ?? rest[0] ?? null);
+}
+
+function selectQuizDictNote(at, midi) {
+    if (!quizDictShown() || quiz.answered !== null || at < 1 || at >= quiz.written.length) return;
+    quiz.chordAt = at;
+    quiz.noteAt = quiz.written[at].includes(midi) ? midi : null;
+    renderQuiz();
+    if (quiz.noteAt !== null) pluckConsNote(midi);
+}
+
+// Another chord: its highest note selected.
+function moveQuizDictChord(by) {
+    const at = Math.max(1, Math.min(quiz.written.length - 1, quiz.chordAt + by));
+    selectQuizDictNote(at, quiz.written[at].at(-1) ?? null);
+}
+
+// The note above or below the selected one in its chord.
+function stepQuizDictSelection(by) {
+    const notes = quiz.written[quiz.chordAt] ?? [];
+    if (!notes.length) return;
+    const from = notes.indexOf(quiz.noteAt);
+    const next = notes[Math.max(0, Math.min(notes.length - 1, (from < 0 ? notes.length - 1 : from) + by))];
+    selectQuizDictNote(quiz.chordAt, next);
+}
+
+// The selected note a step up or down in the key, or a half step; past a
+// note of the chord's own to the next free place.
+function stepQuizDictNote(by, chromatic) {
+    const notes = quiz.written[quiz.chordAt] ?? [];
+    if (!notes.includes(quiz.noteAt)) return;
+    const fifths = MaestroHarmony.keySignature(quizKeyOf(quiz.question));
+    let p = MaestroHarmony.spellVoicing("", [quiz.noteAt], quizKeyOf(quiz.question))[0];
+    let midi = quiz.noteAt;
+    for (let tries = 0; tries < 12; tries++) {
+        if (chromatic) midi += by;
+        else {
+            const step = p.step + by;
+            p = MaestroNotation.pitch(step, MaestroNotation.keyAlter(((step % 7) + 7) % 7, fifths));
+            midi = MaestroNotation.midiOf(p);
+        }
+        if (midi < MaestroHarmony.VOICING_LOW || midi > MaestroHarmony.VOICING_HIGH) return;
+        if (!notes.includes(midi)) break;
+    }
+    if (notes.includes(midi)) return;
+    if (setQuizChord(quiz.chordAt, [...notes.filter(each => each !== quiz.noteAt), midi], midi)) pluckConsNote(midi);
+}
+
+// A letter typed: that letter in the key, nearest the note selected (or the
+// chord's highest, or the last chord written's), and not in the chord.
+function letterQuizDictNote(letter) {
+    const at = quiz.chordAt;
+    const notes = quiz.written[at] ?? [];
+    const before = quiz.written.slice(0, at).reverse().find(each => each.length) ?? [60];
+    const near = notes.includes(quiz.noteAt) ? quiz.noteAt : notes.at(-1) ?? (cons.settings.quizWrite === "bass" ? before[0] : before.at(-1));
+    const index = MaestroNotation.LETTERS.indexOf(letter);
+    const alter = MaestroNotation.keyAlter(index, MaestroHarmony.keySignature(quizKeyOf(quiz.question)));
+    let best = null;
+    for (let octave = 0; octave <= 9; octave++) {
+        const midi = MaestroNotation.midiOf(MaestroNotation.pitch(index + 7 * octave, alter));
+        if (midi < MaestroHarmony.VOICING_LOW || midi > MaestroHarmony.VOICING_HIGH || notes.includes(midi)) continue;
+        if (best === null || Math.abs(midi - near) < Math.abs(best - near) || (Math.abs(midi - near) === Math.abs(best - near) && midi > best)) best = midi;
+    }
+    if (best !== null) addQuizDictNote(at, best);
+}
+
+// The neck or keys clicked: the pitch joins the chord selected, or is
+// selected there, or, selected already, leaves it.
+function toggleQuizDictPitch(midi) {
+    const notes = quiz.written[quiz.chordAt] ?? [];
+    if (!notes.includes(midi)) return addQuizDictNote(quiz.chordAt, midi);
+    if (quiz.noteAt === midi) return removeQuizDictNote(quiz.chordAt, midi);
+    selectQuizDictNote(quiz.chordAt, midi);
+}
+
+// What's under the pointer: the chord nearest it (never the first, which is
+// given), the staff and step there, and a note of the chord's if one is there.
+function quizDictHit(event) {
+    const made = quiz.dict;
+    const svg = $("consQuizDictStaff").querySelector("svg");
+    if (!made || !svg || quiz.answered !== null || !quizDictShown()) return null;
+    const box = svg.getBoundingClientRect();
+    if (!box.width || !box.height) return null;
+    const { drawn } = made;
+    const x = (event.clientX - box.left) / box.width * drawn.width;
+    const y = (event.clientY - box.top) / box.height * drawn.height;
+    const space = drawn.space;
+    const system = drawn.systems[0];
+    const places = quiz.written.map((_, at) => ({ at, place: at > 0 ? quizDictPlace(made, at) : null })).filter(each => each.place);
+    if (!places.length || y < system.top || y > system.bottom + 2 * space) return null;
+    const near = places.reduce((best, each) => (Math.abs(each.place.column.x + 0.6 * space - x) < Math.abs(best.place.column.x + 0.6 * space - x) ? each : best));
+    if (Math.abs(near.place.column.x + 0.6 * space - x) > 4 * space) return null;
+    const hand = system.staffY.length < 2 || y < (system.staffY[0] + system.staffY[1] - 4 * space) / 2 ? 0 : 1;
+    const clef = made.score.staves[hand].clef;
+    const step = staffStepAt(drawn, 0, hand, clef, y);
+    const p = MaestroNotation.pitch(step, MaestroNotation.keyAlter(((step % 7) + 7) % 7, MaestroHarmony.keySignature(quizKeyOf(quiz.question))));
+    const head = near.place.heads.find(each => Math.abs(each.x + 0.6 * space - x) < 1.4 * space && Math.abs(each.y - y) < 0.6 * space);
+    return { at: near.at, place: near.place, hand, clef, step, p, head: head ?? null, staffY: system.staffY[hand] };
+}
+
+function quizDictClick(event) {
+    const hit = quizDictHit(event);
+    if (!hit) return;
+    $("consQuizDictStaff").focus({ preventScroll: true });
+    if (hit.head) return selectQuizDictNote(hit.at, hit.head.midi);
+    if (MaestroNotation.isPitch(hit.p)) addQuizDictNote(hit.at, MaestroNotation.midiOf(hit.p));
+}
+
+// A right-click takes out the note there.
+function quizDictErase(event) {
+    event.preventDefault();
+    const hit = event.button === 2 ? quizDictHit(event) : null;
+    if (!hit?.head) return;
+    removeQuizDictNote(hit.at, hit.head.midi);
+    $("consQuizDictStaff").focus({ preventScroll: true });
+}
+
+// The pointer's note, drawn at most once a frame and gone when it leaves.
+const quizDictGhost = { frame: 0, at: null };
+function quizDictHover(event) {
+    quizDictGhost.at = { clientX: event.clientX, clientY: event.clientY };
+    if (!quizDictGhost.frame) quizDictGhost.frame = requestAnimationFrame(drawQuizDictGhost);
+}
+function quizDictLeave() {
+    quizDictGhost.at = null;
+    cancelAnimationFrame(quizDictGhost.frame);
+    drawQuizDictGhost();
+}
+function drawQuizDictGhost() {
+    quizDictGhost.frame = 0;
+    const svg = $("consQuizDictStaff").querySelector("svg");
+    svg?.querySelector(".cp-ghost")?.remove();
+    const hit = svg && quizDictGhost.at && quizDictHit(quizDictGhost.at);
+    if (!hit || hit.head || !MaestroNotation.isPitch(hit.p)) return;
+    drawStaffGhost(svg, quiz.dict.drawn, { x: hit.place.column.x, staffY: hit.staffY, clef: hit.clef, step: hit.step, d: "w" });
+}
+
+// Graded chord by chord, at the pitch heard.
+function quizDictGrade(answer = quiz.answered) {
+    const truth = quizTruth();
+    return { right: truth.filter((midis, at) => quizSameNotes(answer[at] ?? [], midis)).length, total: truth.length };
+}
+
 // Graded note by note, at the pitch heard.
 function quizMelodyGrade(answer = quiz.answered) {
     const truth = quizTruth();
@@ -632,8 +968,6 @@ function quizTapWords(graded) {
 }
 
 function newQuizQuestion({ play = true } = {}) {
-    clearTimeout(quiz.timer);
-    quiz.timer = null;
     stopQuizSound();
     quiz.answered = null;
     quiz.picks = [];
@@ -655,6 +989,7 @@ function newQuizQuestion({ play = true } = {}) {
             : kind === "melody" ? MaestroMusic.quizMelody(cons.settings.quizMelody, quiz.question?.degrees?.join() ?? "")
             : MaestroMusic.quizProgression(cons.settings.quizChords, quiz.question?.index ?? -1);
         if (kind === "melody") startQuizMelody(quiz.question);
+        if (kind === "progression") startQuizDictation(quiz.question);
         if (play && consSections.current() === "quiz") playQuizQuestion();
     }
     renderQuiz();
@@ -662,8 +997,17 @@ function newQuizQuestion({ play = true } = {}) {
 }
 
 // A progression's last chord named, taken back before the last grades it;
-// a melody's last change, before it's checked.
+// a melody's or a written progression's last change, before it's checked.
 function undoQuizPick() {
+    if (quizDictShown() && quiz.answered === null && quiz.undo.length) {
+        const before = quiz.undo.pop();
+        const changed = before.findIndex((midis, at) => !quizSameNotes(midis, quiz.written[at]));
+        quiz.written = before;
+        if (changed > 0) quiz.chordAt = changed;
+        if (!quiz.written[quiz.chordAt].includes(quiz.noteAt)) quiz.noteAt = quiz.written[quiz.chordAt].at(-1) ?? null;
+        renderQuiz();
+        return true;
+    }
     if (quizMelodyShown() && quiz.answered === null && quiz.undo.length) {
         const before = quiz.undo.pop();
         const changed = before.findIndex((p, at) => !quizSamePitch(p, quiz.notes[at]));
@@ -698,16 +1042,17 @@ function answerQuiz(answer) {
     quiz.right += right ? 1 : 0;
     quiz.streak = right ? quiz.streak + 1 : 0;
     if (note) pluckConsNote(quiz.question.midi);
+    // Focus in the quiz (on an answer, now off) goes to Next (2.7.0); the
+    // answer stays to be looked at until then.
+    const focused = document.activeElement;
     renderQuiz();
     renderConsNeck();
-    // A bar stays to be looked at; the rest go on by themselves.
-    if (right && !quizRhythmic()) quiz.timer = setTimeout(() => { if (consSections.current() === "quiz") newQuizQuestion(); }, QUIZ_NEXT_AFTER);
+    if (!focused || focused === document.body || focused.closest(".cons-quiz-module")) $("consQuizNext").focus({ preventScroll: true });
 }
 
 function resetQuizScore() {
-    clearTimeout(quiz.timer);
     stopQuizSound();
-    Object.assign(quiz, { question: null, answered: null, picks: [], cells: [], notes: [], at: 1, undo: [], drawn: null, right: 0, asked: 0, streak: 0, timer: null });
+    Object.assign(quiz, { question: null, answered: null, picks: [], cells: [], notes: [], at: 1, undo: [], drawn: null, written: [], chordAt: 1, noteAt: null, dict: null, right: 0, asked: 0, streak: 0 });
 }
 
 function renderQuiz() {
@@ -717,17 +1062,20 @@ function renderQuiz() {
     const rhythmic = quizRhythmic();
     const picked = quizPicked();
     const melody = kind === "melody";
+    const writing = quizWriting();
     document.querySelectorAll("#consQuizKind [data-quiz]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.quiz === kind)));
     document.querySelectorAll("#consQuizDirection [data-direction]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.direction === cons.settings.quizDirection)));
     document.querySelectorAll("#consQuizChords [data-chords]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.chords === cons.settings.quizChords)));
     document.querySelectorAll("#consQuizLevel [data-rhythm]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.rhythm === cons.settings.quizRhythm)));
     document.querySelectorAll("#consQuizMelody [data-melody]").forEach(button => button.setAttribute("aria-pressed", String(Number(button.dataset.melody) === cons.settings.quizMelody)));
+    document.querySelectorAll("#consQuizWrite [data-write]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.write === cons.settings.quizWrite)));
     $("consQuizNaturals").checked = cons.settings.quizNaturals;
     $("consQuizNaturalsField").hidden = !note;
     $("consQuizDirectionField").hidden = kind !== "interval" && kind !== "quality";
     $("consQuizChordsField").hidden = !chords;
     $("consQuizLevelField").hidden = !rhythmic;
     $("consQuizMelodyField").hidden = kind !== "melody";
+    $("consQuizWriteField").hidden = kind !== "progression";
     // The options chip (2.4.1) says what this kind of quiz is set to.
     const word = { triads: "Triads", sevenths: "Sevenths", both: "Triads and sevenths", up: "Up", down: "Down", together: "Together" };
     const { quizChords, quizDirection } = cons.settings;
@@ -736,19 +1084,21 @@ function renderQuiz() {
         : kind === "quality" ? `${word[quizChords]} · ${word[quizDirection]}`
         : kind === "melody" ? `${cons.settings.quizMelody} notes`
         : rhythmic ? MaestroRhythm.QUIZ_LEVELS[cons.settings.quizRhythm].label
+        : writing ? `${word[quizChords]} · ${QUIZ_WRITE_WORDS[cons.settings.quizWrite]}`
         : word[quizChords];
     const tapping = Boolean(quiz.sound?.tapping);
     // Reading's bar is heard once it's tapped, so hearing it gives nothing away.
     $("consQuizHear").hidden = note || (kind === "reading" && quiz.answered === null);
     $("consQuizHear").disabled = tapping;
     // Shown throughout a question, so the buttons beside them never move.
-    $("consQuizUndo").hidden = !picked && !melody;
-    $("consQuizUndo").disabled = !quiz.question || quiz.answered !== null || !(melody ? quiz.undo.length : quiz.picks.length);
-    $("consQuizUndo").title = melody ? "Take back the last change (Backspace)" : "Take back the last one named (Backspace)";
-    // A melody is checked once every note is written (2.6.0).
-    $("consQuizCheck").hidden = kind !== "rhythm" && !melody;
-    $("consQuizCheck").disabled = !quiz.question || quiz.answered !== null || (melody && quiz.notes.some(p => !p));
-    $("consQuizCheck").title = melody ? "Check the melody as written" : "Check the bar as written";
+    $("consQuizUndo").hidden = !picked && !melody && !writing;
+    $("consQuizUndo").disabled = !quiz.question || quiz.answered !== null || !(melody || writing ? quiz.undo.length : quiz.picks.length);
+    $("consQuizUndo").title = melody || writing ? "Take back the last change (Backspace)" : "Take back the last one named (Backspace)";
+    // A melody is checked once every note is written (2.6.0), a progression
+    // once each chord has the notes asked for (2.7.0).
+    $("consQuizCheck").hidden = kind !== "rhythm" && !melody && !writing;
+    $("consQuizCheck").disabled = !quiz.question || quiz.answered !== null || (melody && quiz.notes.some(p => !p)) || (writing && !quizDictReady());
+    $("consQuizCheck").title = `${melody ? "Check the melody as written" : writing ? "Check the chords as written" : "Check the bar as written"} (Ctrl+Enter)`;
     $("consQuizTap").hidden = kind !== "reading" || quiz.answered !== null;
     $("consQuizTap").disabled = !quiz.question || tapping;
     const position = consPosition();
@@ -760,6 +1110,7 @@ function renderQuiz() {
         : kind === "melody" ? (quiz.question?.key ? `A melody in ${quiz.question.key} major, after its chord, a note a beat. Write the notes after the first, at the pitch heard, then Check.` : "")
         : kind === "rhythm" ? (quiz.question?.meter ? `A bar of ${quiz.question.meter}, after a bar's count. Click the steps it plays, then Check.` : "")
         : kind === "reading" ? (quiz.question?.meter ? "Tap this bar in time after a bar's count: on the pad, or with F, J or Space." : "")
+        : writing ? `Four chords in ${quiz.question?.key ?? "a"} major, from I, the first written. ${{ bass: "Write the bass of the other three", outer: "Write the lowest and highest notes of the other three", all: "Write every note of the other three" }[cons.settings.quizWrite]}, at the pitch heard, then Check.`
         : "Four chords in a major key, from I. Name the other three, in order.";
     const { question, answered } = quiz;
     const truth = quizTruth();
@@ -767,8 +1118,8 @@ function renderQuiz() {
         ? MaestroMusic.PLAIN_NAMES.map((name, pc) => ({ value: pc, label: quizNoteName(pc), title: "" })).filter(option => !cons.settings.quizNaturals || MaestroMusic.PLAIN_NAMES[option.value].length === 1)
         : kind === "interval" ? MaestroMusic.QUIZ_INTERVALS.map(interval => ({ value: interval.semis, label: interval.short, title: interval.name }))
         : kind === "quality" ? MaestroMusic.QUIZ_QUALITIES.filter(quality => cons.settings.quizChords === "both" || quality.set === cons.settings.quizChords).map(quality => ({ value: quality.id, label: quality.short, title: quality.name }))
-        : rhythmic || melody ? []
-        : (question?.numerals ?? []).map((numeral, degree) => ({ value: degree, label: numeral, title: "" }));
+        : rhythmic || melody || writing ? []
+        : (question?.numerals ?? []).map((numeral, degree) => ({ value: degree, label: numeral, title: `${numeral} (${degree + 1})` }));
     // A progression's chords so far: "I – vi – ? – ?".
     $("consQuizLine").hidden = !picked || !question;
     if (picked && question) {
@@ -782,9 +1133,11 @@ function renderQuiz() {
     }
     $("consQuizAnswers").classList.toggle("is-notes", note);
     $("consQuizAnswers").classList.toggle("is-numerals", picked);
-    $("consQuizAnswers").hidden = rhythmic || melody;
+    $("consQuizAnswers").hidden = rhythmic || melody || writing;
     $("consQuizMelodyBox").hidden = !melody;
     if (melody) renderQuizMelody();
+    $("consQuizDictBox").hidden = !writing;
+    if (writing) renderQuizDictation();
     $("consQuizRhythm").hidden = !rhythmic;
     $("consQuizGrid").hidden = kind !== "rhythm";
     $("consQuizPad").hidden = kind !== "reading";
@@ -807,7 +1160,7 @@ function renderQuiz() {
     let result = "";
     if (!question) result = "There's nowhere to ask about here.";
     else if (tapping) result = quiz.sound.count ? `Count: ${Array.from({ length: quiz.sound.count }, (_, at) => at + 1).join(" ")}` : "Tap it now.";
-    else if (answered === null) result = note ? "Click its name." : kind === "reading" ? "" : "Click Hear it to hear it again.";
+    else if (answered === null) result = "";
     else if (kind === "rhythm") {
         const graded = MaestroRhythm.gradeCells(answered, question.cells);
         result = graded.all ? "Right: as played." : `${graded.right} of ${graded.total} steps right; Played shows the bar as it was. Click Next for another.`;
@@ -815,6 +1168,10 @@ function renderQuiz() {
         const graded = quizMelodyGrade(answered);
         const what = `${question.pitches.map(MaestroNotation.pitchName).join("\u2013")} in ${question.key} major`;
         result = graded.right === graded.total ? `Right: ${what}.` : `${graded.right} of ${graded.total} notes right: it's ${what}. Click Next for another.`;
+    } else if (writing) {
+        const graded = quizDictGrade(answered);
+        const what = `${question.degrees.map(degree => question.numerals[degree]).join("\u2013")} in ${question.key} (${question.chords.join(" ")})`;
+        result = graded.right === graded.total ? `Right: ${what}.` : `${graded.right} of ${graded.total} chords right: it's ${what}. Played shows its notes. Click Next for another.`;
     } else if (kind === "reading") result = answered.all ? `Right: ${quizTapWords(answered)}.` : `${quizTapWords(answered)}. Click Hear it to hear it, or Next for another.`;
     else {
         const right = quizIsRight(answered);
@@ -828,6 +1185,8 @@ function renderQuiz() {
         result = right ? `Right: ${what}.` : `It's ${what}. Click Next for another.`;
     }
     $("consQuizResult").textContent = result;
+    // Answered, the result takes the prompt's place (2.7.0).
+    $("consQuizPrompt").hidden = answered !== null && Boolean(result);
     $("consQuizResult").classList.toggle("is-wrong", answered !== null && !quizIsRight(answered));
     $("consQuizScore").textContent = quiz.asked ? `${quiz.right} of ${quiz.asked} right${quiz.streak > 1 ? ` · ${quiz.streak} in a row` : ""}` : "";
 }
@@ -869,6 +1228,17 @@ $("consQuizMelody").replaceChildren(...MaestroMusic.QUIZ_MELODY_LENGTHS.map(leng
     button.dataset.melody = String(length);
     return button;
 }));
+// What's written for a progression (2.7.0).
+$("consQuizWrite").replaceChildren(...MaestroMusic.QUIZ_WRITES.map(write => {
+    const button = element("button", "", QUIZ_WRITE_WORDS[write]);
+    button.type = "button";
+    button.dataset.write = write;
+    return button;
+}));
+$("consQuizWrite").addEventListener("click", event => {
+    const write = event.target.closest("[data-write]")?.dataset.write;
+    if (MaestroMusic.QUIZ_WRITES.includes(write)) setConsQuiz({ quizWrite: write });
+});
 $("consQuizLevel").addEventListener("click", event => {
     const level = event.target.closest("[data-rhythm]")?.dataset.rhythm;
     if (MaestroMusic.QUIZ_RHYTHMS.includes(level)) setConsQuiz({ quizRhythm: level });
@@ -890,6 +1260,7 @@ $("consQuizGrid").addEventListener("click", event => {
 $("consQuizCheck").addEventListener("click", () => {
     if (quizKind() === "rhythm") answerQuiz([...quiz.cells]);
     else if (quizMelodyShown() && quiz.notes.every(Boolean)) answerQuiz(quiz.notes.slice(1).map(MaestroNotation.midiOf));
+    else if (quizDictReady()) answerQuiz(quiz.written.slice(1).map(midis => [...midis]));
 });
 // The melody's staff (2.6.0): a click writes, a right-click clears; with
 // focus, Left and Right choose a note, Up and Down move it a step (with
@@ -907,6 +1278,60 @@ $("consQuizMelodyStaff").addEventListener("keydown", event => {
     else return;
     event.preventDefault();
 });
+// The progression's staff (2.7.0): a click writes a note or selects one, a
+// right-click takes one out; with focus, Left and Right choose a chord, Up
+// and Down move the note (with Shift, a half step), Alt with Up and Down
+// selects another, A to G write a letter, Delete takes it out, and Enter
+// plays the chord as written.
+$("consQuizDictStaff").addEventListener("click", quizDictClick);
+$("consQuizDictStaff").addEventListener("contextmenu", quizDictErase);
+$("consQuizDictStaff").addEventListener("pointermove", quizDictHover);
+$("consQuizDictStaff").addEventListener("pointerleave", quizDictLeave);
+$("consQuizDictStaff").addEventListener("keydown", event => {
+    if (!quizDictShown() || quiz.answered !== null || event.ctrlKey || event.metaKey) return;
+    const arrow = event.key === "ArrowUp" || event.key === "ArrowDown";
+    if (event.altKey) {
+        if (!arrow || event.shiftKey) return;
+        stepQuizDictSelection(event.key === "ArrowUp" ? 1 : -1);
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") moveQuizDictChord(event.key === "ArrowLeft" ? -1 : 1);
+    else if (arrow) stepQuizDictNote(event.key === "ArrowUp" ? 1 : -1, event.shiftKey);
+    else if (event.key === "Delete") removeQuizDictNote(quiz.chordAt, quiz.noteAt);
+    else if (event.key === "Enter") {
+        const notes = quiz.written[quiz.chordAt] ?? [];
+        if (notes.length) pluckConsNotes(notes, 0.012);
+    } else if (/^[a-gA-G]$/.test(event.key) && !event.shiftKey) letterQuizDictNote(event.key.toUpperCase());
+    else return;
+    event.preventDefault();
+});
+// New room fits the progression's staff again, while it's shown.
+new ResizeObserver(() => {
+    if (!quizDictShown() || $("consQuizPanel").hidden || !quiz.dict) return;
+    if (Math.abs(quizDictFit(quiz.dict.drawn) - quiz.dict.scale) > 0.01) renderQuizDictation();
+}).observe($("consQuizPanel"));
+// Keys on the Quiz tab (2.7.0), outside a field: Space or H hears the
+// question again, N asks the next, Ctrl+Enter checks, and 1 to 7 name a
+// progression's chord by its degree. Space works where it would otherwise
+// start the metronome; a control reached with the keyboard still takes it.
+const QUIZ_KEY_BUTTONS = Object.freeze({ h: "consQuizHear", " ": "consQuizHear", n: "consQuizNext" });
+document.addEventListener("keydown", event => {
+    if (event.defaultPrevented || event.altKey || event.metaKey || !$("conservatory").classList.contains("active") || consSections.current() !== "quiz") return;
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest("input, select, textarea, [contenteditable]") || coveringDialog() || !$("launcher").hidden) return;
+    let button = null;
+    if (event.ctrlKey) {
+        if (event.key === "Enter" && !event.shiftKey) button = $("consQuizCheck");
+    } else if (!event.shiftKey) {
+        const key = event.key.toLowerCase();
+        if (key === " " && !spaceStartsMetronome(document.activeElement)) return;
+        if (Object.hasOwn(QUIZ_KEY_BUTTONS, key)) button = $(QUIZ_KEY_BUTTONS[key]);
+        else if (/^[1-7]$/.test(key) && quizPicked()) button = $("consQuizAnswers").querySelector(`[data-answer="${Number(key) - 1}"]`);
+    }
+    if (!button) return;
+    // Space on the Quiz is the question's, even with nothing to hear.
+    event.preventDefault();
+    event.stopPropagation();
+    if (!event.repeat && !button.hidden && !button.disabled) button.click();
+}, true);
 $("consQuizTap").addEventListener("click", startQuizTapping);
 $("consQuizPad").addEventListener("pointerdown", tapQuiz);
 // While a bar's being tapped, F, J and Space tap it (Space doesn't start the metronome).

@@ -197,16 +197,6 @@ const STAFF_GLYPHS = Object.freeze({
 });
 const ACCIDENTAL_GLYPH = { "-2": STAFF_GLYPHS.doubleFlat, "-1": STAFF_GLYPHS.flat, "0": STAFF_GLYPHS.natural, "1": STAFF_GLYPHS.sharp, "2": STAFF_GLYPHS.doubleSharp };
 
-// How an instrument's chord is written: guitar and bass an octave above how
-// they sound, with an 8 under the clef; mandolin and ukulele as they sound;
-// a keyboard on two staves, split at middle C.
-const STAFF_WRITING = Object.freeze({
-    guitar: { clef: "treble8", staff: "treble", shift: 12 },
-    bass: { clef: "bass8", staff: "bass", shift: 12 },
-    mandolin: { clef: "treble", staff: "treble", shift: 0 },
-    ukulele: { clef: "treble", staff: "treble", shift: 0 }
-});
-
 // One staff's chord, drawn at y (its bottom line) from x; returns its right edge.
 function drawStaffChord(svg, notes, staff, y, headX) {
     const { heads, ledgers } = MaestroMusic.staffChord(notes, MaestroMusic.STAFF_BOTTOM[staff]);
@@ -238,7 +228,7 @@ function drawChordStaff(notes, nameOf) {
     const parts = keyboard
         ? [{ clef: "treble", staff: "treble", y: 0, notes: notes.filter(midi => midi >= 60).map(midi => written(midi, 0)) },
             { clef: "bass", staff: "bass", y: 11 * STAFF_SPACE, notes: notes.filter(midi => midi < 60).map(midi => written(midi, 0)) }]
-        : [{ ...STAFF_WRITING[cons.settings.instrument], y: 0 }].map(part => ({ ...part, notes: notes.map(midi => written(midi, part.shift)) }));
+        : [MaestroMusic.staffWriting(cons.settings)].map(({ clefs: [clef], shift }) => ({ clef, staff: clef.replace("8", ""), shift, y: 0, notes: notes.map(midi => written(midi, shift)) }));
     // Room for the accidentals' columns, before the notes.
     const columns = Math.max(0, ...parts.map(part => MaestroMusic.staffChord(part.notes, MaestroMusic.STAFF_BOTTOM[part.staff]).columns));
     const clefX = keyboard ? 34 : 14;

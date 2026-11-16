@@ -95,6 +95,13 @@
     // ---- Species exercises
     const fux = C.fuxNotes(C.FUX[0]);
     const first = C.speciesExercise({ species: 1, cantus: fux, cantusBelow: true, mode: "dorian", final: "D" });
+    // Clefs (2.7.0): chosen a staff at a time, the notes as they were.
+    const altoFirst = C.withClef(first, 0, "alto");
+    equal("clef: the upper staff's changed, the lower's not", altoFirst.score.staves.map(staff => staff.clef).join(), "alto,bass");
+    check("clef: the notes stay", JSON.stringify(altoFirst.score.staves.map(staff => staff.voices)) === JSON.stringify(first.score.staves.map(staff => staff.voices)));
+    check("clef: kept and read back", C.exerciseText(C.readExercise(C.exerciseText(C.withClef(altoFirst, 1, "tenor")))) === C.exerciseText(C.withClef(altoFirst, 1, "tenor")));
+    check("clef: one with an 8 under it, or a staff that isn't there, changes nothing", C.withClef(first, 0, "treble8") === first && C.withClef(first, 2, "alto") === first);
+    equal("clef: one with an 8 under it isn't read", C.readExercise(C.exerciseText(first).replace("\ttreble\t", "\ttreble8\t")), null);
     equal("species: the cantus below sits around D3", N.pitchName(N.voicesOf(first.score)[1].notes[0].p), "D3");
     equal("species: the counterpoint is above, a whole note to write in each bar", N.voicesOf(first.score)[0].notes.map(note => `${note.p ? "x" : "_"}${note.d}`).join(""), "_w".repeat(11));
     equal("species: given is the cantus", first.given, 1);

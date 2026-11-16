@@ -1,0 +1,143 @@
+/* ==== 2.7.0: Progressions on a grand staff ====
+   The Staff view beside the Chart view: the song's voicings on a grand
+   staff, scrolling in the sheet's place, with the voicing's controls under
+   it. */
+
+#progStaff[hidden],
+#progStaffBar[hidden],
+#progNeckShow[hidden],
+#progFoot[hidden] {
+  display: none;
+}
+
+/* The staff takes the sheet's room and scrolls inside it, as the sheet does. */
+:root .prog-staff {
+  flex: 1 1 0;
+  min-height: 132px;
+  margin: -6px;
+  padding: 6px;
+  overflow-y: auto;
+  contain: size;
+}
+
+.prog-staff-score {
+  border-radius: 10px;
+  cursor: crosshair;
+}
+
+.prog-staff-score .cons-note {
+  padding: 12px;
+}
+
+.prog-staff-svg .prog-staff-chord,
+.prog-staff-svg .prog-staff-section,
+.prog-staff-svg .prog-staff-letter {
+  fill: #e9e6f5;
+  font-family: var(--font-body);
+  font-weight: 700;
+}
+
+.prog-staff-svg .prog-staff-section {
+  fill: var(--text-muted);
+}
+
+.prog-staff-svg .prog-staff-box {
+  fill: none;
+  stroke: #c9c6da;
+  stroke-width: 1.2;
+}
+
+.prog-staff-svg .prog-staff-thick,
+.prog-staff-svg .prog-staff-dot {
+  fill: #e9e6f5;
+}
+
+/* A voicing written into the song: gold, as what's your own is. */
+.prog-staff-svg .prog-staff-written {
+  fill: var(--brand-gold-text);
+}
+
+/* The chord picked, and the one playing, behind their notes. */
+.prog-staff-svg .prog-staff-pick {
+  fill: color-mix(in srgb, var(--brand-tint-text) 14%, transparent);
+}
+
+.prog-staff-svg .prog-staff-pick.is-playing {
+  fill: color-mix(in srgb, var(--brand-indigo-control) 70%, transparent);
+}
+
+/* Under the staff: where the chord is, and its voicing's controls. */
+.prog-staff-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  padding-top: 10px;
+}
+
+.prog-staff-where {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.prog-staff-tools {
+  display: flex;
+  align-items: center;
+}
+
+/* The Quiz's options as wide as their widest row: shrunk to the chip, the
+   Write choice ran past the popover's edge. */
+:root #consQuizOptionsPanel {
+  width: max-content;
+}
+
+/* A popover that would run past its module opens leftward from its chip's
+   right edge. */
+:root .prog-pop.is-end {
+  right: 0;
+  left: auto;
+}
+
+/* The Quiz's progression on a grand staff: once checked, each chord's
+   numeral says whether it was written right. */
+.cons-quiz-staff .prog-staff-svg .prog-staff-chord.is-right {
+  fill: var(--brand-tint-text);
+}
+
+.cons-quiz-staff .prog-staff-svg .prog-staff-chord.is-wrong {
+  fill: var(--brand-burgundy-text);
+}
+
+/* The Quiz's result under its kinds, in the prompt's place once answered,
+   where it's in view; nothing while there's nothing to say. */
+:root .cons-quiz-result {
+  margin: 0 0 16px;
+}
+
+:root .cons-quiz-result:empty,
+:root .cons-quiz-prompt[hidden] {
+  display: none;
+}
+
+/* Counterpoint's clefs: each one a spot to click, and its menu beside it,
+   in the window's frame so the staff's edge doesn't clip it. */
+.cp-score .cp-clef-spot {
+  fill: transparent;
+  cursor: pointer;
+}
+
+.cp-score .cp-clef-spot:hover {
+  fill: color-mix(in srgb, var(--brand-tint-text) 18%, transparent);
+}
+
+:root .cp-clef-menu {
+  position: fixed;
+  width: max-content;
+  gap: 12px;
+}
+
+/* The sheet's rows keep their height and the sheet scrolls when its room is
+   short (its heading takes two rows since the Chart and Staff switch). */
+.prog-sheet > * {
+  flex-shrink: 0;
+}

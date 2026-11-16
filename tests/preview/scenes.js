@@ -514,9 +514,18 @@ const PreviewScenes = (() => {
         // key, and the bass beside Loop.
         "progressions-drawer": progScene({}, { section: 0, bar: 2, slot: 0 }, () => { prog.barOpen = true; }),
         // 2.6.0: a voicing on the neck and the next chord's outlined; one picked by hand; on the keys.
-        "progressions-voicing": progScene({ neck: "shapes" }, { section: 0, bar: 2, slot: 0 }, () => { prog.voicingPins.clear(); prog.barOpen = true; renderProgressions(); renderConsNeck(); }),
-        "progressions-voicing-pinned": progScene({ neck: "shapes" }, { section: 0, bar: 1, slot: 0 }, () => { prog.voicingPins.clear(); prog.barOpen = true; renderProgressions(); stepProgVoicing(3); }),
-        "progressions-voicing-keys": progScene({ neck: "shapes" }, { section: 0, bar: 3, slot: 0 }, () => { prog.voicingPins.clear(); prog.barOpen = true; renderProgressions(); renderConsNeck(); }, { instrument: "keyboard" }),
+        "progressions-voicing": progScene({ neck: "shapes" }, { section: 0, bar: 2, slot: 0 }, () => { prog.barOpen = true; renderProgressions(); renderConsNeck(); }),
+        "progressions-voicing-pinned": progScene({ neck: "shapes" }, { section: 0, bar: 1, slot: 0 }, () => { prog.barOpen = true; renderProgressions(); stepProgVoicing(3); }),
+        "progressions-voicing-keys": progScene({ neck: "shapes" }, { section: 0, bar: 3, slot: 0 }, () => { prog.barOpen = true; renderProgressions(); renderConsNeck(); }, { instrument: "keyboard" }),
+        // 2.7.0: a voicing of the song's own that Maestro wouldn't choose, on the keys and on a neck that can't play it as one shape.
+        "progressions-voicing-own": progScene({ neck: "shapes" }, { section: 0, bar: 1, slot: 0 }, () => { prog.barOpen = true; setProgVoicing(progPicked(), [45, 52, 60, 64, 67]); }, { instrument: "keyboard" }),
+        "progressions-voicing-unplayable": progScene({ neck: "shapes" }, { section: 0, bar: 1, slot: 0 }, () => { prog.barOpen = true; setProgVoicing(progPicked(), [45, 46, 47, 48, 52, 55, 60]); }),
+        // 2.7.0: the Staff view: the song on the guitar's staff (a treble clef with an 8 under it), a voicing of the song's own marked, the chord picked and a note selected; on the keys' grand staff; while playing; a bass's and a ukulele's staff.
+        "progressions-staff": progScene({ view: "staff" }, { section: 0, bar: 1, slot: 0 }, () => { writeProgStaff({ ...progPicked() }, [45, 55, 60, 64, 67], 64); }),
+        "progressions-staff-keys": progScene({ view: "staff", show: "numerals" }, { section: 1, bar: 2, slot: 1 }, undefined, { instrument: "keyboard" }),
+        "progressions-staff-bass": progScene({ view: "staff" }, { section: 0, bar: 1, slot: 0 }, undefined, { instrument: "bass" }),
+        "progressions-staff-ukulele": progScene({ view: "staff" }, { section: 0, bar: 1, slot: 0 }, undefined, { instrument: "ukulele" }),
+        "progressions-staff-playing": progScene({ view: "staff" }, undefined, () => { prog.settings.sketch.sections[0].bars[3] = ["%"]; rebuildProgTimeline(); renderProgressions(); metro.running = true; prog.playing = prog.timeline.find(event => event.section === 0 && event.written === 3); markProgStaff(); }),
         "progressions-section": progScene({}, undefined, () => { prog.sectionOpen = 1; }),
         "progressions-key": progScene({}, undefined, () => toggleProgPopover("key", true)),
         "progressions-bass-menu": progScene({ bass: "walking" }, undefined, () => toggleProgPopover("bass", true)),
@@ -585,6 +594,13 @@ const PreviewScenes = (() => {
             const fux = MaestroCounterpoint.speciesExercise({ species: 1, cantus: MaestroCounterpoint.fuxNotes(MaestroCounterpoint.FUX[0]), cantusBelow: true, mode: "dorian", final: "D", title: "First species, Fux's Dorian" });
             return cpWrite(fux, [["A3", "D4", "C4", "D4", "D4", "A3", "C4"]]);
         }, { voice: 0, index: 7 }),
+        // 2.7.0: clefs chosen a staff at a time: alto over tenor, the menu open on the upper; a tenor's sharps and an alto's flats.
+        "counterpoint-clefs": cpScene(() => {
+            const fux = MaestroCounterpoint.speciesExercise({ species: 1, cantus: MaestroCounterpoint.fuxNotes(MaestroCounterpoint.FUX[0]), cantusBelow: true, mode: "dorian", final: "D", title: "First species, Fux's Dorian" });
+            return MaestroCounterpoint.withClef(MaestroCounterpoint.withClef(cpWrite(fux, [["A3", "D4", "C4", "D4", "D4", "A3", "C4"]]), 0, "alto"), 1, "tenor");
+        }, { voice: 0, index: 7 }, () => openCpClefMenu(0)),
+        "counterpoint-clefs-sharps": cpScene(() => MaestroCounterpoint.withClef(MaestroCounterpoint.melodyExercise({ tonic: "E", mode: "major", instrument: "concert", notes: ["E3", "G#3", "B3", "E4", "D#4", "C#4", "B3", "A3"].map(text => ({ p: MaestroNotation.parsePitch(text), d: "q", dot: false, tie: false })), title: "Sharps on a tenor clef" }), 0, "tenor"), { voice: 0, index: 0 }, () => { cpMelody.chords = "off"; cpMelody.view = "concert"; renderCounterpoint(); }),
+        "counterpoint-clefs-flats": cpScene(() => MaestroCounterpoint.withClef(MaestroCounterpoint.melodyExercise({ tonic: "Eb", mode: "major", instrument: "concert", notes: ["Eb4", "G4", "Bb4", "Eb4", "F4", "Ab4", "G4", "Eb4"].map(text => ({ p: MaestroNotation.parsePitch(text), d: "q", dot: false, tie: false })), title: "Flats on an alto clef" }), 0, "alto"), { voice: 0, index: 0 }, () => { cpMelody.chords = "off"; cpMelody.view = "concert"; renderCounterpoint(); }),
         // The neck hidden on this tab.
         "counterpoint-noneck": cpScene(() => {
             const fux = MaestroCounterpoint.speciesExercise({ species: 1, cantus: MaestroCounterpoint.fuxNotes(MaestroCounterpoint.FUX[0]), cantusBelow: true, mode: "dorian", final: "D", title: "First species, Fux's Dorian" });
@@ -660,6 +676,14 @@ const PreviewScenes = (() => {
         "conservatory-quiz-chords": consScene({ tab: "quiz", quizKind: "quality", quizChords: "sevenths", quizDirection: "together" }, () => { resetQuizScore(); quiz.question = { id: "m7b5", root: "B", name: "Bm7♭5", midis: [59, 62, 65, 69] }; quiz.answered = "m7b5"; Object.assign(quiz, { right: 5, asked: 6, streak: 2 }); renderQuiz(); renderConsNeck(); }),
         "conservatory-quiz-progression": consScene({ tab: "quiz", quizKind: "progression", quizChords: "triads" }, () => { resetQuizScore(); quiz.question = MaestroMusic.quizProgression("triads", -1, () => 0.1); quiz.picks = [quiz.question.degrees[1], quiz.question.degrees[2]]; renderQuiz(); renderConsNeck(); }),
         "conservatory-quiz-progression-wrong": consScene({ tab: "quiz", quizKind: "progression", quizChords: "sevenths" }, () => { resetQuizScore(); quiz.question = MaestroMusic.quizProgression("sevenths", -1, () => 0.3); quiz.picks = [quiz.question.degrees[1], quiz.question.degrees[2], (quiz.question.degrees[3] + 2) % 7]; quiz.answered = [...quiz.picks]; Object.assign(quiz, { right: 3, asked: 5 }); renderQuiz(); renderConsNeck(); }),
+        // 2.7.0: a progression written on a grand staff, partway (the outer voices), and checked (every note, one wrong).
+        "conservatory-quiz-dictation": consScene({ tab: "quiz", quizKind: "progression", quizChords: "triads", quizWrite: "outer" }, () => { resetQuizScore(); quiz.question = MaestroMusic.quizProgression("triads", -1, () => 0.1); startQuizDictation(quiz.question); quiz.written[1] = quizAsked(quiz.question.voicings[1]); quiz.written[2] = [quiz.question.voicings[2][0]]; Object.assign(quiz, { chordAt: 2, noteAt: quiz.written[2][0] }); renderQuiz(); renderConsNeck(); }),
+        // 2.7.0: on the keys' grand staff, and on a ukulele's staff, voiced from its lowest string.
+        "conservatory-quiz-dictation-keys": consScene({ instrument: "keyboard", tab: "quiz", quizKind: "progression", quizChords: "triads", quizWrite: "all" }, () => { resetQuizScore(); quiz.question = MaestroMusic.quizProgression("triads", -1, () => 0.1); startQuizDictation(quiz.question); quiz.written[1] = [...quiz.question.voicings[1]]; Object.assign(quiz, { chordAt: 1, noteAt: quiz.written[1][0] }); renderQuiz(); renderConsNeck(); }),
+        "conservatory-quiz-dictation-ukulele": consScene({ instrument: "ukulele", tab: "quiz", quizKind: "progression", quizChords: "triads", quizWrite: "all" }, () => { resetQuizScore(); quiz.question = MaestroMusic.quizProgression("triads", -1, () => 0.1); startQuizDictation(quiz.question); quiz.written[1] = [...quiz.question.voicings[1]]; Object.assign(quiz, { chordAt: 1, noteAt: quiz.written[1][0] }); renderQuiz(); renderConsNeck(); }),
+        // Its options open: Of and Write, inside the popover and the module.
+        "conservatory-quiz-options": consScene({ tab: "quiz", quizKind: "progression", quizChords: "triads", quizWrite: "bass" }, () => { resetQuizScore(); newQuizQuestion({ play: false }); toggleConsPopover("quiz", true); }),
+        "conservatory-quiz-dictation-wrong": consScene({ tab: "quiz", quizKind: "progression", quizChords: "sevenths", quizWrite: "all" }, () => { resetQuizScore(); quiz.question = MaestroMusic.quizProgression("sevenths", -1, () => 0.3); startQuizDictation(quiz.question); quiz.question.voicings.forEach((midis, at) => { if (at) quiz.written[at] = at === 2 ? [...midis.slice(0, -1), midis.at(-1) + 1] : [...midis]; }); quiz.answered = quiz.written.slice(1).map(midis => [...midis]); Object.assign(quiz, { right: 2, asked: 4 }); renderQuiz(); renderConsNeck(); }),
         "conservatory-quiz-interval": consScene({ tab: "quiz", quizKind: "interval", quizDirection: "up" }, () => { resetQuizScore(); quiz.question = { low: 52, high: 59, semis: 7 }; quiz.answered = 7; Object.assign(quiz, { right: 4, asked: 4, streak: 4 }); renderQuiz(); renderConsNeck(); }),
         // 2.6.0: melodies by ear, partway and answered wrong; a rhythm being written and checked; a bar to read, and tapped.
         "conservatory-quiz-melody": consScene({ tab: "quiz", quizKind: "melody", quizMelody: 5 }, () => { resetQuizScore(); quiz.question = MaestroMusic.quizMelody(5, "", () => 0.3); startQuizMelody(quiz.question); quiz.notes = quiz.question.pitches.map((p, at) => (at < 3 ? p : null)); quiz.at = 3; renderQuiz(); renderConsNeck(); }),

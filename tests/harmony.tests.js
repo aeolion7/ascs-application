@@ -93,6 +93,7 @@
     equal("voicing: C, its root in the bass and the rest close above E3", c.join(), "48,52,55,60");
     equal("voicing: F moves as little as it can from C", H.voiceChord("F", c).join(), "41,53,57,60");
     equal("voicing: a slash chord's bass is lowest", H.voiceChord("C/E")[0] % 12, 4);
+    equal("voicing: from an instrument's lowest note, a mandolin's G3 (2.7.0)", H.voiceChord("C", null, 55).join(), "60,67,72,76");
 
     // Charts.
     const chart = { title: "Tune", root: "C", scale: "major", beats: 4, sections: [{ name: "A", repeat: 2, bars: [["C"], ["F", "G"], ["%"]] }, { name: "B", bars: [["Am", "Dm", "G7"]] }] };
@@ -123,7 +124,7 @@
     equal("charts: as text, the format, the heading, a line a section", text.split("\n").slice(0, 3).join("|"), `Maestro chart 1|Tune\tC\tmajor\t3/4|A\t2\tC\tF G\t%`);
     equal("charts: read back the same", JSON.stringify(H.readChartText(text)), JSON.stringify(waltz));
     equal("charts: read with Windows line breaks", JSON.stringify(H.readChartText(text.replace(/\n/g, "\r\n"))), JSON.stringify(waltz));
-    const unreadable = ["", "Maestro chart 2\nT\tC\tmajor\t4/4\nA\t1\tC", "Maestro chart 1\nT\tC\tmajor\nA\t1\tC", "Maestro chart 1\nT\tC\tmajor\t4/4\nA\t9\tC",
+    const unreadable = ["", "Maestro chart 3\nT\tC\tmajor\t4/4\nA\t1\tC", "Maestro chart 1\nT\tC\tmajor\nA\t1\tC", "Maestro chart 1\nT\tC\tmajor\t4/4\nA\t9\tC",
         "Maestro chart 1\nT\tC\tmajor\t4/4\nA\t1\tC  D", "Maestro chart 1\nT\tC\tmajor\t4/4\nA\t1", "Maestro chart 1\nT\tC\tmajor\t4/4", null];
     equal("charts: malformed text is refused", unreadable.map(H.readChartText).filter(Boolean).length, 0);
 
@@ -224,4 +225,80 @@
     equal("form: the chords poured in order, repeats written out, the rest the filler", aaba.sections.map(section => `${section.name}${section.repeat}:${section.bars.map(bar => bar[0]).join(" ")}`).join(" | "), "A2:C7 F7 | B1:F7 G7 C | A1:C7 F7");
     equal("form: more bars than a song holds is refused", H.chartInForm(blues, ["A", "B", "C", "D", "E"].map(name => [name, 64, 1]), "C"), null);
     equal("ways: into a minor key, its ii is half-diminished", H.modulationRoutes(inC, inAm).find(route => route.id === "twofive").chords.join(" "), "C Bm7♭5 E7 Am");
+    // ---- Voicings written into a chart (2.7.0)
+    const voicedChart = H.cleanChart({ title: "Tune", root: "C", scale: "major", beats: 4, sections: [{ name: "A", repeat: 2, bars: [["Cmaj7=48.55.59.64"], ["%"], ["Dm7", "G7=43.53.59.65"]] }] });
+    equal("voicing: a chord's own, as written", H.slotVoicing("Cmaj7=48.55.59.64")?.join(), "48,55,59,64");
+    equal("voicing: a chord's name without it", `${H.slotChord("Cmaj7=48.55.59.64")} ${H.slotChord("Cmaj7")} ${H.slotVoicing("Cmaj7")}`, "Cmaj7 Cmaj7 null");
+    equal("voicing: written into a chart", voicedChart?.sections[0].bars.map(bar => bar.join(" ")).join(" | "), "Cmaj7=48.55.59.64 | % | Dm7 G7=43.53.59.65");
+    check("voicing: a chord typed plainly is tidied, its voicing kept", H.cleanChart({ ...voicedChart, sections: [{ name: "", bars: [["F#m7=42.52.57.61"]] }] })?.sections[0].bars[0][0] === `F${sharp}m7=42.52.57.61`);
+    const voicingRefused = ["Cmaj7=55.48", "Cmaj7=48.48", "Cmaj7=15", "Cmaj7=109", "Cmaj7=048", "Cmaj7=", "Cmaj7=48.", "Cmaj7=48=55", "=48", "%=48", "Cmaj7=40.41.42.43.44.45.46.47.48.49.50", "Hendrix=48"];
+    equal("voicing: falling, doubled, out of range, malformed or on no chord refused", voicingRefused.map(token => H.cleanChart({ ...voicedChart, sections: [{ name: "", bars: [["C"], [token]] }] })).filter(Boolean).length, 0);
+    check("voicing: ten notes allowed, and one", Boolean(H.cleanChart({ ...voicedChart, sections: [{ name: "", bars: [["C=36.40.43.48.52.55.60.64.67.72"], ["C=60"]] }] })));
+    // As text: format 2 only with a voicing.
+    const voicedText = H.chartText(voicedChart);
+    equal("voicing: a chart with one is format 2", voicedText.split("\n").slice(0, 3).join("|"), "Maestro chart 2|Tune\tC\tmajor\t4/4|A\t2\tCmaj7=48.55.59.64\t%\tDm7 G7=43.53.59.65");
+    equal("voicing: read back the same", JSON.stringify(H.readChartText(voicedText)), JSON.stringify(H.cleanChart({ ...voicedChart, meter: "4/4" })));
+    check("voicing: a chart without one stays format 1", H.chartText(H.cleanChart({ ...voicedChart, sections: [{ name: "", bars: [["C"]] }] })).startsWith("Maestro chart 1\n"));
+    equal("voicing: format 1 with one refused", H.readChartText(voicedText.replace("Maestro chart 2", "Maestro chart 1")), null);
+    check("voicing: format 2 without one read", Boolean(H.readChartText("Maestro chart 2\nT\tC\tmajor\t4/4\nA\t1\tC")));
+    // Played: a repeated bar and a section's repeats play the same voicing.
+    const voicedTimeline = H.chartTimeline(voicedChart);
+    equal("voicing: each chord played with its own, a repeated bar's the bar before's", voicedTimeline.map(event => `${event.chord}:${event.voicing?.join(".") ?? "-"}`).join(" "),
+        "Cmaj7:48.55.59.64 Cmaj7:48.55.59.64 Dm7:- G7:43.53.59.65 Cmaj7:48.55.59.64 Cmaj7:48.55.59.64 Dm7:- G7:43.53.59.65");
+    // Transposed, with the chord.
+    const voicedUp = H.transposeChart(voicedChart, "E" + flat);
+    equal("voicing: moved with its chord, the nearer way", voicedUp.sections[0].bars.map(bar => bar.join(" ")).join(" | "), `E${flat}maj7=51.58.62.67 | % | Fm7 B${flat}7=46.56.62.68`);
+    equal("voicing: down when that's nearer", H.transposeChart(voicedChart, "A").sections[0].bars[0][0], "Amaj7=45.52.56.61");
+    equal("voicing: an octave the other way at the top of the range", H.moveVoicing([100, 105], 5)?.join(), "93,98");
+    equal("voicing: dropped where it can't fit", H.moveVoicing([16, 108], 1), null);
+    equal("voicing: one that can't move is dropped, the chord moved", H.transposeChart({ ...voicedChart, sections: [{ name: "", repeat: 1, bars: [["C=16.108"]] }] }, "D").sections[0].bars[0][0], "D");
+    check("voicing: moved through another key and back, the same", JSON.stringify(H.transposeChart(H.transposeChart(voicedChart, "E" + flat), "C")) === JSON.stringify(voicedChart));
+    // Spelled from the chord symbol, then the key.
+    const spelled = midis => (name, key) => H.spellVoicing(name, midis, key).map(p => `${"CDEFGAB"[((p.step % 7) + 7) % 7]}${{ "-2": "bb", "-1": "b", "0": "", "1": "#", "2": "x" }[p.alter]}${Math.floor(p.step / 7)}`).join(" ");
+    equal("spell: from the symbol", spelled([51, 55, 58, 61])("E" + flat + "7"), "Eb3 G3 Bb3 Db4");
+    equal("spell: the same notes as another chord spells them", spelled([51, 55, 58, 61])("D" + sharp + "7"), "D#3 Fx3 A#3 C#4");
+    equal("spell: a B sharp in its own octave", spelled([48, 52, 56])("G" + sharp + "m/B" + sharp), "B#2 E3 G#3");
+    equal("spell: C flat in its", spelled([59, 63, 66])("C" + flat), "Cb4 Eb4 Gb4");
+    equal("spell: a note outside the chord as the key spells it, else plainly", `${spelled([48, 52, 55, 65])("C", { root: "C", scale: "major" })} / ${spelled([48, 51, 55])("C", { root: "B" + flat, scale: "major" })} / ${spelled([48, 54])("C")}`, `C3 E3 G3 F4 / C3 Eb3 G3 / C3 F#3`);
+    // On a neck: one string a note, as narrow a hand as there is.
+    const sixStrings = [40, 45, 50, 55, 59, 64];
+    equal("neck: a written voicing placed", H.fretsForVoicing([48, 52, 55, 60, 64], sixStrings, 22)?.map(fret => fret ?? "x").join(" "), "x 3 2 0 1 0");
+    equal("neck: high on the neck when it must be", H.fretsForVoicing([55, 59, 62, 67], sixStrings, 22)?.map(fret => fret ?? "x").join(" "), "x x 5 4 3 3");
+    equal("neck: none for more notes than strings, or out of reach", `${H.fretsForVoicing([40, 41, 42, 43, 44, 45, 46], sixStrings, 22)} ${H.fretsForVoicing([30], sixStrings, 22)} ${H.fretsForVoicing([100], sixStrings, 22)}`, "null null null");
+    // Too large for AHK's file.
+    check("size: a chart over 64 KB is too large", H.chartTooLarge("x".repeat(65537)) && !H.chartTooLarge("x".repeat(65536)) && H.chartTooLarge("\u266F".repeat(21846)));
+    // ---- A chart on a grand staff (2.7.0)
+    const N = globalThis.MaestroNotation;
+    equal("staff: a length as tied notes", [8, 7, 6, 5, 3, 12, 14].map(eighths => H.staffLengths(eighths).map(piece => piece.d + (piece.dot ? "." : "")).join("+")).join(" "), "w h.+e h. h+e q. w. w.+q");
+    equal("staff: a key's signature, a mode's own, its parent's, else by its third", [["C", "major"], ["D", "dorian"], ["E" + flat, "major"], ["A", "minor"], ["B", "locrian"], ["A", "harmonic"], ["C", "phrygianDominant"], ["C", "lydianDominant"], ["C", "hungarianMinor"], ["C", "doubleHarmonic"]].map(([root, scale]) => H.keySignature({ root, scale })).join(), "0,0,-3,0,0,0,-4,-2,-3,0");
+    const handsOf = (name, midis) => H.staffHands(name, midis, C).map(hand => hand.map(each => N.pitchName(each.p)).join(" ")).join(" | ");
+    equal("staff: middle C and up in the right hand, below it the left", handsOf("C", [36, 48, 55, 60, 64]), `C4 E4 | C2 C3 G3`);
+    equal("staff: a hand of more than eight gives the rest to the other", handsOf("C", [60, 62, 64, 65, 67, 69, 71, 72, 74, 76]).split(" | ").map(hand => hand.split(" ").length).join(), "8,2");
+    equal("staff: two notes on one line spelled apart", handsOf("C", [60, 61]), `C4 D${flat}4 | `);
+    const oneStaff = (name, midis) => H.staffHands(name, midis, C, 1).map(hand => hand.map(each => N.pitchName(each.p)).join(" ")).join(" | ");
+    equal("staff: on one staff (2.7.0), every note on it", oneStaff("C", [40, 48, 55, 60, 64]), "E2 C3 G3 C4 E4");
+    equal("staff: one staff holds eight, the lowest left out", oneStaff("C", [36, 40, 43, 48, 52, 55, 60, 64, 67, 72]), "G2 C3 E3 G3 C4 E4 G4 C5");
+    const staffChart = H.cleanChart({ title: "Tune", root: "C", scale: "major", beats: 4, sections: [{ name: "A", repeat: 2, bars: [["C=48.55.64"], ["%"], ["Dm7", "G7"]] }, { name: "", repeat: 1, bars: [["C", "F", "G"]] }] });
+    const asked = [];
+    const made = H.chartScore(staffChart, "4/4", entry => (asked.push(`${entry.index}:${entry.name}`), entry.voicing ?? [60, 64, 67]), C);
+    equal("staff: each chord written asked for its notes once, in order", asked.join(" "), "0:C 1:Dm7 2:G7 3:C 4:F 5:G");
+    equal("staff: bars as written, a % bar marked, sections once each", made.bars.map(bar => `${bar.section}.${bar.bar}${bar.repeat ? "%" : ""}`).join(" ") + " / " + made.sections.map(section => `${section.first}-${section.last}x${section.repeat}`).join(" "), "0.0 0.1% 0.2 1.0 / 0-2x2 3-3x1");
+    equal("staff: each chord as long as it's played", made.chords.map(chord => `${chord.name}@${chord.onset}+${chord.length}`).join(" "), "C@0+8 Dm7@16+4 G7@20+4 C@24+4 F@28+2 G@30+2");
+    check("staff: a written voicing known as written", made.chords[0].written && !made.chords[1].written && made.chords[0].midis.join() === "48,55,64");
+    const right = made.score.staves[0].voices[0].notes, left = made.score.staves[1].voices[0].notes;
+    equal("staff: the right hand's notes, rests in the % bar", right.map(note => (note.p ? N.pitchesOf(note).map(N.pitchName).join("+") : "r") + note.d).join(" "), "E4w rw C4+E4+G4h C4+E4+G4h C4+E4+G4h C4+E4+G4q C4+E4+G4q");
+    equal("staff: the left hand's", left.map(note => (note.p ? N.pitchesOf(note).map(N.pitchName).join("+") : "r") + note.d).join(" "), "C3+G3w rw rh rh rh rq rq");
+    equal("staff: where a chord's notes are on each hand's staff", JSON.stringify(made.chords[0].staves), '[{"note":0,"notes":1,"midis":[64]},{"note":0,"notes":1,"midis":[48,55]}]');
+    equal("staff: a % bar's rests, each hand's", JSON.stringify(made.bars[1].notes), "[[1,2],[1,2]]");
+    const sevens = H.chartScore(H.cleanChart({ ...staffChart, beats: 7, sections: [{ name: "", repeat: 1, bars: [["C"]] }] }), "7/8:3+2+2", () => [60, 64, 67], C);
+    equal("staff: 7/8, its groups, a chord over the bar tied", `${JSON.stringify(sevens.score.meter)} ${sevens.score.staves[0].voices[0].notes.map(note => note.d + (note.dot ? "." : "") + (note.tie ? "~" : "")).join(" ")}`, `{"beats":7,"unit":8,"groups":[3,2,2]} h.~ e`);
+    const long = H.cleanChart({ ...staffChart, sections: Array.from({ length: 4 }, () => ({ name: "", repeat: 1, bars: Array.from({ length: 64 }, () => ["C", "F", "G", "C"]) })) });
+    const longMade = H.chartScore(long, "4/4", () => [48, 60, 64, 67], C);
+    check("staff: a song of 256 bars of four chords is written", longMade && longMade.chords.length === 1024 && N.engrave(longMade.score, { maxWidth: 1400, justify: true }).heads.length === 4096);
+    equal("staff: a meter that isn't one refused", H.chartScore(staffChart, "four", () => [60], C), null);
+    const guitarMade = H.chartScore(staffChart, "4/4", entry => entry.voicing ?? [40, 47, 52, 56, 59, 64], C, ["treble8"]);
+    equal("staff: a guitar's chart on one staff, its clef with an 8 (2.7.0)", guitarMade.score.staves.map(staff => staff.clef).join(), "treble8");
+    equal("staff: every note of a chord on it", guitarMade.score.staves[0].voices[0].notes[0] && N.pitchesOf(guitarMade.score.staves[0].voices[0].notes[0]).map(N.pitchName).join(" "), "C3 G3 E4");
+    equal("staff: a % bar's rests, on the one staff", JSON.stringify(guitarMade.bars[1].notes), "[[1,2]]");
+    equal("staff: where a chord's notes are, on the one staff", JSON.stringify(guitarMade.chords[0].staves), '[{"note":0,"notes":1,"midis":[48,55,64]}]');
 })();

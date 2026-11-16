@@ -313,10 +313,14 @@ ValidateChartId(id) {
 ; with no control characters or double quotes; 1 to 12 sections, each played 1
 ; to 8 times, of up to 64 bars, and 256 bars in all; a section can't begin with
 ; "%". Returns the text with plain line breaks.
+; Format 2 (2.7.0) is the same, but a chord may have its voicing written after
+; it, "Cmaj7=48.55.59.64": 1 to 10 MIDI numbers from 16 to 108, rising, with no
+; leading zeros. A chord symbol never has "=". At most 64 KB as UTF-8.
 ValidateChartText(text) {
     lines := StrSplit(Trim(StrReplace(text, "`r`n", "`n"), "`n"), "`n")
-    if (lines.Length < 3 || lines[1] !== "Maestro chart 1")
+    if (lines.Length < 3 || (lines[1] !== "Maestro chart 1" && lines[1] !== "Maestro chart 2"))
         throw Error("A chart is malformed.")
+    voiced := lines[1] == "Maestro chart 2"
     head := StrSplit(lines[2], "`t")
     if (head.Length != 4)
         throw Error("A chart's heading is malformed.")
@@ -354,15 +358,38 @@ ValidateChartText(text) {
                 if (chord == "%") {
                     if (chords.Length > 1 || bar = 1)
                         throw Error("A repeated bar stands alone, after another.")
-                } else if (chord = "" || !IsChordSymbolName(chord)) {
-                    throw Error("A chart's chords must be chord symbols.")
+                } else {
+                    at := InStr(chord, "=")
+                    if (at && !voiced)
+                        throw Error("A chart's chords must be chord symbols.")
+                    symbol := at ? SubStr(chord, 1, at - 1) : chord
+                    if (symbol = "" || InStr(symbol, "=") || !IsChordSymbolName(symbol))
+                        throw Error("A chart's chords must be chord symbols.")
+                    if at
+                        ValidateChartVoicing(SubStr(chord, at + 1))
                 }
             }
         }
     }
     if (total > 256)
         throw Error("A chart has at most 256 bars.")
-    return JoinArray(lines, "`n")
+    result := JoinArray(lines, "`n")
+    if (StrPut(result, "UTF-8") - 1 > 65536)
+        throw Error("A chart is at most 64 KB.")
+    return result
+}
+
+; A chord's voicing in a chart (2.7.0): MIDI numbers separated by dots.
+ValidateChartVoicing(text) {
+    if !RegExMatch(text, "^[1-9]\d{1,2}(\.[1-9]\d{1,2}){0,9}$")
+        throw Error("A chord's voicing is malformed.")
+    before := 0
+    for midi in StrSplit(text, ".") {
+        midi := Integer(midi)
+        if (midi < 16 || midi > 108 || midi <= before)
+            throw Error("A chord's voicing is malformed.")
+        before := midi
+    }
 }
 
 ; ------------------------------------------
@@ -384,7 +411,7 @@ ValidateExerciseId(id) {
 ; key (fifths and mode); for four parts, its numerals (2 to 32, each a
 ; numeral with its quality, figure and target); then a line a voice (two for
 ; species, four for four parts, one for a cantus firmus): its
-; staff, clef, whether it's given, a name of up to 24 characters, and up to
+; staff, clef (treble or bass; since 2.7.0 also alto or tenor), whether it's given, a name of up to 24 characters, and up to
 ; 512 notes, each a step, an alteration, a duration, a dot and a tie. Fields
 ; are separated by tabs. Returns the text with plain line breaks.
 ValidateExerciseText(text) {
@@ -432,7 +459,7 @@ ValidateExerciseText(text) {
         throw Error("An exercise has the wrong number of voices.")
     Loop voices {
         fields := StrSplit(lines[first - 1 + A_Index], "`t")
-        if (fields.Length != 6 || fields[1] !== "voice" || !RegExMatch(fields[2], "^[12]$") || !RegExMatch(fields[3], "^(treble|bass)$") || !RegExMatch(fields[4], "^(given|written)$"))
+        if (fields.Length != 6 || fields[1] !== "voice" || !RegExMatch(fields[2], "^[12]$") || !RegExMatch(fields[3], "^(treble|alto|tenor|bass)$") || !RegExMatch(fields[4], "^(given|written)$"))
             throw Error("An exercise's voice is malformed.")
         name := fields[5]
         if (name = "" || StrLen(name) > 24 || Trim(name) !== name || RegExMatch(name, '[\x00-\x1F\x7F"]'))

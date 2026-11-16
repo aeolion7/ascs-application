@@ -1252,7 +1252,7 @@ chartGood := "Maestro chart 1`nAutumn Study`tC`tmajor`t4/4`nVerse`t2`tCmaj7`tAm7
 Equal("chart kept, line breaks made plain", ValidateChartText(StrReplace(chartGood, "`n", "`r`n") "`r`n"), chartGood)
 Equal("chart in 7/8 grouped", SubStr(ValidateChartText(StrReplace(chartGood, "4/4", "7/8:3+2+2")), 1, 40), SubStr(StrReplace(chartGood, "4/4", "7/8:3+2+2"), 1, 40))
 Throws("chart without its first line rejected", () => ValidateChartText(SubStr(chartGood, 17)), "malformed")
-Throws("chart from a later version rejected", () => ValidateChartText(StrReplace(chartGood, "chart 1", "chart 2")), "malformed")
+Throws("chart from a later version rejected", () => ValidateChartText(StrReplace(chartGood, "chart 1", "chart 3")), "malformed")
 Throws("chart without a title rejected", () => ValidateChartText(StrReplace(chartGood, "Autumn Study", "")), "title")
 Throws("chart title with a quote rejected", () => ValidateChartText(StrReplace(chartGood, "Autumn Study", 'My "tune"')), "title")
 Throws("chart title too long rejected", () => ValidateChartText(StrReplace(chartGood, "Autumn Study", Format("{:061}", 0))), "title")
@@ -1284,6 +1284,32 @@ Loop 5 {
         manyBars .= "`tC"
 }
 Throws("chart of 260 bars rejected", () => ValidateChartText(manyBars), "256")
+; Voicings written into a chart (2.7.0), in format 2 only.
+chartVoiced := StrReplace(StrReplace(chartGood, "chart 1", "chart 2"), "Cmaj7`t", "Cmaj7=48.55.59.64`t")
+Equal("chart in format 2 with a voicing kept", ValidateChartText(chartVoiced), chartVoiced)
+Equal("chart in format 2 without one kept", ValidateChartText(StrReplace(chartGood, "chart 1", "chart 2")), StrReplace(chartGood, "chart 1", "chart 2"))
+Equal("chart voicing of a slash chord kept", SubStr(ValidateChartText(StrReplace(chartVoiced, "E7♯9", "C/E=40.48.55")), -12), "C/E=40.48.55")
+Throws("chart voicing in format 1 rejected", () => ValidateChartText(StrReplace(chartVoiced, "chart 2", "chart 1")), "symbols")
+Throws("chart voicing falling rejected", () => ValidateChartText(StrReplace(chartVoiced, "48.55.59.64", "48.59.55.64")), "voicing")
+Throws("chart voicing with a note twice rejected", () => ValidateChartText(StrReplace(chartVoiced, "48.55.59.64", "48.55.55.64")), "voicing")
+Throws("chart voicing below E0 rejected", () => ValidateChartText(StrReplace(chartVoiced, "48.55.59.64", "15.55")), "voicing")
+Throws("chart voicing above C8 rejected", () => ValidateChartText(StrReplace(chartVoiced, "48.55.59.64", "48.109")), "voicing")
+Throws("chart voicing with a leading zero rejected", () => ValidateChartText(StrReplace(chartVoiced, "48.55.59.64", "048.55")), "voicing")
+Throws("chart voicing of 11 notes rejected", () => ValidateChartText(StrReplace(chartVoiced, "48.55.59.64", "40.41.42.43.44.45.46.47.48.49.50")), "voicing")
+Throws("chart voicing empty rejected", () => ValidateChartText(StrReplace(chartVoiced, "48.55.59.64", "")), "voicing")
+Throws("chart voicing with a space rejected", () => ValidateChartText(StrReplace(chartVoiced, "48.55.59.64", "48. 55")), "voicing")
+Throws("chart voicing twice rejected", () => ValidateChartText(StrReplace(chartVoiced, "48.55.59.64", "48=55")), "voicing")
+Throws("chart voicing without a chord rejected", () => ValidateChartText(StrReplace(chartVoiced, "Cmaj7=", "=")), "symbols")
+Throws("chart % with a voicing rejected", () => ValidateChartText(StrReplace(chartVoiced, "`t%", "`t%=48")), "symbols")
+; A chord symbol of 32 characters, 94 bytes, with ten notes: four a bar make 256 bars over 64 KB.
+bigChord := "C" StrReplace(Format("{:31}", ""), " ", "♯") "=31.43.50.53.56.59.62.65.68.71"
+bigChart := "Maestro chart 2`nT`tC`tmajor`t4/4"
+Loop 4 {
+    bigChart .= "`nA`t1"
+    Loop 64
+        bigChart .= "`t" bigChord " " bigChord " " bigChord " " bigChord
+}
+Throws("chart over 64 KB rejected", () => ValidateChartText(bigChart), "64 KB")
 Equal("song id kept", ValidateChartId("k3x9q2m7ab"), "k3x9q2m7ab")
 Throws("song id with a path rejected", () => ValidateChartId("..\..\x"), "id")
 Throws("song id with capitals rejected", () => ValidateChartId("ABCDEFGH"), "id")
@@ -1349,7 +1375,10 @@ Throws("one chord rejected", () => ValidateExerciseText(StrReplace(fourGood, "i 
 Throws("a third voice in species rejected", () => ValidateExerciseText(speciesGood "`nvoice`t2`tbass`twritten`tMore`t22w"), "voices")
 Throws("a missing voice in four parts rejected", () => ValidateExerciseText(SubStr(fourGood, 1, InStr(fourGood, "`nvoice`t2`tbass`tgiven") - 1)), "voices")
 Throws("a voice on a third staff rejected", () => ValidateExerciseText(StrReplace(speciesGood, "voice`t2`tbass", "voice`t3`tbass")), "voice")
-Throws("an alto clef rejected", () => ValidateExerciseText(StrReplace(speciesGood, "treble", "alto")), "voice")
+Equal("an alto clef kept (2.7.0)", ValidateExerciseText(StrReplace(speciesGood, "treble", "alto")), StrReplace(speciesGood, "treble", "alto"))
+Equal("a tenor clef kept (2.7.0)", ValidateExerciseText(StrReplace(speciesGood, "bass", "tenor")), StrReplace(speciesGood, "bass", "tenor"))
+Throws("a clef with an 8 under it rejected", () => ValidateExerciseText(StrReplace(speciesGood, "treble", "treble8")), "voice")
+Throws("a clef that isn't one rejected", () => ValidateExerciseText(StrReplace(speciesGood, "treble", "mezzo")), "voice")
 Throws("a voice's name with a quote rejected", () => ValidateExerciseText(StrReplace(speciesGood, "Counterpoint", 'A "voice"')), "name")
 Throws("a note that isn't one rejected", () => ValidateExerciseText(StrReplace(speciesGood, "26w", "26x")), "note")
 Throws("a length that isn't one rejected", () => ValidateExerciseText(StrReplace(speciesGood, "26w", "26z")), "note")

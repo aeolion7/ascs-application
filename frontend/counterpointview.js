@@ -97,6 +97,7 @@ const cpFirstExercise = () => MaestroCounterpoint.speciesExercise({ species: 1, 
 function setCpExercise(exercise, { id = null, savedText = null, undo = null } = {}) {
     const before = { exercise: cp.exercise, id: cp.id, savedText: cp.savedText };
     stopCpPlaying();
+    closeCpClefMenu();
     cp.exercise = exercise;
     cp.id = id;
     cp.savedText = savedText;
@@ -498,7 +499,7 @@ function stepCpNote(steps, chromatic) {
     const key = cp.exercise.score.key;
     if (!current) {
         const before = voice.notes.slice(0, cp.at.index).reverse().find(note => note.p)?.p;
-        const start = before ?? MaestroNotation.pitch(voice.clef === "treble" ? 34 : 22, 0);
+        const start = before ?? cpMiddleLine(voice.clef);
         setCpNote(MaestroNotation.pitch(start.step, MaestroNotation.keyAlter(start.step % 7, key.fifths)));
         return;
     }
@@ -515,7 +516,7 @@ function stepCpNote(steps, chromatic) {
 // A letter typed: that letter, nearest the note there (or the one before).
 function letterCpNote(letter) {
     const voice = cpVoices()[cp.at.voice];
-    const near = voice.notes[cp.at.index]?.p ?? voice.notes.slice(0, cp.at.index).reverse().find(note => note.p)?.p ?? MaestroNotation.pitch(voice.clef === "treble" ? 34 : 22, 0);
+    const near = voice.notes[cp.at.index]?.p ?? voice.notes.slice(0, cp.at.index).reverse().find(note => note.p)?.p ?? cpMiddleLine(voice.clef);
     const index = MaestroNotation.LETTERS.indexOf(letter);
     let best = null;
     for (const octave of [-1, 0, 1]) {
@@ -576,7 +577,9 @@ function drawCpStaff() {
     drawScoreItems(svg, drawn);
     drawCpBeneath(svg, drawn, timed);
     drawCpBarStrips(svg, drawn);
+    drawCpClefSpots(svg, drawn);
     holder.replaceChildren(svg);
+    placeCpClefMenu();
     if (cpGhost.at && !cpGhost.frame) cpGhost.frame = requestAnimationFrame(drawCpGhost);
 }
 
@@ -658,6 +661,9 @@ function drawCpBeneath(svg, drawn, timed) {
     MaestroCounterpoint.analysisLine(exercise).forEach(each => writeNumeral(each.onset, each.parts, row, "cp-beneath cp-analysis"));
 }
 
+// The pitch on a staff's middle line, where a note with none before it starts.
+const cpMiddleLine = clef => MaestroNotation.pitch(MaestroNotation.STAFF_BOTTOM[clef] + 4, 0);
+
 function cpStaffLabel() {
     const voices = cpVoices();
     return voices.map(voice => `${voice.name}: ${voice.notes.map(note => (note.p ? MaestroNotation.pitchName(note.p) : "rest")).join(", ")}`).join(". ");
@@ -714,6 +720,11 @@ function cpNearestWritten(hit) {
 // A click on the staff: the moment nearest it, on the staff clicked, for
 // the voice there (the one written nearest the click when two share it).
 function cpStaffClick(event) {
+    const clef = event.target.closest?.(".cp-clef-spot");
+    if (clef) {
+        openCpClefMenu(Number(clef.dataset.staff));
+        return;
+    }
     const strip = event.target.closest?.(".cp-bar-strip");
     if (strip) {
         selectCpBar(Number(strip.dataset.bar), event.shiftKey);
@@ -738,7 +749,7 @@ function cpStaffClick(event) {
 // they are. The menu key (no pointer to aim) does nothing here.
 function cpStaffErase(event) {
     event.preventDefault();
-    if (event.button !== 2 || event.target.closest?.(".cp-bar-strip")) return;
+    if (event.button !== 2 || event.target.closest?.(".cp-bar-strip, .cp-clef-spot")) return;
     const hit = cpStaffHit(event);
     const nearest = hit && cpNearestWritten(hit);
     if (!nearest) return;
@@ -753,9 +764,77 @@ function cpStaffErase(event) {
 const cpGhost = { frame: 0, at: null };
 
 function cpStaffHover(event) {
-    // Over a bar's strip, no note would be written.
-    cpGhost.at = event.target.closest?.(".cp-bar-strip") ? null : { clientX: event.clientX, clientY: event.clientY };
+    // Over a bar's strip or a clef, no note would be written.
+    cpGhost.at = event.target.closest?.(".cp-bar-strip, .cp-clef-spot") ? null : { clientX: event.clientX, clientY: event.clientY };
     if (!cpGhost.frame) cpGhost.frame = requestAnimationFrame(drawCpGhost);
+}
+
+// ---- Clefs (2.7.0): a click on a staff's clef chooses another, treble,
+// alto, tenor or bass, as the part is easiest read. The notes stay where
+// they sound, and Ctrl+Z takes the change back. Not while a transposing
+// part is shown as written: that clef is the instrument's.
+
+const CP_CLEF_WORDS = Object.freeze({ treble: "Treble", alto: "Alto", tenor: "Tenor", bass: "Bass" });
+const cpClef = { staff: -1 };
+
+// Over each line's clefs, a spot to click.
+function drawCpClefSpots(svg, drawn) {
+    if (cpReadOnly()) return;
+    const space = drawn.space;
+    const staves = cp.exercise.score.staves.length;
+    drawn.systems.forEach(system => system.staffY.forEach((staffY, staff) => {
+        const spot = svgNode("rect", { class: "cp-clef-spot", x: system.left + 0.5 * space, y: staffY - 6 * space, width: 3.5 * space, height: 8 * space, rx: 0.6 * space, "data-staff": String(staff) });
+        const title = svgNode("title", {});
+        title.textContent = `${CP_CLEF_WORDS[cp.exercise.score.staves[staff].clef] ?? "The"} clef${staves > 1 ? ` of the ${staff === 0 ? "upper" : "lower"} staff` : ""}: click to choose another`;
+        spot.append(title);
+        svg.append(spot);
+    }));
+}
+
+function openCpClefMenu(staff) {
+    const menu = $("cpClefMenu");
+    if (!menu.hidden && cpClef.staff === staff) return closeCpClefMenu(true);
+    closeConsPopovers();
+    globalThis.closeProgPopovers?.();
+    cpClef.staff = staff;
+    const staves = cp.exercise.score.staves.length;
+    $("cpClefTitle").textContent = staves > 1 ? `Clef of the ${staff === 0 ? "upper" : "lower"} staff` : "Clef";
+    renderCpClefMenu();
+    menu.hidden = false;
+    placeCpClefMenu();
+    requestAnimationFrame(() => menu.querySelector('[aria-pressed="true"]')?.focus());
+}
+
+// Beside the staff's first clef in view, inside the window; it follows the
+// staff when the window changes size.
+function placeCpClefMenu() {
+    const menu = $("cpClefMenu");
+    if (menu.hidden) return;
+    const spot = $("cpStaff").querySelector(`.cp-clef-spot[data-staff="${cpClef.staff}"]`);
+    if (!spot) return closeCpClefMenu();
+    const box = spot.getBoundingClientRect();
+    const left = Math.max(16, Math.min(box.right + 8, innerWidth - menu.offsetWidth - 16));
+    const top = Math.max(16, Math.min(box.top, innerHeight - menu.offsetHeight - 16));
+    menu.style.left = `${Math.round(left)}px`;
+    menu.style.top = `${Math.round(top)}px`;
+}
+
+function renderCpClefMenu() {
+    const clef = cp.exercise.score.staves[cpClef.staff]?.clef;
+    document.querySelectorAll("#cpClefs [data-staff-clef]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.staffClef === clef)));
+}
+
+function closeCpClefMenu(focus = false) {
+    if ($("cpClefMenu").hidden) return;
+    $("cpClefMenu").hidden = true;
+    cpClef.staff = -1;
+    if (focus) $("cpStaff").focus({ preventScroll: true });
+}
+
+function chooseCpClef(clef) {
+    const next = MaestroCounterpoint.withClef(cp.exercise, cpClef.staff, clef);
+    closeCpClefMenu(true);
+    changeCp(next);
 }
 
 // Gone at once when the pointer leaves.
@@ -1416,6 +1495,19 @@ wireConsPopover("cpMenu", $("cpTitleButton"), $("cpMenu"));
 wireConsPopover("cpNew", $("cpMenuNew"), $("cpNewPanel"), { onOpen: () => $("cpNewKind").querySelector('[aria-pressed="true"]') });
 wireConsPopover("cpShow", $("cpShowButton"), $("cpShowPanel"));
 $("cpStaff").addEventListener("click", cpStaffClick);
+$("cpClefs").addEventListener("click", event => {
+    const button = event.target.closest("[data-staff-clef]");
+    if (button && MaestroCounterpoint.STAFF_CLEFS.includes(button.dataset.staffClef)) chooseCpClef(button.dataset.staffClef);
+});
+$("cpClefMenu").addEventListener("keydown", event => {
+    if (event.key !== "Escape") return;
+    event.stopPropagation();
+    closeCpClefMenu(true);
+});
+document.addEventListener("pointerdown", event => {
+    if (!$("cpClefMenu").hidden && !$("cpClefMenu").contains(event.target) && !event.target.closest?.(".cp-clef-spot")) closeCpClefMenu();
+});
+addEventListener("resize", () => requestAnimationFrame(placeCpClefMenu));
 $("cpStaff").addEventListener("contextmenu", cpStaffErase);
 $("cpStaff").addEventListener("pointermove", cpStaffHover);
 $("cpStaff").addEventListener("pointerleave", cpStaffLeave);

@@ -107,7 +107,7 @@ globalThis.MaestroPrompts = (() => {
             section.bars.forEach((bar, b) => {
                 const chords = bar[0] === H.REPEAT_BAR ? before : bar;
                 before = chords;
-                (chords ?? []).forEach((name, slot) => {
+                (chords ?? []).map(H.slotChord).forEach((name, slot) => {
                     if (H.parseChord(name)) list.push({ name, section: s, bar: b, slot, where: several ? `${String.fromCharCode(65 + s)}, bar ${b + 1}` : `bar ${b + 1}` });
                 });
             });

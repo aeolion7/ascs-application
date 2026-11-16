@@ -30,6 +30,7 @@
   <link rel="stylesheet" href="styles/46-2.4.1-conservatory.css">
   <link rel="stylesheet" href="styles/47-2.5.0-counterpoint.css">
   <link rel="stylesheet" href="styles/48-2.6.0-rhythm.css">
+  <link rel="stylesheet" href="styles/49-2.7.0-staff.css">
 </head>
 <body>
   <div class="app-shell">
@@ -40,7 +41,7 @@
           <span>Aeolionware</span>
           <strong>Maestro</strong>
         </span>
-        <span id="sidebarVersion" hidden>Maestro <span>2.6.0</span></span>
+        <span id="sidebarVersion" hidden>Maestro <span>2.7.0</span></span>
       </div>
 
       <nav class="primary-nav" aria-label="Pages">
@@ -1115,6 +1116,10 @@
                     </div>
                     <button class="secondary prog-save" type="button" id="progSave" title="Keep this song in Maestro's data folder">Save song</button>
                     <div class="cons-choice prog-head-show">
+                      <div class="cal-modes cons-labels prog-view" id="progView" role="group" aria-label="View">
+                        <button type="button" data-prog-view="chart" title="The song as a chart of chord symbols, bar by bar">Chart</button>
+                        <button type="button" data-prog-view="staff" title="The song on a staff, as the instrument is written: each chord's voicing, note by note">Staff</button>
+                      </div>
                       <span class="cons-choice-label" id="progShowLabel">Show</span>
                       <div class="cal-modes cons-labels" id="progShow" role="group" aria-labelledby="progShowLabel">
                         <button type="button" data-show="symbols" title="Chord symbols: Dm7, G7">Symbols</button>
@@ -1124,7 +1129,14 @@
                     </div>
                   </div>
                   <div class="prog-sheet" id="progSheet"></div>
-                  <div class="prog-foot">
+                  <div class="prog-staff" id="progStaff" hidden>
+                    <div class="cp-staff prog-staff-score" id="progStaffScore" tabindex="0" aria-label="The song on a staff" title="Click a note to select it, or a space to add one; right-click takes a note out; the neck or keys add or take out the pitch clicked. Left and Right choose a chord; Up and Down move the note a step (with Shift, a half step); Alt with Up or Down selects the note above or below; A to G add a note; Delete takes it out; Enter plays the chord; Ctrl+Z and Ctrl+Y undo and redo"></div>
+                  </div>
+                  <div class="prog-staff-bar" id="progStaffBar" hidden>
+                    <span class="prog-staff-where" id="progStaffWhere"></span>
+                    <div class="prog-staff-tools" id="progStaffTools"></div>
+                  </div>
+                  <div class="prog-foot" id="progFoot">
                     <button class="link-button prog-add-section" type="button" id="progAddSection" title="A section at the end, with one bar"><svg data-icon="plus"></svg><span>Add section</span></button>
                     <p class="cons-note-inline prog-capo" id="progCapo" hidden></p>
                   </div>
@@ -1145,13 +1157,13 @@
                     <div class="prog-voicing" id="progVoicing">
                       <div class="cal-modes" id="progNeckShow" role="group" aria-label="The neck shows">
                         <button type="button" data-neck="notes" title="Every note of the chord, everywhere on the neck">All notes</button>
-                        <button type="button" data-neck="shapes" title="One way to play it, chosen to move as little as it can from the chord before; the next chord's is outlined">Voicing</button>
+                        <button type="button" data-neck="shapes" title="One way to play it, chosen to move as little as it can from the chord before, or the song's own; the next chord's is outlined">Voicing</button>
                       </div>
                       <div class="prog-voicing-step" id="progVoicingStep">
                         <button class="secondary cal-step" type="button" id="progVoicingPrev" aria-label="The voicing before" title="Another voicing for this chord: the one before"><svg data-icon="chevron-left"></svg></button>
                         <span class="cons-note-inline prog-voicing-name" id="progVoicingName" aria-live="polite"></span>
                         <button class="secondary cal-step" type="button" id="progVoicingNext" aria-label="The next voicing" title="Another voicing for this chord: the next"><svg data-icon="chevron-right"></svg></button>
-                        <button class="link-button" type="button" id="progVoicingSmooth" title="Choose every chord's voicing again, to move as little as it can">Smooth</button>
+                        <button class="link-button" type="button" id="progVoicingReset" title="Take this chord's voicing out of the song: Maestro chooses one again, to move as little as it can">Reset voicing</button>
                       </div>
                     </div>
                     <div class="prog-drawer-links">
@@ -1376,6 +1388,15 @@
                     </div>
                   </div>
                   <div class="cp-staff" id="cpStaff" tabindex="0"></div>
+                  <div class="prompt-menu cp-clef-menu" id="cpClefMenu" role="dialog" aria-labelledby="cpClefTitle" hidden>
+                    <p class="prompt-menu-title" id="cpClefTitle">Clef</p>
+                    <div class="cal-modes" id="cpClefs" role="group" aria-labelledby="cpClefTitle">
+                      <button type="button" data-staff-clef="treble" aria-pressed="false">Treble</button>
+                      <button type="button" data-staff-clef="alto" aria-pressed="false">Alto</button>
+                      <button type="button" data-staff-clef="tenor" aria-pressed="false">Tenor</button>
+                      <button type="button" data-staff-clef="bass" aria-pressed="false">Bass</button>
+                    </div>
+                  </div>
                   <div class="cp-hintbar">
                     <span class="cons-note-inline" id="cpLines" title="The wheel on the staff, or Page Up and Page Down, shows the next line" hidden></span>
                   </div>
@@ -1532,6 +1553,10 @@
                           <button type="button" data-chords="both">Both</button>
                         </div>
                       </div>
+                      <div class="cons-choice" id="consQuizWriteField">
+                        <span class="cons-choice-label" id="consQuizWriteLabel">Write</span>
+                        <div class="cal-modes" id="consQuizWrite" role="group" aria-labelledby="consQuizWriteLabel"></div>
+                      </div>
                       <div class="cons-choice" id="consQuizDirectionField">
                         <span class="cons-choice-label" id="consQuizDirectionLabel">Played</span>
                         <div class="cal-modes" id="consQuizDirection" role="group" aria-labelledby="consQuizDirectionLabel">
@@ -1555,11 +1580,12 @@
                     <button class="secondary" type="button" id="consQuizUndo" title="Take back the last one named (Backspace)" hidden>Undo</button>
                     <button class="secondary" type="button" id="consQuizCheck" title="Check the bar as written" hidden>Check</button>
                     <button class="secondary" type="button" id="consQuizTap" title="A bar's count at the metronome's tempo, then tap the bar" hidden>Tap it</button>
-                    <button class="secondary" type="button" id="consQuizHear">Hear it</button>
-                    <button class="secondary" type="button" id="consQuizNext">Next</button>
+                    <button class="secondary" type="button" id="consQuizHear" title="Hear it again (Space or H)">Hear it</button>
+                    <button class="secondary" type="button" id="consQuizNext" title="The next question (N)">Next</button>
                   </div>
                 </div>
                 <p class="cons-quiz-prompt" id="consQuizPrompt">Which note is marked?</p>
+                <p class="cons-quiz-result" id="consQuizResult"></p>
                 <p class="cons-quiz-line" id="consQuizLine" hidden></p>
                 <div class="cons-quiz-answers" id="consQuizAnswers"></div>
                 <div class="cons-quiz-rhythm" id="consQuizRhythm" hidden>
@@ -1574,7 +1600,10 @@
                   <figure class="cons-quiz-staff"><figcaption>Yours</figcaption><div class="cons-quiz-write" id="consQuizMelodyStaff" tabindex="0" title="Click to write a note, right-click to clear it; or click the neck or keys. Left and Right choose a note; Up and Down move it a step (with Shift, a half step); A to G write a letter; Delete clears"></div></figure>
                   <figure class="cons-quiz-staff" id="consQuizMelodyPlayed" hidden><figcaption>Played</figcaption><div id="consQuizMelodyPlayedStaff"></div></figure>
                 </div>
-                <p class="cons-quiz-result" id="consQuizResult"></p>
+                <div class="cons-quiz-staves" id="consQuizDictBox" hidden>
+                  <figure class="cons-quiz-staff"><figcaption>Yours</figcaption><div class="cons-quiz-write" id="consQuizDictStaff" tabindex="0" title="Click to write a note or select one, right-click to take it out; or click the neck or keys. Left and Right choose a chord; Up and Down move the note (with Shift, a half step); Alt with Up and Down selects another; A to G write a letter; Delete takes it out; Enter plays the chord"></div></figure>
+                  <figure class="cons-quiz-staff" id="consQuizDictPlayed" hidden><figcaption>Played</figcaption><div id="consQuizDictPlayedStaff"></div></figure>
+                </div>
               </section>
             </div>
             <div class="cons-panel" id="consTuningPanel" role="tabpanel" aria-labelledby="consTabTuning" hidden>
@@ -2068,6 +2097,7 @@
   <script src="practiceview.js"></script>
   <script src="chordsview.js"></script>
   <script src="progressionview.js"></script>
+  <script src="progstaffview.js"></script>
   <script src="promptview.js"></script>
   <script src="keysview.js"></script>
   <script src="counterpointview.js"></script>

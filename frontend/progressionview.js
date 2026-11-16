@@ -24,6 +24,8 @@ const PROG_BASSES = Object.freeze(["off", "roots", "walking"]);
 const PROG_DRUMS = /^(off|groove:[a-z0-9]{1,24}|rhythm:[a-z0-9]{8,24})$/;
 // The neck shows (2.6.0): every note of the chord, or one voicing of it.
 const PROG_NECKS = Object.freeze(["notes", "shapes"]);
+// The song as a chart of chords, or on a staff as the instrument is written (2.7.0, progstaffview.js).
+const PROG_VIEWS = Object.freeze(["chart", "staff"]);
 const PROG_BASS_GAIN = 1.3;    // a single low note, against a chord's several
 const PROG_PLAYED = Object.freeze(["Once", "Twice", "3 times", "4 times", "5 times", "6 times", "7 times", "8 times"]);
 
@@ -31,7 +33,7 @@ const PROG_PLAYED = Object.freeze(["Once", "Twice", "3 times", "4 times", "5 tim
 function parseProgression(text) {
     let stored = null;
     try { stored = JSON.parse(text ?? "null"); } catch { stored = null; }
-    const settings = { sketch: structuredClone(PROG_DEFAULT), show: "symbols", loop: true, sevenths: true, song: null, under: "numerals", side: "chord", prompt: null, locked: [], bass: "off", drums: "off", move: false, neck: "notes", elsewhere: false };
+    const settings = { sketch: structuredClone(PROG_DEFAULT), show: "symbols", loop: true, sevenths: true, song: null, under: "numerals", side: "chord", prompt: null, locked: [], bass: "off", drums: "off", move: false, neck: "notes", elsewhere: false, view: "chart" };
     if (!stored || typeof stored !== "object" || Array.isArray(stored)) return settings;
     const sketch = MaestroHarmony.cleanChart(stored.sketch);
     if (sketch) {
@@ -51,6 +53,7 @@ function parseProgression(text) {
     if (PROG_BASSES.includes(stored.bass)) settings.bass = stored.bass;
     if (typeof stored.drums === "string" && PROG_DRUMS.test(stored.drums)) settings.drums = stored.drums;
     if (PROG_NECKS.includes(stored.neck)) settings.neck = stored.neck;
+    if (PROG_VIEWS.includes(stored.view)) settings.view = stored.view;
     // Whether a new root moves the chords with it (2.4.1).
     if (typeof stored.move === "boolean") settings.move = stored.move;
     // The writing prompt (2.4.0) and the parts locked; one is drawn when first shown.
@@ -65,9 +68,6 @@ const prog = {
     barOpen: false,         // whether its drawer is open under its line (2.4.1)
     sectionOpen: null,      // the section whose heading is open to edit, by index
     scale: null,            // a scale picked for it, shown on the neck: { root, scale }
-    // Voicings picked by hand (2.6.0), by the chord's place and name: kept
-    // while Maestro runs, the rest chosen around them.
-    voicingPins: new Map(),
     ideas: [],              // the other chords offered for it
     timeline: [],           // the sketch as played: harmony.js's chartTimeline
     timelineWeights: null,  // the metronome's bar it was made with
@@ -93,17 +93,22 @@ const progWeights = () => MaestroMetronome.METERS[metro.settings.meter] ?? Maest
 const progBeats = () => progWeights().length;
 const progLetter = index => String.fromCharCode(65 + index);
 const progIsShown = () => $("conservatory").classList.contains("active") && consSections.current() === "progressions";
+const progStaffShown = () => prog.settings.view === "staff";
+// One voicing a chord (2.6.0), shown on the neck and played: in the Voicing
+// view of the neck, and always with the staff (2.7.0).
+const progShowsVoicing = () => prog.settings.neck === "shapes" || progStaffShown();
 
 function saveProgression() {
     try { localStorage.setItem(PROG_KEY, JSON.stringify(prog.settings)); } catch { /* not kept */ }
 }
 
-// The chords as written, in order: { name, section, bar, slot }. A bar that
-// repeats the one before (%) has none of its own.
+// The chords as written, in order: { name, voicing, section, bar, slot }, the
+// voicing written for it (2.7.0) or null. A bar that repeats the one before
+// (%) has none of its own.
 function progChords() {
     const list = [];
     progSketch().sections.forEach((section, s) => section.bars.forEach((bar, b) => {
-        if (bar[0] !== MaestroHarmony.REPEAT_BAR) bar.forEach((name, c) => list.push({ name, section: s, bar: b, slot: c }));
+        if (bar[0] !== MaestroHarmony.REPEAT_BAR) bar.forEach((token, c) => list.push({ name: MaestroHarmony.slotChord(token), voicing: MaestroHarmony.slotVoicing(token), section: s, bar: b, slot: c }));
     }));
     return list;
 }
@@ -119,7 +124,11 @@ function clampProgPick() {
     prog.at = { section: pick.section, bar: pick.bar, slot: pick.slot };
 }
 
-const progChosen = () => progChords()[progIndex(progChords())]?.name ?? null;
+const progPicked = () => {
+    const list = progChords();
+    return list[progIndex(list)] ?? null;
+};
+const progChosen = () => progPicked()?.name ?? null;
 
 function rebuildProgTimeline() {
     const weights = progWeights();
@@ -178,7 +187,8 @@ function readProgChord(text) {
 function setProgChord(name) {
     changeProgression(() => {
         const bar = progSketch().sections[prog.at.section].bars[prog.at.bar];
-        if (bar[prog.at.slot] === name) return false;
+        // The same chord keeps its voicing; another drops it (2.7.0).
+        if (MaestroHarmony.slotChord(bar[prog.at.slot]) === name) return false;
         bar[prog.at.slot] = name;
     });
     strumProgChord(name);
@@ -216,7 +226,7 @@ function removeProgChord() {
     const { section, bar, slot } = prog.at;
     const bars = sketch.sections[section].bars;
     if (bars[bar].length === 1 && bars.length === 1 && sketch.sections.length === 1) return;
-    const name = bars[bar][slot];
+    const name = MaestroHarmony.slotChord(bars[bar][slot]);
     changeProgression(() => {
         if (bars[bar].length > 1) bars[bar].splice(slot, 1);
         else if (bars.length > 1) {
@@ -231,7 +241,7 @@ function applyProgIdea(index) {
     const idea = prog.ideas[index];
     const bar = progSketch().sections[prog.at.section]?.bars[prog.at.bar];
     if (!idea || !bar || bar.length - 1 + idea.chords.length > MaestroHarmony.CHART_LIMITS.perBar) return;
-    const was = bar[prog.at.slot];
+    const was = MaestroHarmony.slotChord(bar[prog.at.slot]);
     changeProgression(() => bar.splice(prog.at.slot, 1, ...idea.chords), `${idea.label}: ${idea.chords.join(" ")} for ${was}.`);
     strumProgChord(idea.chords[0]);
 }
@@ -371,9 +381,16 @@ function sendProgSong(id, text) {
     send("SaveChart", `${id}\n${text}`);
 }
 
+// A song longer than AHK keeps (64 KB, only with many voicings written) isn't sent.
+function progSongFits(text) {
+    if (!MaestroHarmony.chartTooLarge(text)) return true;
+    showToast("This song is too long to save with its voicings. Reset some to save it.");
+    return false;
+}
+
 function saveProgSong() {
     const text = progSongText();
-    if (prog.songs === null || !text || progIsSaved()) return;
+    if (prog.songs === null || !text || progIsSaved() || !progSongFits(text)) return;
     let id = prog.settings.song;
     if (!id || !prog.songs.some(song => song.id === id)) {
         if (prog.songs.length >= PROG_SONGS_MAX) {
@@ -391,7 +408,7 @@ function saveProgSong() {
 // The sheet kept as another song (2.4.1): the one it came from stays as it was saved.
 function saveProgSongCopy() {
     const text = progSongText();
-    if (prog.songs === null || !text) return;
+    if (prog.songs === null || !text || !progSongFits(text)) return;
     if (prog.songs.length >= PROG_SONGS_MAX) {
         showToast(`Maestro keeps up to ${PROG_SONGS_MAX} songs. Delete one to save another.`);
         return;
@@ -508,7 +525,7 @@ function drawPrintChart() {
                 if (s === chart.sections.length - 1 && at + index === section.bars.length - 1) cell.classList.add("is-last");
                 if (bar[0] === MaestroHarmony.REPEAT_BAR) {
                     cell.append(element("span", "print-same", ""));
-                } else bar.forEach(name => {
+                } else bar.map(MaestroHarmony.slotChord).forEach(name => {
                     const chord = element("div", "print-chord");
                     chord.append(chordSymbol(name, "list"));
                     const below = under === "numerals" ? MaestroHarmony.romanNumeral(name, key) : under === "nashville" ? MaestroHarmony.nashville(name, key) : "";
@@ -661,9 +678,11 @@ function strumProgChord(name) {
     if (!name || (metro.running && prog.settings.loop)) return;
     cons.chordVoices.forEach(dampConsVoice);
     cons.chordVoices = [];
-    // The voicing shown, when the chord strummed is the one picked (2.6.0).
-    const now = name === progChosen() ? progVoicingNow({ picked: true }) : null;
-    pluckConsNotes(now ? [...now.voicing.midis] : MaestroHarmony.voiceChord(name), consChordSpread(0.03)).then(voices => { cons.chordVoices = voices; });
+    // The chord picked plays its written voicing (2.7.0), or the one shown (2.6.0).
+    const picked = progPicked();
+    const own = picked?.name === name ? picked.voicing : null;
+    const now = !own && picked?.name === name ? progVoicingNow({ picked: true }) : null;
+    pluckConsNotes(own ? [...own] : now ? [...now.voicing.midis] : MaestroHarmony.voiceChord(name), consChordSpread(0.03)).then(voices => { cons.chordVoices = voices; });
 }
 
 // Called by the metronome as it books each beat, after any count-in, with
@@ -711,8 +730,8 @@ function soundProgChord(at, name, event = null) {
         voice.gain.gain.setTargetAtTime(0, at, 0.03);
         try { voice.source.stop(at + 0.3); } catch { /* already stopped */ }
     }
-    // The voicing on the neck, when it shows one (2.6.0).
-    const shown = event && prog.settings.neck === "shapes" ? progVoicingAt(event) : null;
+    // Its written voicing (2.7.0), or the one on the neck when it shows one (2.6.0).
+    const shown = event?.voicing ? { midis: event.voicing } : event && progShowsVoicing() ? progVoicingAt(event) : null;
     const midis = shown ? [...shown.midis] : MaestroHarmony.voiceChord(name, prog.voicing);
     prog.voicing = midis.length ? midis : prog.voicing;
     // With a bass playing, the chord leaves its own low note to it.
@@ -858,26 +877,47 @@ function showProgPlaying() {
         if (lit && !cell.classList.contains("is-playing")) revealProgBar(cell);
         cell.classList.toggle("is-playing", lit);
     });
+    if (progStaffShown()) markProgStaff();
     if (progNeckFor() !== progMarkCache.key) renderConsNeck();
 }
 
 // ---- Voicings (2.6.0): each chord a way to play it (a shape on a neck, a
 // voicing on the keys), chosen so the way through moves as little as it can.
 
-const progPinOf = entry => `${entry.section}.${entry.bar}.${entry.slot}:${entry.name}`;
+// A voicing written into the song (2.7.0) is that chord's; the others are
+// chosen around it. One that isn't among Maestro's own comes first in its
+// list, as the chord's own: on a neck, where one hand plays it, or, if none
+// can, with no shape (its notes are shown wherever they are).
+const sameMidis = (a, b) => a.length === b.length && a.every((midi, at) => midi === b[at]);
+function progOwnVoicing(entry, tuning, frets) {
+    const midis = Object.freeze([...entry.voicing]);
+    const bassTone = MaestroHarmony.chordTones(entry.name).find(tone => tone.pc === ((midis[0] % 12) + 12) % 12);
+    const own = { midis, kind: "own", bass: bassTone?.name ?? "", bassDegree: bassTone?.degree ?? 0, cost: 0 };
+    if (!tuning) return Object.freeze(own);
+    const placed = MaestroHarmony.fretsForVoicing(midis, tuning.pitches, frets);
+    if (!placed) return Object.freeze({ ...own, frets: null, unplayable: true });
+    const fretted = placed.filter(fret => fret !== null && fret > 0);
+    const low = fretted.length ? Math.min(...fretted) : 0;
+    return Object.freeze({ ...own, frets: Object.freeze(placed), low, high: fretted.length ? Math.max(...fretted) : 0, open: placed.includes(0) });
+}
+
 let progVoicingCache = { key: null, chords: [], choices: [], path: [] };
 function progVoicings() {
     const chords = progChords();
     const keyboard = consKeyboard();
     const tuning = keyboard ? null : MaestroMusic.currentTuning(cons.settings);
     const frets = keyboard ? 0 : MaestroMusic.INSTRUMENTS[cons.settings.instrument].frets;
-    const pins = chords.map(entry => prog.voicingPins.get(progPinOf(entry)) ?? null);
-    const key = JSON.stringify([keyboard ? "keys" : tuning?.pitches, frets, chords.map(entry => entry.name), pins]);
+    const key = JSON.stringify([keyboard ? "keys" : tuning?.pitches, frets, chords.map(entry => [entry.name, entry.voicing])]);
     if (progVoicingCache.key === key) return progVoicingCache;
     const byName = new Map();
-    const choices = chords.map(entry => {
+    const pins = [];
+    const choices = chords.map((entry, k) => {
         if (!byName.has(entry.name)) byName.set(entry.name, keyboard ? MaestroHarmony.keyVoicings(entry.name) : MaestroHarmony.chordShapes(entry.name, tuning.pitches, frets));
-        return byName.get(entry.name);
+        const list = byName.get(entry.name);
+        if (!entry.voicing) return list;
+        const found = list.findIndex(voicing => sameMidis(voicing.midis, entry.voicing));
+        pins[k] = found >= 0 ? found : 0;
+        return found >= 0 ? list : [progOwnVoicing(entry, tuning, frets), ...list];
     });
     progVoicingCache = { key, chords, choices, path: MaestroHarmony.smoothVoicings(choices, pins) };
     return progVoicingCache;
@@ -899,7 +939,7 @@ function progVoicingAt(event) {
 
 // The voicing playing (or picked) and the next one, to show on the neck.
 function progVoicingNow({ picked = false } = {}) {
-    if (prog.settings.neck !== "shapes") return null;
+    if (!progShowsVoicing()) return null;
     const { chords, choices, path } = progVoicings();
     let index, next;
     if (prog.playing && !picked) {
@@ -918,42 +958,70 @@ function progVoicingNow({ picked = false } = {}) {
     };
 }
 
-// How a voicing is named: which it is of how many, where, and what's in the bass.
+// How a voicing is named: which it is of how many (or the song's own), where,
+// and what's in the bass.
 const PROG_KEY_KINDS = Object.freeze({ close: "Close", drop2: "Drop 2", shell: "Shell", open: "Spread" });
 const PROG_INVERSIONS = Object.freeze(["root position", "first inversion", "second inversion", "third inversion"]);
 const PROG_BASS_WORDS = Object.freeze({ 2: "the 2nd", 3: "the 3rd", 4: "the 4th", 5: "the 5th", 6: "the 6th", 7: "the 7th", 9: "the 9th", 11: "the 11th", 13: "the 13th" });
 function progVoicingLabel(now) {
     const { voicing, chosen, count } = now;
-    const where = voicing.frets
-        ? `${voicing.high <= 4 && voicing.open ? "Open" : voicing.low === voicing.high ? `Fret ${voicing.low}` : `Frets ${voicing.low}\u2013${voicing.high}`}${voicing.bassDegree > 1 ? `, ${PROG_BASS_WORDS[voicing.bassDegree] ?? voicing.bass} in the bass` : ""}`
-        : `${PROG_KEY_KINDS[voicing.kind]}${voicing.kind === "close" || voicing.kind === "drop2" ? `, ${PROG_INVERSIONS[voicing.inversion] ?? "inverted"}` : ""}`;
-    return `${chosen + 1} of ${count} \u00B7 ${where}`;
+    const inBass = voicing.bassDegree > 1 ? `${PROG_BASS_WORDS[voicing.bassDegree] ?? voicing.bass} in the bass` : "";
+    const own = voicing.kind === "own";
+    let where;
+    if (voicing.frets) where = `${voicing.high <= 4 && voicing.open ? "Open" : voicing.low === voicing.high ? `Fret ${voicing.low}` : `Frets ${voicing.low}\u2013${voicing.high}`}${inBass ? `, ${inBass}` : ""}`;
+    else if (voicing.unplayable) where = "Not one hand's shape on this neck";
+    else if (own) where = `${voicing.midis.length} ${voicing.midis.length === 1 ? "note" : "notes"}${inBass ? `, ${inBass}` : ""}`;
+    else where = `${PROG_KEY_KINDS[voicing.kind]}${voicing.kind === "close" || voicing.kind === "drop2" ? `, ${PROG_INVERSIONS[voicing.inversion] ?? "inverted"}` : ""}`;
+    return `${own ? "Your voicing" : `${chosen + 1} of ${count}`} \u00B7 ${where}`;
 }
 
+// The picked chord's slot in the sketch, to write its voicing into.
+function setProgVoicing(entry, midis, said = "") {
+    changeProgression(() => {
+        const bar = progSketch().sections[entry.section]?.bars[entry.bar];
+        if (!bar || MaestroHarmony.slotChord(bar[entry.slot]) !== entry.name) return false;
+        const token = MaestroHarmony.voicedSlot(entry.name, midis);
+        if (bar[entry.slot] === token) return false;
+        bar[entry.slot] = token;
+    }, said);
+}
+
+// ‹ › write the voicing into the song (2.7.0); one of the song's own that
+// isn't Maestro's is replaced with Undo.
 function stepProgVoicing(by) {
     const now = progVoicingNow({ picked: true });
     if (!now || now.count < 2) return;
-    prog.voicingPins.set(progPinOf(now.entry), (now.chosen + by + now.count) % now.count);
-    renderProgVoicing();
-    renderConsNeck();
+    const next = progVoicings().choices[now.index][(now.chosen + by + now.count) % now.count];
+    const replaced = now.voicing.kind === "own" ? `Replaced your voicing of ${now.entry.name}.` : "";
+    setProgVoicing(now.entry, [...next.midis], replaced);
     strumProgChord(now.entry.name);
 }
 
+// Reset voicing: the chord picked is voiced by Maestro again, with Undo.
+function resetProgVoicing() {
+    const picked = progPicked();
+    if (!picked?.voicing) return;
+    setProgVoicing(picked, null, `Reset the voicing of ${picked.name}.`);
+    strumProgChord(picked.name);
+}
+
 function renderProgVoicing() {
-    const shapes = prog.settings.neck === "shapes";
+    const shapes = progShowsVoicing();
     document.querySelectorAll("#progNeckShow [data-neck]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.neck === prog.settings.neck)));
+    // With the staff, the neck shows the voicing written there.
+    $("progNeckShow").hidden = progStaffShown();
     const now = shapes ? progVoicingNow({ picked: true }) : null;
     $("progVoicingStep").hidden = !shapes;
     $("progVoicingName").textContent = !shapes ? "" : now ? progVoicingLabel(now) : "No voicing within four frets";
     $("progVoicingPrev").disabled = $("progVoicingNext").disabled = !now || now.count < 2;
-    $("progVoicingSmooth").hidden = !prog.voicingPins.size;
+    $("progVoicingReset").hidden = !progPicked()?.voicing;
 }
 
 // ---- The neck: the chord playing, or the one picked, with a scale picked for it.
 
 const progNeckFor = () => {
     const chord = `${prog.playing?.chord ?? progChosen() ?? ""}|${prog.scale ? `${prog.scale.root} ${prog.scale.scale}` : ""}`;
-    if (prog.settings.neck !== "shapes") return chord;
+    if (!progShowsVoicing()) return chord;
     const now = progVoicingNow();
     return `${chord}|${now ? `${now.index}:${now.voicing.midis.join(",")}>${now.next?.midis.join(",") ?? ""}` : "none"}`;
 };
@@ -991,9 +1059,15 @@ function progMarks() {
             return { kind: marks.get(pc)?.kind === "root" ? "root" : "note", label: names.get(pc) ?? MaestroMusic.PLAIN_NAMES[pc] };
         };
         if (now.voicing.frets) {
-            now.next?.frets.forEach((fret, string) => { if (fret !== null) spots.set(`${string}:${fret}`, { kind: "next", label: "" }); });
+            now.next?.frets?.forEach((fret, string) => { if (fret !== null) spots.set(`${string}:${fret}`, { kind: "next", label: "" }); });
             const pitches = MaestroMusic.currentTuning(cons.settings).pitches;
             now.voicing.frets.forEach((fret, string) => spots.set(`${string}:${fret ?? 0}`, fret === null ? { kind: "muted", label: "\u00D7" } : tone(pitches[string] + fret)));
+        } else if (now.voicing.unplayable) {
+            const pitches = MaestroMusic.currentTuning(cons.settings).pitches;
+            const frets = MaestroMusic.INSTRUMENTS[cons.settings.instrument].frets;
+            pitches.forEach((open, string) => {
+                for (let fret = 0; fret <= frets; fret++) if (now.voicing.midis.includes(open + fret)) spots.set(`${string}:${fret}`, tone(open + fret));
+            });
         } else {
             now.next?.midis.forEach(midi => keys.set(midi, { kind: "next", label: "" }));
             now.voicing.midis.forEach(midi => keys.set(midi, tone(midi)));
@@ -1014,6 +1088,8 @@ consNeckModes.progressions = {
         return marks.keys ? marks.keys.get(midi) ?? null : marks.marks.get(((midi % 12) + 12) % 12) ?? null;
     },
     nameOf: midi => progMarks().names.get(((midi % 12) + 12) % 12) ?? MaestroMusic.PLAIN_NAMES[((midi % 12) + 12) % 12],
+    // With the staff (2.7.0), a pitch clicked joins the chord picked or leaves it.
+    click: midi => (progStaffShown() ? toggleProgStaffPitch(midi) : pluckConsNote(midi)),
     render: () => renderProgressions()
 };
 
@@ -1089,14 +1165,16 @@ function renderProgSheet() {
                 same.setAttribute("aria-label", `Bar ${b + 1}, the bar before again: write it out`);
                 same.append(element("span", "prog-same-sign", ""));
                 cell.append(same);
-            } else bar.forEach((name, c) => {
+            } else bar.forEach((token, c) => {
+                const name = MaestroHarmony.slotChord(token);
                 const chord = element("button", "prog-chord");
                 chord.type = "button";
                 chord.dataset.slot = String(c);
                 const picked = prog.at.section === s && prog.at.bar === b && prog.at.slot === c;
                 chord.setAttribute("aria-pressed", String(picked));
                 if (picked) chord.setAttribute("aria-expanded", String(prog.barOpen));
-                chord.setAttribute("aria-label", `${name}, bar ${b + 1}${bar.length > 1 ? `, chord ${c + 1}` : ""}`);
+                const voiced = MaestroHarmony.slotVoicing(token) ? ", its voicing written" : "";
+                chord.setAttribute("aria-label", `${name}, bar ${b + 1}${bar.length > 1 ? `, chord ${c + 1}` : ""}${voiced}`);
                 chord.append(progChordLabel(name));
                 cell.append(chord);
             });
@@ -1311,6 +1389,7 @@ function renderProgressions() {
     renderProgSide();
     if (!$("progSongMenu").hidden) renderProgSongs();
     $("progProblem").hidden = true;
+    renderProgStaffView();
 }
 
 // ---- Wiring
@@ -1413,11 +1492,7 @@ document.querySelectorAll("#progNeckShow [data-neck]").forEach(button => button.
 }));
 $("progVoicingPrev").addEventListener("click", () => stepProgVoicing(-1));
 $("progVoicingNext").addEventListener("click", () => stepProgVoicing(1));
-$("progVoicingSmooth").addEventListener("click", () => {
-    prog.voicingPins.clear();
-    renderProgVoicing();
-    renderConsNeck();
-});
+$("progVoicingReset").addEventListener("click", resetProgVoicing);
 document.querySelectorAll("#progChordSize [data-sevenths]").forEach(button => button.addEventListener("click", () => {
     prog.settings.sevenths = button.dataset.sevenths === "true";
     saveProgression();

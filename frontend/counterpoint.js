@@ -1004,7 +1004,7 @@ globalThis.MaestroCounterpoint = (() => {
         let voiceIndex = 0;
         for (const line of lines.slice(at)) {
             const parts = line.split("\t");
-            if (parts.length !== 6 || parts[0] !== "voice" || !["1", "2"].includes(parts[1]) || !["given", "written"].includes(parts[3])) return null;
+            if (parts.length !== 6 || parts[0] !== "voice" || !["1", "2"].includes(parts[1]) || !STAFF_CLEFS.includes(parts[2]) || !["given", "written"].includes(parts[3])) return null;
             const notes = parts[5] ? parts[5].split(" ").map(readNote) : [];
             if (notes.some(note => !note)) return null;
             const staffIndex = Number(parts[1]) - 1;
@@ -1256,6 +1256,17 @@ globalThis.MaestroCounterpoint = (() => {
         return exerciseText(fresh) === exerciseText(exercise) ? exercise : fresh;
     }
 
+    // A staff's clef (2.7.0): treble, alto, tenor or bass, chosen as it's
+    // read; the notes stay where they sound.
+    const STAFF_CLEFS = Object.freeze(["treble", "alto", "tenor", "bass"]);
+    function withClef(exercise, staffIndex, clef) {
+        const staff = exercise.score.staves[staffIndex];
+        if (!staff || !STAFF_CLEFS.includes(clef) || staff.clef === clef) return exercise;
+        const staves = exercise.score.staves.map((each, index) => ({ clef: index === staffIndex ? clef : each.clef, voices: each.voices }));
+        const score = N.cleanScore({ title: exercise.title, key: exercise.score.key, meter: exercise.score.meter, staves });
+        return score ? Object.freeze({ ...exercise, score }) : exercise;
+    }
+
     function withVoiceNotes(exercise, voice, notes) {
         let index = 0;
         const staves = exercise.score.staves.map(staff => ({ clef: staff.clef, voices: staff.voices.map(each => (index++ === voice ? { name: each.name, notes } : each)) }));
@@ -1503,6 +1514,6 @@ globalThis.MaestroCounterpoint = (() => {
         chordFromNumeral, figuresFor, numeralParts, numeralText, keyChords, analyze, chordRhythm, fourPartExercise, figuredBass, checkFourPart,
         check, analysisLine, exerciseText, readExercise, setNote, setBarRhythm, clearWritten, allowedAlter, degreePitch, modelAnswer,
         CODES, codesFor, rhythmEditable, rhythmVoice, rhythmBars, fillCodes, barRhythm, pasteRhythms, clearBars, setNoteLength, toggleTie, rhythmFromTaps,
-        MELODY_BARS, melodyExercise, withMelodyNotes, checkMelody
+        MELODY_BARS, melodyExercise, withMelodyNotes, checkMelody, STAFF_CLEFS, withClef
     });
 })();

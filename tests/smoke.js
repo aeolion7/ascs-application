@@ -521,6 +521,19 @@
                         $("consQuizOptionsButton").click();
                         checks.push(["its popover holds what this kind uses", !$("consQuizOptionsPanel").hidden && !$("consQuizChordsField").hidden && !$("consQuizDirectionField").hidden && $("consQuizNaturalsField").hidden ? [] : ["fields"]]);
                         $("consQuizOptionsPanel").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+                        // 2.7.0: each kind's options inside their popover, and the popover inside its module (Write ran past the edge).
+                        const popSpill = [];
+                        MaestroMusic.QUIZ_KINDS.forEach(kind => {
+                            setConsQuiz({ quizKind: kind });
+                            toggleConsPopover("quiz", true);
+                            const panel = $("consQuizOptionsPanel");
+                            const box = panel.getBoundingClientRect();
+                            const module = panel.closest(".module").getBoundingClientRect();
+                            const out = [...panel.querySelectorAll("button, label, .cons-choice-label")].filter(node => node.offsetParent && (node.getBoundingClientRect().right > box.right - 10 || node.getBoundingClientRect().left < box.left + 10));
+                            if (out.length || box.right > module.right + 0.5 || box.left < module.left - 0.5) popSpill.push(`${kind}: ${out.map(node => node.textContent).join("|")} ${Math.round(box.left)}-${Math.round(box.right)} in ${Math.round(module.left)}-${Math.round(module.right)}`);
+                            toggleConsPopover("quiz", false);
+                        });
+                        checks.push(["each quiz's options fit their popover, and it fits the module", popSpill]);
                         cons.settings.quizKind = "note";
                         renderQuiz();
                         checks.push(["Name the note's chip says which notes", ["All notes", "Natural notes"].includes($("consQuizOptionsName").textContent) ? [] : [$("consQuizOptionsName").textContent]]);
@@ -748,11 +761,24 @@
                         checks.push(["Quiz marks one place with a question mark, and its tooltip doesn't say", asked().length === 1 && asked()[0].querySelector("text").textContent === "?" && asked()[0].querySelector("title").textContent.startsWith("?") && $("consQuizAnswers").children.length === 12 ? [] : [asked().length, $("consQuizAnswers").children.length]]);
                         let truth = quiz.question.midi % 12;
                         $("consQuizAnswers").querySelector(`[data-answer="${(truth + 1) % 12}"]`).click();
-                        checks.push(["a wrong answer shows the right one, and keeps the question", $("consQuizAnswers").querySelector(".is-right")?.dataset.answer === String(truth) && $("consQuizAnswers").querySelector(".is-wrong") && dots().some(dot => dot.classList.contains("is-missed")) && $("consQuizResult").classList.contains("is-wrong") && quiz.timer === null && $("consQuizScore").textContent === "0 of 1 right" ? [] : [$("consQuizScore").textContent]]);
+                        checks.push(["a wrong answer shows the right one, and keeps the question", $("consQuizAnswers").querySelector(".is-right")?.dataset.answer === String(truth) && $("consQuizAnswers").querySelector(".is-wrong") && dots().some(dot => dot.classList.contains("is-missed")) && $("consQuizResult").classList.contains("is-wrong") && $("consQuizScore").textContent === "0 of 1 right" ? [] : [$("consQuizScore").textContent]]);
                         $("consQuizNext").click();
                         truth = quiz.question.midi % 12;
                         $("consQuizAnswers").querySelector(`[data-answer="${truth}"]`).click();
-                        checks.push(["a right answer is scored, and the next question comes by itself", $("consQuizScore").textContent === "1 of 2 right" && quiz.timer !== null && /^Right/.test($("consQuizResult").textContent) ? [] : [$("consQuizScore").textContent, quiz.timer]]);
+                        await pause(1200);
+                        checks.push(["2.7.0: a right answer is scored and stays until Next, the result in the prompt's place, focus on Next", $("consQuizScore").textContent === "1 of 2 right" && quiz.answered !== null && /^Right/.test($("consQuizResult").textContent) && $("consQuizPrompt").hidden && $("consQuizResult").previousElementSibling === $("consQuizPrompt") && document.activeElement === $("consQuizNext") ? [] : [$("consQuizScore").textContent, quiz.answered, document.activeElement?.id]]);
+                        // Keys on the Quiz tab: N for the next, Space (nothing to hear here, and no metronome).
+                        const quizPress = (key, extra = {}, target = document.body) => {
+                            const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...extra });
+                            target.dispatchEvent(event);
+                            return event;
+                        };
+                        document.activeElement.blur();
+                        const askedBeforeN = quiz.question;
+                        quizPress("n");
+                        checks.push(["N asks the next question, the prompt back", quiz.answered === null && quiz.question !== askedBeforeN && !$("consQuizPrompt").hidden && $("consQuizResult").textContent === "" ? [] : [quiz.answered, $("consQuizResult").textContent]]);
+                        const spaceNote = quizPress(" ");
+                        checks.push(["Space on Name the Note hears nothing and doesn't start the metronome", spaceNote.defaultPrevented && !metro.running ? [] : [spaceNote.defaultPrevented, metro.running]]);
                         $("consQuizNaturals").click();
                         checks.push(["natural notes only: seven answers, a natural asked, the score begun again", $("consQuizAnswers").children.length === 7 && MaestroMusic.PLAIN_NAMES[quiz.question.midi % 12].length === 1 && $("consQuizScore").textContent === "" ? [] : [$("consQuizAnswers").children.length]]);
                         $("consQuizNaturals").click();
@@ -763,6 +789,14 @@
                         $("consQuizHear").click();
                         await pause(40);
                         checks.push(["Hear it plays its two notes", heard.clicks - hearBefore === 2 ? [] : [heard.clicks - hearBefore]]);
+                        // 2.7.0: Space and H hear it again, and the metronome stays off.
+                        document.activeElement?.blur();
+                        const spaceBefore = heard.clicks;
+                        quizPress(" ");
+                        await pause(40);
+                        quizPress("h");
+                        await pause(40);
+                        checks.push(["Space and H hear it again, on the Quiz, not the metronome", heard.clicks - spaceBefore === 4 && !metro.running ? [] : [heard.clicks - spaceBefore, metro.running]]);
                         $("consQuizAnswers").querySelector(`[data-answer="${quiz.question.semis}"]`).click();
                         checks.push(["once answered, both notes are shown on the neck", pcs(dots()).size === (quiz.question.semis === 12 ? 1 : 2) && /^Right/.test($("consQuizResult").textContent) ? [] : [pcs(dots()).size]]);
                         // 2.4.0: chords and progressions by ear.
@@ -791,6 +825,10 @@
                         await pause(40);
                         const voicedNotes = heardAsked.chords.reduce((sum, name, at, all) => sum + MaestroHarmony.voiceChord(name, at ? MaestroHarmony.voiceChord(all[at - 1]) : null).length, 0);
                         checks.push(["Hear it plays its four chords, each stopping as the next sounds", heard.sources.length - progBefore2 >= 12 && heard.sources.slice(progBefore2).filter(source => source.stopped).length >= 9 ? [] : [heard.sources.length - progBefore2, voicedNotes]]);
+                        // 2.7.0: 1 to 7 name a chord by its degree.
+                        quizPress(String(heardAsked.degrees[1] + 1));
+                        checks.push(["a number names the chord of that degree", quiz.picks.join() === String(heardAsked.degrees[1]) ? [] : [quiz.picks.join()]]);
+                        $("consQuizUndo").click();
                         $("consQuizAnswers").querySelector(`[data-answer="${heardAsked.degrees[1]}"]`).click();
                         checks.push(["a chord named fills its place, and the quiz waits for the rest", $("consQuizLine").textContent === `${heardAsked.numerals[0]}–${heardAsked.numerals[heardAsked.degrees[1]]}–?–?` && quiz.answered === null ? [] : [$("consQuizLine").textContent]]);
                         const slip = $("consQuizAnswers").querySelector(`[data-answer="${(heardAsked.degrees[2] + 1) % 7}"]`);
@@ -808,8 +846,107 @@
                         $("consQuizAnswers").querySelector(`[data-answer="${wrongLast}"]`).click();
                         checks.push(["a wrong third chord: marked, the progression given, the streak broken", quiz.answered !== null && $("consQuizLine").querySelectorAll(".is-right").length === 2 && $("consQuizLine").querySelectorAll(".is-wrong").length === 1 && /^It's .+ in .+ \(.+\)\. Click Next/.test($("consQuizResult").textContent) && quiz.streak === 0 && $("consQuizUndo").disabled ? [] : [$("consQuizResult").textContent]]);
                         consSections.show("scales");
-                        await pause(QUIZ_NEXT_AFTER + 100);
-                        checks.push(["leaving Quiz, the next question waits", quiz.answered !== null ? [] : ["moved on"]]);
+                        const nOffQuiz = quizPress("n");
+                        checks.push(["leaving Quiz, the question waits, and N there isn't the quiz's", quiz.answered !== null && !nOffQuiz.defaultPrevented ? [] : ["moved on"]]);
+                        // 2.7.0: Progressions by ear written on a grand staff.
+                        consSections.show("quiz");
+                        const writeChoices = () => [...$("consQuizWrite").children].map(button => button.textContent).join();
+                        checks.push(["2.7.0: Progressions by ear's options choose what's written, Numerals first and chosen, no staff", !$("consQuizWriteField").hidden && writeChoices() === "Numerals,Bass line,Outer voices,Every note" && $("consQuizWrite").querySelector('[aria-pressed="true"]')?.dataset.write === "numerals" && $("consQuizDictBox").hidden && $("consQuizCheck").hidden ? [] : [writeChoices(), $("consQuizDictBox").hidden]]);
+                        $("consQuizWrite").querySelector('[data-write="bass"]').click();
+                        const dict = quiz.question;
+                        const dictStaff = $("consQuizDictStaff");
+                        const dictKey = { root: dict.key, scale: "major" };
+                        const dictLabels = () => [...dictStaff.querySelectorAll(".prog-staff-chord")].map(node => node.textContent).join();
+                        const dictWritten = () => quiz.written.map(midis => midis.join(".")).join(" ");
+                        // Where a pitch at a chord's place is, on the staff as drawn.
+                        const dictPoint = (at, midi, extra = {}) => {
+                            const box = dictStaff.querySelector("svg").getBoundingClientRect();
+                            const { drawn } = quiz.dict;
+                            const column = quizDictPlace(quiz.dict, at).column;
+                            const clefs = quiz.dict.score.staves.map(staff => staff.clef);
+                            const hand = clefs.length > 1 && midi < 60 ? 1 : 0;
+                            const p = MaestroHarmony.spellVoicing("", [midi], dictKey)[0];
+                            const y = drawn.systems[0].staffY[hand] - (p.step - MaestroNotation.STAFF_BOTTOM[clefs[hand]]) * drawn.space / 2;
+                            return { clientX: box.left + (column.x + 0.6 * drawn.space) / drawn.width * box.width, clientY: box.top + y / drawn.height * box.height, bubbles: true, ...extra };
+                        };
+                        const dictKeyDown = (key, extra = {}) => dictStaff.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...extra }));
+                        checks.push(["2.7.0: a guitar's progression on one staff, a treble clef with an 8 under it", cons.settings.instrument === "guitar" && quiz.dict.score.staves.map(staff => staff.clef).join() === "treble8" ? [] : [cons.settings.instrument, quiz.dict.score.staves.map(staff => staff.clef).join()]]);
+                        checks.push(["Bass line: no numerals to click, the first chord written on its staff, its numeral over it and ? over the rest, Check off", $("consQuizAnswers").hidden && $("consQuizLine").hidden && !$("consQuizDictBox").hidden && $("consQuizDictPlayed").hidden && dictStaff.querySelectorAll("svg .staff-glyph").length > dict.voicings[0].length && dictLabels() === `${dict.numerals[0]},?,?,?` && quiz.written[0].join() === dict.voicings[0].join() && quiz.written.slice(1).every(midis => !midis.length) && !$("consQuizCheck").hidden && $("consQuizCheck").disabled && $("consQuizUndo").disabled && $("consQuizOptionsName").textContent.endsWith(" · Bass line") ? [] : [dictLabels(), dictWritten(), $("consQuizOptionsName").textContent]]);
+                        checks.push(["its prompt names the key and what to write", new RegExp(`^Four chords in ${dict.key} major, from I, the first written\\. Write the bass of the other three`).test($("consQuizPrompt").textContent) ? [] : [$("consQuizPrompt").textContent]]);
+                        checks.push(["the chords are voiced as the numerals' quiz plays them, each near the last", dict.voicings.length === 4 && dict.voicings.every((midis, at) => midis.join() === MaestroHarmony.voiceChord(dict.chords[at], at ? dict.voicings[at - 1] : null).join()) ? [] : [JSON.stringify(dict.voicings)]]);
+                        await pause(40);
+                        const dictHeard = heard.sources.length;
+                        $("consQuizHear").click();
+                        await pause(40);
+                        checks.push(["Hear it plays those voicings", heard.sources.length - dictHeard >= dict.voicings.flat().length ? [] : [heard.sources.length - dictHeard]]);
+                        const bassOf = at => dict.voicings[at][0];
+                        dictStaff.dispatchEvent(new PointerEvent("pointermove", dictPoint(1, bassOf(1))));
+                        cancelAnimationFrame(quizDictGhost.frame);
+                        drawQuizDictGhost();
+                        checks.push(["the pointer's note shows where a click would write", dictStaff.querySelector(".cp-ghost") ? [] : ["no ghost"]]);
+                        dictStaff.dispatchEvent(new PointerEvent("pointerleave", { bubbles: false }));
+                        checks.push(["and goes when it leaves", !dictStaff.querySelector(".cp-ghost") ? [] : ["ghost"]]);
+                        dictStaff.dispatchEvent(new MouseEvent("click", dictPoint(1, bassOf(1))));
+                        checks.push(["a click writes the note there, selected and ringed, Undo on", quiz.written[1].join() === String(bassOf(1)) && quiz.chordAt === 1 && quiz.noteAt === bassOf(1) && dictStaff.querySelectorAll(".cp-ring.is-selected").length === 1 && dictStaff.querySelectorAll(".prog-staff-pick").length === 1 && !$("consQuizUndo").disabled ? [] : [dictWritten()]]);
+                        dictStaff.dispatchEvent(new MouseEvent("click", dictPoint(1, bassOf(1) + 12)));
+                        checks.push(["the bass is one note: another takes its place", quiz.written[1].join() === String(bassOf(1) + 12) ? [] : [dictWritten()]]);
+                        dictStaff.dispatchEvent(new MouseEvent("contextmenu", dictPoint(1, bassOf(1) + 12, { button: 2, cancelable: true })));
+                        checks.push(["a right-click takes it out", !quiz.written[1].length ? [] : [dictWritten()]]);
+                        $("consQuizUndo").click();
+                        $("consQuizUndo").click();
+                        checks.push(["and Undo takes back each change", quiz.written[1].join() === String(bassOf(1)) ? [] : [dictWritten()]]);
+                        // Keys on the staff: another chord, a note from the neck, a letter, steps, Delete, Backspace.
+                        dictStaff.focus();
+                        dictKeyDown("ArrowRight");
+                        consNeckModes.quiz.click(bassOf(2));
+                        checks.push(["Right chooses the next chord, and a click on the neck writes into it", quiz.chordAt === 2 && quiz.written[2].join() === String(bassOf(2)) ? [] : [quiz.chordAt, dictWritten()]]);
+                        consNeckModes.quiz.click(bassOf(2));
+                        checks.push(["the note clicked again on the neck leaves the chord", !quiz.written[2].length ? [] : [dictWritten()]]);
+                        consNeckModes.quiz.click(bassOf(2));
+                        dictKeyDown("ArrowRight");
+                        dictKeyDown("ArrowRight");
+                        const dictThird = MaestroHarmony.spellVoicing(dict.chords[3], [bassOf(3)], dictKey)[0];
+                        dictKeyDown(MaestroNotation.LETTERS[((dictThird.step % 7) + 7) % 7].toLowerCase());
+                        const dictLettered = quiz.written[3][0];
+                        checks.push(["Right stops at the last chord; a letter writes that letter in the key, near the bass before", quiz.chordAt === 3 && quiz.written[3].length === 1 && (dictLettered - bassOf(3)) % 12 === 0 && Math.abs(dictLettered - bassOf(2)) <= 6 ? [] : [quiz.chordAt, dictWritten()]]);
+                        dictKeyDown("ArrowUp");
+                        const raisedDict = quiz.written[3][0];
+                        dictKeyDown("ArrowDown");
+                        dictKeyDown("ArrowUp", { shiftKey: true });
+                        checks.push(["Up moves it a step in the key, Down back, Shift and Up a half step", [1, 2].includes(raisedDict - dictLettered) && quiz.written[3][0] === dictLettered + 1 ? [] : [dictLettered, raisedDict, dictWritten()]]);
+                        dictKeyDown("Delete");
+                        checks.push(["Delete takes it out", !quiz.written[3].length ? [] : [dictWritten()]]);
+                        dictStaff.dispatchEvent(new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true }));
+                        checks.push(["Backspace undoes", quiz.written[3].length === 1 ? [] : [dictWritten()]]);
+                        // The last bass an octave off: wrong at the pitch heard.
+                        consNeckModes.quiz.click(bassOf(3) + 12);
+                        checks.push(["each chord written, Check is on", quiz.written.slice(1).every(midis => midis.length === 1) && !$("consQuizCheck").disabled ? [] : [dictWritten()]]);
+                        const dictRight = quiz.right;
+                        $("consQuizCheck").click();
+                        checks.push(["an octave off is wrong: ringed, its numeral marked, the chords as played shown, the score kept", quiz.answered !== null && quiz.right === dictRight && quiz.streak === 0 && dictStaff.querySelectorAll(".cp-ring.is-wrong").length === 1 && dictStaff.querySelectorAll(".cp-ring.is-right").length === 2 && dictStaff.querySelectorAll(".prog-staff-chord.is-wrong").length === 1 && dictLabels() === dict.degrees.map(degree => dict.numerals[degree]).join() && !$("consQuizDictPlayed").hidden && $("consQuizDictPlayedStaff").querySelectorAll(".prog-staff-chord").length === 4 && /^2 of 3 chords right: it's .+ in .+ \(.+\)\. Played shows its notes/.test($("consQuizResult").textContent) ? [] : [dictWritten(), $("consQuizResult").textContent]]);
+                        const dictKept = dictWritten();
+                        dictStaff.dispatchEvent(new MouseEvent("click", dictPoint(1, bassOf(1) + 2)));
+                        checks.push(["once checked, the staff doesn't change", dictWritten() === dictKept ? [] : [dictWritten()]]);
+                        // The dictOuter voices: two a chord, a third taking the selected one's place.
+                        $("consQuizWrite").querySelector('[data-write="outer"]').click();
+                        const dictOuter = quiz.question;
+                        consNeckModes.quiz.click(dictOuter.voicings[1][0]);
+                        consNeckModes.quiz.click(dictOuter.voicings[1].at(-1));
+                        consNeckModes.quiz.click(dictOuter.voicings[1].at(-1) + 1);
+                        checks.push(["Outer voices: a new score, two notes a chord, a third in the selected one's place", quiz.asked === 0 && quiz.written[1].join() === [dictOuter.voicings[1][0], dictOuter.voicings[1].at(-1) + 1].join() && /lowest and highest/.test($("consQuizPrompt").textContent) ? [] : [quiz.asked, dictWritten()]]);
+                        // Every note, all of it right.
+                        $("consQuizWrite").querySelector('[data-write="all"]').click();
+                        const dictEvery = quiz.question;
+                        dictEvery.voicings.slice(1).forEach((midis, at) => {
+                            selectQuizDictNote(at + 1, null);
+                            midis.forEach(midi => consNeckModes.quiz.click(midi));
+                        });
+                        dictStaff.focus();
+                        checks.push(["Every note: Check on once each chord has a note", !$("consQuizCheck").disabled && quiz.written.slice(1).every((midis, at) => midis.join() === dictEvery.voicings[at + 1].join()) ? [] : [dictWritten()]]);
+                        quizPress("Enter", { ctrlKey: true }, dictStaff);
+                        checks.push(["Ctrl+Enter checks it, written right: named in its key, scored, it stays, focus on Next", /^Right: .+ in .+ \(.+\)\.$/.test($("consQuizResult").textContent) && quiz.right === 1 && quiz.answered !== null && document.activeElement === $("consQuizNext") && dictStaff.querySelectorAll(".cp-ring.is-wrong").length === 0 ? [] : [$("consQuizResult").textContent, document.activeElement?.id]]);
+                        setConsQuiz({ quizWrite: "numerals" });
+                        checks.push(["Numerals again: the staff gone, the numerals back", $("consQuizDictBox").hidden && !$("consQuizAnswers").hidden && $("consQuizCheck").hidden ? [] : ["staff"]]);
                         // 2.6.0: melodies by ear, rhythms by ear and reading.
                         consSections.show("quiz");
                         document.querySelector('#consQuizKind [data-quiz="melody"]').click();
@@ -874,7 +1011,7 @@
                         checks.push(["once all are written, Check is on", quiz.notes.every(Boolean) && !$("consQuizCheck").disabled ? [] : [written()]]);
                         const octaveRight = quiz.right;
                         $("consQuizCheck").click();
-                        checks.push(["an octave off is wrong: ringed, the melody as played shown, the score kept", quiz.answered !== null && quiz.right === octaveRight && quizStaff.querySelectorAll(".cp-ring.is-wrong").length === 1 && quizStaff.querySelectorAll(".cp-ring.is-right").length === tune.midis.length - 2 && !$("consQuizMelodyPlayed").hidden && $("consQuizMelodyPlayedStaff").querySelector("svg") && new RegExp(`^${tune.midis.length - 2} of ${tune.midis.length - 1} notes right: it's .+ in .+ major\\. Click Next`).test($("consQuizResult").textContent) && $("consQuizCheck").disabled && quiz.timer === null ? [] : [$("consQuizResult").textContent, quizStaff.querySelectorAll(".cp-ring.is-wrong").length]]);
+                        checks.push(["an octave off is wrong: ringed, the melody as played shown, the score kept", quiz.answered !== null && quiz.right === octaveRight && quizStaff.querySelectorAll(".cp-ring.is-wrong").length === 1 && quizStaff.querySelectorAll(".cp-ring.is-right").length === tune.midis.length - 2 && !$("consQuizMelodyPlayed").hidden && $("consQuizMelodyPlayedStaff").querySelector("svg") && new RegExp(`^${tune.midis.length - 2} of ${tune.midis.length - 1} notes right: it's .+ in .+ major\\. Click Next`).test($("consQuizResult").textContent) && $("consQuizCheck").disabled && quiz.answered !== null ? [] : [$("consQuizResult").textContent, quizStaff.querySelectorAll(".cp-ring.is-wrong").length]]);
                         const kept = written();
                         quizStaff.dispatchEvent(new MouseEvent("click", quizPoint(1, tune.pitches[2])));
                         checks.push(["once checked, the staff doesn't change", written() === kept ? [] : [written()]]);
@@ -883,7 +1020,7 @@
                         const tune2 = quiz.question;
                         tune2.midis.slice(1).forEach(midi => consNeckModes.quiz.click(midi));
                         $("consQuizCheck").click();
-                        checks.push(["named right: the melody given in its key, its notes on the neck, and the next comes by itself", /^Right: .+ in .+ major\.$/.test($("consQuizResult").textContent) && [...pcs(dots())].sort((a, b) => a - b).join() === [...new Set(tune2.midis.map(midi => midi % 12))].sort((a, b) => a - b).join() && quiz.timer !== null ? [] : [$("consQuizResult").textContent, [...pcs(dots())].join()]]);
+                        checks.push(["named right: the melody given in its key, its notes on the neck, and it stays", /^Right: .+ in .+ major\.$/.test($("consQuizResult").textContent) && [...pcs(dots())].sort((a, b) => a - b).join() === [...new Set(tune2.midis.map(midi => midi % 12))].sort((a, b) => a - b).join() && quiz.answered !== null ? [] : [$("consQuizResult").textContent, [...pcs(dots())].join()]]);
                         document.querySelector('#consQuizKind [data-quiz="rhythm"]').click();
                         const bar = quiz.question;
                         checks.push(["Rhythms by ear: the neck set aside, the bar's steps a beat to a group, Check, and the staff drawn", $("consNeckModule").hidden && $("consQuizAnswers").hidden && !$("consQuizRhythm").hidden && $("consQuizGrid").querySelectorAll(".cons-quiz-cell").length === bar.cells.length && $("consQuizGrid").children.length === bar.cells.length / bar.steps && !$("consQuizCheck").hidden && $("consQuizPad").hidden && $("consQuizWrittenStaff").querySelector("svg") && $("consQuizPlayed").hidden && !$("consQuizLevelField").hidden ? [] : [$("consNeckModule").hidden, $("consQuizGrid").children.length]]);
@@ -898,7 +1035,7 @@
                         bar.cells.forEach((cell, index) => { if (cell) $("consQuizGrid").querySelector(`[data-cell="${index}"]`).click(); });
                         checks.push(["a step clicked holds a note, drawn on the staff as it's written", quiz.cells.join("") === bar.cells.join("") && $("consQuizGrid").querySelectorAll('[aria-pressed="true"]').length === bar.cells.filter(Boolean).length && $("consQuizWrittenStaff").innerHTML !== staffBefore ? [] : [quiz.cells.join("")]]);
                         $("consQuizCheck").click();
-                        checks.push(["Check: right, the bar as played beside it, and it stays to be looked at", $("consQuizResult").textContent === "Right: as played." && !$("consQuizPlayed").hidden && $("consQuizGrid").querySelectorAll(".is-wrong").length === 0 && $("consQuizCheck").disabled && quiz.timer === null ? [] : [$("consQuizResult").textContent, quiz.timer]]);
+                        checks.push(["Check: right, the bar as played beside it, and it stays to be looked at", $("consQuizResult").textContent === "Right: as played." && !$("consQuizPlayed").hidden && $("consQuizGrid").querySelectorAll(".is-wrong").length === 0 && $("consQuizCheck").disabled && quiz.answered !== null ? [] : [$("consQuizResult").textContent]]);
                         $("consQuizNext").click();
                         $("consQuizCheck").click();
                         checks.push(["nothing written: the steps missed are marked, and counted", /^\d+ of \d+ steps right; Played shows/.test($("consQuizResult").textContent) && $("consQuizGrid").querySelectorAll(".is-wrong").length === quiz.question.cells.filter(Boolean).length && quiz.streak === 0 ? [] : [$("consQuizResult").textContent]]);
@@ -942,18 +1079,102 @@
                             checks.push(["a chord clicked is picked, heard, and shown: Dm7, ii7 in C major", prog.at.bar === 2 && heard.clicks - pickBefore === 5 && $("progChordHead").textContent === "ii7 in C major" && neckPcs() === "0,2,5,9" ? [] : [$("progChordHead").textContent, heard.clicks - pickBefore, neckPcs()]]);
                             const pickedLine = () => $("progSheet").querySelector('.prog-chord[aria-pressed="true"]')?.closest(".prog-bars");
                             checks.push(["2.4.1: its drawer opens under its line, the notch at the chord", !$("progDrawer").hidden && $("progDrawer").previousElementSibling === pickedLine() && $("progDrawer").contains($("progChordForm")) && parseFloat($("progDrawer").style.getPropertyValue("--notch")) > 0 ? [] : [$("progDrawer").hidden, $("progDrawer").style.getPropertyValue("--notch")]]);
-                            // 2.6.0: one voicing on the neck, the next chord's outlined, another by hand, Smooth.
+                            // 2.6.0: one voicing on the neck, the next chord's outlined; 2.7.0: another by hand, written into the song, and Reset.
                             checks.push(["2.6.0: the drawer offers All notes or a Voicing, all notes first", document.querySelector('#progNeckShow [data-neck="notes"]').getAttribute("aria-pressed") === "true" && $("progVoicingStep").hidden ? [] : ["voicing row"]]);
                             document.querySelector('#progNeckShow [data-neck="shapes"]').click();
                             const shownShape = progVoicingNow({ picked: true });
                             const shapeDots = () => [...$("consNeck").querySelectorAll(".cons-dot")];
                             const sounding = shownShape?.voicing.frets.filter(fret => fret !== null).length;
-                            checks.push(["a voicing: its notes alone on the neck, a silent string's ×, the next chord's outlined, and named", shownShape && shapeDots().filter(dot => /is-(root|note)/.test(dot.getAttribute("class"))).length === sounding && shapeDots().filter(dot => dot.classList.contains("is-muted")).length === shownShape.voicing.frets.filter(fret => fret === null).length && shapeDots().some(dot => dot.classList.contains("is-next")) && /^\d+ of \d+ · /.test($("progVoicingName").textContent) && $("progVoicingSmooth").hidden ? [] : [sounding, shapeDots().length, $("progVoicingName").textContent]]);
+                            checks.push(["a voicing: its notes alone on the neck, a silent string's ×, the next chord's outlined, and named", shownShape && shapeDots().filter(dot => /is-(root|note)/.test(dot.getAttribute("class"))).length === sounding && shapeDots().filter(dot => dot.classList.contains("is-muted")).length === shownShape.voicing.frets.filter(fret => fret === null).length && shapeDots().some(dot => dot.classList.contains("is-next")) && /^\d+ of \d+ · /.test($("progVoicingName").textContent) && $("progVoicingReset").hidden ? [] : [sounding, shapeDots().length, $("progVoicingName").textContent]]);
                             const firstChoice = shownShape.chosen;
+                            const writtenToken = () => progSketch().sections[0].bars[2][0];
                             $("progVoicingNext").click();
-                            checks.push(["› another voicing, kept for that chord, and Smooth offered", progVoicingNow({ picked: true }).chosen === (firstChoice + 1) % shownShape.count && !$("progVoicingSmooth").hidden && prog.voicingPins.size === 1 ? [] : [progVoicingNow({ picked: true }).chosen, firstChoice]]);
-                            $("progVoicingSmooth").click();
-                            checks.push(["Smooth chooses again around nothing", prog.voicingPins.size === 0 && progVoicingNow({ picked: true }).chosen === firstChoice && $("progVoicingSmooth").hidden ? [] : [prog.voicingPins.size]]);
+                            const steppedTo = progVoicings().choices[shownShape.index][(firstChoice + 1) % shownShape.count];
+                            checks.push(["2.7.0: › another voicing, written into the song as its notes, a format 2 chart, and Reset offered", progVoicingNow({ picked: true }).chosen === (firstChoice + 1) % shownShape.count && writtenToken() === `Dm7=${steppedTo.midis.join(".")}` && progSongText().startsWith("Maestro chart 2\n") && !$("progVoicingReset").hidden && $("progSheet").querySelectorAll(".prog-chord")[2].getAttribute("aria-label").endsWith("its voicing written") ? [] : [writtenToken(), progVoicingNow({ picked: true }).chosen, firstChoice]]);
+                            $("progVoicingReset").click();
+                            checks.push(["Reset voicing takes it out of the song, chosen again around the rest, with Undo", writtenToken() === "Dm7" && progVoicingNow({ picked: true }).chosen === firstChoice && $("progVoicingReset").hidden && progSongText().startsWith("Maestro chart 1\n") && /Reset the voicing of Dm7/.test($("toast").textContent) ? [] : [writtenToken(), $("toast").textContent]]);
+                            lastToastUndo();
+                            checks.push(["Undo puts the voicing back", writtenToken() === `Dm7=${steppedTo.midis.join(".")}` && !$("progVoicingReset").hidden ? [] : [writtenToken()]]);
+                            setProgChord("Dm9");
+                            checks.push(["another chord in its place drops the voicing", writtenToken() === "Dm9" ? [] : [writtenToken()]]);
+                            setProgChord("Dm7");
+                            // 2.7.0: the Staff view, the song on a grand staff, edited note by note.
+                            const staffKept = { sketch: structuredClone(progSketch()), at: { ...prog.at } };
+                            document.querySelector('#progView [data-prog-view="staff"]').click();
+                            const staffSvg = () => $("progStaffScore").querySelector("svg");
+                            const staffToken = () => progSketch().sections[prog.at.section].bars[prog.at.bar][prog.at.slot];
+                            const staffKey = (key, extra = {}) => $("progStaffScore").dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...extra }));
+                            checks.push(["2.7.0: Staff shows the song on a grand staff in the sheet's place, a symbol over each chord, the voicing's controls under it, and is kept", prog.settings.view === "staff" && $("progSheet").hidden && !$("progStaff").hidden && staffSvg()?.querySelectorAll(".prog-staff-chord").length === progChords().length && $("progStaffTools").contains($("progVoicingPrev")) && $("progNeckShow").hidden && $("progFoot").hidden && JSON.parse(localStorage.getItem(PROG_KEY)).view === "staff" ? [] : [prog.settings.view, staffSvg()?.querySelectorAll(".prog-staff-chord").length, progChords().length]]);
+                            checks.push(["its chord picked marked, and a note of it selected", staffSvg().querySelector(".prog-staff-pick.is-picked") && staffSvg().querySelector(".cp-ring.is-selected") && progStaffPicked().midis.includes(progStaff.note) && $("progStaffWhere").textContent.endsWith("Dm7") ? [] : [progStaff.note, $("progStaffWhere").textContent]]);
+                            const staffBefore = staffToken();
+                            const staffFrom = progStaff.note;
+                            staffKey("ArrowUp");
+                            checks.push(["Up moves the note a step in the key, and writes the voicing into the song", /^Dm7=/.test(staffToken()) && progStaff.note > staffFrom && progStaff.note - staffFrom <= 2 && progStaffPicked().midis.includes(progStaff.note) && !progStaffPicked().midis.includes(staffFrom) && staffSvg().querySelector(".prog-staff-written") ? [] : [staffToken(), staffFrom, progStaff.note]]);
+                            staffKey("ArrowUp", { shiftKey: true });
+                            checks.push(["Shift+Up a half step", progStaffPicked().midis.includes(progStaff.note) ? [] : [staffToken()]]);
+                            const staffTop = progStaff.note;
+                            staffKey("ArrowDown", { altKey: true });
+                            checks.push(["Alt+Down selects the note below, writing nothing", progStaff.note < staffTop && progStaffPicked().midis.includes(progStaff.note) ? [] : [progStaff.note, staffTop]]);
+                            const staffCount = progStaffPicked().midis.length;
+                            staffKey("Delete");
+                            checks.push(["Delete takes the note out", progStaffPicked().midis.length === staffCount - 1 ? [] : [staffToken()]]);
+                            staffKey("c");
+                            checks.push(["a letter adds that note, the nearest not in the chord", progStaffPicked().midis.length === staffCount && progStaff.note % 12 === 0 ? [] : [staffToken(), progStaff.note]]);
+                            const staffNow = staffToken();
+                            const ctrlOnPanel = (key, shiftKey = false) => $("progStaffScore").dispatchEvent(new KeyboardEvent("keydown", { key, ctrlKey: true, shiftKey, bubbles: true, cancelable: true }));
+                            ctrlOnPanel("z");
+                            const staffOneBack = staffToken();
+                            ctrlOnPanel("y");
+                            checks.push(["Ctrl+Z steps back through the changes, and Ctrl+Y forward again", staffOneBack !== staffNow && staffToken() === staffNow ? [] : [staffOneBack, staffToken()]]);
+                            for (let back = 0; back < 6; back++) ctrlOnPanel("z");
+                            checks.push(["back to the start, the chord as it was", staffToken() === staffBefore ? [] : [staffToken(), staffBefore]]);
+                            staffKey("ArrowRight");
+                            checks.push(["Right picks the next chord", progChosen() === "G7" && $("progStaffWhere").textContent.endsWith("G7") ? [] : [progChosen()]]);
+                            staffKey("ArrowLeft");
+                            // The pointer: a note clicked is selected; a space clicked adds one; a right-click takes one out.
+                            const staffAt = (x, y) => {
+                                const box = staffSvg().getBoundingClientRect();
+                                return { clientX: box.left + x / progStaff.drawn.width * box.width, clientY: box.top + y / progStaff.drawn.height * box.height, button: 2, preventDefault() {} };
+                            };
+                            const pickedPlace = progStaffPlace(progStaff.made.chords.find(chord => chord.section === prog.at.section && chord.bar === prog.at.bar && chord.slot === prog.at.slot));
+                            const lowHead = pickedPlace.heads.reduce((low, head) => (head.midi < low.midi ? head : low));
+                            $("progStaffScore").scrollIntoView();
+                            progStaffClick(staffAt(lowHead.x + 6, lowHead.y));
+                            checks.push(["a note clicked is selected", progStaff.note === lowHead.midi && staffToken() === staffBefore ? [] : [progStaff.note, lowHead.midi]]);
+                            const staffSystem = pickedPlace.system;
+                            checks.push(["2.7.0: a guitar's song on one staff, a treble clef with an 8 under it", cons.settings.instrument === "guitar" && progStaff.made.score.staves.map(staff => staff.clef).join() === "treble8" && staffSystem.staffY.length === 1 && staffSvg().getAttribute("aria-label").includes(" on a staff:") ? [] : [cons.settings.instrument, progStaff.made.score.staves.map(staff => staff.clef).join()]]);
+                            // Two lines over the staff: written a sixth over the top line, sounding an octave lower.
+                            const aboveStep = MaestroNotation.STAFF_BOTTOM.treble8 + 12;
+                            const aboveMidi = MaestroNotation.midiOf(MaestroNotation.pitch(aboveStep, MaestroNotation.keyAlter(aboveStep % 7, MaestroHarmony.keySignature(progKey()))));
+                            progStaffClick(staffAt(pickedPlace.column.x + 6, staffSystem.staffY[0] - 12 * MaestroNotation.SPACE / 2));
+                            checks.push(["a space clicked adds a note there, in the key, as it sounds: an octave under where it's written", progStaffPicked().midis.includes(aboveMidi) && progStaff.note === aboveMidi && aboveMidi < 76 ? [] : [staffToken(), aboveMidi]]);
+                            const addedHead = progStaffPlace(progStaff.made.chords.find(chord => chord.section === prog.at.section && chord.bar === prog.at.bar && chord.slot === prog.at.slot)).heads.find(head => head.midi === aboveMidi);
+                            progStaffErase(staffAt(addedHead.x + 6, addedHead.y));
+                            checks.push(["a right-click takes it out", !progStaffPicked().midis.includes(aboveMidi) ? [] : [staffToken()]]);
+                            // Each instrument written as it's written: the staves follow the instrument chosen.
+                            const staffClefs = () => progStaff.made.score.staves.map(staff => staff.clef).join();
+                            const writtenAs = {};
+                            for (const instrument of ["keyboard", "bass", "mandolin", "ukulele"]) {
+                                document.querySelector(`#consInstruments [data-instrument="${instrument}"]`).click();
+                                writtenAs[instrument] = staffClefs();
+                            }
+                            $("consTuning").value = "baritone";
+                            $("consTuning").dispatchEvent(new Event("change"));
+                            writtenAs.baritone = staffClefs();
+                            $("consTuning").value = "standard";
+                            $("consTuning").dispatchEvent(new Event("change"));
+                            document.querySelector('#consInstruments [data-instrument="guitar"]').click();
+                            checks.push(["a keyboard's on a grand staff, a bass's with an 8 under its clef, a mandolin's and a ukulele's on a treble clef, a baritone ukulele's as a guitar's", JSON.stringify(writtenAs) === JSON.stringify({ keyboard: "treble,bass", bass: "bass8", mandolin: "treble", ukulele: "treble", baritone: "treble8" }) && staffClefs() === "treble8" ? [] : [JSON.stringify(writtenAs), staffClefs()]]);
+                            consNeckModes.progressions.click(50);
+                            checks.push(["the neck clicked adds its pitch; clicked again on the note selected, takes it out", progStaffPicked().midis.includes(50) ? [] : [staffToken()]]);
+                            consNeckModes.progressions.click(50);
+                            checks.push(["and the pitch is gone", !progStaffPicked().midis.includes(50) ? [] : [staffToken()]]);
+                            // Back to the chart: the voicing's controls go back to the drawer.
+                            prog.settings.sketch = staffKept.sketch;
+                            prog.at = staffKept.at;
+                            document.querySelector('#progView [data-prog-view="chart"]').click();
+                            checks.push(["Chart puts the sheet back, and the voicing's controls in the drawer", !$("progSheet").hidden && $("progStaff").hidden && $("progDrawer").contains($("progVoicingPrev")) && !$("progNeckShow").hidden ? [] : ["chart"]]);
+                            pickProgChord(staffKept.at.section, staffKept.at.bar, staffKept.at.slot);
                             document.querySelector('#progNeckShow [data-neck="notes"]').click();
                             checks.push(["All notes again: every chord tone everywhere", prog.settings.neck === "notes" && neckPcs() === "0,2,5,9" ? [] : [neckPcs()]]);
                             checks.push(["with the scales that fit it, the key's first, and its guide tones", $("progScales").children[0]?.textContent === "D Dorian" && $("progScales").children[0].classList.contains("is-in-key") && /Dm7: (F C|C F)/.test($("progGuide").textContent) ? [] : [$("progScales").textContent, $("progGuide").textContent]]);
@@ -1595,6 +1816,20 @@
                             $("cpNewPlace").querySelector('[data-below="true"]').click();
                             $("cpNewStart").click();
                             checks.push(["and a species exercise is written against it", cp.exercise.kind === "species" && cp.exercise.title === "First species, A cantus in E phrygian" && cp.exercise.score.key.mode === "phrygian" && cpNotes(1).split(" ").map(text => text.replace(/\d/, "")).join(" ") === "E G F A C B G F E" ? [] : [cp.exercise.title, cpNotes(1)]]);
+                            // 2.7.0: a staff's clef, clicked, chosen from a menu beside it; the notes stay; Ctrl+Z takes it back.
+                            const clefSpots = () => [...$("cpStaff").querySelectorAll(".cp-clef-spot")];
+                            const clefsNow = () => cp.exercise.score.staves.map(staff => staff.clef).join();
+                            const notesBefore = cpNotes(0) + " / " + cpNotes(1);
+                            checks.push(["2.7.0: each staff's clef a spot to click, the cantus on its own staff", clefSpots().length === cp.drawn.systems.length * 2 && clefsNow() === "treble,bass" ? [] : [clefSpots().length, clefsNow()]]);
+                            clefSpots()[0].dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                            checks.push(["a click opens the clef menu for that staff, its clef chosen", !$("cpClefMenu").hidden && $("cpClefTitle").textContent === "Clef of the upper staff" && $("cpClefs").querySelector('[aria-pressed="true"]')?.dataset.staffClef === "treble" && [...$("cpClefs").children].map(button => button.textContent).join() === "Treble,Alto,Tenor,Bass" ? [] : [$("cpClefTitle").textContent]]);
+                            $("cpClefs").querySelector('[data-staff-clef="alto"]').click();
+                            checks.push(["Alto writes the upper staff on an alto clef, the notes as they were, and the menu closes", clefsNow() === "alto,bass" && cpNotes(0) + " / " + cpNotes(1) === notesBefore && $("cpClefMenu").hidden && [...$("cpStaff").querySelectorAll("svg .staff-glyph")].some(node => node.textContent === MaestroNotation.GLYPHS.alto) ? [] : [clefsNow()]]);
+                            clefSpots()[1].dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                            $("cpClefMenu").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+                            checks.push(["Escape closes the menu, nothing changed", $("cpClefMenu").hidden && clefsNow() === "alto,bass" ? [] : [clefsNow()]]);
+                            undoCp();
+                            checks.push(["and Undo puts the treble clef back", clefsNow() === "treble,bass" ? [] : [clefsNow()]]);
                             // A phrase of chant as the cantus.
                             toggleConsPopover("cpMenu", true);
                             $("cpMenuNew").click();

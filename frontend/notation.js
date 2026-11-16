@@ -73,15 +73,20 @@ globalThis.MaestroNotation = (() => {
     }
 
     // Where a signature's sharps or flats sit, in half spaces up from the
-    // bottom line: the treble's as printed, the bass's a third lower.
+    // bottom line: the treble's as printed, the bass's a third lower, the
+    // alto's a step lower; the tenor's flats a step higher, its sharps in
+    // their own order, low, so the first stays on the staff (2.7.0). A clef
+    // with an 8 under it places them as the clef without.
     const SHARP_POSITIONS = [8, 5, 9, 6, 3, 7, 4];
     const FLAT_POSITIONS = [4, 7, 3, 6, 2, 5, 1];
+    const TENOR_SHARPS = [2, 6, 3, 7, 4, 8, 5];
+    const SIGNATURE_SHIFT = Object.freeze({ treble: 0, treble8: 0, bass: -2, bass8: -2, alto: -1, tenor: 1 });
     function signature(fifths, clef = "treble") {
-        const shift = clef === "bass" ? -2 : 0;
+        const shift = SIGNATURE_SHIFT[clef] ?? 0;
         const count = Math.abs(fifths);
         const order = fifths > 0 ? SHARP_ORDER : FLAT_ORDER;
-        const positions = fifths > 0 ? SHARP_POSITIONS : FLAT_POSITIONS;
-        return Array.from({ length: count }, (_, index) => ({ letter: order[index], alter: fifths > 0 ? 1 : -1, position: positions[index] + shift }));
+        const positions = fifths > 0 && clef === "tenor" ? TENOR_SHARPS : (fifths > 0 ? SHARP_POSITIONS : FLAT_POSITIONS).map(at => at + shift);
+        return Array.from({ length: count }, (_, index) => ({ letter: order[index], alter: fifths > 0 ? 1 : -1, position: positions[index] }));
     }
 
     // A MIDI note spelled for a key: as the key has it, then (in minor) as a
@@ -142,6 +147,14 @@ globalThis.MaestroNotation = (() => {
     const lengthOf = note => DURATIONS[note.d] * (note.dot ? 1.5 : 1);
     const barLength = meter => meter.beats * 8 / meter.unit;
 
+    // A note's pitches, low to high: its own, then a chord's others above it
+    // (2.7.0: `more`, absent on a single note). None for a rest.
+    const CHORD_MAX = 8;
+    const pitchesOf = note => (note.p ? [note.p, ...(note.more ?? [])] : []);
+    const midisOf = note => pitchesOf(note).map(midiOf);
+    // Held by a tie: the note before is tied and sounds the same pitches.
+    const heldBy = (previous, note) => Boolean(previous?.tie && previous.p && note.p && midisOf(previous).join() === midisOf(note).join());
+
     // The notes of a voice in bars: each bar's notes with their onsets, and
     // any that run over a bar line (written as two tied notes instead).
     function bars(notes, meter) {
@@ -168,8 +181,7 @@ globalThis.MaestroNotation = (() => {
     function timed(notes) {
         let time = 0;
         return notes.map((note, index) => {
-            const previous = notes[index - 1];
-            const held = Boolean(previous?.tie && previous.p && note.p && midiOf(previous.p) === midiOf(note.p));
+            const held = heldBy(notes[index - 1], note);
             const entry = { note, index, onset: time, length: lengthOf(note), held };
             time += entry.length;
             return entry;
@@ -191,22 +203,35 @@ globalThis.MaestroNotation = (() => {
     }
 
     // The voice as it sounds: a note per struck pitch, ties joined, in eighths.
+    // A chord's pitches each sound (2.7.0); a tie holds each that the next has.
     function soundingEvents(notes) {
         const events = [];
+        let before = new Map();     // the last entry's events, by MIDI number, when it's tied
         for (const entry of timed(notes)) {
-            if (!entry.note.p) continue;
-            if (entry.held && events.length) events.at(-1).length += entry.length;
-            else events.push({ start: entry.onset, length: entry.length, midi: midiOf(entry.note.p), index: entry.index });
+            const now = new Map();
+            for (const midi of midisOf(entry.note)) {
+                const held = before.get(midi);
+                if (held) {
+                    held.length += entry.length;
+                    now.set(midi, held);
+                } else {
+                    const event = { start: entry.onset, length: entry.length, midi, index: entry.index };
+                    events.push(event);
+                    now.set(midi, event);
+                }
+            }
+            before = entry.note.tie ? now : new Map();
         }
         return events;
     }
 
-    // Which accidental each note shows (its alteration, 0 for a natural), or
-    // null: the key's, or one already shown on that line or space in the
-    // bar, isn't shown again; a note held over by a tie shows none.
-    function shownAccidentals(notes, meter, fifths) {
+    // Which accidental each pitch of each note shows (its alteration, 0 for a
+    // natural), or null: the key's, or one already shown on that line or
+    // space in the bar, isn't shown again; a note held over by a tie shows
+    // none. A list a note, a pitch at a time (2.7.0: a chord's every pitch).
+    function chordAccidentals(notes, meter, fifths) {
         const size = barLength(meter);
-        const shown = new Array(notes.length).fill(null);
+        const shown = notes.map(note => pitchesOf(note).map(() => null));
         let current = new Map();
         let bar = -1;
         for (const entry of timed(notes)) {
@@ -215,50 +240,85 @@ globalThis.MaestroNotation = (() => {
                 bar = thisBar;
                 current = new Map();
             }
-            const p = entry.note.p;
-            if (!p || entry.held) continue;
-            const before = current.has(p.step) ? current.get(p.step) : keyAlter(letterOf(p.step), fifths);
-            if (p.alter !== before) {
-                shown[entry.index] = p.alter;
-                current.set(p.step, p.alter);
-            }
+            if (entry.held) continue;
+            pitchesOf(entry.note).forEach((p, at) => {
+                const before = current.has(p.step) ? current.get(p.step) : keyAlter(letterOf(p.step), fifths);
+                if (p.alter !== before) {
+                    shown[entry.index][at] = p.alter;
+                    current.set(p.step, p.alter);
+                }
+            });
         }
         return shown;
     }
 
+    // The accidental each note's own pitch shows, as before chords.
+    const shownAccidentals = (notes, meter, fifths) => chordAccidentals(notes, meter, fifths).map(list => list[0] ?? null);
+
     // ---- A score as kept
 
-    const CLEFS = ["treble", "bass"];
+    // A staff's clef (2.7.0: alto and tenor, and treble and bass with an 8
+    // under them, which sound an octave below where they're written). Notes
+    // are kept as they sound, whatever the clef.
+    const CLEFS = Object.freeze(["treble", "treble8", "alto", "tenor", "bass", "bass8"]);
     const METER_UNITS = [2, 4, 8];
+    const BEATS_MAX = 12;
+
+    // How a bar's eighths are beamed: in groups of the meter's own (2.7.0: as
+    // the metronome counts 7/8, 2+2+3 or another), else a beat each in
+    // quarters and halves, and threes in eighths (twos and a three when they
+    // don't divide).
+    function meterGroups(meter) {
+        if (meter.groups) return meter.groups.map(group => group * 8 / meter.unit);
+        if (meter.unit !== 8) return Array(meter.beats * (meter.unit === 2 ? 2 : 1)).fill(2);
+        if (meter.beats % 3 === 0) return Array(meter.beats / 3).fill(3);
+        if (meter.beats < 3) return [meter.beats];
+        return meter.beats % 2 ? [...Array((meter.beats - 3) / 2).fill(2), 3] : Array(meter.beats / 2).fill(2);
+    }
     const NOTES_MAX = 512, TITLE_MAX = 60, NAME_MAX = 24;
     const cleanText = (text, max) => [...String(text ?? "").replace(/[\u0000-\u001F\u007F]/g, "").trim()].slice(0, max).join("").trim();
 
     // A score as the page keeps it, or null: a title; a key (fifths, major or
     // minor); a meter; one or two staves, each a clef and one or two voices of
-    // notes. Every voice's bars are whole except perhaps its last.
-    function cleanScore(raw) {
+    // notes. Every voice's bars are whole except perhaps its last. A score
+    // made from a song's chart (2.7.0) may hold more notes than one kept.
+    function cleanScore(raw, { notesMax = NOTES_MAX } = {}) {
         if (!raw || typeof raw !== "object") return null;
         const fifths = raw.key?.fifths;
         const mode = raw.key?.mode;
         const beats = raw.meter?.beats;
         const unit = raw.meter?.unit;
         if (!Number.isInteger(fifths) || fifths < -7 || fifths > 7 || !Object.hasOwn(MODES, mode)) return null;
-        if (!Number.isInteger(beats) || beats < 2 || beats > 6 || !METER_UNITS.includes(unit)) return null;
+        if (!Number.isInteger(beats) || beats < 1 || beats > BEATS_MAX || !METER_UNITS.includes(unit)) return null;
+        // A meter's own groups (2.7.0), when given, add up to its beats.
+        const groups = raw.meter.groups;
+        if (groups !== undefined && (!Array.isArray(groups) || !groups.length || groups.some(group => !Number.isInteger(group) || group < 1) || groups.reduce((sum, group) => sum + group, 0) !== beats)) return null;
         if (!Array.isArray(raw.staves) || raw.staves.length < 1 || raw.staves.length > 2) return null;
-        const meter = Object.freeze({ beats, unit });
+        const meter = Object.freeze({ beats, unit, ...(groups ? { groups: Object.freeze([...groups]) } : {}) });
         const staves = [];
         for (const staff of raw.staves) {
             if (!CLEFS.includes(staff?.clef) || !Array.isArray(staff.voices) || staff.voices.length < 1 || staff.voices.length > 2) return null;
             const voices = [];
             for (const voice of staff.voices) {
-                if (!Array.isArray(voice?.notes) || voice.notes.length > NOTES_MAX) return null;
+                if (!Array.isArray(voice?.notes) || voice.notes.length > notesMax) return null;
                 const notes = [];
                 for (const note of voice.notes) {
                     if (!note || !Object.hasOwn(DURATIONS, note.d)) return null;
                     if (note.dot && note.d === "f") return null;
                     if (note.p !== null && note.p !== undefined && !isPitch(note.p)) return null;
                     const p = note.p ? pitch(note.p.step, note.p.alter) : null;
-                    notes.push(Object.freeze({ p, d: note.d, dot: Boolean(note.dot), tie: Boolean(note.tie && p) }));
+                    // A chord (2.7.0): its other pitches, each on a line or space of its own.
+                    let more = null;
+                    if (note.more !== undefined && note.more !== null) {
+                        if (!p || !Array.isArray(note.more) || note.more.length + 1 > CHORD_MAX || !note.more.every(isPitch)) return null;
+                        const all = [p, ...note.more.map(each => pitch(each.step, each.alter))].sort((a, b) => a.step - b.step);
+                        if (new Set(all.map(each => each.step)).size !== all.length) return null;
+                        if (all.length > 1) more = all;
+                    }
+                    const clean = more
+                        ? { p: more[0], more: Object.freeze(more.slice(1)), d: note.d, dot: Boolean(note.dot), tie: Boolean(note.tie) }
+                        : { p, d: note.d, dot: Boolean(note.dot), tie: Boolean(note.tie && p) };
+                    notes.push(Object.freeze(clean));
                 }
                 if (bars(notes, meter).problems.length) return null;
                 voices.push(Object.freeze({ name: cleanText(voice.name, NAME_MAX), notes: Object.freeze(notes) }));
@@ -277,7 +337,7 @@ globalThis.MaestroNotation = (() => {
     const LIFT = 2 * SPACE;
     const STAFF_GAP = 11 * SPACE;            // bottom line to bottom line, in a grand staff
     const GLYPHS = Object.freeze({
-        treble: "\uE050", bass: "\uE062", brace: "\uE000",
+        treble: "\uE050", treble8: "\uE052", alto: "\uE05C", tenor: "\uE05C", bass: "\uE062", bass8: "\uE064", brace: "\uE000",
         whole: "\uE0A2", half: "\uE0A3", black: "\uE0A4",
         flagUp: "\uE240", flagDown: "\uE241", dot: "\uE1E7",
         // Flags by beams: an eighth's, a sixteenth's, a thirty-second's, a sixty-fourth's.
@@ -291,7 +351,11 @@ globalThis.MaestroNotation = (() => {
     const BEAM_STEP = 0.75 * SPACE;
     const stemExtra = d => Math.max(0, (BEAMS[d] ?? 0) - 2) * BEAM_STEP;
     const STEM = 3.5 * SPACE;
-    const STAFF_BOTTOM = Object.freeze({ treble: 30, bass: 18 });   // E4 and G2, as steps
+    // The bottom line, as steps: E4 and G2, an octave lower with an 8 under
+    // the clef, F3 under an alto clef, D3 under a tenor.
+    const STAFF_BOTTOM = Object.freeze({ treble: 30, treble8: 23, alto: 24, tenor: 22, bass: 18, bass8: 11 });
+    // A C clef sits on the line it names: an alto's the middle, a tenor's a line up.
+    const CLEF_RAISE = Object.freeze({ tenor: 1 });
     const HEADER_CLEF = 4.5;                         // spaces from the system's left to what follows the clef
 
     // How much room a note's column takes, by the shortest note starting there
@@ -303,26 +367,64 @@ globalThis.MaestroNotation = (() => {
     // are { kind: "line" | "glyph" | "path" | "beam", ... } to draw; heads say
     // where each note is ({ voice, index, x, y }); columns where each moment is.
     // Justified, each system but the last is spread to maxWidth (the last
-    // too when it's nearly full), its bars widened alike.
-    function engrave(score, { maxWidth = Infinity, room = 0, justify = false } = {}) {
+    // too when it's nearly full), its bars widened alike. headroom (2.7.0)
+    // is room in units above each system's top staff, for words over it;
+    // barPadding(bar), [before, after] in spaces, widens a bar at its edges,
+    // for repeat signs; hideRest(voice, index) leaves a rest undrawn, for a
+    // bar drawn with another sign.
+    function engrave(score, { maxWidth = Infinity, room = 0, justify = false, headroom = 0, barPadding = null, hideRest = null } = {}) {
         const voices = voicesOf(score);
         const size = barLength(score.meter);
         const entries = voices.map(voice => timed(voice.notes));
-        const shown = voices.map(voice => shownAccidentals(voice.notes, score.meter, score.key.fifths));
+        const shown = voices.map(voice => chordAccidentals(voice.notes, score.meter, score.key.fifths));
         const end = Math.max(size, ...entries.map(list => list.length ? list.at(-1).onset + list.at(-1).length : 0));
         const barCount = Math.ceil(end / size);
         const staffCount = score.staves.length;
         const voicesOnStaff = staff => voices.filter(voice => voice.staff === staff).length;
 
-        // Each moment's room: the shortest note there, and room for an accidental.
+        // Each note as a chord (a single note a chord of one, 2.7.0): its
+        // pitches' places on the staff, low to high; the stem's way (from the
+        // note farthest from the middle line); which heads sit on the stem's
+        // other side, a second against the head beside them; and each
+        // accidental's column, the nearest first, top down, as close as they
+        // clear each other.
+        const layouts = voices.map((voice, v) => entries[v].map(entry => {
+            const pitches = pitchesOf(entry.note);
+            if (!pitches.length) return null;
+            const positions = pitches.map(p => p.step - STAFF_BOTTOM[voice.clef]);
+            const count = positions.length;
+            const up = voicesOnStaff(voice.staff) > 1 ? voice.voiceIndex === 0 : positions[count - 1] - 4 < 4 - positions[0];
+            const flipped = new Array(count).fill(false);
+            if (up) for (let at = 1; at < count; at++) flipped[at] = positions[at] - positions[at - 1] === 1 && !flipped[at - 1];
+            else for (let at = count - 2; at >= 0; at--) flipped[at] = positions[at + 1] - positions[at] === 1 && !flipped[at + 1];
+            const alters = shown[v][entry.index];
+            const column = new Array(count).fill(-1);
+            const used = [];
+            for (let at = count - 1; at >= 0; at--) {
+                if (alters[at] === null) continue;
+                let c = 0;
+                while ((used[c] ?? []).some(other => Math.abs(other - positions[at]) < 6)) c++;
+                (used[c] ??= []).push(positions[at]);
+                column[at] = c;
+            }
+            return { positions, up, flipped, alters, column, columns: used.length, left: !up && flipped.some(Boolean), right: up && flipped.some(Boolean) };
+        }));
+
+        // Each moment's room: the shortest note there, room before it for
+        // accidentals (and heads on a stem's left), and after for heads on its right.
         const moments = new Map();
         entries.forEach((list, voice) => list.forEach(entry => {
-            const moment = moments.get(entry.onset) ?? { time: entry.onset, shortest: Infinity, accidental: false };
+            const moment = moments.get(entry.onset) ?? { time: entry.onset, shortest: Infinity, lead: 0, trail: 0 };
             moment.shortest = Math.min(moment.shortest, entry.length);
-            if (shown[voice][entry.index] !== null) moment.accidental = true;
+            const layout = layouts[voice][entry.index];
+            if (layout) {
+                const headWidth = HEAD_WIDTH[entry.note.d];
+                moment.lead = Math.max(moment.lead, (layout.columns ? 1.6 * SPACE + (layout.columns - 1) * 1.2 * SPACE : 0) + (layout.left ? headWidth : 0));
+                if (layout.right) moment.trail = Math.max(moment.trail, headWidth);
+            }
             moments.set(entry.onset, moment);
         }));
-        for (let bar = 0; bar < barCount; bar++) if (!moments.has(bar * size)) moments.set(bar * size, { time: bar * size, shortest: size, accidental: false });
+        for (let bar = 0; bar < barCount; bar++) if (!moments.has(bar * size)) moments.set(bar * size, { time: bar * size, shortest: size, lead: 0, trail: 0 });
         const ordered = [...moments.values()].sort((a, b) => a.time - b.time);
 
         // Bars as widths, then systems.
@@ -330,17 +432,21 @@ globalThis.MaestroNotation = (() => {
         // the key and the time each 0.8 of a space clear of what's before.
         const header = signatureWidth => SPACE * HEADER_CLEF + signatureWidth;
         const keyWidth = Math.abs(score.key.fifths) * SPACE + (score.key.fifths ? SPACE : 0);
-        const timeWidth = 3 * SPACE;
+        // The time's widest number (12/8's 12) sets its room.
+        const timeDigits = Math.max(String(score.meter.beats).length, String(score.meter.unit).length);
+        const timeWidth = timeDigits * 1.8 * SPACE + 1.2 * SPACE;
         const barWidths = [];
         for (let bar = 0; bar < barCount; bar++) {
             const inBar = ordered.filter(moment => moment.time >= bar * size && moment.time < (bar + 1) * size);
-            let width = SPACE * 1.2;
+            const [before, after] = barPadding?.(bar) ?? [0, 0];
+            let width = SPACE * (1.2 + before);
             inBar.forEach((moment, index) => {
                 const next = inBar[index + 1]?.time ?? (bar + 1) * size;
                 moment.span = next - moment.time;
-                moment.offset = width + (moment.accidental ? 1.6 * SPACE : 0);
-                width = moment.offset + columnWidth(Math.min(moment.span, moment.shortest)) + (moment.span > moment.shortest ? SPACE * 0.6 * Math.log2(moment.span / moment.shortest) : 0);
+                moment.offset = width + moment.lead;
+                width = moment.offset + columnWidth(Math.min(moment.span, moment.shortest)) + (moment.span > moment.shortest ? SPACE * 0.6 * Math.log2(moment.span / moment.shortest) : 0) + moment.trail;
             });
+            width += SPACE * after;
             barWidths.push(width);
         }
         const systems = [];
@@ -380,17 +486,16 @@ globalThis.MaestroNotation = (() => {
                 const ends = voices.flatMap((voice, v) => voice.staff !== staff ? [] : entries[v]
                     .filter(entry => entry.note.p && system.bars.includes(Math.floor(entry.onset / size)))
                     .map(entry => {
-                        const position = entry.note.p.step - STAFF_BOTTOM[voice.clef];
-                        const up = voicesOnStaff(staff) > 1 ? voice.voiceIndex === 0 : position < 4;
+                        const { positions, up } = layouts[v][entry.index];
                         const stem = entry.note.d === "w" ? 0 : 7;
-                        return { high: position + (up ? stem : 0) + 2, low: position - (up ? 0 : stem) - 2 };
+                        return { high: positions.at(-1) + (up ? stem : 0) + 2, low: positions[0] - (up ? 0 : stem) - 2 };
                     }));
                 return { high: Math.max(8, ...ends.map(end => end.high)), low: Math.min(0, ...ends.map(end => end.low)) };
             };
             const above = Math.max(11, reach(0).high + 2);
             const below = Math.min(-5, reach(staffCount - 1).low - 2);
             const gap = staffCount > 1 ? Math.max(STAFF_GAP, (reach(1).high - reach(0).low + 3) * SPACE / 2) : 0;
-            const firstBottom = top + above * SPACE / 2;
+            const firstBottom = top + headroom + above * SPACE / 2;
             const bottoms = score.staves.map((_, staff) => firstBottom + staff * gap);
             system.staffY = bottoms;
             system.top = top;
@@ -406,13 +511,18 @@ globalThis.MaestroNotation = (() => {
             score.staves.forEach((staff, index) => {
                 const y = bottoms[index];
                 // Bravura Text sets a clef on its line when its baseline is the bottom line.
-                glyph(GLYPHS[staff.clef], left + SPACE, y, "staff-glyph");
+                glyph(GLYPHS[staff.clef], left + SPACE, y - (CLEF_RAISE[staff.clef] ?? 0) * SPACE, "staff-glyph");
                 signature(score.key.fifths, staff.clef).forEach((mark, at) => glyph(GLYPHS[String(mark.alter)], left + HEADER_CLEF * SPACE + at * SPACE, y - mark.position * SPACE / 2 + LIFT, "staff-glyph"));
                 if (system.first) {
                     // The digits are centered on their baseline: the beats in the upper half, the unit below.
+                    // A number narrower than the other is centered over or under it.
                     const x = left + header(keyWidth);
-                    String(score.meter.beats).split("").forEach((digit, at) => glyph(GLYPHS.digits[digit], x + at * 1.8 * SPACE, y - 3 * SPACE, "staff-glyph"));
-                    String(score.meter.unit).split("").forEach((digit, at) => glyph(GLYPHS.digits[digit], x + at * 1.8 * SPACE, y - SPACE, "staff-glyph"));
+                    const row = (text, rowY) => {
+                        const start = x + (timeDigits - text.length) * 0.9 * SPACE;
+                        text.split("").forEach((digit, at) => glyph(GLYPHS.digits[digit], start + at * 1.8 * SPACE, rowY, "staff-glyph"));
+                    };
+                    row(String(score.meter.beats), y - 3 * SPACE);
+                    row(String(score.meter.unit), y - SPACE);
                 }
             });
             // Bars: their moments' x, then bar lines.
@@ -443,16 +553,23 @@ globalThis.MaestroNotation = (() => {
         // Notes, rests, stems, flags, beams, dots and ledger lines.
         voices.forEach((voice, v) => {
             const shared = voicesOnStaff(voice.staff) > 1;
-            const bottomStep = STAFF_BOTTOM[voice.clef];
             placed[v] = [];
-            // Eighths and shorter in the same beat are beamed (a beat is three
-            // eighths in eighths meters).
-            const beat = score.meter.unit === 8 ? 3 : 2;
+            // Eighths and shorter in the same beat are beamed: a beat is a
+            // group of the meter's (2.7.0: 7/8's 2+2+3; threes in 6/8 before).
+            const starts = [];
+            meterGroups(score.meter).reduce((at, group) => (starts.push(at), at + group), 0);
+            const groupOf = onset => {
+                const bar = Math.floor(onset / size);
+                const local = onset - bar * size;
+                let at = 0;
+                while (at + 1 < starts.length && starts[at + 1] <= local) at++;
+                return `${bar}.${at}`;
+            };
             const groups = [];
             entries[v].forEach(entry => {
                 if (!BEAMS[entry.note.d] || !entry.note.p) return;
                 const group = groups.at(-1);
-                const sameBeat = group && Math.floor(group.at(-1).onset / beat) === Math.floor(entry.onset / beat) && group.at(-1).onset + group.at(-1).length === entry.onset;
+                const sameBeat = group && groupOf(group.at(-1).onset) === groupOf(entry.onset) && group.at(-1).onset + group.at(-1).length === entry.onset;
                 if (sameBeat) group.push(entry);
                 else groups.push([entry]);
             });
@@ -465,6 +582,10 @@ globalThis.MaestroNotation = (() => {
                 const y = system.staffY[voice.staff];
                 const note = entry.note;
                 const headWidth = HEAD_WIDTH[note.d];
+                if (!note.p && hideRest?.(v, entry.index)) {
+                    placed[v][entry.index] = { x: moment.x, y: y - 2 * SPACE, up: true, system: moment.system, headWidth, rest: true };
+                    return;
+                }
                 if (!note.p) {
                     const lift = shared ? (voice.voiceIndex === 0 ? 2 : -2) * SPACE : 0;
                     glyph(GLYPHS[`rest${note.d}`], moment.x, y - 2 * SPACE - lift + LIFT, "staff-glyph");
@@ -473,9 +594,7 @@ globalThis.MaestroNotation = (() => {
                     rests.push({ voice: v, index: entry.index, x: moment.x, y: y - 2 * SPACE - lift, system: moment.system });
                     return;
                 }
-                const position = note.p.step - bottomStep;
-                const centerY = y - position * SPACE / 2;
-                const up = shared ? voice.voiceIndex === 0 : position < 4;
+                const { positions, up, flipped } = layouts[v][entry.index];
                 // A second against the other voice on the staff: the stem-up head steps right.
                 let headX = moment.x;
                 if (shared && voice.voiceIndex === 0) {
@@ -483,24 +602,43 @@ globalThis.MaestroNotation = (() => {
                     const against = entries[other]?.find(each => each.onset === entry.onset && each.note.p);
                     if (against && Math.abs(against.note.p.step - note.p.step) === 1) headX += HEAD_WIDTH[against.note.d];
                 }
-                for (let ledger = -2; ledger >= position; ledger -= 2) line(headX - 0.4 * SPACE, y - ledger * SPACE / 2, headX + headWidth + 0.4 * SPACE, y - ledger * SPACE / 2, "staff-ledger");
-                for (let ledger = 10; ledger <= position; ledger += 2) line(headX - 0.4 * SPACE, y - ledger * SPACE / 2, headX + headWidth + 0.4 * SPACE, y - ledger * SPACE / 2, "staff-ledger");
-                const alter = shown[v][entry.index];
-                if (alter !== null) glyph(GLYPHS[String(alter)], headX - 1.5 * SPACE, centerY + LIFT, "staff-glyph");
+                // A chord's heads: on the stem's other side when flipped, touching it.
+                const xOf = at => (!flipped[at] ? headX : up ? headX + headWidth - 0.12 * SPACE : headX - headWidth + 0.12 * SPACE);
+                const yOf = at => y - positions[at] * SPACE / 2;
+                const xs = positions.map((_, at) => xOf(at));
+                // Ledger lines, each as wide as the heads on or past it.
+                const ledger = place => {
+                    const reaching = xs.filter((_, at) => (place < 0 ? positions[at] <= place : positions[at] >= place));
+                    line(Math.min(...reaching) - 0.4 * SPACE, y - place * SPACE / 2, Math.max(...reaching) + headWidth + 0.4 * SPACE, y - place * SPACE / 2, "staff-ledger");
+                };
+                for (let place = -2; place >= positions[0]; place -= 2) ledger(place);
+                for (let place = 10; place <= positions.at(-1); place += 2) ledger(place);
+                const leftmost = Math.min(...xs);
+                const { alters, column } = layouts[v][entry.index];
+                alters.forEach((alter, at) => {
+                    if (alter !== null) glyph(GLYPHS[String(alter)], leftmost - 1.5 * SPACE - column[at] * 1.2 * SPACE, yOf(at) + LIFT, "staff-glyph");
+                });
                 const headGlyph = note.d === "w" ? GLYPHS.whole : note.d === "h" ? GLYPHS.half : GLYPHS.black;
-                glyph(headGlyph, headX, centerY + LIFT, "staff-glyph");
-                if (note.dot) glyph(GLYPHS.dot, headX + headWidth + 0.5 * SPACE, centerY - (position % 2 === 0 ? SPACE / 2 : 0) + LIFT, "staff-glyph");
+                positions.forEach((_, at) => glyph(headGlyph, xs[at], yOf(at) + LIFT, "staff-glyph"));
+                // A dot for each head, in the space it's on or the one above its line, once a space.
+                if (note.dot) {
+                    const dotX = Math.max(...xs) + headWidth + 0.5 * SPACE;
+                    new Set(positions.map((position, at) => yOf(at) - (position % 2 === 0 ? SPACE / 2 : 0))).forEach(dotY => glyph(GLYPHS.dot, dotX, dotY + LIFT, "staff-glyph"));
+                }
                 const middle = y - 2 * SPACE;
                 const stemX = up ? headX + headWidth - 0.06 * SPACE : headX + 0.06 * SPACE;
                 const stem = STEM + stemExtra(note.d);
-                let stemEnd = up ? Math.min(centerY - stem, shared ? centerY - stem : middle) : Math.max(centerY + stem, shared ? centerY + stem : middle);
-                placed[v][entry.index] = { x: headX, y: centerY, up, system: moment.system, headWidth, stemX, stemEnd };
+                // The stem runs from the far head past the near one.
+                const top = yOf(positions.length - 1), bottom = yOf(0);
+                const near = up ? top : bottom, far = up ? bottom : top;
+                let stemEnd = up ? Math.min(near - stem, shared ? near - stem : middle) : Math.max(near + stem, shared ? near + stem : middle);
+                placed[v][entry.index] = { x: headX, y: bottom, top, bottom, up, system: moment.system, headWidth, stemX, stemEnd, heads: xs.map((x, at) => ({ x, y: yOf(at) })) };
                 if (note.d !== "w" && !beamed.has(entry.index)) {
-                    line(stemX, centerY, stemX, stemEnd, "staff-stem");
+                    line(stemX, far, stemX, stemEnd, "staff-stem");
                     // A flag hangs from the stem's end: its origin there, lifted as every glyph is (2.6.0; it sat two spaces off).
                     if (BEAMS[note.d]) glyph((up ? GLYPHS.flagsUp : GLYPHS.flagsDown)[BEAMS[note.d]], stemX - 0.06 * SPACE, stemEnd + LIFT, "staff-glyph");
                 }
-                heads.push({ voice: v, index: entry.index, x: headX, y: centerY, system: moment.system });
+                xs.forEach((x, at) => heads.push({ voice: v, index: entry.index, at, x, y: yOf(at), system: moment.system }));
             });
 
             // Beams: one stem direction for the group, the beam level at its
@@ -513,15 +651,16 @@ globalThis.MaestroNotation = (() => {
                 if (new Set(spots.map(spot => spot.system)).size > 1) return;
                 const levels = group.map(entry => BEAMS[entry.note.d]);
                 const extra = Math.max(...group.map(entry => stemExtra(entry.note.d)));
-                const up = shared ? voice.voiceIndex === 0 : spots.reduce((sum, spot) => sum + (spot.y - systems[spot.system].staffY[voice.staff] + 2 * SPACE), 0) > 0;
-                const ends = spots.map(spot => up ? spot.y - STEM - extra : spot.y + STEM + extra);
+                // A chord counts by its middle. (Its heads stay on the side its own stem put them.)
+                const up = shared ? voice.voiceIndex === 0 : spots.reduce((sum, spot) => sum + ((spot.top + spot.bottom) / 2 - systems[spot.system].staffY[voice.staff] + 2 * SPACE), 0) > 0;
+                const ends = spots.map(spot => up ? spot.top - STEM - extra : spot.bottom + STEM + extra);
                 const level = up ? Math.min(...ends) : Math.max(...ends);
                 spots.forEach(spot => {
                     const stemX = up ? spot.x + spot.headWidth - 0.06 * SPACE : spot.x + 0.06 * SPACE;
                     spot.up = up;
                     spot.stemX = stemX;
                     spot.stemEnd = level;
-                    line(stemX, spot.y, stemX, level, "staff-stem");
+                    line(stemX, up ? spot.bottom : spot.top, stemX, level, "staff-stem");
                 });
                 const beam = (x1, x2, depth) => {
                     const y = up ? level + depth * BEAM_STEP : level - 0.5 * SPACE - depth * BEAM_STEP;
@@ -544,21 +683,29 @@ globalThis.MaestroNotation = (() => {
                 }
             });
 
-            // Ties, curved away from the stems; one crossing a system's end is drawn in two halves.
+            // Ties, curved away from the stems (a chord's lower half down, its
+            // upper half up); one crossing a system's end is drawn in two
+            // halves. A chord's tie holds each pitch the next chord has.
             entries[v].forEach(entry => {
                 if (!entry.note.tie || !entry.note.p) return;
                 const next = entries[v][entry.index + 1];
-                if (!next?.note.p || midiOf(next.note.p) !== midiOf(entry.note.p)) return;
+                if (!next?.note.p) return;
                 const from = placed[v][entry.index], to = placed[v][next.index];
-                const below = from.up;
-                const lift = below ? 0.7 * SPACE : -0.7 * SPACE;
-                const bow = below ? 1.1 * SPACE : -1.1 * SPACE;
-                const tie = (x1, x2, y) => items.push({ kind: "path", class: "staff-tie", d: tiePath(x1, x2, y, bow) });
-                if (from.system === to.system) tie(from.x + from.headWidth + 0.2 * SPACE, to.x - 0.2 * SPACE, from.y + lift);
-                else {
-                    tie(from.x + from.headWidth + 0.2 * SPACE, systems[from.system].right, from.y + lift);
-                    tie(systems[to.system].left + systems[to.system].lead - SPACE, to.x - 0.2 * SPACE, to.y + lift);
-                }
+                const mine = midisOf(entry.note), theirs = midisOf(next.note);
+                mine.forEach((midi, at) => {
+                    const there = theirs.indexOf(midi);
+                    if (there < 0) return;
+                    const below = mine.length === 1 ? from.up : at < mine.length / 2;
+                    const lift = below ? 0.7 * SPACE : -0.7 * SPACE;
+                    const bow = below ? 1.1 * SPACE : -1.1 * SPACE;
+                    const tie = (x1, x2, y) => items.push({ kind: "path", class: "staff-tie", d: tiePath(x1, x2, y, bow) });
+                    const start = from.heads[at], end = to.heads[there];
+                    if (from.system === to.system) tie(start.x + from.headWidth + 0.2 * SPACE, end.x - 0.2 * SPACE, start.y + lift);
+                    else {
+                        tie(start.x + from.headWidth + 0.2 * SPACE, systems[from.system].right, start.y + lift);
+                        tie(systems[to.system].left + systems[to.system].lead - SPACE, end.x - 0.2 * SPACE, end.y + lift);
+                    }
+                });
             });
         });
 
@@ -580,10 +727,20 @@ globalThis.MaestroNotation = (() => {
     const XML_TYPES = Object.freeze({ w: "whole", h: "half", q: "quarter", e: "eighth", s: "16th", t: "32nd", f: "64th" });
 
     // ---- MusicXML (4.0, partwise): a part per staff, its voices one after
-    // another in each measure. Durations count eighths, so a quarter is 2.
+    // another in each measure, a chord's pitches as notes marked <chord/>
+    // (2.7.0). Durations count XML_DIVISIONS a quarter.
 
     const escapeXml = text => String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+    // Each clef as MusicXML writes it; an 8 under the clef is an octave change.
+    const XML_CLEFS = Object.freeze({
+        treble: "<clef><sign>G</sign><line>2</line></clef>",
+        treble8: "<clef><sign>G</sign><line>2</line><clef-octave-change>-1</clef-octave-change></clef>",
+        alto: "<clef><sign>C</sign><line>3</line></clef>",
+        tenor: "<clef><sign>C</sign><line>4</line></clef>",
+        bass: "<clef><sign>F</sign><line>4</line></clef>",
+        bass8: "<clef><sign>F</sign><line>4</line><clef-octave-change>-1</clef-octave-change></clef>"
+    });
     function musicXml(score) {
         const size = barLength(score.meter);
         const end = Math.max(size, ...score.staves.flatMap(staff => staff.voices.map(voice => voice.notes.reduce((sum, note) => sum + lengthOf(note), 0))));
@@ -596,7 +753,7 @@ globalThis.MaestroNotation = (() => {
         out.push("  <identification><encoding><software>Aeolionware Maestro</software></encoding></identification>");
         out.push("  <part-list>");
         score.staves.forEach((staff, index) => {
-            const name = staff.voices.map(voice => voice.name).filter(Boolean).join(" and ") || (staff.clef === "treble" ? "Upper" : "Lower");
+            const name = staff.voices.map(voice => voice.name).filter(Boolean).join(" and ") || (score.staves.length > 1 && index > 0 ? "Lower" : "Upper");
             out.push(`    <score-part id="P${index + 1}"><part-name>${escapeXml(name)}</part-name></score-part>`);
         });
         out.push("  </part-list>");
@@ -611,7 +768,7 @@ globalThis.MaestroNotation = (() => {
                     out.push(`        <divisions>${XML_DIVISIONS}</divisions>`);
                     out.push(`        <key><fifths>${score.key.fifths}</fifths><mode>${score.key.mode}</mode></key>`);
                     out.push(`        <time><beats>${score.meter.beats}</beats><beat-type>${score.meter.unit}</beat-type></time>`);
-                    out.push(staff.clef === "treble" ? "        <clef><sign>G</sign><line>2</line></clef>" : "        <clef><sign>F</sign><line>4</line></clef>");
+                    out.push(`        ${XML_CLEFS[staff.clef]}`);
                     out.push("      </attributes>");
                 }
                 staff.voices.forEach((voice, voiceIndex) => {
@@ -619,21 +776,30 @@ globalThis.MaestroNotation = (() => {
                     const inBar = voiceBars[voiceIndex][bar] ?? [];
                     let filled = 0;
                     for (const { note, index } of inBar) {
-                        const held = voiceTimed[voiceIndex][index].held;
-                        const parts = [];
-                        if (note.p) {
-                            const letter = LETTERS[letterOf(note.p.step)];
-                            parts.push(`<pitch><step>${letter}</step>${note.p.alter ? `<alter>${note.p.alter}</alter>` : ""}<octave>${octaveOf(note.p.step)}</octave></pitch>`);
-                        } else parts.push("<rest/>");
-                        parts.push(`<duration>${lengthOf(note) * XML_PER_EIGHTH}</duration>`);
-                        if (held) parts.push('<tie type="stop"/>');
-                        if (note.tie && note.p) parts.push('<tie type="start"/>');
-                        parts.push(`<voice>${voiceIndex + 1}</voice>`, `<type>${XML_TYPES[note.d]}</type>`);
-                        if (note.dot) parts.push("<dot/>");
-                        if (note.p && staff.voices.length > 1) parts.push(`<stem>${voiceIndex === 0 ? "up" : "down"}</stem>`);
-                        const tied = [held ? '<tied type="stop"/>' : "", note.tie && note.p ? '<tied type="start"/>' : ""].join("");
-                        if (tied) parts.push(`<notations>${tied}</notations>`);
-                        out.push(`      <note>${parts.join("")}</note>`);
+                        const notes = voice.notes;
+                        // A chord's tie holds each pitch the next has; a single note's, as written.
+                        const before = notes[index - 1], after = notes[index + 1];
+                        const held = midi => Boolean(before?.tie && midisOf(before).includes(midi));
+                        const tied = midi => Boolean(note.tie && note.p && (!note.more || (after && midisOf(after).includes(midi))));
+                        const pitches = pitchesOf(note);
+                        (pitches.length ? pitches : [null]).forEach((p, at) => {
+                            const parts = at ? ["<chord/>"] : [];
+                            const midi = p ? midiOf(p) : null;
+                            const stop = p && (note.more ? held(midi) : voiceTimed[voiceIndex][index].held);
+                            if (p) {
+                                const letter = LETTERS[letterOf(p.step)];
+                                parts.push(`<pitch><step>${letter}</step>${p.alter ? `<alter>${p.alter}</alter>` : ""}<octave>${octaveOf(p.step)}</octave></pitch>`);
+                            } else parts.push("<rest/>");
+                            parts.push(`<duration>${lengthOf(note) * XML_PER_EIGHTH}</duration>`);
+                            if (stop) parts.push('<tie type="stop"/>');
+                            if (p && tied(midi)) parts.push('<tie type="start"/>');
+                            parts.push(`<voice>${voiceIndex + 1}</voice>`, `<type>${XML_TYPES[note.d]}</type>`);
+                            if (note.dot) parts.push("<dot/>");
+                            if (p && staff.voices.length > 1) parts.push(`<stem>${voiceIndex === 0 ? "up" : "down"}</stem>`);
+                            const ties = [stop ? '<tied type="stop"/>' : "", p && tied(midi) ? '<tied type="start"/>' : ""].join("");
+                            if (ties) parts.push(`<notations>${ties}</notations>`);
+                            out.push(`      <note>${parts.join("")}</note>`);
+                        });
                         filled += lengthOf(note);
                     }
                     // A bar the voice hasn't reached yet is a rest; a short last bar is filled out with one.
@@ -649,8 +815,8 @@ globalThis.MaestroNotation = (() => {
     }
 
     return Object.freeze({
-        LETTERS, NATURAL, MODES, DURATIONS, DURATION_NAMES, BEAMS, GLYPHS, SPACE, FONT, LIFT, HEAD_WIDTH, STAFF_BOTTOM, LOWEST_STEP, HIGHEST_STEP, NOTES_MAX, TITLE_MAX,
+        CLEFS, LETTERS, NATURAL, MODES, DURATIONS, DURATION_NAMES, BEAMS, CHORD_MAX, GLYPHS, SPACE, FONT, LIFT, HEAD_WIDTH, STAFF_BOTTOM, LOWEST_STEP, HIGHEST_STEP, NOTES_MAX, TITLE_MAX,
         pitch, isPitch, midiOf, parsePitch, pitchName, pitchLetterName, keyFifths, keyTonic, tonicLetter, keyAlter, signature, pitchFromMidi, interval,
-        lengthOf, barLength, bars, voicesOf, timed, slices, soundingEvents, shownAccidentals, cleanScore, engrave, musicXml
+        lengthOf, barLength, meterGroups, pitchesOf, midisOf, bars, voicesOf, timed, slices, soundingEvents, shownAccidentals, chordAccidentals, cleanScore, engrave, musicXml
     });
 })();

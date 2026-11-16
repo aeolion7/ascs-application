@@ -235,6 +235,13 @@
     const fresh = M.parseSettings(null);
     check("settings: nothing kept gives the defaults", fresh.instrument === "guitar" && fresh.root === "G" && fresh.scale === "major" && fresh.labels === "names" && fresh.tab === "scales" && fresh.tone === "pluck" && fresh.a4 === 440 && fresh.own.length === 0);
     equal("settings: the default tuning is standard", M.currentTuning(fresh).id, "standard");
+    // How each instrument is written (2.7.0).
+    const written = (instrument, tuning = "standard") => M.staffWriting({ ...fresh, instrument, tunings: { ...fresh.tunings, [instrument]: tuning } });
+    equal("writing: guitar and bass an octave above how they sound, with an 8 under the clef", ["guitar", "bass"].map(each => `${written(each).clefs.join("+")}/${written(each).shift}`).join(), "treble8/12,bass8/12");
+    equal("writing: mandolin and ukulele as they sound", ["mandolin", "ukulele"].map(each => `${written(each).clefs.join("+")}/${written(each).shift}`).join(), "treble/0,treble/0");
+    equal("writing: a baritone ukulele as a guitar is", written("ukulele", "baritone").clefs.join(), "treble8");
+    equal("writing: a keyboard on a grand staff", written("keyboard").clefs.join(), "treble,bass");
+    equal("writing: an instrument that isn't one as a keyboard", M.staffWriting({ ...fresh, instrument: "kazoo" }).clefs.join(), "treble,bass");
     const own = { id: "own-x1", name: "Mine", instrument: "guitar", pitches: [36, 43, 48, 55, 60, 64] };
     const kept = M.parseSettings(JSON.stringify({ instrument: "guitar", tunings: { guitar: "own-x1", bass: "five", ukulele: "nope" }, own: [own, own, { junk: 1 }], root: `B${FLAT}`, scale: "dorian", labels: "degrees", degreeStyle: "interval", tab: "tuning", tone: "steady", a4: 442 }));
     check("settings: what was kept is read", kept.root === `B${FLAT}` && kept.scale === "dorian" && kept.labels === "degrees" && kept.degreeStyle === "interval" && kept.tab === "tuning" && kept.tone === "steady" && kept.a4 === 442);
@@ -433,4 +440,9 @@
     check("quiz: the new kinds and their options are kept", quizKept.quizKind === "reading" && quizKept.quizRhythm === "triplets" && quizKept.quizMelody === 6);
     const quizWrong = M.parseSettings(JSON.stringify({ quizRhythm: "hard", quizMelody: 12 }));
     check("quiz: options not offered fall back", quizWrong.quizRhythm === "easy" && quizWrong.quizMelody === 5);
+    // 2.7.0: what's written for a progression heard.
+    equal("quiz: a progression's numerals, or on a staff its bass, outer voices or every note", M.QUIZ_WRITES.join(), "numerals,bass,outer,all");
+    equal("quiz: numerals at first", M.parseSettings("{}").quizWrite, "numerals");
+    equal("quiz: what's written is kept", M.parseSettings(JSON.stringify({ quizWrite: "outer" })).quizWrite, "outer");
+    equal("quiz: and falls back when not offered", M.parseSettings(JSON.stringify({ quizWrite: "tenor" })).quizWrite, "numerals");
 })();

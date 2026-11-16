@@ -686,7 +686,16 @@ function toggleConsPopover(name, open = consPopovers[name].panel.hidden) {
     }
     pop.panel.hidden = !open;
     pop.button.setAttribute("aria-expanded", String(open));
+    if (open) placeConsPopover(pop.panel);
     if (open) requestAnimationFrame(() => (pop.onOpen?.() ?? pop.panel.querySelector('[aria-pressed="true"], select, input'))?.focus());
+}
+
+// A popover that would run past its module's right edge opens leftward,
+// from its chip's right edge (2.7.0).
+function placeConsPopover(panel) {
+    panel.classList.remove("is-end");
+    const edge = (panel.closest(".module") ?? document.body).getBoundingClientRect().right;
+    if (panel.getBoundingClientRect().right > edge) panel.classList.add("is-end");
 }
 
 function closeConsPopovers(except = null) {

@@ -465,6 +465,9 @@ globalThis.MaestroMusic = (() => {
         [0, 4, 3, 0], [0, 3, 0, 4], [0, 1, 3, 4], [0, 2, 5, 3], [0, 2, 3, 4], [0, 5, 2, 3]
     ].map(degrees => Object.freeze(degrees)));
     const QUIZ_KEYS = Object.freeze(["C", "G", "D", "A", "E", "F", "B♭", "E♭"]);
+    // What's written for a progression (2.7.0): its numerals, or on a grand
+    // staff its bass, its lowest and highest notes, or every note.
+    const QUIZ_WRITES = Object.freeze(["numerals", "bass", "outer", "all"]);
 
     // A progression to hear: one of them in a major key, never the same twice
     // running; triads or sevenths (both: either). { key, size, index, degrees, chords }.
@@ -833,7 +836,7 @@ globalThis.MaestroMusic = (() => {
     }
 
     const DEFAULTS = Object.freeze({
-        instrument: "guitar", tunings: {}, own: [], root: "G", scale: "major", labels: "names", degreeStyle: "flat", show: "scale", sevenths: false, capo: 0, lefty: false, position: -1, quizKind: "note", quizNaturals: false, quizDirection: "up", quizChords: "triads", chordStyle: "letters", tab: "scales", tone: "pluck", a4: 440, neckHidden: [], drill: "straight", quizRhythm: "easy", quizMelody: 5
+        instrument: "guitar", tunings: {}, own: [], root: "G", scale: "major", labels: "names", degreeStyle: "flat", show: "scale", sevenths: false, capo: 0, lefty: false, position: -1, quizKind: "note", quizNaturals: false, quizDirection: "up", quizChords: "triads", chordStyle: "letters", tab: "scales", tone: "pluck", a4: 440, neckHidden: [], drill: "straight", quizRhythm: "easy", quizMelody: 5, quizWrite: "numerals"
     });
 
     function tuningsFor(instrument, own) {
@@ -872,6 +875,7 @@ globalThis.MaestroMusic = (() => {
         if (QUIZ_CHORD_SETS.includes(stored.quizChords)) settings.quizChords = stored.quizChords;
         if (QUIZ_RHYTHMS.includes(stored.quizRhythm)) settings.quizRhythm = stored.quizRhythm;
         if (QUIZ_MELODY_LENGTHS.includes(stored.quizMelody)) settings.quizMelody = stored.quizMelody;
+        if (QUIZ_WRITES.includes(stored.quizWrite)) settings.quizWrite = stored.quizWrite;
         if (Object.hasOwn(CHORD_STYLES, stored.chordStyle)) settings.chordStyle = stored.chordStyle;
         if (stored.tone === "pluck" || stored.tone === "steady") settings.tone = stored.tone;
         if (Number.isInteger(stored.a4) && stored.a4 >= 415 && stored.a4 <= 466) settings.a4 = stored.a4;
@@ -885,8 +889,24 @@ globalThis.MaestroMusic = (() => {
         return list.find(tuning => tuning.id === settings.tunings[settings.instrument]) || list[0] || null;
     }
 
+    // How an instrument is written (2.7.0): its staves' clefs, as
+    // MaestroNotation names them, and how far above where it sounds a note is
+    // written. Guitar, bass and baritone ukulele sound an octave below where
+    // they're written, as the 8 under the clef says; mandolin and ukulele are
+    // written where they sound; a keyboard has two staves, split at middle C.
+    const writing = (clefs, shift) => Object.freeze({ clefs: Object.freeze(clefs), shift });
+    const STAFF_WRITING = Object.freeze({
+        guitar: writing(["treble8"], 12), bass: writing(["bass8"], 12), mandolin: writing(["treble"], 0),
+        ukulele: writing(["treble"], 0), keyboard: writing(["treble", "bass"], 0)
+    });
+    function staffWriting(settings) {
+        const instrument = Object.hasOwn(STAFF_WRITING, settings?.instrument) ? settings.instrument : "keyboard";
+        if (instrument === "ukulele" && currentTuning(settings)?.id === "baritone") return STAFF_WRITING.guitar;
+        return STAFF_WRITING[instrument];
+    }
+
     return {
-        ROOTS, SCALES, FAMILIES, SHOWS, LABELS, DEGREE_STYLES, INSTRUMENTS, STRINGED, LOWEST, HIGHEST, OWN_MAX, CAPO_MAX, POSITION_SPAN, TABS, NECK_OPTIONAL, NECKLESS, DRILLS, drillNotes, PLAIN_NAMES, CHORD_KINDS, QUIZ_INTERVALS, QUIZ_KINDS, QUIZ_DIRECTIONS, QUIZ_QUALITIES, QUIZ_CHORD_SETS, QUIZ_PROGRESSIONS, QUIZ_KEYS, QUIZ_RHYTHMS, QUIZ_NECKLESS, QUIZ_MELODY_LENGTHS, quizMelody, DEFAULTS, CHORD_STYLES, STAFF_BOTTOM, CHORDS_MAX, KEY_LOW, KEY_HIGH, FRET_MAX, CHORD_LABEL_MAX, isChordName, cleanChordLabel,
+        ROOTS, SCALES, FAMILIES, SHOWS, LABELS, DEGREE_STYLES, INSTRUMENTS, STRINGED, LOWEST, HIGHEST, OWN_MAX, CAPO_MAX, POSITION_SPAN, TABS, NECK_OPTIONAL, NECKLESS, DRILLS, drillNotes, PLAIN_NAMES, CHORD_KINDS, QUIZ_INTERVALS, QUIZ_KINDS, QUIZ_DIRECTIONS, QUIZ_QUALITIES, QUIZ_CHORD_SETS, QUIZ_PROGRESSIONS, QUIZ_KEYS, QUIZ_WRITES, QUIZ_RHYTHMS, QUIZ_NECKLESS, QUIZ_MELODY_LENGTHS, quizMelody, DEFAULTS, CHORD_STYLES, STAFF_BOTTOM, STAFF_WRITING, staffWriting, CHORDS_MAX, KEY_LOW, KEY_HIGH, FRET_MAX, CHORD_LABEL_MAX, isChordName, cleanChordLabel,
         parseName, pitchClass, spell, degreeLabel, intervalLabel, scaleNotes, triadName, seventhName, chordsInKey, capoShape, findChords, alteredDominant, findScales, positionsFor, quizNote, quizInterval, quizQuality, quizProgression, everyNote, pitchName, spelledPitch, frequency, tuningNotes,
         pluckPeriod, pluckSamples, cleanName, cleanOwnTuning, tuningsFor, parseSettings, currentTuning,
         chordSymbolParts, cleanChordName, staffStep, staffChord, cleanSavedChord, savedChordLine, savedChordNotes, shapeStart

@@ -309,18 +309,19 @@ globalThis.MaestroHarmony = (() => {
     // ---- Playing
 
     // A chord's notes to play: its bass (the root, or a slash chord's bass)
-    // from E2, and the rest in close position from E3, voiced as near as can
-    // be to the chord before. MIDI numbers, low to high.
-    function voiceChord(name, previous = null) {
+    // from E2 (or `low`, 2.7.0: an instrument's lowest note), and the rest in
+    // close position from an octave above, voiced as near as can be to the
+    // chord before. MIDI numbers, low to high.
+    function voiceChord(name, previous = null, low = 40) {
         const tones = chordTones(name);
         if (!tones.length) return [];
         const bassPc = tones[0].pc;
-        const bass = 40 + modulo(bassPc - 4, 12);
+        const bass = low + modulo(bassPc - low, 12);
         const upper = [...new Set(tones.map(tone => tone.pc))];
         const candidates = upper.map((_, turn) => {
             const order = [...upper.slice(turn), ...upper.slice(0, turn)];
             const notes = [];
-            let floor = 52;
+            let floor = low + 12;
             for (const pc of order) {
                 const midi = floor + modulo(pc - floor, 12);
                 notes.push(midi);
@@ -336,8 +337,55 @@ globalThis.MaestroHarmony = (() => {
 
     // ---- Charts
 
-    const CHART_LIMITS = Object.freeze({ title: 60, section: 24, sections: 12, bars: 64, totalBars: 256, perBar: 4, repeat: 8, beats: 12 });
+    const CHART_LIMITS = Object.freeze({ title: 60, section: 24, sections: 12, bars: 64, totalBars: 256, perBar: 4, repeat: 8, beats: 12, bytes: 65536 });
     const REPEAT_BAR = "%";
+
+    // A chord's voicing written into the chart (2.7.0): its notes, kept with
+    // it as "Cmaj7=48.55.59.64", MIDI numbers low to high, 1 to 10 of them
+    // from E0 to C8 (AHK checks the same). A chord symbol has no "=".
+    const VOICING_LOW = 16, VOICING_HIGH = 108, VOICING_MAX = 10;
+    const VOICING_TEXT = /^[1-9]\d{1,2}(?:\.[1-9]\d{1,2}){0,9}$/;
+    const isVoicing = midis => Array.isArray(midis) && midis.length >= 1 && midis.length <= VOICING_MAX
+        && midis.every((midi, at) => Number.isInteger(midi) && midi >= VOICING_LOW && midi <= VOICING_HIGH && (at === 0 || midi > midis[at - 1]));
+    // A chart's chord as written: its name, and its voicing or null.
+    const slotChord = slot => String(slot ?? "").split("=")[0];
+    function slotVoicing(slot) {
+        const text = String(slot ?? "");
+        const at = text.indexOf("=");
+        if (at < 0 || !VOICING_TEXT.test(text.slice(at + 1))) return null;
+        const midis = text.slice(at + 1).split(".").map(Number);
+        return isVoicing(midis) ? midis : null;
+    }
+    const voicedSlot = (name, midis) => (isVoicing(midis) ? `${name}=${midis.join(".")}` : name);
+    const isVoiced = chart => chart.sections.some(section => section.bars.some(bar => bar.some(slot => slotVoicing(slot))));
+
+    // A voicing moved as its chord is, by `semis` up (1 to 11): the nearer
+    // way, up or down, and an octave the other way if it leaves the range.
+    // null if it can't stay in it.
+    function moveVoicing(midis, semis) {
+        const by = modulo(semis, 12) > 6 ? modulo(semis, 12) - 12 : modulo(semis, 12);
+        for (const shift of [by, by + (by > 0 ? -12 : 12)]) {
+            const moved = midis.map(midi => midi + shift);
+            if (isVoicing(moved)) return moved;
+        }
+        return null;
+    }
+
+    // A voicing's notes spelled (2.7.0): each as its chord spells that note,
+    // else as the key does, else plainly. As staff pitches: { step, alter },
+    // the step counted in letters from C0.
+    function spellVoicing(name, midis, key = null) {
+        const tones = chordTones(name);
+        const notes = key && isKey(key) ? keyNotes(key) : [];
+        return midis.map(midi => {
+            const pc = modulo(midi, 12);
+            const spelled = tones.find(tone => tone.pc === pc)?.name ?? notes.find(note => note.pc === pc)?.name ?? M.PLAIN_NAMES[pc];
+            const letter = LETTERS.indexOf(spelled[0]);
+            const natural = M.pitchClass(spelled[0]);
+            const alter = modulo(pc - natural + 6, 12) - 6;
+            return { step: letter + 7 * ((midi - natural - alter) / 12 - 1), alter };
+        });
+    }
 
     // A chart as the page keeps it, or null: a title, a key, beats in a bar,
     // and sections, each a name, how many times it's played, and bars of one
@@ -365,8 +413,17 @@ globalThis.MaestroHarmony = (() => {
             const bars = [];
             for (const bar of section.bars) {
                 if (!Array.isArray(bar) || !bar.length || bar.length > CHART_LIMITS.perBar) return null;
-                // Chords are chord symbols (2.4.0), as a saved chord's name is.
-                const chords = bar.map(each => each === REPEAT_BAR ? each : (M.isChordName(M.cleanChordName(each)) ? M.cleanChordName(each) : ""));
+                // Chords are chord symbols (2.4.0), as a saved chord's name
+                // is, each with a voicing written or none (2.7.0).
+                const chords = bar.map(each => {
+                    if (each === REPEAT_BAR) return each;
+                    const text = String(each ?? "");
+                    const name = M.cleanChordName(slotChord(text));
+                    if (!M.isChordName(name)) return "";
+                    if (!text.includes("=")) return name;
+                    const midis = slotVoicing(text);
+                    return midis ? voicedSlot(name, midis) : "";
+                });
                 if (chords.some(each => !each || (each === REPEAT_BAR && bar.length > 1))) return null;
                 if (chords[0] === REPEAT_BAR && !bars.length) return null;
                 bars.push(chords);
@@ -381,16 +438,24 @@ globalThis.MaestroHarmony = (() => {
     // A chart as text (2.4.0), as AHK checks and keeps it: the first line names
     // the format; then the title, key, scale and time signature, tab-separated;
     // then a line a section: its name, times played, and its bars, each bar's
-    // chords separated by spaces (chord symbols have none).
+    // chords separated by spaces (chord symbols have none). A chart with a
+    // voicing written (2.7.0) is format 2, so a Maestro before it, which
+    // couldn't read one, leaves the song out rather than misreading it; one
+    // with none stays format 1.
     const CHART_FORMAT = "Maestro chart 1";
+    const CHART_FORMAT_VOICED = "Maestro chart 2";
     function chartText(chart) {
         const head = [chart.title, chart.root, chart.scale, chart.meter ?? `${chart.beats}/4`].join("\t");
         const lines = chart.sections.map(section => [section.name, String(section.repeat), ...section.bars.map(bar => bar.join(" "))].join("\t"));
-        return [CHART_FORMAT, head, ...lines].join("\n");
+        return [isVoiced(chart) ? CHART_FORMAT_VOICED : CHART_FORMAT, head, ...lines].join("\n");
     }
+    // Whether a chart's text is more than AHK keeps in a file.
+    const chartTooLarge = text => new TextEncoder().encode(text).length > CHART_LIMITS.bytes;
     function readChartText(text) {
         const lines = String(text ?? "").replace(/\r\n/g, "\n").trim().split("\n");
-        if (lines.length < 3 || lines[0] !== CHART_FORMAT) return null;
+        if (lines.length < 3 || (lines[0] !== CHART_FORMAT && lines[0] !== CHART_FORMAT_VOICED)) return null;
+        // Only format 2 has voicings.
+        if (lines[0] === CHART_FORMAT && lines.slice(2).some(line => line.includes("="))) return null;
         const head = lines[1].split("\t");
         if (head.length !== 4) return null;
         const [title, root, scale, meter] = head;
@@ -416,9 +481,10 @@ globalThis.MaestroHarmony = (() => {
                     // The bar's beats shared out, the first chords taking any left over.
                     const share = Math.floor(chart.beats / chords.length);
                     let extra = chart.beats - share * chords.length;
-                    for (const [slot, chord] of chords.entries()) {
+                    for (const [slot, token] of chords.entries()) {
                         const beats = share + (extra-- > 0 ? 1 : 0);
-                        if (beats > 0) events.push({ chord, section: at, bar, written, slot, start: beat, beats });
+                        // A repeated bar plays the voicings of the one it repeats (2.7.0).
+                        if (beats > 0) events.push({ chord: slotChord(token), voicing: slotVoicing(token), section: at, bar, written, slot, start: beat, beats });
                         beat += beats;
                     }
                     bar += 1;
@@ -454,10 +520,157 @@ globalThis.MaestroHarmony = (() => {
         return cleanChart({ ...chart, sections });
     }
 
-    // A chart in another key: every chord moved by the interval between roots.
+    // ---- A chart on a grand staff (2.7.0)
+
+    // A length in eighths as notes, longest first, to be tied: 7/8's bar is
+    // a dotted half and an eighth.
+    const STAFF_LENGTHS = [[12, "w", true], [8, "w", false], [6, "h", true], [4, "h", false], [3, "q", true], [2, "q", false], [1.5, "e", true], [1, "e", false], [0.75, "s", true], [0.5, "s", false], [0.25, "t", false], [0.125, "f", false]];
+    function staffLengths(eighths) {
+        const pieces = [];
+        let left = eighths;
+        while (left > 1e-9) {
+            const fit = STAFF_LENGTHS.find(([length]) => length <= left + 1e-9);
+            if (!fit) break;
+            pieces.push({ d: fit[1], dot: fit[2] });
+            left -= fit[0];
+        }
+        return pieces;
+    }
+
+    // A key's signature on the staff: a mode's own; a mode of the major,
+    // harmonic or melodic minor scale its parent's (C Phrygian dominant, F
+    // harmonic minor's: four flats), the one with fewest sharps or flats; any
+    // other scale the major's or minor's on its root, by its third.
+    function keySignature(key) {
+        const N = globalThis.MaestroNotation;
+        if (!N || !isKey(key)) return 0;
+        if (Object.hasOwn(N.MODES, key.scale)) return N.keyFifths(key.root, key.scale) ?? 0;
+        const pcs = pcsOf(key);
+        let best = null;
+        for (const root of M.ROOTS) for (const [scale, mode] of [["major", "major"], ["harmonic", "minor"], ["melodic", "minor"]]) {
+            const fifths = pcsOf({ root, scale }) === pcs ? N.keyFifths(root, mode) : null;
+            if (fifths !== null && (best === null || Math.abs(fifths) < Math.abs(best))) best = fifths;
+        }
+        return best ?? N.keyFifths(key.root, keyIsMinor(key) ? "minor" : "major") ?? 0;
+    }
+
+    // A voicing's notes for the staff, a hand each: from middle C up the
+    // right, below it the left, at most eight a hand; on one staff (an
+    // instrument's own, 2.7.0: `staves` 1) all on it, at most eight, the
+    // lowest left out. Spelled by
+    // spellVoicing, two notes on one line or space of a hand are spelled
+    // apart (the upper a letter up, else the lower a letter down, else it's
+    // left out); a note outside the piano's range isn't written.
+    function staffHands(name, midis, key, staves = 2) {
+        const N = globalThis.MaestroNotation;
+        const notes = spellVoicing(name, midis, key).map((p, at) => ({ midi: midis[at], p })).filter(each => N.isPitch(each.p));
+        const hands = staves === 1 ? [notes.slice(-N.CHORD_MAX)] : [notes.filter(each => each.midi >= 60), notes.filter(each => each.midi < 60)];
+        while (staves !== 1 && hands[0].length > N.CHORD_MAX) hands[1].push(hands[0].shift());
+        while (staves !== 1 && hands[1].length > N.CHORD_MAX) hands[0].unshift(hands[1].pop());
+        const respelled = (midi, step) => {
+            const alter = midi - N.midiOf(N.pitch(step, 0));
+            return alter >= -2 && alter <= 2 && N.isPitch(N.pitch(step, alter)) ? N.pitch(step, alter) : null;
+        };
+        return hands.map(hand => {
+            const kept = [];
+            for (const note of hand) {
+                const before = kept.at(-1);
+                if (!before || note.p.step > before.p.step) {
+                    kept.push(note);
+                    continue;
+                }
+                const up = respelled(note.midi, before.p.step + 1);
+                const down = respelled(before.midi, note.p.step - 1);
+                if (up) kept.push({ midi: note.midi, p: up });
+                else if (down && (kept.length < 2 || kept.at(-2).p.step < down.step)) kept.splice(-1, 1, { midi: before.midi, p: down }, note);
+            }
+            return kept;
+        });
+    }
+
+    // A chart as written on a grand staff (or, 2.7.0, on the staves `clefs`
+    // names: one for a stringed instrument): its sections once each, their
+    // bars in order (a % bar empty, for its sign), each chord for as long as
+    // it's played (tied over where one note won't do), its voicing split
+    // between the hands. voicingOf(chord) gives the notes for each chord
+    // written ({ name, voicing, section, bar, slot, index }, in order), the
+    // voicing written or one chosen. meter: the metronome's ("7/8:3+2+2").
+    // Returns { score, chords, bars, sections }, or null: chords as written,
+    // each with where its notes are on each hand's staff; bars, each one's
+    // section and whether it repeats the one before (and its rests, if it
+    // does); sections, each one's first and last bar.
+    const STAFF_NOTES_MAX = 4096;
+    function chartScore(chart, meter, voicingOf, key, clefs = ["treble", "bass"]) {
+        const N = globalThis.MaestroNotation;
+        const match = /^(\d{1,2})\/(\d{1,2})(?::(\d(?:\+\d)+))?$/.exec(String(meter ?? ""));
+        if (!N || !match) return null;
+        const [beats, unit] = [Number(match[1]), Number(match[2])];
+        const groups = match[3] ? match[3].split("+").map(Number) : null;
+        const voices = clefs.map(() => []);
+        const chords = [];
+        const bars = [];
+        const sections = [];
+        const rests = (hand, eighths) => staffLengths(eighths).forEach(piece => voices[hand].push({ p: null, d: piece.d, dot: piece.dot, tie: false }));
+        let onset = 0;
+        let index = 0;
+        chart.sections.forEach((section, s) => {
+            const first = bars.length;
+            section.bars.forEach((bar, b) => {
+                const barEighths = beats * 8 / unit;
+                bars.push({ section: s, bar: b, repeat: bar[0] === REPEAT_BAR, onset });
+                if (bar[0] === REPEAT_BAR) {
+                    // Its rests, each hand's [from, to), drawn as the sign instead.
+                    bars.at(-1).notes = voices.map((_, hand) => {
+                        const from = voices[hand].length;
+                        rests(hand, barEighths);
+                        return [from, voices[hand].length];
+                    });
+                    onset += barEighths;
+                    return;
+                }
+                // The bar's beats shared out as the chart plays them (chartTimeline).
+                const share = Math.floor(beats / bar.length);
+                let extra = beats - share * bar.length;
+                bar.forEach((token, slot) => {
+                    const chordBeats = share + (extra-- > 0 ? 1 : 0);
+                    const entry = { name: slotChord(token), voicing: slotVoicing(token), section: s, bar: b, slot, index: index++ };
+                    if (chordBeats <= 0) return;
+                    const eighths = chordBeats * 8 / unit;
+                    const midis = voicingOf(entry) ?? [];
+                    const hands = staffHands(entry.name, midis, key, clefs.length);
+                    const pieces = staffLengths(eighths);
+                    const staves = hands.map((hand, h) => {
+                        const at = voices[h].length;
+                        pieces.forEach((piece, n) => {
+                            if (!hand.length) voices[h].push({ p: null, d: piece.d, dot: piece.dot, tie: false });
+                            else voices[h].push({ p: hand[0].p, more: hand.slice(1).map(each => each.p), d: piece.d, dot: piece.dot, tie: n < pieces.length - 1 });
+                        });
+                        return { note: at, notes: pieces.length, midis: hand.map(each => each.midi) };
+                    });
+                    chords.push({ ...entry, written: Boolean(entry.voicing), midis: [...midis], onset, length: eighths, staves });
+                    onset += eighths;
+                });
+            });
+            sections.push({ name: section.name, repeat: section.repeat, first, last: bars.length - 1 });
+        });
+        const score = N.cleanScore({
+            title: "", key: { fifths: keySignature(key), mode: "major" }, meter: { beats, unit, ...(groups ? { groups } : {}) },
+            staves: clefs.map((clef, hand) => ({ clef, voices: [{ name: clefs.length === 1 ? "Chords" : hand === 0 ? "Right hand" : "Left hand", notes: voices[hand] }] }))
+        }, { notesMax: STAFF_NOTES_MAX });
+        return score ? { score, chords, bars, sections } : null;
+    }
+
+    // A chart in another key: every chord moved by the interval between
+    // roots, and its voicing with it (2.7.0; dropped if it would leave the range).
     function transposeChart(chart, root) {
         if (!isKey({ root, scale: chart.scale })) return null;
-        const move = name => name === REPEAT_BAR ? name : (transposeChord(name, chart.root, root) ?? name);
+        const semis = modulo(M.pitchClass(root) - M.pitchClass(chart.root), 12);
+        const move = token => {
+            if (token === REPEAT_BAR) return token;
+            const name = slotChord(token);
+            const midis = slotVoicing(token);
+            return voicedSlot(transposeChord(name, chart.root, root) ?? name, midis ? moveVoicing(midis, semis) : null);
+        };
         return { ...chart, root, sections: chart.sections.map(section => ({ ...section, bars: section.bars.map(bar => bar.map(move)) })) };
     }
 
@@ -743,6 +956,38 @@ globalThis.MaestroHarmony = (() => {
         return list.map(({ key, ...each }) => Object.freeze(each));
     }
 
+    // A written voicing's place on a neck (2.7.0): a fret or none (null) on
+    // each string, each note on a string of its own, the hand within four
+    // frets if it can be and as low and narrow as it can be. `pitches` are the open strings. null if the
+    // neck can't play it.
+    function fretsForVoicing(midis, pitches, frets) {
+        if (!midis.length || midis.length > pitches.length) return null;
+        const pick = new Array(pitches.length).fill(null);
+        let best = null;
+        const place = at => {
+            const fretted = pick.filter(fret => fret !== null && fret > 0);
+            const low = fretted.length ? Math.min(...fretted) : 0;
+            const width = fretted.length ? Math.max(...fretted) - low : 0;
+            // The hand's width alone, as low can only fall: four frets reach easily.
+            const reach = width * 4 + Math.max(0, width - SHAPE_SPAN + 1) * 30;
+            if (best && reach > best.cost) return;
+            if (at === midis.length) {
+                const cost = reach + low;
+                if (!best || cost < best.cost) best = { cost, frets: [...pick] };
+                return;
+            }
+            pitches.forEach((open, string) => {
+                const fret = midis[at] - open;
+                if (pick[string] !== null || fret < 0 || fret > frets) return;
+                pick[string] = fret;
+                place(at + 1);
+                pick[string] = null;
+            });
+        };
+        place(0);
+        return best ? best.frets : null;
+    }
+
     // How far a hand and its notes travel from one voicing to the next: the
     // notes paired from the top down, and on a neck the hand's move along it.
     function voicingDistance(a, b) {
@@ -854,7 +1099,7 @@ globalThis.MaestroHarmony = (() => {
 
     return {
         CIRCLE, circlePlace, chordOnCircle, keyHolds, findKey, pivotChords, bassLine, CADENCES, cadencesIn, keyIsMinor, modulationRoutes,
-        FORMULAS, OPEN_SHAPES, CHART_LIMITS, REPEAT_BAR,
+        FORMULAS, OPEN_SHAPES, CHART_LIMITS, REPEAT_BAR, VOICING_LOW, VOICING_HIGH, VOICING_MAX, isVoicing, staffLengths, keySignature, staffHands, chartScore, slotChord, slotVoicing, voicedSlot, isVoiced, moveVoicing, spellVoicing, fretsForVoicing, chartTooLarge, CHART_FORMAT_VOICED,
         formulaOf, parseChord, chordName, chordTones, isKey, placeInKey, isDiatonic, romanNumeral, nashville, chordFromNumeral,
         transposeChord, capoOptions, scalesForChord, guideTones, reharmonize, voiceChord, chartInForm, SHAPE_SPAN, chordShapes, keyVoicings, voicingDistance, smoothVoicings, cleanChart, chartTimeline, transposeChart, chartText, readChartText, CHART_FORMAT
     };

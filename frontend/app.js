@@ -5625,7 +5625,11 @@ const HELP_INSIDE = [
     [["Ctrl", "E"], "New calendar event"],
     [["Ctrl", "F"], "Search this page"],
     [["Ctrl", "Shift", "M"], "Start or stop the metronome, from any page"],
-    [["Space"], "Start or stop the metronome, on the Conservatory"],
+    [["Space"], "Start or stop the metronome, on the Conservatory (on its Quiz, hear the question again)"],
+    [["H"], "On the Quiz: hear the question again"],
+    [["N"], "On the Quiz: the next question"],
+    [["Ctrl", "Enter"], "On the Quiz: Check"],
+    [["1–7"], "On the Quiz, Progressions by ear: name a chord by its degree"],
     [["Enter"], "In Quick Notes' filter: the next match in the open note (Shift + Enter, the one before)"],
     [["F1"], "Open or close this help"],
     [["Esc"], "Close a dialog or the palette"]
