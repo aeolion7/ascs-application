@@ -132,7 +132,7 @@ $url = "file:///" + $smokePage.Replace('\', '/')
 # Virtual time, so the budget costs no real time. 2.2.0's checks wait for
 # things that move (counting, sliding), which outran 6 s.
 $process = Start-Process $edge -ArgumentList "--headless=new", "--disable-gpu", "--allow-file-access-from-files", "--user-data-dir=`"$work\edge`"", "--window-size=1600,1000",
-    "--virtual-time-budget=12000", "--dump-dom", $url -RedirectStandardOutput $dom -RedirectStandardError (Join-Path $work "smoke.err") -PassThru -NoNewWindow
+    "--virtual-time-budget=20000", "--dump-dom", $url -RedirectStandardOutput $dom -RedirectStandardError (Join-Path $work "smoke.err") -PassThru -NoNewWindow
 if (-not $process.WaitForExit(60000)) { $process.Kill(); throw "Edge timed out on the smoke test." }
 $html = Get-Content $dom -Raw -Encoding utf8
 $match = [regex]::Match($html, '<pre id="results">([\s\S]*?)</pre>')

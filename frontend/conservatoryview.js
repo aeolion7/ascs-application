@@ -128,11 +128,17 @@ function bookMetroClicks() {
         const counting = metro.countLeft > 0;
         const weight = counting ? (metro.position.sub ? 0 : 2) : MaestroMetronome.pulseWeight(metro.position, meter);
         const muted = !counting && MaestroMetronome.barIsMuted(metro.bars, metro.settings.gap);
-        if (!muted && !(counting && metro.position.sub)) playMetroClick(metro.nextAt, weight);
-        // Progressions (2.4.0) plays its chords on the beats, muted bars too.
-        if (!counting && !metro.position.sub) globalThis.bookProgressionBeat?.(metro.nextAt, metro.bars, metro.position.beat);
+        // The Rhythm tab's sequencer (2.6.0) may play without the clicks.
+        const quiet = !counting && globalThis.rhythmQuietsClick?.();
+        if (!muted && !quiet && !(counting && metro.position.sub)) playMetroClick(metro.nextAt, weight);
+        // Progressions (2.4.0) plays its chords on the beats, muted bars too,
+        // and the rhythms (2.6.0) their steps.
+        if (!counting && !metro.position.sub) {
+            globalThis.bookProgressionBeat?.(metro.nextAt, metro.bars, metro.position.beat);
+            globalThis.bookRhythmBeat?.(metro.nextAt, metro.bars, metro.position.beat);
+        }
         metro.booked.push({ at: metro.nextAt, beat: metro.position.beat, weight });
-        metro.nextAt += MaestroMetronome.secondsPerClick(metro.settings.tempo, count);
+        metro.nextAt += MaestroMetronome.clickGap(metro.settings.tempo, count, metro.settings.swing, metro.position.sub);
         const next = MaestroMetronome.advance(metro.position, meter, count);
         metro.position = next.position;
         if (next.barEnded) metroBarEnded();
@@ -171,6 +177,8 @@ async function startMetronome() {
         return;
     }
     metro.starting = false;
+    // One transport at a time: the Rhythm tab's trainer (2.6.0) has its own.
+    globalThis.stopRhythmTrainer?.();
     if (metro.settings.trainer.on) metro.settings.tempo = metro.settings.trainer.from;
     metro.running = true;
     metro.run = metro.context.createGain();
@@ -198,6 +206,7 @@ function stopMetronome() {
     metro.run?.disconnect();
     metro.run = null;
     globalThis.progressionStopped?.();
+    globalThis.rhythmStopped?.();
     restConsAudio();
     saveMetroSettings();
     renderMetro();
@@ -239,6 +248,7 @@ function metroFrame() {
     if (!metro.running || !metroLightsShown()) return;
     lightDueMetroBeat();
     globalThis.lightDueProgression?.();
+    globalThis.lightDueRhythm?.();
     metro.frame = requestAnimationFrame(metroFrame);
 }
 
@@ -352,11 +362,13 @@ function renderMetroTrainer() {
     const parts = [];
     if (metro.running) {
         if (metro.countLeft > 0) parts.push("Counting in");
+        if (metro.settings.swing > 50 && ["eighth", "sixteenth"].includes(metro.settings.count)) parts.push("Swing");
         if (trainer.on) parts.push(text);
         if (gap.on && metro.countLeft === 0 && MaestroMetronome.barIsMuted(metro.bars, gap)) parts.push("Muted bar");
         else if (gap.on && !trainer.on && metro.countLeft === 0) parts.push("Muted bars");
     } else {
         if (countIn) parts.push("Count-in");
+        if (metro.settings.swing > 50) parts.push("Swing");
         if (trainer.on) parts.push(`${trainer.from}–${trainer.to}`);
         if (gap.on) parts.push("Muted bars");
     }
@@ -369,6 +381,7 @@ function renderMetroTrainer() {
 function renderMetroTrainerFields() {
     const { trainer, gap } = metro.settings;
     $("metroCountIn").value = String(metro.settings.countIn);
+    $("metroSwing").value = String(metro.settings.swing);
     $("metroGapOn").checked = gap.on;
     for (const key of ["play", "mute"]) {
         const field = $(`metroGap${key[0].toUpperCase()}${key.slice(1)}`);
@@ -468,6 +481,13 @@ $("metroCount").addEventListener("change", () => {
     metro.position = { beat: metro.position.beat, sub: 0 };
     saveMetroSettings();
 });
+$("metroSwing").addEventListener("change", () => {
+    const swing = Number($("metroSwing").value);
+    if (!MaestroMetronome.SWINGS.some(([value]) => value === swing)) return;
+    metro.settings.swing = swing;
+    saveMetroSettings();
+    renderMetroTrainer();
+});
 $("metroSound").addEventListener("change", () => {
     if (!Object.hasOwn(MaestroMetronome.SOUNDS, $("metroSound").value)) return;
     metro.settings.sound = $("metroSound").value;
@@ -506,6 +526,11 @@ $("metroMeter").replaceChildren(...MaestroMetronome.METER_GROUPS.map(([family, m
 $("metroCount").replaceChildren(...Object.entries(MaestroMetronome.COUNT_LABELS).map(([value, label]) => {
     const option = element("option", "", label);
     option.value = value;
+    return option;
+}));
+$("metroSwing").replaceChildren(...MaestroMetronome.SWINGS.map(([value, label]) => {
+    const option = element("option", "", value === 50 ? label : `${label} (${value}%)`);
+    option.value = String(value);
     return option;
 }));
 $("metroSound").replaceChildren(...Object.entries(MaestroMetronome.SOUNDS).map(([value, label]) => {

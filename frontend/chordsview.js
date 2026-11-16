@@ -333,6 +333,9 @@ function renderChordPanel() {
     $("consChordSave").textContent = chords.editing >= 0 ? "Save changes" : "Save chord";
     $("consChordSave").disabled = !notes.length || (!name && !chords.label) || chordTypedWrong() || chords.library === null;
     $("consChordSaveNew").hidden = chords.editing < 0;
+    // A saved chord open: a link to it for Quick Notes (2.6.0).
+    const savedOpen = chords.library?.[chords.editing];
+    $("consChordLink").hidden = !savedOpen || !(savedOpen.name || savedOpen.label);
     $("consChordSaveNew").disabled = $("consChordSave").disabled;
     $("consChordStrum").disabled = $("consChordClear").disabled = !notes.length && chords.editing < 0;
     $("consChordStrum").textContent = consChordVerb();
@@ -367,7 +370,7 @@ function renderChordPanel() {
         return button;
     }));
     $("consChordNote").textContent = !notes.length
-        ? (consKeyboard() ? "Click keys to build a chord, and again to drop one." : "Click a fret on each string you'd play. Click the nut for an open string, and a note again to leave its string out.")
+        ? ""
         : chordTypedWrong() ? `"${chords.typed}" isn't a chord symbol. Name it as one, like E7#9 or C/E, and put other words in the label.`
         : chords.typed ? "Your name is kept. Clear it to use the one found."
         : readings.length ? "Named from its notes. Type a name, or pick a reading."
@@ -417,7 +420,7 @@ function renderChordLibrary() {
             const tuning = MaestroMusic.tuningsFor(instrument, cons.settings.own).find(each => each.pitches.join(" ") === chord.tuning.join(" "));
             if (tuning?.id !== chordTuning().id) label.append(element("span", "cons-saved-tuning", tuning ? `In ${tuning.label}` : "In a tuning since deleted"));
         }
-        const remove = element("button", "quiet cons-saved-delete");
+        const remove = element("button", "cons-saved-delete");
         remove.type = "button";
         remove.dataset.savedDelete = String(index);
         remove.setAttribute("aria-label", `Delete ${savedTitle(chord)}`);
@@ -594,6 +597,7 @@ function receiveChords(items) {
         .map(chord => chord.name ? chord : { ...chord, name: MaestroMusic.findChords([...new Set(MaestroMusic.savedChordNotes(chord).map(midi => midi % 12))])[0]?.name ?? "" });
     if (chords.editing >= chords.library.length) chords.editing = -1;
     if (consSections.current() === "chords") renderChordPanel();
+    globalThis.resolveMusicLink?.();
 }
 
 // ---- Wiring
@@ -616,6 +620,10 @@ $("consChordLabel").addEventListener("keydown", event => {
 $("consChordSave").addEventListener("click", () => saveChord(false));
 $("consChordSaveNew").addEventListener("click", () => saveChord(true));
 $("consChordStrum").addEventListener("click", () => pluckConsNotes(chordNotes(), consChordSpread()));
+$("consChordLink").addEventListener("click", () => {
+    const chord = chords.library?.[chords.editing];
+    if (chord && savedTitle(chord)) copyMusicLink(chord.label ? `${chord.name ? `${chord.name} ` : ""}${chord.name ? `(${chord.label})` : chord.label}` : chord.name, { kind: "chord", instrument: chord.instrument, name: savedTitle(chord) });
+});
 $("consChordClear").addEventListener("click", () => {
     clearChord();
     renderChords();
@@ -677,5 +685,3 @@ $("consNeck").addEventListener("wheel", event => {
     chords.wheel -= steps * CHORD_WHEEL_STEP;
     moveChordFrets(steps);
 }, { passive: false });
-
-if (consSections.current() === "chords") renderConservatory();

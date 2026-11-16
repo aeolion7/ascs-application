@@ -131,10 +131,14 @@ globalThis.MaestroNotation = (() => {
 
     // ---- Time
 
-    // Durations in eighth notes: whole, half, quarter, eighth; dotted is half
-    // as long again (a dotted eighth isn't written).
-    const DURATIONS = Object.freeze({ w: 8, h: 4, q: 2, e: 1 });
-    const DURATION_NAMES = Object.freeze({ w: "whole", h: "half", q: "quarter", e: "eighth" });
+    // Durations in eighth notes: whole, half, quarter, eighth, and since 2.6.0
+    // sixteenth, thirty-second and sixty-fourth (s, t, f), as halves, quarters
+    // and eighths of an eighth, which are exact as numbers. Dotted is half as
+    // long again; a sixty-fourth isn't dotted.
+    const DURATIONS = Object.freeze({ w: 8, h: 4, q: 2, e: 1, s: 0.5, t: 0.25, f: 0.125 });
+    const DURATION_NAMES = Object.freeze({ w: "whole", h: "half", q: "quarter", e: "eighth", s: "sixteenth", t: "thirty-second", f: "sixty-fourth" });
+    // The beams (or flags) each value has.
+    const BEAMS = Object.freeze({ e: 1, s: 2, t: 3, f: 4 });
     const lengthOf = note => DURATIONS[note.d] * (note.dot ? 1.5 : 1);
     const barLength = meter => meter.beats * 8 / meter.unit;
 
@@ -251,7 +255,7 @@ globalThis.MaestroNotation = (() => {
                 const notes = [];
                 for (const note of voice.notes) {
                     if (!note || !Object.hasOwn(DURATIONS, note.d)) return null;
-                    if (note.dot && note.d === "e") return null;
+                    if (note.dot && note.d === "f") return null;
                     if (note.p !== null && note.p !== undefined && !isPitch(note.p)) return null;
                     const p = note.p ? pitch(note.p.step, note.p.alter) : null;
                     notes.push(Object.freeze({ p, d: note.d, dot: Boolean(note.dot), tie: Boolean(note.tie && p) }));
@@ -276,17 +280,23 @@ globalThis.MaestroNotation = (() => {
         treble: "\uE050", bass: "\uE062", brace: "\uE000",
         whole: "\uE0A2", half: "\uE0A3", black: "\uE0A4",
         flagUp: "\uE240", flagDown: "\uE241", dot: "\uE1E7",
-        restw: "\uE4E3", resth: "\uE4E4", restq: "\uE4E5", reste: "\uE4E6",
+        // Flags by beams: an eighth's, a sixteenth's, a thirty-second's, a sixty-fourth's.
+        flagsUp: ["", "\uE240", "\uE242", "\uE244", "\uE246"], flagsDown: ["", "\uE241", "\uE243", "\uE245", "\uE247"],
+        restw: "\uE4E3", resth: "\uE4E4", restq: "\uE4E5", reste: "\uE4E6", rests: "\uE4E7", restt: "\uE4E8", restf: "\uE4E9",
         "-2": "\uE264", "-1": "\uE260", "0": "\uE261", "1": "\uE262", "2": "\uE263",
         digits: ["\uE080", "\uE081", "\uE082", "\uE083", "\uE084", "\uE085", "\uE086", "\uE087", "\uE088", "\uE089"]
     });
-    const HEAD_WIDTH = Object.freeze({ w: 1.69 * SPACE, h: 1.18 * SPACE, q: 1.18 * SPACE, e: 1.18 * SPACE });
+    const HEAD_WIDTH = Object.freeze({ w: 1.69 * SPACE, h: 1.18 * SPACE, q: 1.18 * SPACE, e: 1.18 * SPACE, s: 1.18 * SPACE, t: 1.18 * SPACE, f: 1.18 * SPACE });
+    // Each beam (or flag) past the second lengthens a stem by this much.
+    const BEAM_STEP = 0.75 * SPACE;
+    const stemExtra = d => Math.max(0, (BEAMS[d] ?? 0) - 2) * BEAM_STEP;
     const STEM = 3.5 * SPACE;
     const STAFF_BOTTOM = Object.freeze({ treble: 30, bass: 18 });   // E4 and G2, as steps
     const HEADER_CLEF = 4.5;                         // spaces from the system's left to what follows the clef
 
-    // How much room a note's column takes, by the shortest note starting there.
-    const columnWidth = eighths => SPACE * (2.4 + 1.5 * Math.log2(eighths));
+    // How much room a note's column takes, by the shortest note starting there
+    // (anything shorter than an eighth, room enough for a head and its flag).
+    const columnWidth = eighths => SPACE * (eighths >= 1 ? 2.4 + 1.5 * Math.log2(eighths) : 2.3);
 
     // Lays a score out in systems no wider than maxWidth (one long system if
     // none), with room (in units) left under each for what's written beneath. Returns { width, height, items, heads, columns, systems }: items
@@ -354,6 +364,8 @@ globalThis.MaestroNotation = (() => {
         const items = [];
         const heads = [];
         const columns = [];
+        const barSpans = [];     // each bar's left and right edge on its line (2.6.0)
+        const rests = [];        // each unwritten note's rest, where it's drawn (2.6.0)
         const line = (x1, y1, x2, y2, kind) => items.push({ kind: "line", x1, y1, x2, y2, class: kind });
         const glyph = (character, x, y, kind = "glyph", extra = {}) => items.push({ kind: "glyph", text: character, x, y, class: kind, ...extra });
         const braceRoom = staffCount > 1 ? 2 * SPACE : 0;
@@ -411,7 +423,9 @@ globalThis.MaestroNotation = (() => {
                     moment.system = systemIndex;
                     columns.push({ time: moment.time, x: moment.x, system: systemIndex });
                 });
+                const barStart = x;
                 x += barWidths[bar] * system.stretch;
+                barSpans.push({ bar, system: systemIndex, x1: barStart, x2: x });
                 const last = bar === barCount - 1;
                 if (last) {
                     line(x - 0.75 * SPACE, bottoms[0] - 4 * SPACE, x - 0.75 * SPACE, bottoms.at(-1), "bar-line");
@@ -431,11 +445,12 @@ globalThis.MaestroNotation = (() => {
             const shared = voicesOnStaff(voice.staff) > 1;
             const bottomStep = STAFF_BOTTOM[voice.clef];
             placed[v] = [];
-            // Eighths in the same beat are beamed in pairs (threes in eighths meters).
+            // Eighths and shorter in the same beat are beamed (a beat is three
+            // eighths in eighths meters).
             const beat = score.meter.unit === 8 ? 3 : 2;
             const groups = [];
             entries[v].forEach(entry => {
-                if (entry.note.d !== "e" || !entry.note.p) return;
+                if (!BEAMS[entry.note.d] || !entry.note.p) return;
                 const group = groups.at(-1);
                 const sameBeat = group && Math.floor(group.at(-1).onset / beat) === Math.floor(entry.onset / beat) && group.at(-1).onset + group.at(-1).length === entry.onset;
                 if (sameBeat) group.push(entry);
@@ -455,6 +470,7 @@ globalThis.MaestroNotation = (() => {
                     glyph(GLYPHS[`rest${note.d}`], moment.x, y - 2 * SPACE - lift + LIFT, "staff-glyph");
                     if (note.dot) glyph(GLYPHS.dot, moment.x + headWidth + 0.6 * SPACE, y - 2.5 * SPACE - lift + LIFT, "staff-glyph");
                     placed[v][entry.index] = { x: moment.x, y: y - 2 * SPACE - lift, up: true, system: moment.system, headWidth, rest: true };
+                    rests.push({ voice: v, index: entry.index, x: moment.x, y: y - 2 * SPACE - lift, system: moment.system });
                     return;
                 }
                 const position = note.p.step - bottomStep;
@@ -476,21 +492,29 @@ globalThis.MaestroNotation = (() => {
                 if (note.dot) glyph(GLYPHS.dot, headX + headWidth + 0.5 * SPACE, centerY - (position % 2 === 0 ? SPACE / 2 : 0) + LIFT, "staff-glyph");
                 const middle = y - 2 * SPACE;
                 const stemX = up ? headX + headWidth - 0.06 * SPACE : headX + 0.06 * SPACE;
-                let stemEnd = up ? Math.min(centerY - STEM, shared ? centerY - STEM : middle) : Math.max(centerY + STEM, shared ? centerY + STEM : middle);
+                const stem = STEM + stemExtra(note.d);
+                let stemEnd = up ? Math.min(centerY - stem, shared ? centerY - stem : middle) : Math.max(centerY + stem, shared ? centerY + stem : middle);
                 placed[v][entry.index] = { x: headX, y: centerY, up, system: moment.system, headWidth, stemX, stemEnd };
                 if (note.d !== "w" && !beamed.has(entry.index)) {
                     line(stemX, centerY, stemX, stemEnd, "staff-stem");
-                    if (note.d === "e") glyph(up ? GLYPHS.flagUp : GLYPHS.flagDown, stemX - 0.06 * SPACE, stemEnd + LIFT - 2 * SPACE + (up ? 0 : 0), "staff-glyph");
+                    // A flag hangs from the stem's end: its origin there, lifted as every glyph is (2.6.0; it sat two spaces off).
+                    if (BEAMS[note.d]) glyph((up ? GLYPHS.flagsUp : GLYPHS.flagsDown)[BEAMS[note.d]], stemX - 0.06 * SPACE, stemEnd + LIFT, "staff-glyph");
                 }
                 heads.push({ voice: v, index: entry.index, x: headX, y: centerY, system: moment.system });
             });
 
-            // Beams: one stem direction for the group, the beam level at its outermost end.
+            // Beams: one stem direction for the group, the beam level at its
+            // outermost end. A sixteenth's second beam (a thirty-second's third,
+            // a sixty-fourth's fourth) joins the notes beside it that have one
+            // too; a note alone at its level has a short beam toward its
+            // neighbor: back from the group's last, forward from the rest.
             groups.filter(group => group.length > 1).forEach(group => {
                 const spots = group.map(entry => placed[v][entry.index]);
                 if (new Set(spots.map(spot => spot.system)).size > 1) return;
+                const levels = group.map(entry => BEAMS[entry.note.d]);
+                const extra = Math.max(...group.map(entry => stemExtra(entry.note.d)));
                 const up = shared ? voice.voiceIndex === 0 : spots.reduce((sum, spot) => sum + (spot.y - systems[spot.system].staffY[voice.staff] + 2 * SPACE), 0) > 0;
-                const ends = spots.map(spot => up ? spot.y - STEM : spot.y + STEM);
+                const ends = spots.map(spot => up ? spot.y - STEM - extra : spot.y + STEM + extra);
                 const level = up ? Math.min(...ends) : Math.max(...ends);
                 spots.forEach(spot => {
                     const stemX = up ? spot.x + spot.headWidth - 0.06 * SPACE : spot.x + 0.06 * SPACE;
@@ -499,7 +523,25 @@ globalThis.MaestroNotation = (() => {
                     spot.stemEnd = level;
                     line(stemX, spot.y, stemX, level, "staff-stem");
                 });
-                items.push({ kind: "beam", x1: spots[0].stemX, x2: spots.at(-1).stemX, y1: up ? level : level - 0.5 * SPACE, y2: up ? level : level - 0.5 * SPACE, thickness: 0.5 * SPACE, class: "staff-beam" });
+                const beam = (x1, x2, depth) => {
+                    const y = up ? level + depth * BEAM_STEP : level - 0.5 * SPACE - depth * BEAM_STEP;
+                    items.push({ kind: "beam", x1, x2, y1: y, y2: y, thickness: 0.5 * SPACE, class: "staff-beam" });
+                };
+                beam(spots[0].stemX, spots.at(-1).stemX, 0);
+                const stub = 1.1 * SPACE;
+                for (let depth = 1; depth < Math.max(...levels); depth++) {
+                    let start = -1;
+                    for (let at = 0; at <= group.length; at++) {
+                        const has = at < group.length && levels[at] > depth;
+                        if (has && start < 0) start = at;
+                        if (has || start < 0) continue;
+                        const last = at - 1;
+                        if (last > start) beam(spots[start].stemX, spots[last].stemX, depth);
+                        else if (start === group.length - 1) beam(spots[start].stemX - stub, spots[start].stemX, depth);
+                        else beam(spots[start].stemX, spots[start].stemX + stub, depth);
+                        start = -1;
+                    }
+                }
             });
 
             // Ties, curved away from the stems; one crossing a system's end is drawn in two halves.
@@ -520,7 +562,7 @@ globalThis.MaestroNotation = (() => {
             });
         });
 
-        return { width, height: top - 2 * SPACE + SPACE, room, items, heads, columns, systems: systems.map(system => ({ top: system.top, bottom: system.bottom, staffY: system.staffY, left: system.left, right: system.right, bars: system.bars })), space: SPACE, font: FONT };
+        return { width, height: top - 2 * SPACE + SPACE, room, items, heads, rests, columns, barSpans, systems: systems.map(system => ({ top: system.top, bottom: system.bottom, staffY: system.staffY, left: system.left, right: system.right, bars: system.bars })), space: SPACE, font: FONT };
     }
 
     // A tie as a filled crescent from x1 to x2 at y, bowing by bow.
@@ -530,6 +572,12 @@ globalThis.MaestroNotation = (() => {
         const r = value => Math.round(value * 10) / 10;
         return `M${r(x1)} ${r(y)}Q${r(middle)} ${r(y + bow + thick)} ${r(x2)} ${r(y)}Q${r(middle)} ${r(y + bow)} ${r(x1)} ${r(y)}Z`;
     }
+
+    // MusicXML's divisions a quarter (2.6.0: 16, so a sixty-fourth is one; 2
+    // before), and its names for the values.
+    const XML_DIVISIONS = 16;
+    const XML_PER_EIGHTH = XML_DIVISIONS / 2;
+    const XML_TYPES = Object.freeze({ w: "whole", h: "half", q: "quarter", e: "eighth", s: "16th", t: "32nd", f: "64th" });
 
     // ---- MusicXML (4.0, partwise): a part per staff, its voices one after
     // another in each measure. Durations count eighths, so a quarter is 2.
@@ -560,14 +608,14 @@ globalThis.MaestroNotation = (() => {
                 out.push(`    <measure number="${bar + 1}">`);
                 if (bar === 0) {
                     out.push("      <attributes>");
-                    out.push("        <divisions>2</divisions>");
+                    out.push(`        <divisions>${XML_DIVISIONS}</divisions>`);
                     out.push(`        <key><fifths>${score.key.fifths}</fifths><mode>${score.key.mode}</mode></key>`);
                     out.push(`        <time><beats>${score.meter.beats}</beats><beat-type>${score.meter.unit}</beat-type></time>`);
                     out.push(staff.clef === "treble" ? "        <clef><sign>G</sign><line>2</line></clef>" : "        <clef><sign>F</sign><line>4</line></clef>");
                     out.push("      </attributes>");
                 }
                 staff.voices.forEach((voice, voiceIndex) => {
-                    if (voiceIndex > 0) out.push(`      <backup><duration>${size}</duration></backup>`);
+                    if (voiceIndex > 0) out.push(`      <backup><duration>${size * XML_PER_EIGHTH}</duration></backup>`);
                     const inBar = voiceBars[voiceIndex][bar] ?? [];
                     let filled = 0;
                     for (const { note, index } of inBar) {
@@ -577,10 +625,10 @@ globalThis.MaestroNotation = (() => {
                             const letter = LETTERS[letterOf(note.p.step)];
                             parts.push(`<pitch><step>${letter}</step>${note.p.alter ? `<alter>${note.p.alter}</alter>` : ""}<octave>${octaveOf(note.p.step)}</octave></pitch>`);
                         } else parts.push("<rest/>");
-                        parts.push(`<duration>${lengthOf(note)}</duration>`);
+                        parts.push(`<duration>${lengthOf(note) * XML_PER_EIGHTH}</duration>`);
                         if (held) parts.push('<tie type="stop"/>');
                         if (note.tie && note.p) parts.push('<tie type="start"/>');
-                        parts.push(`<voice>${voiceIndex + 1}</voice>`, `<type>${DURATION_NAMES[note.d]}</type>`);
+                        parts.push(`<voice>${voiceIndex + 1}</voice>`, `<type>${XML_TYPES[note.d]}</type>`);
                         if (note.dot) parts.push("<dot/>");
                         if (note.p && staff.voices.length > 1) parts.push(`<stem>${voiceIndex === 0 ? "up" : "down"}</stem>`);
                         const tied = [held ? '<tied type="stop"/>' : "", note.tie && note.p ? '<tied type="start"/>' : ""].join("");
@@ -589,7 +637,7 @@ globalThis.MaestroNotation = (() => {
                         filled += lengthOf(note);
                     }
                     // A bar the voice hasn't reached yet is a rest; a short last bar is filled out with one.
-                    if (filled < size) out.push(`      <forward><duration>${size - filled}</duration><voice>${voiceIndex + 1}</voice></forward>`);
+                    if (filled < size) out.push(`      <forward><duration>${(size - filled) * XML_PER_EIGHTH}</duration><voice>${voiceIndex + 1}</voice></forward>`);
                 });
                 if (bar === barCount - 1) out.push('      <barline location="right"><bar-style>light-heavy</bar-style></barline>');
                 out.push("    </measure>");
@@ -601,7 +649,7 @@ globalThis.MaestroNotation = (() => {
     }
 
     return Object.freeze({
-        LETTERS, NATURAL, MODES, DURATIONS, DURATION_NAMES, GLYPHS, SPACE, FONT, LIFT, HEAD_WIDTH, STAFF_BOTTOM, LOWEST_STEP, HIGHEST_STEP, NOTES_MAX, TITLE_MAX,
+        LETTERS, NATURAL, MODES, DURATIONS, DURATION_NAMES, BEAMS, GLYPHS, SPACE, FONT, LIFT, HEAD_WIDTH, STAFF_BOTTOM, LOWEST_STEP, HIGHEST_STEP, NOTES_MAX, TITLE_MAX,
         pitch, isPitch, midiOf, parsePitch, pitchName, pitchLetterName, keyFifths, keyTonic, tonicLetter, keyAlter, signature, pitchFromMidi, interval,
         lengthOf, barLength, bars, voicesOf, timed, slices, soundingEvents, shownAccidentals, cleanScore, engrave, musicXml
     });

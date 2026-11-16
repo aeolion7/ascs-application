@@ -533,10 +533,6 @@
   margin: 0 auto 0 8px;
 }
 
-#consFinderHint[hidden] {
-  display: none;
-}
-
 /* Quiz: the kind heads its module, its options in a chip beside it. */
 :root .cons-quiz-head {
   justify-content: flex-start;

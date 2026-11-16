@@ -14,6 +14,14 @@
         errors.push(`Unhandled rejection: ${event.reason?.message || event.reason}`);
     });
     window.chrome = window.chrome || {};
+    // 2.6.0: the page starts on the Conservatory's section last open, drawn
+    // once every script has run (Counterpoint's was left as bare markup).
+    const startedCons = localStorage.getItem("maestro.conservatory");
+    try {
+        localStorage.setItem("maestro.conservatory", JSON.stringify({ ...JSON.parse(startedCons || "{}"), tab: "counterpoint" }));
+    } catch {
+        localStorage.setItem("maestro.conservatory", JSON.stringify({ tab: "counterpoint" }));
+    }
     // As in the real app, AHK can answer Ready before the page's later scripts
     // have run. A reply handled then calls functions that don't exist yet.
     const listeners = [];
@@ -43,6 +51,8 @@
 
     window.addEventListener("load", () => setTimeout(() => {
         const checks = [["the page loads without errors", errors.splice(0)]];
+        checks.push(["a section open at start is drawn", $("cpTitleText").textContent.trim() && $("cpFacts").textContent.trim() && $("cpStaff").querySelector("svg") && $("cpVoices").children.length ? [] : [`title "${$("cpTitleText").textContent}"`]]);
+        if (startedCons === null) localStorage.removeItem("maestro.conservatory"); else localStorage.setItem("maestro.conservatory", startedCons);
         checks.push(["replies that arrive before the last script still draw the notes list", $("notesList").textContent.includes("Early note") ? [] : ["list is empty"]]);
         const views = [...new Set([...document.querySelectorAll("[data-view]")].map(node => node.dataset.view))];
         checks.push(["every view is reachable", views.length >= 9 ? [] : [`only ${views.length} views found`]]);
@@ -126,9 +136,9 @@
             // audio, so nothing sounds. Clicks are counted as they're booked.
             {
                 const heard = { clicks: 0, suspended: 0, resumed: 0, sources: [] };
-                class FakeParam { setValueAtTime() {} exponentialRampToValueAtTime() {} setTargetAtTime(value) { this.target = value; } cancelScheduledValues() {} }
+                class FakeParam { setValueAtTime() {} exponentialRampToValueAtTime() {} linearRampToValueAtTime() {} setTargetAtTime(value) { this.target = value; } cancelScheduledValues() {} }
                 class FakeNode {
-                    constructor() { this.gain = new FakeParam(); this.frequency = new FakeParam(); this.frequency.value = 0; this.playbackRate = { value: 1 }; }
+                    constructor() { this.gain = new FakeParam(); this.frequency = new FakeParam(); this.frequency.value = 0; this.Q = new FakeParam(); this.playbackRate = { value: 1 }; }
                     connect(node) { return node; }
                     disconnect() {}
                     addEventListener(type, listener) { (this.listeners ??= {})[type] = listener; }
@@ -498,10 +508,9 @@
                         const pickedBefore5 = finder.picked;
                         finder.picked = [];
                         renderFinder();
-                        checks.push(["Finder: how to pick shows until a note is picked, Strum and Clear head the chords", !$("consFinderHint").hidden && $("consPickStrum").closest(".cons-finder-head") && $("consPickClear").classList.contains("link-button") ? [] : ["hidden"]]);
+                        checks.push(["Finder: Strum and Clear head the chords, with no how-to text", !$("consFinderHint") && $("consPickStrum").closest(".cons-finder-head") && $("consPickClear").classList.contains("link-button") ? [] : ["hidden"]]);
                         finder.picked = [{ string: 4, fret: 3, midi: 48 }];
                         renderFinder();
-                        checks.push(["and goes once one is", $("consFinderHint").hidden ? [] : ["shown"]]);
                         finder.picked = pickedBefore5;
                         renderFinder();
                         consSections.show("quiz");
@@ -532,7 +541,12 @@
                         const scaleBefore = heard.clicks;
                         $("consPlayScale").click();
                         await pause(40);
-                        checks.push(["Play scale plays it up an octave and back", heard.clicks - scaleBefore === 15 && $("consPlayScale").textContent === "Stop" ? [] : [heard.clicks - scaleBefore]]);
+                        checks.push(["Play scale plays it up an octave and back, the first notes booked ahead (2.6.0: as it goes)", cons.scalePlay?.run?.events.length === 15 && heard.clicks > scaleBefore && $("consPlayScale").textContent === "Stop" ? [] : [cons.scalePlay?.run?.events.length, heard.clicks - scaleBefore]]);
+                        const firstBooked = cons.scalePlay.run.next;
+                        setMetroTempo(metro.settings.tempo * 2);
+                        await pause(120);
+                        checks.push(["a faster tempo takes hold as it plays (2.6.0)", cons.scalePlay.run.tempo === metro.settings.tempo && cons.scalePlay.run.next >= firstBooked ? [] : [cons.scalePlay.run.tempo]]);
+                        setMetroTempo(metro.settings.tempo / 2);
                         $("consPlayScale").click();
                         checks.push(["and Stop stops it", cons.scalePlay === null && $("consPlayScale").textContent === "Play scale" ? [] : ["playing"]]);
                         navigate("notes");
@@ -796,6 +810,115 @@
                         consSections.show("scales");
                         await pause(QUIZ_NEXT_AFTER + 100);
                         checks.push(["leaving Quiz, the next question waits", quiz.answered !== null ? [] : ["moved on"]]);
+                        // 2.6.0: melodies by ear, rhythms by ear and reading.
+                        consSections.show("quiz");
+                        document.querySelector('#consQuizKind [data-quiz="melody"]').click();
+                        const tune = quiz.question;
+                        const N = MaestroNotation;
+                        const written = () => quiz.notes.map(p => (p ? N.pitchName(p) : "-")).join(" ");
+                        const quizStaff = $("consQuizMelodyStaff");
+                        // Where a pitch at a note's place is, on the staff as drawn.
+                        const quizPoint = (index, p, extra = {}) => {
+                            const box = quizStaff.querySelector("svg").getBoundingClientRect();
+                            const drawn = quiz.drawn;
+                            const column = drawn.columns.find(each => each.time === index * 2);
+                            const y = drawn.systems[column.system].staffY[0] - (p.step - N.STAFF_BOTTOM.treble) * drawn.space / 2;
+                            return { clientX: box.left + (column.x + 0.75 * drawn.space) / drawn.width * box.width, clientY: box.top + y / drawn.height * box.height, bubbles: true, ...extra };
+                        };
+                        const quizKey = (key, extra = {}) => quizStaff.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...extra }));
+                        checks.push(["2.6.0: Melodies by ear, written on a staff: the first note given, the rest to write, no names to click, Check off until all are written", $("consQuizAnswers").hidden && $("consQuizLine").hidden && !$("consQuizMelodyBox").hidden && quizStaff.querySelector("svg .staff-glyph") && $("consQuizMelodyPlayed").hidden && quiz.notes.length === tune.midis.length && N.midiOf(quiz.notes[0]) === tune.midis[0] && quiz.notes.slice(1).every(p => p === null) && !$("consQuizCheck").hidden && $("consQuizCheck").disabled && !$("consQuizUndo").hidden && $("consQuizUndo").disabled && quizStaff.querySelector(".cp-ring.is-selected.is-rest") && !$("consQuizMelodyField").hidden && $("consQuizChordsField").hidden && $("consQuizTitle").textContent === "Melodies by Ear" && $("consQuizOptionsName").textContent === `${cons.settings.quizMelody} notes` ? [] : [written(), $("consQuizCheck").disabled]]);
+                        checks.push(["its notes spelled in the key, the tonic from C4 to B4", tune.tonic >= 60 && tune.tonic <= 71 && tune.pitches.every((p, at) => N.midiOf(p) === tune.midis[at] && N.pitchLetterName(p) === tune.names[at]) ? [] : [tune.pitches.map(N.pitchName).join(" "), tune.names.join(" ")]]);
+                        await pause(40);
+                        const tuneBefore = heard.clicks;
+                        $("consQuizHear").click();
+                        await pause(60);
+                        checks.push(["Hear it plays the key's chord first", heard.clicks - tuneBefore >= 3 ? [] : [heard.clicks - tuneBefore]]);
+                        // A click on the staff writes there, heard, and the next note is selected.
+                        quizStaff.dispatchEvent(new PointerEvent("pointermove", quizPoint(1, tune.pitches[1])));
+                        // The frame it waits for, drawn now (headless Edge may hold frames back).
+                        cancelAnimationFrame(quizGhost.frame);
+                        drawQuizGhost();
+                        checks.push(["the pointer's note shows where a click would write", quizStaff.querySelector(".cp-ghost") ? [] : ["no ghost"]]);
+                        quizStaff.dispatchEvent(new PointerEvent("pointerleave", { bubbles: false }));
+                        checks.push(["and goes when it leaves", !quizStaff.querySelector(".cp-ghost") ? [] : ["ghost"]]);
+                        quizStaff.dispatchEvent(new MouseEvent("click", quizPoint(1, tune.pitches[1])));
+                        checks.push(["a click on the staff writes the note there, in the key, the next selected, Undo on", N.midiOf(quiz.notes[1] ?? N.pitch(0)) === tune.midis[1] && quiz.at === 2 && !$("consQuizUndo").disabled && quizStaff.querySelectorAll(".cp-ring.is-selected").length === 1 ? [] : [written(), quiz.at]]);
+                        quizStaff.dispatchEvent(new MouseEvent("contextmenu", quizPoint(1, tune.pitches[1], { button: 2, cancelable: true })));
+                        checks.push(["a right-click clears it", quiz.notes[1] === null && quiz.at === 1 ? [] : [written()]]);
+                        $("consQuizUndo").click();
+                        checks.push(["and Undo brings it back", N.midiOf(quiz.notes[1] ?? N.pitch(0)) === tune.midis[1] ? [] : [written()]]);
+                        // The neck (or keys) writes the next note at the pitch clicked.
+                        selectQuizNote(2);
+                        consNeckModes.quiz.click(tune.midis[2]);
+                        checks.push(["a click on the neck writes the next note at that pitch", N.midiOf(quiz.notes[2] ?? N.pitch(0)) === tune.midis[2] && quiz.at === 3 ? [] : [written(), quiz.at]]);
+                        // Keys on the staff: a letter, a step, a half step, Delete, Backspace to undo.
+                        quizStaff.focus();
+                        const third = tune.pitches[3];
+                        quizKey(N.LETTERS[((third.step % 7) + 7) % 7].toLowerCase());
+                        const lettered = quiz.notes[3];
+                        checks.push(["a letter writes that letter in the key, near the note before", lettered && ((lettered.step - third.step) % 7 === 0) && lettered.alter === third.alter && Math.abs(lettered.step - quiz.notes[2].step) <= 3 ? [] : [written()]]);
+                        selectQuizNote(3);
+                        quizKey("ArrowUp");
+                        const raised = quiz.notes[3];
+                        quizKey("ArrowDown");
+                        quizKey("ArrowUp", { shiftKey: true });
+                        const sharpened = quiz.notes[3];
+                        checks.push(["Up moves it a step, Down back, Shift and Up a half step", raised.step === lettered.step + 1 && sharpened.step === lettered.step && sharpened.alter === lettered.alter + 1 ? [] : [written()]]);
+                        quizKey("Delete");
+                        checks.push(["Delete clears it", quiz.notes[3] === null ? [] : [written()]]);
+                        quizStaff.dispatchEvent(new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true }));
+                        checks.push(["Backspace undoes", N.isPitch(quiz.notes[3]) ? [] : [written()]]);
+                        // All of it written, the last an octave off: wrong at the pitch heard.
+                        selectQuizNote(3);
+                        tune.midis.slice(3).forEach((midi, at) => consNeckModes.quiz.click(at === tune.midis.length - 4 ? midi + 12 : midi));
+                        checks.push(["once all are written, Check is on", quiz.notes.every(Boolean) && !$("consQuizCheck").disabled ? [] : [written()]]);
+                        const octaveRight = quiz.right;
+                        $("consQuizCheck").click();
+                        checks.push(["an octave off is wrong: ringed, the melody as played shown, the score kept", quiz.answered !== null && quiz.right === octaveRight && quizStaff.querySelectorAll(".cp-ring.is-wrong").length === 1 && quizStaff.querySelectorAll(".cp-ring.is-right").length === tune.midis.length - 2 && !$("consQuizMelodyPlayed").hidden && $("consQuizMelodyPlayedStaff").querySelector("svg") && new RegExp(`^${tune.midis.length - 2} of ${tune.midis.length - 1} notes right: it's .+ in .+ major\\. Click Next`).test($("consQuizResult").textContent) && $("consQuizCheck").disabled && quiz.timer === null ? [] : [$("consQuizResult").textContent, quizStaff.querySelectorAll(".cp-ring.is-wrong").length]]);
+                        const kept = written();
+                        quizStaff.dispatchEvent(new MouseEvent("click", quizPoint(1, tune.pitches[2])));
+                        checks.push(["once checked, the staff doesn't change", written() === kept ? [] : [written()]]);
+                        // Another, written right.
+                        $("consQuizNext").click();
+                        const tune2 = quiz.question;
+                        tune2.midis.slice(1).forEach(midi => consNeckModes.quiz.click(midi));
+                        $("consQuizCheck").click();
+                        checks.push(["named right: the melody given in its key, its notes on the neck, and the next comes by itself", /^Right: .+ in .+ major\.$/.test($("consQuizResult").textContent) && [...pcs(dots())].sort((a, b) => a - b).join() === [...new Set(tune2.midis.map(midi => midi % 12))].sort((a, b) => a - b).join() && quiz.timer !== null ? [] : [$("consQuizResult").textContent, [...pcs(dots())].join()]]);
+                        document.querySelector('#consQuizKind [data-quiz="rhythm"]').click();
+                        const bar = quiz.question;
+                        checks.push(["Rhythms by ear: the neck set aside, the bar's steps a beat to a group, Check, and the staff drawn", $("consNeckModule").hidden && $("consQuizAnswers").hidden && !$("consQuizRhythm").hidden && $("consQuizGrid").querySelectorAll(".cons-quiz-cell").length === bar.cells.length && $("consQuizGrid").children.length === bar.cells.length / bar.steps && !$("consQuizCheck").hidden && $("consQuizPad").hidden && $("consQuizWrittenStaff").querySelector("svg") && $("consQuizPlayed").hidden && !$("consQuizLevelField").hidden ? [] : [$("consNeckModule").hidden, $("consQuizGrid").children.length]]);
+                        await startMetronome();
+                        await pause(40);
+                        const barBefore = heard.clicks;
+                        $("consQuizHear").click();
+                        await pause(60);
+                        const barBeats = bar.cells.length / bar.steps;
+                        checks.push(["Hear it stops the metronome, and plays a bar's count, then the bar over the pulse", !metro.running && heard.clicks - barBefore >= barBeats * 2 + bar.cells.filter(Boolean).length ? [] : [metro.running, heard.clicks - barBefore]]);
+                        const staffBefore = $("consQuizWrittenStaff").innerHTML;
+                        bar.cells.forEach((cell, index) => { if (cell) $("consQuizGrid").querySelector(`[data-cell="${index}"]`).click(); });
+                        checks.push(["a step clicked holds a note, drawn on the staff as it's written", quiz.cells.join("") === bar.cells.join("") && $("consQuizGrid").querySelectorAll('[aria-pressed="true"]').length === bar.cells.filter(Boolean).length && $("consQuizWrittenStaff").innerHTML !== staffBefore ? [] : [quiz.cells.join("")]]);
+                        $("consQuizCheck").click();
+                        checks.push(["Check: right, the bar as played beside it, and it stays to be looked at", $("consQuizResult").textContent === "Right: as played." && !$("consQuizPlayed").hidden && $("consQuizGrid").querySelectorAll(".is-wrong").length === 0 && $("consQuizCheck").disabled && quiz.timer === null ? [] : [$("consQuizResult").textContent, quiz.timer]]);
+                        $("consQuizNext").click();
+                        $("consQuizCheck").click();
+                        checks.push(["nothing written: the steps missed are marked, and counted", /^\d+ of \d+ steps right; Played shows/.test($("consQuizResult").textContent) && $("consQuizGrid").querySelectorAll(".is-wrong").length === quiz.question.cells.filter(Boolean).length && quiz.streak === 0 ? [] : [$("consQuizResult").textContent]]);
+                        document.querySelector('#consQuizKind [data-quiz="reading"]').click();
+                        const read = quiz.question;
+                        checks.push(["Reading: the bar written, Tap it, the pad waiting, Hear it kept back", $("consQuizWrittenStaff").querySelector("svg") && !$("consQuizTap").hidden && $("consQuizHear").hidden && $("consQuizCheck").hidden && $("consQuizGrid").hidden && !$("consQuizPad").hidden && $("consQuizPad").disabled && $("consQuizTitle").textContent === "Reading Rhythms" ? [] : [$("consQuizTap").hidden, $("consQuizHear").hidden]]);
+                        const readTempo = metro.settings.tempo;
+                        metro.settings.tempo = MaestroMetronome.MAX;
+                        $("consQuizTap").click();
+                        await pause(40);
+                        checks.push(["Tap it counts a bar in, and the pad is ready", quiz.sound?.tapping && !$("consQuizPad").disabled && $("consQuizTap").disabled ? [] : [Boolean(quiz.sound?.tapping)]]);
+                        const readTiming = quizBarTiming();
+                        await pause((quiz.sound.start - metro.context.currentTime) * 1000 + 10);
+                        document.body.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true }));
+                        document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "f", bubbles: true, cancelable: true }));
+                        checks.push(["Space and F tap it, and Space doesn't start the metronome", quiz.sound?.tapping?.taps.length === 2 && !metro.running ? [] : [quiz.sound?.tapping?.taps.length, metro.running]]);
+                        await pause(readTiming.beats * readTiming.beat * 1000 + 300);
+                        checks.push(["as the bar ends the taps are graded, each note marked on time or missed under the staff", quiz.answered?.total === read.cells.filter(Boolean).length && $("consQuizWrittenStaff").querySelectorAll(".cons-quiz-mark").length === quiz.answered.total && /on time/.test($("consQuizResult").textContent) && !$("consQuizHear").hidden && $("consQuizTap").hidden ? [] : [quiz.answered?.total, $("consQuizResult").textContent]]);
+                        metro.settings.tempo = readTempo;
+                        setConsQuiz({ quizKind: "note" });
                         resetQuizScore();
                         consSections.show("finder");
                         checks.push(["Clear empties the picks", finder.picked.length === 0 && $("consPickClear").disabled ? [] : [finder.picked.join()]]);
@@ -819,6 +942,20 @@
                             checks.push(["a chord clicked is picked, heard, and shown: Dm7, ii7 in C major", prog.at.bar === 2 && heard.clicks - pickBefore === 5 && $("progChordHead").textContent === "ii7 in C major" && neckPcs() === "0,2,5,9" ? [] : [$("progChordHead").textContent, heard.clicks - pickBefore, neckPcs()]]);
                             const pickedLine = () => $("progSheet").querySelector('.prog-chord[aria-pressed="true"]')?.closest(".prog-bars");
                             checks.push(["2.4.1: its drawer opens under its line, the notch at the chord", !$("progDrawer").hidden && $("progDrawer").previousElementSibling === pickedLine() && $("progDrawer").contains($("progChordForm")) && parseFloat($("progDrawer").style.getPropertyValue("--notch")) > 0 ? [] : [$("progDrawer").hidden, $("progDrawer").style.getPropertyValue("--notch")]]);
+                            // 2.6.0: one voicing on the neck, the next chord's outlined, another by hand, Smooth.
+                            checks.push(["2.6.0: the drawer offers All notes or a Voicing, all notes first", document.querySelector('#progNeckShow [data-neck="notes"]').getAttribute("aria-pressed") === "true" && $("progVoicingStep").hidden ? [] : ["voicing row"]]);
+                            document.querySelector('#progNeckShow [data-neck="shapes"]').click();
+                            const shownShape = progVoicingNow({ picked: true });
+                            const shapeDots = () => [...$("consNeck").querySelectorAll(".cons-dot")];
+                            const sounding = shownShape?.voicing.frets.filter(fret => fret !== null).length;
+                            checks.push(["a voicing: its notes alone on the neck, a silent string's ×, the next chord's outlined, and named", shownShape && shapeDots().filter(dot => /is-(root|note)/.test(dot.getAttribute("class"))).length === sounding && shapeDots().filter(dot => dot.classList.contains("is-muted")).length === shownShape.voicing.frets.filter(fret => fret === null).length && shapeDots().some(dot => dot.classList.contains("is-next")) && /^\d+ of \d+ · /.test($("progVoicingName").textContent) && $("progVoicingSmooth").hidden ? [] : [sounding, shapeDots().length, $("progVoicingName").textContent]]);
+                            const firstChoice = shownShape.chosen;
+                            $("progVoicingNext").click();
+                            checks.push(["› another voicing, kept for that chord, and Smooth offered", progVoicingNow({ picked: true }).chosen === (firstChoice + 1) % shownShape.count && !$("progVoicingSmooth").hidden && prog.voicingPins.size === 1 ? [] : [progVoicingNow({ picked: true }).chosen, firstChoice]]);
+                            $("progVoicingSmooth").click();
+                            checks.push(["Smooth chooses again around nothing", prog.voicingPins.size === 0 && progVoicingNow({ picked: true }).chosen === firstChoice && $("progVoicingSmooth").hidden ? [] : [prog.voicingPins.size]]);
+                            document.querySelector('#progNeckShow [data-neck="notes"]').click();
+                            checks.push(["All notes again: every chord tone everywhere", prog.settings.neck === "notes" && neckPcs() === "0,2,5,9" ? [] : [neckPcs()]]);
                             checks.push(["with the scales that fit it, the key's first, and its guide tones", $("progScales").children[0]?.textContent === "D Dorian" && $("progScales").children[0].classList.contains("is-in-key") && /Dm7: (F C|C F)/.test($("progGuide").textContent) ? [] : [$("progScales").textContent, $("progGuide").textContent]]);
                             $("progScales").children[0].click();
                             checks.push(["a scale clicked joins the chord on the neck, quieter", neckPcs() === "0,2,4,5,7,9,11" && $("consNeck").querySelectorAll(".cons-dot.is-other").length > 0 ? [] : [neckPcs()]]);
@@ -919,7 +1056,8 @@
                             $("progBassButton").click();
                             const bassOpened = !$("progBassPanel").hidden;
                             $("progBass").querySelector('[data-bass="walking"]').click();
-                            checks.push(["2.4.1: Bass beside Loop opens its choices, and a choice closes them and names itself", bassOpened && $("progBassPanel").hidden && $("progBassNow").textContent === "Walking" ? [] : [bassOpened, $("progBassNow").textContent]]);
+                            checks.push(["2.4.1: Bass beside Loop opens its choices, and a choice names itself (2.6.0: the popover stays open for the drums)", bassOpened && !$("progBassPanel").hidden && $("progBassNow").textContent === "Walking" ? [] : [bassOpened, $("progBassNow").textContent]]);
+                            toggleProgPopover("bass", false);
                             const bassKept = JSON.parse(localStorage.getItem(PROG_KEY) ?? "{}").bass === "walking" && $("progBass").querySelector('[aria-pressed="true"]')?.dataset.bass === "walking";
                             const bookBar = () => {
                                 cutProgLoop();
@@ -1126,6 +1264,40 @@
                             checks.push(["the keys the chords fit, the key first and pressed, A7 named outside it", fitsShown[0] === "C major3 of 4 chords" && $("progKeyFits").children[0].getAttribute("aria-pressed") === "true" && $("progKeyOutside").textContent === "Outside C major: A7 (V7/ii)." && $("progChordHead").textContent === "3 of 4 chords in C major" && $("progTowardKey").hidden ? [] : [fitsShown.join("|"), $("progKeyOutside").textContent, $("progChordHead").textContent]]);
                             keyCell("1-major").click();
                             checks.push(["a key picked on the circle: the chords the two share, numeral to numeral", keyCell("1-major").getAttribute("aria-pressed") === "true" && $("progPivotLabel").textContent === "Shared with G major" && [...$("progPivots").children].map(button => button.dataset.name).join(" ") === "C Em G Am" && $("progPivots").children[0].textContent.startsWith("I → IV") && !$("progTowardKey").hidden ? [] : [$("progPivotLabel").textContent, [...$("progPivots").children].map(button => button.textContent).join("|")]]);
+                            // 2.6.0: cadences in the key, and ways to the key picked.
+                            const moveChords = list => [...$(list).querySelectorAll(".prog-move")].map(item => [...item.querySelectorAll("[data-name]")].map(chip => chip.dataset.name).join(" "));
+                            checks.push(["2.6.0: the key's cadences, and ways to the key picked", moveChords("progCadences")[0] === "F G7 C" && $("progCadences").children.length === 6 && !$("progWaysLabel").hidden && $("progWaysLabel").textContent === "Ways to G major" && moveChords("progWays").includes("C D7 G") ? [] : [moveChords("progCadences").join("|"), moveChords("progWays").join("|")]]);
+                            const barsBeforeAdd = progSketch().sections[0].bars.length;
+                            $("progWays").querySelector('[data-add="ways:dominant"]').click();
+                            checks.push(["Add puts a way's chords in after the chord picked, a bar each, the first picked", progSketch().sections[0].bars.slice(1, 4).map(bar => bar[0]).join(" ") === "C D7 G" && progSketch().sections[0].bars.length === barsBeforeAdd + 3 && prog.at.bar === 1 ? [] : [progSketch().sections[0].bars.map(bar => bar[0]).join(" ")]]);
+                            lastToastUndo();
+                            checks.push(["and Undo takes them out", progSketch().sections[0].bars.length === barsBeforeAdd ? [] : [progSketch().sections[0].bars.length]]);
+                            // 2.6.0: the Form panel pours the chords into a form, with Undo.
+                            $("progSongButton").click();
+                            $("progMenuForm").click();
+                            checks.push(["2.6.0: Form… shows the song's form and the forms to pour it into", !$("progFormPanel").hidden && $("progSongMenu").hidden && $("progFormNow").querySelectorAll(".prog-form-block").length === 1 && $("progForms").querySelectorAll("[data-form]").length === MaestroPrompts.FORMS.length ? [] : [$("progFormPanel").hidden, $("progForms").children.length]]);
+                            $("progForms").querySelector('[data-form="aaba32"]').click();
+                            const formed = progSketch().sections.map(section => `${section.name}${section.repeat}:${section.bars.length}`).join(" ");
+                            checks.push(["a form chosen: its sections and bars, the chords first, the panel closed", formed === "A2:8 B1:8 A1:8" && progSketch().sections[0].bars[0][0] === "Cmaj7" && progSketch().sections[2].bars[1][0] === "A7" && $("progFormPanel").hidden ? [] : [formed]]);
+                            lastToastUndo();
+                            checks.push(["and Undo puts the song back", progSketch().sections.length === 1 && progSketch().sections[0].bars.length === barsBeforeAdd ? [] : [progSketch().sections.length]]);
+                            // 2.6.0: a Quick Notes link to a saved song, Ctrl + clicked in a note, opens it.
+                            const songsBeforeLink = prog.songs;
+                            const linkedChart = MaestroHarmony.cleanChart({ title: "Linked song", root: "G", scale: "major", beats: 4, sections: [{ name: "", repeat: 1, bars: [["G"], ["D"]] }] });
+                            receiveCharts([{ id: "smokelink01", text: MaestroHarmony.chartText(linkedChart) }]);
+                            const previewBefore = [...$("notePreview").childNodes];
+                            renderMarkdown($("notePreview"), ASCSNotes.parseMarkdown(`See ${ASCSNotes.musicLinkText("Linked song", { kind: "song", id: "smokelink01" })}.`));
+                            const musicLinkNode = $("notePreview").querySelector(".md-link.is-music");
+                            checks.push(["2.6.0: a link to a song in a note is drawn as one", musicLinkNode?.textContent === "Linked song" && musicLinkNode.title.includes("Ctrl + click") ? [] : [$("notePreview").innerHTML]]);
+                            musicLinkNode?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true }));
+                            checks.push(["Ctrl + click opens the Conservatory on the song", $("conservatory").classList.contains("active") && consSections.current() === "progressions" && prog.settings.song === "smokelink01" && progSketch().title === "Linked song" ? [] : [consSections.current(), prog.settings.song]]);
+                            lastToastUndo();
+                            $("notePreview").replaceChildren(...previewBefore);
+                            openMusicLink("maestro:song/gone0000gone");
+                            checks.push(["a song no longer saved is said to be gone", /isn't saved any more/.test($("toast").textContent) && musicLinks.pending === null ? [] : [$("toast").textContent]]);
+                            prog.songs = songsBeforeLink;
+                            $("progSide").querySelector('[data-side="keys"]').click();
+                            if (!keysState.toward) keyCell("1-major").click();
                             $("progPivots").querySelector('[data-name="Em"]').click();
                             const pivotPut = progSketch().sections[0].bars[0][0] === "Em";
                             $("progTowardKey").click();
@@ -1257,10 +1429,7 @@
                             checks.push(["and with room again, every line shows from the first", cp.lines.top === 0 && $("cpLines").hidden && cp.lines.clip === 0 ? [] : [cp.lines.top, $("cpLines").textContent]]);
                             sizeStaff({ flex: "", width: "", height: "" });
                             // Keys and mouse: listed under the staff on request, and remembered.
-                            $("cpKeysButton").click();
-                            checks.push(["Keys and mouse lists what each does", !$("cpKeys").hidden && $("cpKeys").textContent.includes("Right-click") && $("cpKeysButton").getAttribute("aria-expanded") === "true" && JSON.parse(localStorage.getItem(CP_KEY)).showKeys === true ? [] : [$("cpKeys").hidden]]);
-                            $("cpKeysButton").click();
-                            checks.push(["and hides it again", $("cpKeys").hidden && $("cpKeysButton").getAttribute("aria-expanded") === "false" ? [] : ["shown"]]);
+                            checks.push(["the staff's tooltip lists its keys; no list under it", $("cpStaff").title.includes("A to G: write that letter") && !$("cpKeys") && !$("cpHint") ? [] : [$("cpStaff").title]]);
                             // The neck hidden on this tab alone, and remembered.
                             checks.push(["Counterpoint offers to hide the neck", !$("consNeckToggle").hidden && $("consNeckToggle").getAttribute("aria-pressed") === "true" ? [] : ["not offered"]]);
                             $("consNeckToggle").click();
@@ -1291,13 +1460,20 @@
                             key("ArrowRight");
                             key("d");
                             checks.push(["a good first species, written by the keys, has no problems", cpNotes() === `A3 D4 C4 D4 B3 A3 C4 E4 D4 C${String.fromCodePoint(0x266F)}4 D4` && $("cpCount").textContent === "No problems" && !$("cpProblems").children.length ? [] : [cpNotes(), $("cpCount").textContent]]);
-                            checks.push(["the intervals are written beneath", [...$("cpStaff").querySelectorAll(".cp-beneath")].map(text => text.textContent).join(" ") === "5 6 6 8 3 3 3 6 6 6 8" ? [] : [[...$("cpStaff").querySelectorAll(".cp-beneath")].map(text => text.textContent).join(" ")]]);
+                            checks.push(["the intervals are written beneath, the row named", [...$("cpStaff").querySelectorAll(".cp-beneath:not(.cp-row-label)")].map(text => text.textContent).join(" ") === "5 6 6 8 3 3 3 6 6 6 8" && $("cpStaff").querySelector(".cp-row-label")?.textContent === "Intervals" ? [] : [[...$("cpStaff").querySelectorAll(".cp-beneath")].map(text => text.textContent).join(" ")]]);
                             // Clear exercise: the counterpoint emptied, the cantus kept, with Undo.
                             const writtenCp = cpNotes(), cantusCp = cpNotes(1);
+                            toggleConsPopover("cpMenu", true);
                             $("cpClearAll").click();
-                            checks.push(["Clear exercise empties the counterpoint and keeps the cantus", cpNotes() === Array(11).fill("-").join(" ") && cpNotes(1) === cantusCp && $("cpClearAll").disabled && cp.at.index === 0 ? [] : [cpNotes(), $("cpClearAll").disabled]]);
+                            checks.push(["Clear exercise, in the title menu, empties the counterpoint and keeps the cantus", cpNotes() === Array(11).fill("-").join(" ") && cpNotes(1) === cantusCp && $("cpClearAll").disabled && cp.at.index === 0 && $("cpMenu").hidden ? [] : [cpNotes(), $("cpClearAll").disabled, $("cpMenu").hidden]]);
                             $("toast").querySelector(".toast-action")?.click();
                             checks.push(["and its Undo brings it all back", cpNotes() === writtenCp && !$("cpClearAll").disabled ? [] : [cpNotes()]]);
+                            // 2.6.0: a model answer in place of what's written, with Undo.
+                            $("cpModel").click();
+                            const modelErrors = MaestroCounterpoint.check(cp.exercise).filter(each => each.level === "error").length;
+                            checks.push(["2.6.0: Model answer writes the counterpoint, the checker finding no error, the cantus kept", !$("cpModel").hidden && !cpNotes().includes("-") && cpNotes(1) === cantusCp && modelErrors === 0 ? [] : [cpNotes(), modelErrors, $("cpCount").textContent]]);
+                            $("toast").querySelector(".toast-action")?.click();
+                            checks.push(["its Undo brings back what was written", cpNotes() === writtenCp ? [] : [cpNotes()]]);
                             cp.at = { voice: 0, index: 1 };
                             key("c");
                             checks.push(["parallel fifths are named, and ringed", $("cpProblems").textContent.includes("Parallel fifths") && $("cpStaff").querySelectorAll(".cp-ring.is-error").length >= 2 ? [] : [$("cpProblems").textContent]]);
@@ -1342,10 +1518,14 @@
                             window.dispatchEvent(new Event("afterprint"));
                             checks.push(["and the screen's staff is drawn again", $("cpStaff").querySelector("svg") !== null ? [] : ["gone"]]);
                             // Heard: Play books the notes and turns into Stop; a voice can be left out.
+                            // Several voices heard: each filled, no marker; one alone: the marker.
+                            checks.push(["voices heard together each show filled, with no marker", $("cpVoices").querySelectorAll('[aria-pressed="true"]').length > 1 && !$("cpVoices").classList.contains("has-marker") ? [] : [$("cpVoices").querySelectorAll('[aria-pressed="true"]').length]]);
                             $("cpVoices").querySelector('[data-hear="1"]').click();
                             checks.push(["a voice left out isn't heard", cp.hear[1] === false && $("cpVoices").querySelector('[data-hear="1"]').getAttribute("aria-pressed") === "false" ? [] : [cp.hear.join()]]);
                             $("cpVoices").querySelector('[data-hear="0"]').dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
                             checks.push(["a double-click hears one voice alone", cp.hear.join() === "true,false,false,false" ? [] : [cp.hear.join()]]);
+                            await pause(0);
+                            checks.push(["and one voice alone has the marker", $("cpVoices").classList.contains("has-marker") && $("cpVoices").style.getPropertyValue("--marker-x") === `${$("cpVoices").querySelector('[data-hear="0"]').offsetLeft}px` ? [] : ["no marker"]]);
                             await playCpExercise();
                             checks.push(["Play plays, and turns into Stop", cp.playing !== null && $("cpPlay").textContent.includes("Stop") ? [] : [cp.playing]]);
                             stopCpPlaying();
@@ -1363,10 +1543,18 @@
                             // every figure the exercise has must be drawn, however many that is.
                             const figuresWanted = MaestroCounterpoint.figuredBass(cp.exercise).flat().filter(Boolean).length;
                             checks.push(["its figures under the bass", $("cpStaff").querySelectorAll(".cp-figure").length === figuresWanted ? [] : [$("cpStaff").querySelectorAll(".cp-figure").length, figuresWanted]]);
-                            key("4");
+                            key("B", true);
                             checks.push(["the given bass can't be chosen to write", cp.at.voice !== 3 ? [] : ["chosen"]]);
+                            const tenorNotes = cpNotes(2);
+                            key("T", true);
+                            checks.push(["Shift+T chooses the tenor, and writes nothing", cp.at.voice === 2 && $("cpWriting").querySelector('[aria-pressed="true"]')?.dataset.writing === "2" && cpNotes(2) === tenorNotes ? [] : [cp.at.voice]]);
                             key("3");
-                            checks.push(["3 chooses the tenor", cp.at.voice === 2 && $("cpWriting").querySelector('[aria-pressed="true"]')?.dataset.writing === "2" ? [] : [cp.at.voice]]);
+                            checks.push(["3 no longer chooses a voice", cp.at.voice === 2 ? [] : [cp.at.voice]]);
+                            const ringY = () => $("cpStaff").querySelector(".cp-ring.is-selected")?.getAttribute("cy");
+                            key("S", true);
+                            const sopranoRing = ringY();
+                            key("A", true);
+                            checks.push(["the ring moves to the voice chosen, around its rest when it's still to write", cp.at.voice === 1 && sopranoRing && ringY() && ringY() !== sopranoRing && $("cpWriting").querySelector('[aria-pressed="true"]')?.dataset.writing === "1" ? [] : [sopranoRing, ringY(), cp.at.voice]]);
                             // A cantus firmus of one's own: made, written, checked, kept, and then sung against.
                             toggleConsPopover("cpMenu", true);
                             $("cpMenuNew").click();
@@ -1386,7 +1574,7 @@
                                 key(letter);
                             }
                             checks.push(["written by the keys, a sound cantus has no problems", cpNotes() === "E3 G3 F3 A3 C4 B3 G3 F3 E3" && $("cpCount").textContent === "No problems" ? [] : [cpNotes(), $("cpCount").textContent, $("cpProblems").textContent]]);
-                            checks.push(["its degrees are written beneath", [...$("cpStaff").querySelectorAll(".cp-beneath")].map(text => text.textContent).join(" ") === "1 3 2 4 6 5 3 2 1" ? [] : [[...$("cpStaff").querySelectorAll(".cp-beneath")].map(text => text.textContent).join(" ")]]);
+                            checks.push(["its degrees are written beneath, the row named", [...$("cpStaff").querySelectorAll(".cp-beneath:not(.cp-row-label)")].map(text => text.textContent).join(" ") === "1 3 2 4 6 5 3 2 1" && $("cpStaff").querySelector(".cp-row-label")?.textContent === "Degrees" ? [] : [[...$("cpStaff").querySelectorAll(".cp-beneath")].map(text => text.textContent).join(" ")]]);
                             cp.at = { voice: 0, index: 7 };
                             key("d");
                             checks.push(["approached from below in phrygian, the close is named", $("cpProblems").textContent.includes("In Phrygian, reach the final from above") ? [] : [$("cpProblems").textContent]]);
@@ -1414,8 +1602,125 @@
                             checks.push(["four phrases of chant are offered, each with its page", chantGroup?.children.length === 4 && chantGroup.textContent.includes("Liber Usualis, p. 256") ? [] : [chantGroup?.textContent]]);
                             $("cpNewCantus").value = "chant-lucis-creator";
                             $("cpNewCantus").dispatchEvent(new Event("change"));
+                            const newPanel = $("cpNewPanel").getBoundingClientRect();
+                            const outside = [...$("cpNewPanel").querySelectorAll("select, .cal-modes, .cons-choice-label, .metro-field > span")].filter(node => node.getClientRects().length && node.getBoundingClientRect().right > newPanel.right - 8);
+                            checks.push(["New Exercise keeps every field within its panel, each label on one line", !outside.length && [...$("cpNewPanel").querySelectorAll(".metro-field > span")].filter(node => node.getClientRects().length).every(node => node.getClientRects().length === 1 && node.getBoundingClientRect().height < 40) ? [] : outside.map(node => node.id || node.textContent)]);
                             $("cpNewStart").click();
                             checks.push(["a species exercise is written against Lucis Creator", cp.exercise.title === "First species, Lucis Creator optime" && cp.exercise.score.key.mode === "mixolydian" && cpNotes(1).split(" ").length === 14 ? [] : [cp.exercise.title, cpNotes(1)]]);
+                            // 2.6.0: a cantus made to the rules (Start did nothing in 2.5.0).
+                            toggleConsPopover("cpMenu", true);
+                            $("cpMenuNew").click();
+                            $("cpNewCantus").value = "made-minor";
+                            $("cpNewCantus").dispatchEvent(new Event("change"));
+                            $("cpNewStart").click();
+                            checks.push(["2.6.0: a new cantus in a minor key, made to the rules", cp.exercise.kind === "species" && cp.exercise.score.key.mode === "minor" && / minor$/.test(cp.exercise.title) && !cpNotes(1).includes("-") ? [] : [cp.exercise.title]]);
+                            // 2.6.0: a melody for B flat trumpet: written, developed, harmonized, shown as written.
+                            toggleConsPopover("cpMenu", true);
+                            $("cpMenuNew").click();
+                            $("cpNewKind").querySelector('[data-kind="melody"]').click();
+                            checks.push(["Melody offers a mode, a key, an instrument and bars", !$("cpNewCantusFields").hidden && $("cpNewFinalLabel").textContent === "Key" && !$("cpNewInstrumentField").hidden && !$("cpNewBarsField").hidden && $("cpNewClefField").hidden && $("cpNewLengthField").hidden ? [] : ["fields"]]);
+                            $("cpNewMode").value = "major";
+                            $("cpNewMode").dispatchEvent(new Event("change"));
+                            $("cpNewFinal").value = "C";
+                            $("cpNewFinal").dispatchEvent(new Event("change"));
+                            $("cpNewInstrument").value = "trumpet";
+                            $("cpNewInstrument").dispatchEvent(new Event("change"));
+                            $("cpNewBars").value = "4";
+                            $("cpNewBars").dispatchEvent(new Event("change"));
+                            $("cpNewStart").click();
+                            checks.push(["Start makes four empty bars for trumpet, the melody's tools shown", cp.exercise.kind === "melody" && $("cpFacts").textContent === "Melody · C major · Trumpet in B♭ · 4 bars" && !$("cpMelodyTools").hidden && !$("cpViewField").hidden && !$("cpLengthField").hidden && $("cpRhythmField").hidden && $("cpModel").hidden && cpNotes() === Array(16).fill("-").join(" ") ? [] : [$("cpFacts").textContent, cpNotes()]]);
+                            for (const [at, letter] of ["c", "d", "e", "c"].entries()) {
+                                if (at) key("ArrowRight");
+                                key(letter);
+                            }
+                            cp.at = { voice: 0, index: 0 };
+                            renderCounterpoint();
+                            $("cpMotifHow").value = "up";
+                            $("cpMotifHow").dispatchEvent(new Event("change"));
+                            $("cpMotifWrite").click();
+                            checks.push(["Write it after: the motif a step higher in bar 2, with Undo", cpNotes().split(" ").slice(4, 8).join(" ") === "D5 E5 F5 D5" && $("toast").textContent.includes("from bar 2") ? [] : [cpNotes()]]);
+                            $("cpChords").querySelector('[data-chords="1"]').click();
+                            const chordTexts = [...$("cpStaff").querySelectorAll(".cp-chord")].map(text => text.textContent);
+                            checks.push(["Chords: one a bar under the notes, C then a chord holding D, E and F's strong notes", chordTexts[0] === "C" && chordTexts.length === 2 && ["Dm", "G", "B°"].includes(chordTexts[1]) && !$("cpChordsOpen").hidden ? [] : [chordTexts.join(" ")]]);
+                            $("cpView").querySelector('[data-shown="written"]').click();
+                            checks.push(["Written: the part a step up, read-only", cp.exercise.score.key.fifths === 0 && cpShownScore().key.fifths === 2 && cpReadOnly() && $("cpRhythmField").hidden && $("cpMotifWrite").disabled ? [] : [cpShownScore().key.fifths]]);
+                            const readOnlyNotes = cpNotes();
+                            key("g");
+                            checks.push(["and nothing is written there", cpNotes() === readOnlyNotes && $("toast").textContent.includes("Choose Concert") ? [] : [cpNotes()]]);
+                            $("cpView").querySelector('[data-shown="concert"]').click();
+                            $("cpChordsOpen").click();
+                            checks.push(["Open in Progressions: the chords as the sketch, in C major", consSections.current() === "progressions" && progSketch().root === "C" && progSketch().sections[0].bars.length === 4 && progSketch().sections[0].bars[0][0] === "C" ? [] : [consSections.current(), JSON.stringify(progSketch().sections[0].bars)]]);
+                            $("toast").querySelector(".toast-action")?.click();
+                            consSections.show("counterpoint");
+                            cpMelody.chords = "off";
+                            // 2.6.0: rhythm bar by bar and note by note.
+                            const rhythmLine = () => MaestroNotation.voicesOf(cp.exercise.score)[0].notes.map(note => (note.p ? MaestroNotation.pitchName(note.p) : "-") + note.d + (note.dot ? "." : "") + (note.tie ? "~" : "")).join(" ");
+                            const strip = bar => $("cpStaff").querySelectorAll(".cp-bar-strip")[bar];
+                            cp.at = { voice: 0, index: 0 };
+                            renderCounterpoint();
+                            checks.push(["a strip above each bar, numbered", $("cpStaff").querySelectorAll(".cp-bar-strip").length === 4 && [...$("cpStaff").querySelectorAll(".cp-bar-number")].map(text => text.textContent).join() === "1,2,3,4" ? [] : [$("cpStaff").querySelectorAll(".cp-bar-strip").length]]);
+                            strip(1).dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                            strip(2).dispatchEvent(new MouseEvent("click", { bubbles: true, shiftKey: true }));
+                            checks.push(["a click selects bar 2, Shift + click bars 2 to 3", cp.bars?.from === 1 && cp.bars.to === 2 && $("cpRhythmLabel").textContent === "Bars 2\u20133" && $("cpStaff").querySelectorAll(".cp-bar-strip.is-selected").length === 2 && cp.at.index === 4 ? [] : [JSON.stringify(cp.bars), $("cpRhythmLabel").textContent]]);
+                            $("cpRhythms").querySelector('[data-rhythm="1"]').click();
+                            checks.push(["a rhythm for both bars, each pitch kept where its note began", rhythmLine() === "C5q D5q E5q C5q D5h F5h -h -h -q -q -q -q" ? [] : [rhythmLine()]]);
+                            key("c", false, true);
+                            checks.push(["Ctrl+C copies the bars' rhythm", cp.copied?.length === 2 && $("toast").textContent.includes("bars 2\u20133") && !$("cpBarPaste").disabled ? [] : [JSON.stringify(cp.copied)]]);
+                            strip(3).dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                            key("v", false, true);
+                            checks.push(["Ctrl+V pastes it into bar 4, what's past the end left out", rhythmLine() === "C5q D5q E5q C5q D5h F5h -h -h -h -h" && cp.bars?.from === 3 ? [] : [rhythmLine()]]);
+                            strip(1).dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                            key("Delete");
+                            checks.push(["Delete with a bar selected empties it, its rhythm kept", rhythmLine() === "C5q D5q E5q C5q -h -h -h -h -h -h" ? [] : [rhythmLine()]]);
+                            key("z", false, true);
+                            key("Escape");
+                            checks.push(["Undo brings it back; Esc goes back to the note, Length in place of the bar's tools", rhythmLine().startsWith("C5q D5q E5q C5q D5h F5h") && cp.bars === null && $("cpRhythmField").hidden && !$("cpLengthField").hidden ? [] : [rhythmLine(), JSON.stringify(cp.bars)]]);
+                            cp.at = { voice: 0, index: 0 };
+                            renderCounterpoint();
+                            checks.push(["Length shows the note's, a sixty-fourth to a whole", !$("cpLengthField").hidden && $("cpLengths").querySelector('[data-length="q"]')?.getAttribute("aria-pressed") === "true" && $("cpLengths").querySelectorAll("[data-length]").length === 7 && $("cpLengths").querySelector("[data-tie]") ? [] : ["field"]]);
+                            key("2");
+                            const afterHalf = rhythmLine();
+                            key(".");
+                            const afterDot = rhythmLine();
+                            key("8");
+                            const afterEighth = rhythmLine();
+                            checks.push(["2 makes it a half, . dots it, 8 an eighth, the time after it to write", afterHalf.startsWith("C5h E5q C5q D5h") && afterDot.startsWith("C5h. C5q D5h") && afterEighth.startsWith("C5e -e -h C5q D5h") ? [] : [afterHalf, afterDot, afterEighth]]);
+                            // 2.6.0: a sixteenth on 6; a thirty-second and a sixty-fourth by button alone.
+                            key("6");
+                            const afterSixteenth = rhythmLine();
+                            $("cpLengths").querySelector('[data-length="f"]').click();
+                            const afterSixtyFourth = rhythmLine();
+                            const flagShown = [...$("cpStaff").querySelectorAll("text")].some(node => node.textContent === MaestroNotation.GLYPHS.flagsUp[4] || node.textContent === MaestroNotation.GLYPHS.flagsDown[4]);
+                            checks.push(["6 makes it a sixteenth, the sixty-fourth's button one, each gap the fewest lengths, its flag drawn", afterSixteenth.startsWith("C5s -s -e -h C5q") && afterSixtyFourth.startsWith("C5f -f -t -s -e -h C5q") && flagShown ? [] : [afterSixteenth, afterSixtyFourth, flagShown]]);
+                            checks.push(["the thirty-second and sixty-fourth have no key", $("cpLengths").querySelector('[data-length="t"]').title === "A thirty-second note" && $("cpLengths").querySelector('[data-length="f"]').title === "A sixty-fourth note" && $("cpLengths").querySelector('[data-length="s"]').title === "A sixteenth note (6)" && $("cpLengths").querySelector("[data-dot]").disabled ? [] : ["titles"]]);
+                            // The marker follows the choice when the buttons are made again; the dot keeps its own fill.
+                            await pause(0);
+                            const markerAt = group => group.classList.contains("has-marker") ? group.style.getPropertyValue("--marker-x") : "none";
+                            const atSixtyFourth = markerAt($("cpLengths")) === `${$("cpLengths").querySelector('[data-length="f"]').offsetLeft}px`;
+                            $("cpLengths").querySelector('[data-length="s"]').click();
+                            key(".");
+                            await pause(0);
+                            const dotButton = $("cpLengths").querySelector("[data-dot]");
+                            const dotFilled = getComputedStyle(dotButton).backgroundColor !== "rgba(0, 0, 0, 0)";
+                            checks.push(["the purple marker moves to the length chosen, and a dotted note shows its length and its dot", atSixtyFourth && rhythmLine().startsWith("C5s. ") && markerAt($("cpLengths")) === `${$("cpLengths").querySelector('[data-length="s"]').offsetLeft}px` && dotButton.getAttribute("aria-pressed") === "true" && dotFilled ? [] : [atSixtyFourth, rhythmLine(), markerAt($("cpLengths")), dotFilled]]);
+                            key("1");
+                            checks.push(["1 makes it a whole", rhythmLine().startsWith("C5w D5h") ? [] : [rhythmLine()]]);
+                            $("cpLengths").querySelector("[data-tie]").click();
+                            checks.push(["Tie holds it into the next bar", rhythmLine().startsWith("C5w~ C5h D5") || rhythmLine().startsWith("C5w~ C5h F5") ? [] : [rhythmLine()]]);
+                            cp.at = { voice: 0, index: 2 };
+                            renderCounterpoint();
+                            key("1");
+                            checks.push(["a length that would cross the bar line is refused, and says why", $("toast").textContent.includes("doesn't fit") && $("cpLengths").querySelector('[data-length="w"]').disabled ? [] : [$("toast").textContent]]);
+                            // Tap: a bar's count, then the taps, each to the nearest eighth.
+                            strip(3).dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                            await tapCpBars();
+                            const counting = cpTap.sound?.phase === "count" && $("cpBarTap").getAttribute("aria-pressed") === "true";
+                            document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+                            checks.push(["Tap counts in, and Esc stops it", counting && cpTap.sound === null && $("cpBarTap").textContent === "Tap" ? [] : [counting, $("cpBarTap").textContent]]);
+                            const tapped = { taps: [0, 2, 3, 4].map(eighth => eighth * 0.25 + 0.02), from: 3, bars: 1, beat: 0.5, phase: "tap", timers: [], out: null, start: 1 };
+                            cpTap.sound = tapped;
+                            finishCpTap(tapped);
+                            checks.push(["the taps become bar 4's rhythm, with Undo", rhythmLine().endsWith("-q -e -e -h") && $("toast").textContent.includes("Tapped bar 4") ? [] : [rhythmLine()]]);
                         } finally {
                             window.print = realPrint;
                             stopCpPlaying();
@@ -1425,6 +1730,121 @@
                             cp.saved = null;
                             cp.asked = false;
                             cp.saving.clear();
+                        }
+                        // 2.6.0: Rhythm. The sequencer written, spread evenly, kept through
+                        // AHK and played with the metronome; drums behind Progressions; the trainer.
+                        const savedRh = localStorage.getItem(RH_KEY);
+                        try {
+                            consSections.show("rhythm");
+                            checks.push(["Rhythm shows no neck, and asks AHK for the rhythms", $("consNeckModule").hidden && sent.has("GetRhythms") && $("rhSave").disabled ? [] : [$("consNeckModule").hidden, sent.has("GetRhythms")]]);
+                            receiveRhythms([]);
+                            setRhythm(MaestroRhythm.newRhythm({ title: "Smoke rhythm", meter: "4/4", steps: 4 }), { id: null, savedText: null });
+                            const cells = row => [...$("rhRows").querySelectorAll(`[data-cell^="${row}:"]`)];
+                            checks.push(["a new rhythm: three rows of a bar of sixteenths", $("rhRows").querySelectorAll(".rh-row").length === 3 && cells(0).length === 16 ? [] : [$("rhRows").querySelectorAll(".rh-row").length, cells(0).length]]);
+                            cells(0)[0].click();
+                            cells(0)[2].dispatchEvent(new MouseEvent("click", { bubbles: true, shiftKey: true }));
+                            cells(1)[4].dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+                            checks.push(["a click writes a hit, Shift and a click or a right-click an accent", rh.rhythm.rows[0].hits.slice(0, 3).join("") === "102" && rh.rhythm.rows[1].hits[4] === 2 && cells(0)[2].classList.contains("is-accent") ? [] : [rh.rhythm.rows[0].hits.join(""), rh.rhythm.rows[1].hits.join("")]]);
+                            cells(0)[0].click();
+                            checks.push(["and a click again rests it", rh.rhythm.rows[0].hits[0] === 0 ? [] : [rh.rhythm.rows[0].hits.join("")]]);
+                            checks.push(["the rhythm is written out, a staff a row", $("rhStaff").querySelectorAll(".staff-line").length === 3 && $("rhStaff").querySelectorAll(".rhythm-label").length === 3 ? [] : [$("rhStaff").querySelectorAll(".staff-line").length]]);
+                            $("rhRows").querySelector('[data-row-even="2"]').click();
+                            const evenOpen = !$("rhEvenPanel").hidden;
+                            $("rhEvenHits").value = "3";
+                            $("rhEvenLength").value = "8";
+                            $("rhEvenPanel").dispatchEvent(new Event("input", { bubbles: true }));
+                            const preview = $("rhEvenPreview").textContent;
+                            $("rhEvenApply").click();
+                            checks.push(["Spread puts 3 hits over a row of 8, a polymeter, and says its length", evenOpen && preview.startsWith("x · · x") && rh.rhythm.rows[2].hits.join("") === "10010010" && $("rhRows").textContent.includes("8 steps") && $("rhEvenPanel").hidden ? [] : [evenOpen, preview, rh.rhythm.rows[2].hits.join("")]]);
+                            $("rhSteps").querySelector('[data-steps="2"]').click();
+                            checks.push(["2 steps a beat keeps the hits on eighths", rh.rhythm.steps === 2 && rh.rhythm.rows[0].hits.length === 8 && rh.rhythm.rows[0].hits[1] === 2 && rh.rhythm.rows[1].hits[2] === 2 ? [] : [rh.rhythm.rows[0].hits.join(""), rh.rhythm.rows[1].hits.join("")]]);
+                            $("rhMeter").value = "7/8";
+                            $("rhMeter").dispatchEvent(new Event("change"));
+                            checks.push(["in 7/8, a beat takes 1 or 2 steps, and its groups are set apart", [...$("rhSteps").children].map(button => button.dataset.steps).join() === "1,2" && $("rhRows").querySelectorAll(".rh-cell.is-group").length > 0 ? [] : [[...$("rhSteps").children].map(button => button.dataset.steps).join()]]);
+                            $("rhMeter").value = "4/4";
+                            $("rhMeter").dispatchEvent(new Event("change"));
+                            $("rhAddRow").click();
+                            checks.push(["Add row adds a sound not yet used", rh.rhythm.rows.length === 4 && !["hatClosed", "snare", "kick"].includes(rh.rhythm.rows[3].sound) ? [] : [rh.rhythm.rows.map(row => row.sound).join()]]);
+                            $("rhRows").querySelector('[data-row-remove="3"]').click();
+                            $("toast").querySelector(".toast-action")?.click();
+                            checks.push(["a row removed comes back with Undo", rh.rhythm.rows.length === 4 ? [] : [rh.rhythm.rows.length]]);
+                            // Kept through AHK, with its id; deleted, with Undo.
+                            const rhFrom = messages.length;
+                            $("rhSave").click();
+                            const rhSave = messages.slice(rhFrom).find(message => message.startsWith("SaveRhythm\n"))?.split("\n") ?? [];
+                            checks.push(["Save sends the rhythm to AHK under a new id", /^[a-z0-9]{12}$/.test(rhSave[1] ?? "") && rhSave[2] === MaestroRhythm.HEADER && rhSave[3] === "Smoke rhythm" ? [] : [rhSave.slice(0, 4).join(" | ")]]);
+                            rhythmSaved(rhSave[1]);
+                            checks.push(["and once AHK has it, it reads Saved", $("rhSave").textContent === "Saved" && rh.saved.length === 1 ? [] : [$("rhSave").textContent]]);
+                            $("rhTitleButton").click();
+                            checks.push(["the title opens the menu: grooves and the rhythm saved", !$("rhMenu").hidden && $("rhGrooves").children.length === MaestroRhythm.GROOVES.length && $("rhRhythms").querySelector("[aria-current]")?.textContent.startsWith("Smoke rhythm") ? [] : [$("rhRhythms").textContent]]);
+                            const rhDelete = messages.length;
+                            $("rhRhythms").querySelector("[data-rhythm-delete]").click();
+                            checks.push(["delete asks AHK, by its id", messages.slice(rhDelete).includes(`DeleteRhythm\n${rhSave[1]}`) ? [] : [messages.slice(rhDelete).join(" | ")]]);
+                            rhythmDeleted(rhSave[1]);
+                            const rhUndo = messages.length;
+                            $("toast").querySelector(".toast-action")?.click();
+                            checks.push(["Undo saves it again", messages.slice(rhUndo).some(message => message.startsWith(`SaveRhythm\n${rhSave[1]}\n`)) ? [] : ["not saved"]]);
+                            rhythmSaved(rhSave[1]);
+                            $("rhTitleButton").click();
+                            $("rhGrooves").querySelector('[data-groove-open="funk"]').click();
+                            checks.push(["a groove opens from the menu", rh.rhythm.title === "Funk sixteenths" && rh.id === null && $("rhMenu").hidden ? [] : [rh.rhythm.title]]);
+                            // Played with the metronome: each beat books its steps, without the clicks.
+                            await toggleRhythmPlay();
+                            const playingNow = metro.running && rh.playing && $("rhPlay").getAttribute("aria-pressed") === "true";
+                            const clicksFrom = heard.clicks;
+                            rh.seq.fromBar = null;
+                            for (let beat = 0; beat < 4; beat++) bookRhythmBeat(metro.context.currentTime + 1 + beat * 0.5, 0, beat);
+                            const funkHits = Array.from({ length: 16 }, (_, step) => MaestroRhythm.hitsAt(rh.rhythm, step)).flat();
+                            checks.push(["Play starts the metronome, and a bar books every step and sounds every hit", playingNow && rh.seq.booked.length >= 16 && heard.clicks - clicksFrom >= funkHits.length && rhythmQuietsClick() ? [] : [playingNow, rh.seq.booked.length, heard.clicks - clicksFrom, funkHits.length]]);
+                            $("rhClick").click();
+                            checks.push(["Click lets the metronome's clicks under it", !rhythmQuietsClick() ? [] : ["quiet"]]);
+                            $("rhClick").click();
+                            $("rhPlay").click();
+                            checks.push(["Stop stops it all", !metro.running && !rh.playing && $("rhPlay").textContent === "Play" ? [] : [metro.running, rh.playing]]);
+                            // Drums behind Progressions' loop, in its time signature.
+                            setMetroMeter("4/4");
+                            prog.settings.loop = true;
+                            setProgDrums("groove:rock");
+                            // On the Rhythm tab, Play plays only the rhythm: the loop and
+                            // its drums rest unless they're set to keep playing.
+                            const bookedBefore = prog.booked.length;
+                            bookProgressionBeat(metro.context.currentTime + 1, 0, 0);
+                            checks.push(["on another tab the loop and its drums rest", progressionDrums() === null && prog.booked.length === bookedBefore && prog.fromBar === null && !prog.settings.elsewhere ? [] : [prog.booked.length - bookedBefore, prog.fromBar]]);
+                            $("progElsewhere").click();
+                            const behind = progressionDrums();
+                            const waltz = $("progDrums").querySelector('[data-drums="groove:waltz"]');
+                            checks.push(["drums behind the loop: a groove in its meter plays, one in 3/4 can't be chosen, and Backing names it", behind?.title === "Rock" && waltz?.disabled && $("progBassNow").textContent.endsWith("Rock") ? [] : [behind?.title, waltz?.disabled, $("progBassNow").textContent]]);
+                            setMetroMeter("3/4");
+                            checks.push(["in another meter they rest", progressionDrums() === null ? [] : ["playing"]]);
+                            setMetroMeter("4/4");
+                            $("progElsewhere").click();
+                            checks.push(["Keep playing on other tabs is kept, and off again", !prog.settings.elsewhere && JSON.parse(localStorage.getItem(PROG_KEY)).elsewhere === false ? [] : [prog.settings.elsewhere]]);
+                            setProgDrums("off");
+                            // The trainer: its own transport, taps scored, faster when steady.
+                            setRhTrainer({ kind: "polyrhythm", a: 3, b: 2, speed: { on: true, step: 4, every: 1, to: 200 } });
+                            const trainFrom = metro.settings.tempo;
+                            await startRhythmTrainer();
+                            const layers = [0, 1].map(layer => rhTrainer.events.filter(event => event.layer === layer && event.cycle === 0).length);
+                            checks.push(["the trainer plays 3 against 2, the pads ready", rhTrainer.running && !metro.running && layers.join() === "3,2" && !$("rhPadA").disabled ? [] : [rhTrainer.running, layers.join()]]);
+                            rhTrainer.events.filter(event => event.cycle === 0).forEach((event, at) => { event.hit = at % 2 ? 0.01 : -0.012; });
+                            scoreRhythmCycles(rhTrainer.cycles[0].end + 1);
+                            checks.push(["a steady cycle is scored and speeds it up", $("rhResults").textContent.includes("Steady") && metro.settings.tempo === trainFrom + 4 ? [] : [$("rhResults").textContent, metro.settings.tempo]]);
+                            document.dispatchEvent(new KeyboardEvent("keydown", { key: "f", bubbles: true, cancelable: true }));
+                            checks.push(["F taps the first layer", errors.length === 0 ? [] : errors.slice(0, 2)]);
+                            await startMetronome();
+                            checks.push(["the metronome starting stops the trainer", !rhTrainer.running && metro.running ? [] : [rhTrainer.running]]);
+                            stopMetronome();
+                            setMetroTempo(trainFrom);
+                        } finally {
+                            stopRhythmTrainer();
+                            if (metro.running) stopMetronome();
+                            closeConsPopovers();
+                            setProgDrums("off");
+                            if (savedRh === null) localStorage.removeItem(RH_KEY); else localStorage.setItem(RH_KEY, savedRh);
+                            loadRhythm();
+                            rh.saved = null;
+                            rh.asked = false;
+                            rh.saving.clear();
                         }
                     } finally {
                         stopSteadyTone();
@@ -3489,7 +3909,7 @@
             // controls (Windows' own caption glyphs), charts, the keyboard map, the
             // almanac's sun and moon, and the Conservatory's neck, keys, staves and
             // chord diagrams are drawings, not icons.
-            const NOT_ICONS = ".brand-mark, .window-control, .chart-plot, .keymap, .alm-moon, .alm-sun, .cons-neck, .cons-keys, .cons-map, .cons-staff, .cons-mini, .cp-score";
+            const NOT_ICONS = ".brand-mark, .window-control, .chart-plot, .keymap, .alm-moon, .alm-sun, .cons-neck, .cons-keys, .cons-map, .cons-staff, .cons-mini, .cp-score, .rh-circle";
             const iconProblems = new Set();
             const iconCheck = place => {
                 [document.querySelector(".view.active"), document.querySelector(".sidebar"), document.querySelector(".topbar")].forEach((area, index) => {
@@ -3511,7 +3931,21 @@
                         if (/^[‹›⋯×✕♥♡◆→↗↻]|[‹›⋯×✕♥♡◆→↗↻]$/.test(words)) iconProblems.add(`${where}: a glyph for an icon in "${words.slice(0, 30)}"`);
                     });
                 });
-            };            const sectioned = { games: gamesSections, dashboard: systemSections, sounds: soundSections, commands: commandsSections, workspaces: workspaceSections, conservatory: consSections };
+            };
+            // 2.6.0: a control none of the house's styles reach falls back to
+            // the browser's own: a gray, raised button, or a select whose text
+            // touches its edge.
+            const unstyled = new Set();
+            const styleCheck = place => {
+                document.querySelector(".view.active").querySelectorAll("button, select").forEach(control => {
+                    if (!control.getClientRects().length) return;
+                    const look = getComputedStyle(control);
+                    const name = control.id ? "#" + control.id : `${control.tagName.toLowerCase()}.${[...control.classList].join(".")}`;
+                    if (look.borderTopStyle === "outset") unstyled.add(`${place}: ${name} is the browser's own button`);
+                    if (control.tagName === "SELECT" && parseFloat(look.paddingLeft) < 8) unstyled.add(`${place}: ${name} has no inner padding`);
+                });
+            };
+            const sectioned = { games: gamesSections, dashboard: systemSections, sounds: soundSections, commands: commandsSections, workspaces: workspaceSections, conservatory: consSections };
             // The Calendars list with a calendar in it, where the cut-off Edit was found.
             const calendarsBefore = { loaded: calState.loaded, calendars: calState.calendars };
             calState.loaded = true;
@@ -3520,15 +3954,28 @@
                 navigate(view);
                 if (view === "calendar") renderCalendar();
                 const sections = sectioned[view];
-                if (!sections) return (ringCheck(view), sizeCheck(view), iconCheck(view));
+                if (!sections) return (ringCheck(view), sizeCheck(view), iconCheck(view), styleCheck(view));
                 const tabs = [...document.querySelectorAll(`#${view} [data-section-tab]`)].map(tab => tab.dataset.sectionTab);
-                tabs.forEach(tab => { sections.show(tab); ringCheck(`${view} › ${tab}`); sizeCheck(`${view} › ${tab}`); iconCheck(`${view} › ${tab}`); });
+                tabs.forEach(tab => { sections.show(tab); ringCheck(`${view} › ${tab}`); sizeCheck(`${view} › ${tab}`); iconCheck(`${view} › ${tab}`); styleCheck(`${view} › ${tab}`); });
             });
+            // Each of the Quiz's kinds has controls of its own (2.6.0: Reading's pad was the browser's).
+            navigate("conservatory");
+            consSections.show("quiz");
+            const quizKindBefore = cons.settings.quizKind;
+            MaestroMusic.QUIZ_KINDS.forEach(kind => {
+                cons.settings.quizKind = kind;
+                newQuizQuestion({ play: false });
+                renderConservatory();
+                styleCheck(`conservatory › quiz › ${kind}`);
+            });
+            cons.settings.quizKind = quizKindBefore;
+            newQuizQuestion({ play: false });
             Object.assign(calState, calendarsBefore);
             checks.push(["no control's focus ring is cut off", [...new Set(clippedRings)]]);
             checks.push(["no text under 18 px, or 19 px in the display face", [...smallText]]);
             checks.push(["every text is one of the seven sizes", [...offScale]]);
             checks.push(["every icon is from the set, drawn at 20 or 24 px", [...iconProblems]]);
+            checks.push(["every button and select has the house's style", [...unstyled]]);
             checks.push(["no errors from focusing every control", errors.splice(0)]);
 
             const allowedNow = new Set(window.SMOKE_ALLOWLIST || []);

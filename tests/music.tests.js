@@ -389,4 +389,48 @@
     equal("shape start: up to fret 5 starts at the nut", M.shapeStart([3, null, 3, 4, 4, 4], 15), 1);
     equal("shape start: higher, at its lowest fret", M.shapeStart([null, 7, 6, 7, 8, null], 15), 6);
     equal("shape start: kept on the neck", M.shapeStart([null, 15, 15, 14, 15, null], 15), 11);
+    // Drills (2.6.0): C major's notes from C3
+    const cMajor = [48, 50, 52, 53, 55, 57, 59];
+    equal("drill: up and back", M.drillNotes(cMajor, "straight").join(), "48,50,52,53,55,57,59,60,59,57,55,53,52,50,48");
+    equal("drill: in thirds", M.drillNotes(cMajor, "thirds").join(), "48,52,50,53,52,55,53,57,55,59,57,60,59,62,60");
+    equal("drill: in fours starts each step", M.drillNotes(cMajor, "fours").slice(0, 8).join(), "48,50,52,53,50,52,53,55");
+    equal("drill: triads on each", M.drillNotes(cMajor, "triads").slice(-4).join(), "59,62,65,60");
+    equal("drill: sevenths on each, the first", M.drillNotes(cMajor, "sevenths").slice(0, 4).join(), "48,52,55,59");
+    equal("drill: a chord's notes up and back", M.drillNotes([48, 52, 55], "straight").join(), "48,52,55,60,55,52,48");
+    equal("drill: nothing to play", M.drillNotes([], "thirds").length, 0);
+    equal("drill: an unknown one plays up and back", M.drillNotes([48, 52], "zigzag").join(), "48,52,60,52,48");
+    equal("drill: kept", M.parseSettings(JSON.stringify({ drill: "thirds" })).drill, "thirds");
+    equal("drill: one not offered isn't", M.parseSettings(JSON.stringify({ drill: "zigzag" })).drill, "straight");
+    // Melodies by ear (2.6.0)
+    let melodySeed = 7;
+    const melodyRandom = () => {
+        melodySeed = (melodySeed * 1103515245 + 12345) % 2147483648;
+        return melodySeed / 2147483648;
+    };
+    let melodiesGood = true;
+    for (let i = 0; i < 300; i++) {
+        const length = M.QUIZ_MELODY_LENGTHS[i % 3];
+        const melody = M.quizMelody(length, "", melodyRandom);
+        const { degrees, midis, names } = melody;
+        const steps = degrees.slice(1).map((degree, at) => Math.abs(degree - degrees[at]));
+        const good = degrees.length === length && [0, 2, 4].includes(degrees[0]) && [0, 7].includes(degrees.at(-1)) && steps.at(-1) === 1
+            && steps.every(step => step >= 1 && step <= 4) && degrees.every(degree => degree >= -3 && degree <= 9)
+            && midis.every((midi, at) => M.pitchClass(names[at]) === midi % 12) && M.QUIZ_KEYS.includes(melody.key) && M.pitchClass(melody.key) === melody.tonic % 12 && melody.tonic >= 60 && melody.tonic <= 71;
+        if (!good) {
+            melodiesGood = false;
+            check(`melody: ${JSON.stringify(melody)}`, false);
+            break;
+        }
+    }
+    check("melody: 300 phrases, each from the tonic's triad, by step and small leaps, ending on the tonic by step, named in its key, the tonic from C4 to B4", melodiesGood);
+    const once = M.quizMelody(5, "", () => 0.42);
+    check("melody: never the same twice running", M.quizMelody(5, once.degrees.join(), () => 0.42).degrees.join() !== once.degrees.join());
+    const stuck = M.quizMelody(6, "", () => 0.6);
+    check("melody: a random that keeps leaving the range still ends", stuck.degrees.length === 6 && stuck.degrees.at(-1) % 7 === 0);
+    equal("melody: a length not offered is five", M.quizMelody(9, "", melodyRandom).degrees.length, 5);
+    equal("quiz: rhythm and melody kinds", M.QUIZ_KINDS.slice(4).join(), "rhythm,reading,melody");
+    const quizKept = M.parseSettings(JSON.stringify({ quizKind: "reading", quizRhythm: "triplets", quizMelody: 6 }));
+    check("quiz: the new kinds and their options are kept", quizKept.quizKind === "reading" && quizKept.quizRhythm === "triplets" && quizKept.quizMelody === 6);
+    const quizWrong = M.parseSettings(JSON.stringify({ quizRhythm: "hard", quizMelody: 12 }));
+    check("quiz: options not offered fall back", quizWrong.quizRhythm === "easy" && quizWrong.quizMelody === 5);
 })();

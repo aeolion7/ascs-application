@@ -14,7 +14,7 @@ Suspend(true)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 2.5.0
+; Version 2.6.0
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -24,7 +24,7 @@ Suspend(true)
 ; GLOBAL VARIABLES
 ; ==========================================
 
-global ASCS_Version := "2.5.0"
+global ASCS_Version := "2.6.0"
 global ASCS_App := ""
 global ASCS_WindowIcon := 0
 global ASCS_IconPath := A_ScriptDir "\frontend\assets\ascs.ico"
@@ -48,6 +48,7 @@ global ASCS_ChordsFile := ASCS_DataDir "\chords.ini"     ; 2.3.0: the Conservato
 global ASCS_ChartsDir := ASCS_DataDir "\charts"          ; 2.4.0: the Conservatory's songs, a file each
 global ASCS_ExercisesDir := ASCS_DataDir "\counterpoint" ; 2.5.0: counterpoint exercises, a file each
 global ASCS_ExportsDir := ASCS_DataDir "\exports"        ; 2.5.0: MusicXML written for notation programs
+global ASCS_RhythmsDir := ASCS_DataDir "\rhythms"        ; 2.6.0: the Conservatory's rhythms, a file each
 global ASCS_Chords := 0                                  ; 0 = not read yet
 global ASCS_ActivityFile := ASCS_DataDir "\activity.log"
 
@@ -1324,6 +1325,24 @@ HandleWebMessage(sender, args) {
                 else
                     WriteLog("Rejected DeleteExercise payload.")
 
+            case "GetRhythms":
+                if (content = "")
+                    SendRhythms()
+                else
+                    WriteLog("Rejected GetRhythms payload.")
+
+            case "SaveRhythm":
+                if (StrLen(content) <= 16384)
+                    SaveRhythm(content)
+                else
+                    WriteLog("Rejected oversized rhythm payload.")
+
+            case "DeleteRhythm":
+                if (StrLen(content) <= 24)
+                    DeleteRhythm(content)
+                else
+                    WriteLog("Rejected DeleteRhythm payload.")
+
             case "ExportMusicXml":
                 if (StrLen(content) <= 524288 + 256)
                     ExportMusicXml(content)
@@ -1587,4 +1606,5 @@ SendToFrontend(json) {
 #Include lib\features\Chords.ahk
 #Include lib\features\Charts.ahk
 #Include lib\features\Counterpoint.ahk
+#Include lib\features\Rhythm.ahk
 #Include lib\features\Backups.ahk

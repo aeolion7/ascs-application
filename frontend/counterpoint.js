@@ -167,6 +167,62 @@ globalThis.MaestroCounterpoint = (() => {
         return score && Object.freeze({ kind: "cantus", title: score.title, given: -1, numerals: Object.freeze([]), score });
     }
 
+    // ---- Melodies (2.6.0): one line in a key, for an instrument (melody.js
+    // knows each one's range and how its part is written). Each bar begins as
+    // four quarters to write; a rest is a rest, not a note still to write.
+    const MELODY_BARS = Object.freeze({ min: 1, max: 32, usual: 8 });
+    const melodyInstrument = id => globalThis.MaestroMelody?.INSTRUMENTS.find(each => each.id === id) ?? null;
+    function melodyExercise({ tonic = "C", mode = "major", instrument = "concert", bars = MELODY_BARS.usual, notes = null, title = "" }) {
+        const fifths = N.keyFifths(tonic, mode);
+        const played = melodyInstrument(instrument);
+        if (fifths === null || !CANTUS_MODES.includes(mode) || !played) return null;
+        if (!notes && (!Number.isInteger(bars) || bars < MELODY_BARS.min || bars > MELODY_BARS.max)) return null;
+        const line = notes ?? Array.from({ length: bars * 4 }, () => ({ p: null, d: "q", dot: false, tie: false }));
+        const score = N.cleanScore({ title, key: { fifths, mode }, meter: METER, staves: [{ clef: played.clef, voices: [{ name: "Melody", notes: line }] }] });
+        if (!score || N.bars(N.voicesOf(score)[0].notes, METER).bars.length > MELODY_BARS.max) return null;
+        return Object.freeze({ kind: "melody", instrument, title: score.title, given: -1, numerals: Object.freeze([]), score });
+    }
+
+    // A melody's notes, the instrument and the key kept.
+    function withMelodyNotes(exercise, notes) {
+        return melodyExercise({ tonic: N.keyTonic(exercise.score.key.fifths, exercise.score.key.mode), mode: exercise.score.key.mode, instrument: exercise.instrument, notes, title: exercise.title }) ?? exercise;
+    }
+
+    // A melody's checker: its range on the instrument, wide and awkward leaps,
+    // and how it ends. Warnings and suggestions only: a melody has no rules
+    // to break, as counterpoint has.
+    function checkMelody(exercise) {
+        const list = [];
+        const notes = N.voicesOf(exercise.score)[0].notes;
+        const entries = N.timed(notes);
+        const sounding = entries.filter(entry => entry.note.p && !entry.held);
+        const played = melodyInstrument(exercise.instrument);
+        const at = entry => [{ voice: 0, index: entry.index }];
+        if (!sounding.length) {
+            problem(list, "info", "empty", "Nothing written yet. A rest stays a rest.", null, []);
+            return list;
+        }
+        if (played?.range) {
+            const [low, high] = played.range;
+            for (const entry of sounding) {
+                const m = midi(entry.note.p);
+                if (m < low || m > high) problem(list, "warning", "range", `${name(entry.note.p)} is ${m < low ? "below" : "above"} the range of the ${played.label[0].toLowerCase()}${played.label.slice(1)} (${name(N.pitchFromMidi(low, 0))}${DASH}${name(N.pitchFromMidi(high, 0))}, as it sounds).`, entry.onset, at(entry));
+            }
+        }
+        for (let n = 1; n < sounding.length; n++) {
+            const a = sounding[n - 1], b = sounding[n];
+            const leap = N.interval(a.note.p, b.note.p);
+            if (leap.number > 8) problem(list, "warning", "leap", `A leap of ${leap.name}, wider than an octave.`, b.onset, [...at(a), ...at(b)]);
+            else if (/^[Ad]/.test(leap.quality) && leap.number > 1) problem(list, "info", "awkward", `A leap of ${leap.name}, an augmented or diminished interval: harder to sing or hear.`, b.onset, [...at(a), ...at(b)]);
+        }
+        const last = sounding.at(-1);
+        const tonic = tonicOf(exercise.score.key);
+        if (modulo(last.note.p.step - tonic.step, 7) !== 0 || last.note.p.alter !== tonic.alter) {
+            problem(list, "info", "close", `It ends on ${N.pitchLetterName(last.note.p)}; ${N.pitchLetterName(tonic)}, the tonic, would close it.`, last.onset, at(last));
+        }
+        return sortProblems(list);
+    }
+
     // A whole cantus as a species exercise takes it: its pitches, mode and
     // final. Null while a note is unwritten.
     function cantusOf(exercise) {
@@ -681,6 +737,28 @@ globalThis.MaestroCounterpoint = (() => {
             voices[3] = line.map((value, k) => ({ p: spellAs(value, chords[k]), d: rhythm[k], dot: false, tie: false }));
             given = 3;
         } else if (form === "soprano") {
+            // A soprano from a model answer (2.6.0), so the other three voices
+            // can always be written under it: of a few, best one ending on the
+            // last chord's root and moving no more than a fourth at a time, else
+            // the smoothest. With none, one drawn as before.
+            const free = fourPartExercise({ form: "numerals", tonic, mode, progression: numerals, title });
+            const rootPc = chords.at(-1).pcs[0];
+            let smoothest = null;
+            for (let tries = 0; tries < 6 && free; tries++) {
+                const model = modelAnswer(free, { random });
+                const line = model && N.voicesOf(model.score)[0].notes;
+                if (!line) continue;
+                const widest = Math.max(...line.map((note, at) => (at ? Math.abs(midi(note.p) - midi(line[at - 1].p)) : 0)));
+                const cost = widest + (modulo(midi(line.at(-1).p), 12) === rootPc ? 0 : 10);
+                if (!smoothest || cost < smoothest.cost) smoothest = { line, cost };
+                if (cost <= 5) break;
+            }
+            if (smoothest) {
+                voices[0] = smoothest.line.map(note => ({ ...note }));
+                given = 0;
+            }
+        }
+        if (form === "soprano" && given < 0) {
             const tonicPc = chords.at(-1).pcs[0];
             const line = smoothLine(chords.map((chord, k) => {
                 const tones = k === chords.length - 1 ? [tonicPc] : chord.pcs.slice(0, 3);
@@ -709,6 +787,21 @@ globalThis.MaestroCounterpoint = (() => {
         return chord ? figuresFor(chord, exercise.score.key) : Object.freeze([]);
     });
 
+    // A key's roles for chords (2.6.0, shared with model answers): the
+    // leading tone; a chord on the fifth or seventh degree holding it acts as
+    // a dominant; the tonic and submediant chords take its resolution.
+    function keyRoles(key) {
+        const tonic = tonicOf(key);
+        const tonicPc = modulo(N.NATURAL[tonic.step] + tonic.alter, 12);
+        const leadingPc = modulo(tonicPc - 1, 12);
+        const rootDegree = chord => modulo(chord.tones[0].letter - tonic.step, 7);
+        return {
+            tonicPc, leadingPc, rootDegree,
+            dominant: chord => Boolean(chord) && [4, 6].includes(rootDegree(chord)) && chord.pcs.includes(leadingPc),
+            resolving: chord => Boolean(chord) && [0, 5].includes(rootDegree(chord))
+        };
+    }
+
     function checkFourPart(exercise) {
         const { score } = exercise;
         const key = score.key;
@@ -719,14 +812,7 @@ globalThis.MaestroCounterpoint = (() => {
         const unwritten = slots.reduce((sum, slot) => sum + slot.filter(p => !p).length, 0);
         if (unwritten) problem(list, "info", "unfinished", `${unwritten} ${unwritten === 1 ? "note" : "notes"} still to write.`, null, []);
         const at = (voice, k) => ({ voice, index: k });
-        const tonic = tonicOf(key);
-        const tonicPc = modulo(N.NATURAL[tonic.step] + tonic.alter, 12);
-        const leadingPc = modulo(tonicPc - 1, 12);
-        // A chord on the fifth or seventh degree holding the leading tone acts
-        // as a dominant; the tonic and submediant chords take its resolution.
-        const rootDegree = chord => modulo(chord.tones[0].letter - tonic.step, 7);
-        const dominant = chord => Boolean(chord) && [4, 6].includes(rootDegree(chord)) && chord.pcs.includes(leadingPc);
-        const resolving = chord => Boolean(chord) && [0, 5].includes(rootDegree(chord));
+        const { leadingPc, rootDegree, dominant, resolving } = keyRoles(key);
         const asked = exercise.form === "soprano" ? [] : exercise.numerals.map(text => chordFromNumeral(text, key));
         const analysis = slots.map(slot => analyze(slot, key));
 
@@ -792,10 +878,12 @@ globalThis.MaestroCounterpoint = (() => {
                 }
             }
             // The leading tone in an outer voice rises to the tonic; a seventh falls by step.
+            // In the bass only into the tonic chord (2.6.0): a bass falling from V6 to vi
+            // (C B A) is a line, and vi has no tonic to rise to there.
             const chordA = asked[k - 1] ?? analysis[k - 1]?.chord;
             const chordB = asked[k] ?? analysis[k]?.chord;
             if (dominant(chordA) && resolving(chordB)) {
-                for (const v of [0, 3]) {
+                for (const v of rootDegree(chordB) === 0 ? [0, 3] : [0]) {
                     if (a[v] && b[v] && modulo(midi(a[v]), 12) === leadingPc && midi(b[v]) - midi(a[v]) !== 1) {
                         problem(list, "error", "leading", `The leading tone in the ${VOICE_WORDS[v]} should rise to the tonic.`, onset, [at(v, k - 1), at(v, k)]);
                     }
@@ -813,14 +901,15 @@ globalThis.MaestroCounterpoint = (() => {
         return sortProblems(list);
     }
 
-    const check = exercise => (exercise.kind === "species" ? checkSpecies(exercise) : exercise.kind === "cantus" ? checkCantus(exercise) : checkFourPart(exercise));
+    const check = exercise => (exercise.kind === "species" ? checkSpecies(exercise) : exercise.kind === "cantus" ? checkCantus(exercise)
+        : exercise.kind === "melody" ? checkMelody(exercise) : checkFourPart(exercise));
 
     // Under the staff: in species, each counterpoint note's interval with the
     // cantus (8, 6, 3); in a cantus firmus, each note's degree (♯7 raised);
     // in four parts, each chord's numeral and figures.
     function analysisLine(exercise) {
         const { score } = exercise;
-        if (exercise.kind === "cantus") {
+        if (exercise.kind === "cantus" || exercise.kind === "melody") {
             return N.timed(N.voicesOf(score)[0].notes).map(entry => {
                 const p = entry.note.p;
                 if (!p) return { onset: entry.onset, text: "" };
@@ -860,7 +949,7 @@ globalThis.MaestroCounterpoint = (() => {
 
     const HEADER = "Maestro exercise 1";
     const ID = /^[a-z0-9]{1,40}$/;
-    const NOTE_TOKEN = /^(r|(\d{1,2})([+-][12])?)([whqe])(\.?)(~?)$/;
+    const NOTE_TOKEN = /^(r|(\d{1,2})([+-][12])?)([whqestf])(\.?)(~?)$/;
 
     function noteToken(note) {
         const pitchPart = note.p ? `${note.p.step}${note.p.alter > 0 ? `+${note.p.alter}` : note.p.alter < 0 ? note.p.alter : ""}` : "r";
@@ -880,7 +969,7 @@ globalThis.MaestroCounterpoint = (() => {
     function exerciseText(exercise) {
         const { score } = exercise;
         const lines = [HEADER, cleanTitle(exercise.title) || "Untitled"];
-        const kindOf = { species: String(exercise.species), fourpart: exercise.form, cantus: "-" }[exercise.kind];
+        const kindOf = { species: String(exercise.species), fourpart: exercise.form, cantus: "-", melody: exercise.instrument }[exercise.kind];
         lines.push(["kind", exercise.kind, kindOf, exercise.kind === "species" ? (exercise.cantusBelow ? "below" : "above") : "-"].join("\t"));
         lines.push(["key", String(score.key.fifths), score.key.mode].join("\t"));
         if (exercise.kind === "fourpart") lines.push(["numerals", exercise.numerals.join(" ")].join("\t"));
@@ -932,6 +1021,8 @@ globalThis.MaestroCounterpoint = (() => {
         const score = N.cleanScore({ title, key, meter: METER, staves });
         if (!score) return null;
         const count = N.voicesOf(score).length;
+        // Sixteenths and shorter, and a dotted eighth, are a melody's alone (2.6.0).
+        if (kind[1] !== "melody" && N.voicesOf(score).some(voice => voice.notes.some(note => !SPECIES_CODES.includes(note.d + (note.dot ? "." : ""))))) return null;
         if (kind[1] === "species") {
             const species = Number(kind[2]);
             if (!Number.isInteger(species) || species < 1 || species > 5 || !["below", "above"].includes(kind[3]) || count !== 2 || given !== (kind[3] === "below" ? 1 : 0)) return null;
@@ -943,6 +1034,12 @@ globalThis.MaestroCounterpoint = (() => {
             if (given !== wantGiven || numerals.some(text => !chordFromNumeral(text, key))) return null;
             if (N.voicesOf(score).some(voice => voice.notes.length !== numerals.length)) return null;
             return Object.freeze({ kind: "fourpart", form: kind[2], title, given, numerals: Object.freeze(numerals), score });
+        }
+        if (kind[1] === "melody") {
+            if (!melodyInstrument(kind[2]) || kind[3] !== "-" || count !== 1 || given !== -1 || !CANTUS_MODES.includes(key.mode)) return null;
+            const notes = N.voicesOf(score)[0].notes;
+            if (!notes.length || N.bars(notes, METER).bars.length > MELODY_BARS.max) return null;
+            return Object.freeze({ kind: "melody", instrument: kind[2], title, given: -1, numerals: Object.freeze([]), score });
         }
         if (kind[1] === "cantus") {
             const notes = count === 1 ? N.voicesOf(score)[0].notes : [];
@@ -961,24 +1058,190 @@ globalThis.MaestroCounterpoint = (() => {
         const notes = voices[voice]?.notes;
         if (!notes || index < 0 || index >= notes.length) return exercise;
         let changed = notes.map((note, at) => (at === index ? { ...note, p: p ?? null, tie: false } : note));
-        if (exercise.kind === "species") changed = tieSuspensions(changed, exercise.species);
+        if (exercise.kind === "species" || exercise.kind === "melody") changed = mendTies(exercise, changed);
         return withVoiceNotes(exercise, voice, changed);
     }
 
-    // The fifth species' bar rhythms: a bar's notes replaced by one of these,
-    // its pitches carried over where they fit.
+    // ---- Rhythm, bar by bar and note by note: the fifth species' line and
+    // a melody's (2.6.0). Times are in eighths, as everywhere here.
+
+    // The fifth species' bar rhythms, offered to choose from.
     const FIFTH_BARS = Object.freeze(["w", "h h", "h q q", "q q h", "q q q q", "h. q", "q e e h", "q e e q q", "h q e e"].map(text => Object.freeze(text.split(" "))));
-    function setBarRhythm(exercise, bar, pattern) {
-        if (exercise.kind !== "species" || exercise.species !== 5) return exercise;
-        const cpIndex = 1 - exercise.given;
-        const voices = N.voicesOf(exercise.score);
-        const timed = N.timed(voices[cpIndex].notes);
-        const before = timed.filter(entry => Math.floor(entry.onset / BAR) < bar).map(entry => entry.note);
-        const inBar = timed.filter(entry => Math.floor(entry.onset / BAR) === bar).map(entry => entry.note);
-        const after = timed.filter(entry => Math.floor(entry.onset / BAR) > bar).map(entry => entry.note);
-        if (!inBar.length || !after.length) return exercise;
-        const notes = pattern.map((code, at) => ({ p: inBar[at]?.p ?? null, d: code[0], dot: code.endsWith("."), tie: false }));
-        return withVoiceNotes(exercise, cpIndex, tieSuspensions([...before, ...notes, ...after], 5));
+    // The lengths a note may have, and where each may start in the bar: a
+    // whole at its start, a half or a quarter on a beat (a half on the second
+    // beat is a syncopation, q h q), an eighth anywhere, and in a melody
+    // (2.6.0) a sixteenth, thirty-second or sixty-fourth on its own grid,
+    // dotted or not (a sixty-fourth not). The fifth species keeps whole to
+    // eighth, with no dotted eighth.
+    const CODES = Object.freeze(["w", "h.", "h", "q.", "q", "e.", "e", "s.", "s", "t.", "t", "f"]);
+    const SPECIES_CODES = Object.freeze(["w", "h.", "h", "q.", "q", "e"]);
+    const codesFor = exercise => (exercise?.kind === "melody" ? CODES : SPECIES_CODES);
+    // A gap is filled with these, longest first: no dotted value shorter than a quarter.
+    const FILL_CODES = Object.freeze(["w", "h.", "h", "q.", "q", "e", "s", "t", "f"]);
+    const codeLength = code => N.DURATIONS[code[0]] * (code.endsWith(".") ? 1.5 : 1);
+    const ALIGN = Object.freeze({ "w": 8, "h.": 2, "h": 2, "q.": 2, "q": 2, "e.": 1, "e": 1, "s.": 0.5, "s": 0.5, "t.": 0.25, "t": 0.25, "f": 0.125 });
+    const codeOf = note => note.d + (note.dot ? "." : "");
+
+    // Whether an exercise's rhythm is written, not given, and in which voice.
+    const rhythmEditable = exercise => exercise?.kind === "melody" || (exercise?.kind === "species" && exercise.species === 5);
+    const rhythmVoice = exercise => (exercise.kind === "melody" ? 0 : 1 - exercise.given);
+    // The bars whose rhythm may change: all of a melody's; the fifth
+    // species' but its last, a whole note.
+    function rhythmBars(exercise) {
+        if (!rhythmEditable(exercise)) return 0;
+        const bars = Math.ceil(N.timed(N.voicesOf(exercise.score)[rhythmVoice(exercise)].notes).reduce((sum, entry) => sum + entry.length, 0) / BAR);
+        return exercise.kind === "melody" ? bars : bars - 1;
+    }
+
+    // A span of time, from a place in the bar, as the fewest lengths that each
+    // start where they may.
+    function fillCodes(from, length) {
+        const codes = [];
+        let at = from;
+        const end = from + length;
+        while (at < end) {
+            const code = FILL_CODES.find(each => codeLength(each) <= end - at && (at % BAR) % ALIGN[each] === 0 && (at % BAR) + codeLength(each) <= BAR);
+            if (!code) break;
+            codes.push(code);
+            at += codeLength(code);
+        }
+        return codes;
+    }
+
+    // A melody's ties hold only to the same pitch; the fifth species' are its
+    // suspensions.
+    function mendTies(exercise, notes) {
+        if (exercise.kind === "species") return tieSuspensions(notes, exercise.species);
+        return notes.map((note, index) => {
+            const next = notes[index + 1];
+            return note.tie && !(note.p && next?.p && midi(note.p) === midi(next.p)) ? { ...note, tie: false } : note;
+        });
+    }
+
+    function rhythmSplit(exercise, from, to = from) {
+        const timed = N.timed(N.voicesOf(exercise.score)[rhythmVoice(exercise)].notes);
+        return {
+            timed,
+            before: timed.filter(entry => entry.onset < from * BAR).map(entry => entry.note),
+            inside: timed.filter(entry => entry.onset >= from * BAR && entry.onset < (to + 1) * BAR),
+            after: timed.filter(entry => entry.onset >= (to + 1) * BAR).map(entry => entry.note)
+        };
+    }
+
+    // A bar's rhythm as its lengths, to copy.
+    function barRhythm(exercise, bar) {
+        if (!rhythmEditable(exercise)) return null;
+        const { inside } = rhythmSplit(exercise, bar);
+        return inside.length ? inside.map(entry => codeOf(entry.note)) : null;
+    }
+
+    // A bar's notes given a rhythm: each new note keeps the pitch of the note
+    // that began at the same moment, the rest are to write (in a melody,
+    // rests). Those listed in rests are empty whatever began there.
+    function setBarRhythm(exercise, bar, pattern, { rests = [] } = {}) {
+        if (!rhythmEditable(exercise) || !Number.isInteger(bar) || bar < 0 || bar >= rhythmBars(exercise)) return exercise;
+        if (!Array.isArray(pattern) || !pattern.length || !pattern.every(code => codesFor(exercise).includes(code))) return exercise;
+        if (pattern.reduce((sum, code) => sum + codeLength(code), 0) !== BAR) return exercise;
+        const { before, inside, after } = rhythmSplit(exercise, bar);
+        if (!inside.length) return exercise;
+        let at = bar * BAR;
+        const notes = pattern.map((code, index) => {
+            const began = rests.includes(index) ? null : inside.find(entry => entry.onset === at);
+            at += codeLength(code);
+            return { p: began?.note.p ?? null, d: code[0], dot: code.endsWith("."), tie: false };
+        });
+        const changed = withVoiceNotes(exercise, rhythmVoice(exercise), mendTies(exercise, [...before, ...notes, ...after]));
+        return exerciseText(changed) === exerciseText(exercise) ? exercise : changed;
+    }
+
+    // Bars given rhythms copied, in turn, from the first bar named on: as
+    // many bars as were copied, or every bar of a range, the copied ones
+    // repeating. Bars past the end are left out.
+    function pasteRhythms(exercise, from, to, rhythms) {
+        if (!Array.isArray(rhythms) || !rhythms.length) return exercise;
+        const last = Math.min(rhythmBars(exercise) - 1, to > from ? to : from + rhythms.length - 1);
+        let result = exercise;
+        for (let bar = from; bar <= last; bar++) result = setBarRhythm(result, bar, rhythms[(bar - from) % rhythms.length]);
+        return result;
+    }
+
+    // Bars emptied, their rhythm kept.
+    function clearBars(exercise, from, to = from) {
+        if (!rhythmEditable(exercise)) return exercise;
+        const voice = rhythmVoice(exercise);
+        const { before, inside, after } = rhythmSplit(exercise, from, Math.min(to, rhythmBars(exercise) - 1));
+        if (!inside.some(entry => entry.note.p)) return exercise;
+        const emptied = inside.map(entry => ({ ...entry.note, p: null, tie: false }));
+        return withVoiceNotes(exercise, voice, mendTies(exercise, [...before, ...emptied, ...after]));
+    }
+
+    // One note's length changed, within its bar. Longer, it takes the time of
+    // the notes after it (one cut short keeps its pitch for what's left);
+    // shorter, it leaves the time to write. Null when it doesn't fit.
+    function setNoteLength(exercise, index, code) {
+        if (!rhythmEditable(exercise) || !codesFor(exercise).includes(code)) return null;
+        const voice = rhythmVoice(exercise);
+        const timed = N.timed(N.voicesOf(exercise.score)[voice].notes);
+        const entry = timed[index];
+        if (!entry) return null;
+        const bar = Math.floor(entry.onset / BAR);
+        if (bar >= rhythmBars(exercise)) return null;
+        const start = entry.onset, end = start + codeLength(code), barEnd = (bar + 1) * BAR;
+        if (end > barEnd || (start % BAR) % ALIGN[code] !== 0) return null;
+        if (codeOf(entry.note) === code) return exercise;
+        const inBar = timed.filter(each => each.onset >= start && each.onset < barEnd && each.index > index);
+        const kept = inBar.filter(each => each.onset >= end);
+        const cut = inBar.find(each => each.onset < end && each.onset + each.length > end);
+        const nextOnset = kept[0]?.onset ?? barEnd;
+        const gap = fillCodes(end, nextOnset - end).map((each, at) => ({ p: at === 0 && cut ? cut.note.p : null, d: each[0], dot: each.endsWith("."), tie: false }));
+        const notes = [
+            ...timed.filter(each => each.index < index).map(each => each.note),
+            { ...entry.note, d: code[0], dot: code.endsWith(".") },
+            ...gap,
+            ...kept.map(each => each.note),
+            ...timed.filter(each => each.onset >= barEnd).map(each => each.note)
+        ];
+        return withVoiceNotes(exercise, voice, mendTies(exercise, notes));
+    }
+
+    // A melody's note tied to the next, which takes its pitch; again, untied.
+    function toggleTie(exercise, index) {
+        if (exercise?.kind !== "melody") return null;
+        const notes = N.voicesOf(exercise.score)[0].notes;
+        const note = notes[index], next = notes[index + 1];
+        if (!note?.p || !next) return null;
+        const changed = notes.map((each, at) => (at === index ? { ...each, tie: !each.tie } : at === index + 1 && !note.tie ? { ...each, p: note.p } : each));
+        return withVoiceNotes(exercise, 0, mendTies(exercise, changed));
+    }
+
+    // Taps, in eighths from the first bar's start, as bars' rhythms: each tap
+    // to the nearest eighth begins a note that lasts to the next; time before
+    // the first is a rest. Each bar: { pattern, rests } for setBarRhythm.
+    function rhythmFromTaps(taps, bars = 1) {
+        const span = bars * BAR;
+        const onsets = [...new Set(taps.filter(Number.isFinite).map(Math.round))].filter(at => at >= 0 && at < span).sort((a, b) => a - b);
+        if (!onsets.length) return null;
+        const result = Array.from({ length: bars }, () => ({ pattern: [], rests: [] }));
+        const put = (from, length, rest) => {
+            fillCodes(from, length).forEach((code, at) => {
+                const place = result[Math.floor(from / BAR)];
+                if (rest || at > 0) place.rests.push(place.pattern.length);
+                place.pattern.push(code);
+                from += codeLength(code);
+            });
+        };
+        // Each span is cut at the bar lines it crosses.
+        const mark = (from, to, rest) => {
+            while (from < to) {
+                const stop = Math.min(to, (Math.floor(from / BAR) + 1) * BAR);
+                put(from, stop - from, rest);
+                from = stop;
+                rest = true;
+            }
+        };
+        if (onsets[0] > 0) mark(0, onsets[0], true);
+        onsets.forEach((at, k) => mark(at, onsets[k + 1] ?? span, false));
+        return result;
     }
 
     // The exercise begun again: every written voice emptied, the given one
@@ -1000,10 +1263,246 @@ globalThis.MaestroCounterpoint = (() => {
         return score ? Object.freeze({ ...exercise, score }) : exercise;
     }
 
+    // ---- Model answers (2.6.0): what's to be written, written so the checker
+    // finds no error, by a search the checker itself guides; of the answers
+    // found, the one with the fewest warnings. Null when none is found within
+    // `budget` checks, so it never runs long.
+
+    // An exercise with some voices' notes replaced, unchecked: for the search alone.
+    function quickVoices(exercise, replaced) {
+        let index = 0;
+        const staves = exercise.score.staves.map(staff => ({
+            clef: staff.clef,
+            voices: staff.voices.map(each => {
+                const notes = replaced[index++];
+                return notes ? { name: each.name, notes } : each;
+            })
+        }));
+        return { ...exercise, score: { ...exercise.score, staves } };
+    }
+    const countOf = (problems, level) => problems.filter(each => each.level === level).length;
+    // Problems the next note can still mend: a dissonance resolved, a pair of eighths finished.
+    const MENDED_NEXT = new Set(["dissonance", "suspension", "eighths"]);
+    // Fresh starts, each with its share of the budget: a line that's boxed
+    // itself in near the cadence is begun again rather than searched to the end.
+    const MODEL_RUNS = 6;
+
+    function modelSpecies(exercise, random, budget) {
+        const { species, given } = exercise;
+        const key = exercise.score.key;
+        const voices = N.voicesOf(exercise.score);
+        const cpIndex = 1 - given, cpAbove = cpIndex === 0;
+        const cf = voices[given].notes.map(note => note.p);
+        if (cf.some(p => !p)) return null;
+        const written = voices[cpIndex].notes;
+        const timed = N.timed(written);
+        const last = written.length - 1;
+        // The first bar of the second species on opens with a rest.
+        const first = species > 1 ? 1 : 0;
+        const cfAt = index => cf[Math.min(cf.length - 1, Math.floor(timed[index].onset / BAR))];
+        const steps = cf.map(p => p.step);
+        const low = cpAbove ? Math.min(...steps) : Math.min(...steps) - 9;
+        const high = cpAbove ? Math.max(...steps) + 9 : Math.max(...steps);
+        const scale = [];
+        for (let step = low; step <= high; step++) scale.push(N.pitch(step, N.keyAlter(modulo(step, 7), key.fifths)));
+        const above = (p, c) => (cpAbove ? midi(p) - midi(c) : midi(c) - midi(p));
+        // It ends on the final at a unison or octave; the note before it is a step away, the leading tone raised.
+        const final = cf.at(-1);
+        const finals = scale.filter(p => modulo(midi(p) - midi(final), 12) === 0 && above(p, final) >= 0);
+        const beforeFinal = [];
+        for (const f of finals) {
+            for (const p of scale.filter(each => Math.abs(each.step - f.step) === 1)) {
+                const raised = N.pitch(p.step, p.alter + 1);
+                const lift = p.step < f.step && midi(f) - midi(p) === 2 && key.mode !== "phrygian" && allowedAlter(key, raised);
+                beforeFinal.push(lift ? raised : p);
+            }
+        }
+        // Near the close the mode's raised notes too (minor's sixth leads to its
+        // leading tone: F sharp, G sharp, A).
+        const raisedToo = scale.flatMap(p => {
+            const raised = N.pitch(p.step, p.alter + 1);
+            return allowedAlter(key, raised) ? [p, raised] : [p];
+        });
+        const closing = Math.max(0, cf.length - 2) * BAR;
+        const options = index => {
+            if (index === last) return finals;
+            if (index === last - 1) return beforeFinal.filter(p => above(p, cfAt(index)) >= 0);
+            return (timed[index].onset >= closing ? raisedToo : scale).filter(p => {
+                const apart = above(p, cfAt(index));
+                return apart >= 0 && apart <= 19;
+            });
+        };
+        // Steps first, then small leaps; a consonance first where the beat is strong; in the
+        // fourth species the downbeat held over from the beat before.
+        const order = (list, index, previous) => list.map(p => {
+            const beat = modulo(timed[index].onset, BAR);
+            const strong = beat === 0 || species === 1;
+            const c = cfAt(index);
+            const vertical = cpAbove ? N.interval(c, p) : N.interval(p, c);
+            let weight = random() * 1.5;
+            if (strong && consonance(vertical) === "dissonant") weight += species === 4 && beat === 0 ? 0 : 6;
+            if (consonance(vertical) === "perfect") weight += 0.6;
+            if (previous) {
+                const leap = Math.abs(p.step - previous.step);
+                if (leap === 0) weight += species === 4 && beat === 0 ? -3 : 4;
+                else weight += leap === 1 ? 0 : leap === 2 ? 0.9 : 1.8 + leap * 0.4;
+            }
+            return { p, weight };
+        }).sort((a, b) => a.weight - b.weight).map(each => each.p);
+
+        let checks = 0;
+        const found = [];
+        for (let run = 0; run < MODEL_RUNS && checks < budget; run++) {
+            const until = Math.min(budget, checks + Math.ceil(budget / MODEL_RUNS));
+            const notes = written.map(note => ({ p: null, d: note.d, dot: note.dot, tie: false }));
+            let done = null;
+            const look = () => {
+                checks += 1;
+                const tied = tieSuspensions(notes, species);
+                return { tied, problems: checkSpecies(quickVoices(exercise, { [cpIndex]: tied })) };
+            };
+            // An error on a note already settled, or on this one when the next can't mend it, ends the branch.
+            const fails = (problems, index) => problems.some(each => each.level === "error" && each.at.some(at => at.index <= index)
+                && !(MENDED_NEXT.has(each.rule) && index < last && each.at.every(at => at.index >= index)));
+            const search = (index, previous) => {
+                for (const p of order(options(index), index, previous)) {
+                    if (done || checks >= until) return;
+                    notes[index].p = p;
+                    const { tied, problems } = look();
+                    if (fails(problems, index)) continue;
+                    if (index === last) done = { notes: tied, warnings: countOf(problems, "warning") };
+                    else search(index + 1, p);
+                }
+                if (!done) notes[index].p = null;
+            };
+            search(first, null);
+            if (done) found.push(done);
+        }
+        if (!found.length) return null;
+        const best = found.sort((a, b) => a.warnings - b.warnings)[0];
+        return withVoiceNotes(exercise, cpIndex, best.notes);
+    }
+
+    // A move from chord to chord (soprano first): null if it breaks a rule
+    // checkFourPart counts an error, else the warnings it would give.
+    function fourPartMove(a, b, chordA, chordB, roles) {
+        let warnings = 0;
+        for (let v = 0; v < 4; v++) {
+            const melodic = N.interval(a[v], b[v]);
+            if (melodic.quality === "A" || melodic.quality === "AA" || melodic.number > 8 || melodic.simple === 7) return null;
+            if (v < 3 && midi(b[v + 1]) > midi(a[v])) warnings += 1;
+            if (v < 3 && midi(b[v]) < midi(a[v + 1])) warnings += 1;
+        }
+        for (let u = 0; u < 4; u++) for (let w = u + 1; w < 4; w++) {
+            const before = N.interval(a[w], a[u]), after = N.interval(b[w], b[u]);
+            if (consonance(after) !== "perfect" || consonance(before) !== "perfect" || before.simple !== after.simple) continue;
+            const move = motion(a[u], b[u], a[w], b[w]);
+            if (move === "similar") return null;
+            if (move === "contrary") warnings += 1;
+        }
+        const outer = N.interval(b[3], b[0]);
+        if (consonance(outer) === "perfect" && motion(a[0], b[0], a[3], b[3]) === "similar" && Math.abs(b[0].step - a[0].step) > 1) {
+            const before = N.interval(a[3], a[0]);
+            if (!(consonance(before) === "perfect" && before.simple === outer.simple)) return null;
+        }
+        if (roles.dominant(chordA) && roles.resolving(chordB)) {
+            for (const v of roles.rootDegree(chordB) === 0 ? [0, 3] : [0]) {
+                if (modulo(midi(a[v]), 12) === roles.leadingPc && midi(b[v]) - midi(a[v]) !== 1) return null;
+            }
+        }
+        if (chordA.seventh) {
+            for (let v = 0; v < 4; v++) {
+                if (modulo(midi(a[v]), 12) !== chordA.pcs[3]) continue;
+                const fall = a[v].step - b[v].step;
+                if (!(fall === 1 && midi(a[v]) - midi(b[v]) <= 2) && midi(a[v]) !== midi(b[v])) return null;
+            }
+        }
+        return warnings;
+    }
+
+    function modelFourPart(exercise, random, budget) {
+        const key = exercise.score.key;
+        const voices = N.voicesOf(exercise.score);
+        const rhythm = voices[0].notes.map(note => note.d);
+        const chords = exercise.numerals.map(text => chordFromNumeral(text, key));
+        if (chords.length !== rhythm.length || chords.some(chord => !chord)) return null;
+        const given = exercise.given;
+        const fixed = given >= 0 ? voices[given].notes.map(note => note.p) : null;
+        if (fixed?.some(p => !p)) return null;
+        const tonicPc = chords.at(-1).pcs[0];
+        const leadingPc = modulo(tonicPc - 1, 12);
+        // Each chord's voicings: complete, in range, spaced, the bass on its bass note;
+        // a doubled root is best, a missing fifth or a doubled third a little worse.
+        const VOICINGS_KEPT = 36;
+        const voicings = chords.map((chord, k) => {
+            const pick = v => (v === given ? [midi(fixed[k])] : inRange(v === 3 ? [chord.bassPc] : chord.pcs, RANGES[v]));
+            const list = [];
+            for (const b of pick(3)) for (const t of pick(2)) for (const a of pick(1)) for (const s of pick(0)) {
+                if (!(b <= t && t <= a && a <= s) || s - a > 12 || a - t > 12 || t - b > 19) continue;
+                const pcs = [s, a, t, b].map(value => modulo(value, 12));
+                if (!pcs.includes(chord.pcs[0]) || !pcs.includes(chord.pcs[1]) || (chord.seventh && !pcs.includes(chord.pcs[3]))) continue;
+                if (pcs.filter(pc => pc === leadingPc).length > 1) continue;
+                let cost = random() * 0.5;
+                if (!chord.seventh && !pcs.includes(chord.pcs[2])) cost += 3;
+                if (pcs.filter(pc => pc === chord.pcs[1]).length > 1) cost += 2;
+                cost += Math.abs(s - 70) / 4 + Math.abs(a - 64) / 6 + Math.abs(t - 57) / 6;
+                if (k === chords.length - 1 && pcs[0] !== tonicPc) cost += 8;
+                list.push({ values: [s, a, t, b], cost });
+            }
+            return list.sort((x, y) => x.cost - y.cost).slice(0, VOICINGS_KEPT).map(each => ({
+                ...each,
+                pitches: each.values.map((value, v) => (v === given ? fixed[k] : spellAs(value, chord)))
+            }));
+        });
+        if (voicings.some(list => !list.length)) return null;
+        // From one chord to the next, by the checker's rules for moves: an error
+        // rules the move out, a warning costs, and the upper voices move as
+        // little as they can. The answer is checked whole at the end.
+        const roles = keyRoles(key);
+        let checks = 0;
+        const pair = (from, to, k) => {
+            checks += 1;
+            const warnings = fourPartMove(from.pitches, to.pitches, chords[k - 1], chords[k], roles);
+            if (warnings === null) return Infinity;
+            const moves = [0, 1, 2].reduce((sum, v) => sum + Math.abs(to.values[v] - from.values[v]), 0);
+            // A soprano that leaps past a fourth costs more: it's the line that's heard.
+            const leap = Math.abs(to.values[0] - from.values[0]);
+            return warnings * 8 + moves + (leap > 5 ? 6 : 0) + Math.abs(to.values[3] - from.values[3]) / 4;
+        };
+        let best = voicings[0].map(voicing => ({ total: voicing.cost, path: [voicing] }));
+        for (let k = 1; k < chords.length; k++) {
+            if (checks > budget) return null;
+            best = voicings[k].map(voicing => {
+                let choice = null;
+                for (const each of best) {
+                    if (each.total === Infinity) continue;
+                    const total = each.total + pair(each.path.at(-1), voicing, k) + voicing.cost;
+                    if (!choice || total < choice.total) choice = { total, path: [...each.path, voicing] };
+                }
+                return choice ?? { total: Infinity, path: [] };
+            });
+        }
+        const winner = best.filter(each => each.total < Infinity).sort((a, b) => a.total - b.total)[0];
+        if (!winner) return null;
+        const answer = [0, 1, 2, 3].reduce((done, v) => (v === given ? done : withVoiceNotes(done, v, winner.path.map((voicing, k) => ({ p: voicing.pitches[v], d: rhythm[k], dot: false, tie: false })))), exercise);
+        return checkFourPart(answer).some(each => each.level === "error") ? null : answer;
+    }
+
+    // The budget counts checks of a species line, or moves from chord to chord
+    // in four parts, which cost far less: by default about 50 ms of searching at most.
+    const MODEL_BUDGET = Object.freeze({ species: 6000, fourpart: 60000 });
+    function modelAnswer(exercise, { random = Math.random, budget = null } = {}) {
+        if (exercise?.kind === "species") return modelSpecies(exercise, random, budget ?? MODEL_BUDGET.species);
+        if (exercise?.kind === "fourpart") return modelFourPart(exercise, random, budget ?? MODEL_BUDGET.fourpart);
+        return null;
+    }
+
     return Object.freeze({
         FUX, CHANT, PROGRESSIONS, FOURPART_KEYS, FORMS, RANGES, FIFTH_BARS, HEADER, ID, METER, CANTUS_MODES, CANTUS_LENGTH,
         fuxNotes, makeCantus, cantusProblems, cantusFinals, cantusExercise, cantusOf, checkCantus, speciesTemplate, tieSuspensions, speciesExercise, consonance, checkSpecies,
         chordFromNumeral, figuresFor, numeralParts, numeralText, keyChords, analyze, chordRhythm, fourPartExercise, figuredBass, checkFourPart,
-        check, analysisLine, exerciseText, readExercise, setNote, setBarRhythm, clearWritten, allowedAlter, degreePitch
+        check, analysisLine, exerciseText, readExercise, setNote, setBarRhythm, clearWritten, allowedAlter, degreePitch, modelAnswer,
+        CODES, codesFor, rhythmEditable, rhythmVoice, rhythmBars, fillCodes, barRhythm, pasteRhythms, clearBars, setNoteLength, toggleTie, rhythmFromTaps,
+        MELODY_BARS, melodyExercise, withMelodyNotes, checkMelody
     });
 })();

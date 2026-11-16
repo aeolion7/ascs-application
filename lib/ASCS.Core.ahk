@@ -406,6 +406,10 @@ ValidateExerciseText(text) {
     } else if (kind[2] == "cantus" && kind[3] == "-" && kind[4] == "-") {
         voices := 1
         first := 5
+    } else if (kind[2] == "melody" && RegExMatch(kind[3], "^[a-z]{2,16}$") && kind[4] == "-") {
+        ; A melody (2.6.0): one line, for an instrument the page names.
+        voices := 1
+        first := 5
     } else {
         throw Error("An exercise's kind isn't one Maestro knows.")
     }
@@ -437,9 +441,63 @@ ValidateExerciseText(text) {
         if (notes.Length > 512)
             throw Error("A voice has at most 512 notes.")
         for note in notes {
-            if !RegExMatch(note, "^(r|\d{1,2}([+-][12])?)[whqe]\.?~?$")
+            ; s, t and f: a sixteenth, thirty-second and sixty-fourth (2.6.0).
+            if !RegExMatch(note, "^(r|\d{1,2}([+-][12])?)[whqestf]\.?~?$")
                 throw Error("An exercise's note is malformed.")
         }
+    }
+    return JoinArray(lines, "`n")
+}
+
+; ------------------------------------------
+; Rhythm (2.6.0)
+; ------------------------------------------
+
+; A rhythm's id, as the page makes it: 8 to 24 lowercase letters and digits.
+; It names the rhythm's file, so nothing else is accepted.
+ValidateRhythmId(id) {
+    if !RegExMatch(id, "^[a-z0-9]{8,24}$")
+        throw Error("A rhythm's id is malformed.")
+    return id
+}
+
+; The metronome's time signatures, and how many steps a beat each takes.
+RhythmMeterBeats(meter) {
+    static beats := Map("2/2", 2, "2/4", 2, "3/4", 3, "4/4", 4, "5/4", 5, "6/4", 6, "7/4", 7, "3/8", 3, "6/8", 6, "9/8", 9, "12/8", 12, "5/8", 5, "5/8:2+3", 5, "7/8", 7, "7/8:3+2+2", 7, "7/8:2+3+2", 7)
+    return beats.Has(meter) ? beats[meter] : 0
+}
+
+; A rhythm as the page writes it: "Maestro rhythm 1"; its title (1 to 60
+; characters, no control characters or double quotes); its time signature
+; (one of the metronome's); its steps a beat (1 to 4, or 1 or 2 in a meter
+; counted in eighths), bars (1 to 4) and swing (50 to 75); then 1 to 8 rows,
+; each a sound from the kit, on or off, and its cells (0, 1 or 2), at most
+; four bars of steps. Fields are separated by tabs. Returns the text with
+; plain line breaks.
+ValidateRhythmText(text) {
+    static sounds := "kick|snare|rim|clap|hatClosed|hatOpen|tomHigh|tomLow|cowbell|clave|woodblock|shaker"
+    lines := StrSplit(Trim(StrReplace(text, "`r`n", "`n"), "`n"), "`n")
+    if (lines.Length < 5 || lines.Length > 12 || lines[1] !== "Maestro rhythm 1")
+        throw Error("A rhythm is malformed.")
+    title := lines[2]
+    if (title = "" || Trim(title) !== title || StrLen(title) > 60 || RegExMatch(title, '[\x00-\x1F\x7F"]'))
+        throw Error("A rhythm's title must be 1 to 60 characters.")
+    if !RegExMatch(lines[3], "^meter\t(\S+)$", &meter) || !(beats := RhythmMeterBeats(meter[1]))
+        throw Error("A rhythm's time signature isn't one Maestro knows.")
+    if !RegExMatch(lines[4], "^steps\t([1-4])\tbars\t([1-4])\tswing\t(\d\d)$", &counts)
+        throw Error("A rhythm's steps are malformed.")
+    steps := Integer(counts[1])
+    swing := Integer(counts[3])
+    if (InStr(meter[1], "/8") && steps > 2)
+        throw Error("A rhythm in eighths takes 1 or 2 steps a beat.")
+    if (swing < 50 || swing > 75)
+        throw Error("A rhythm's swing is 50 to 75.")
+    longest := beats * steps * 4
+    Loop lines.Length - 4 {
+        if !RegExMatch(lines[4 + A_Index], "^row\t(" sounds ")\t(on|off)\t([012]+)$", &row)
+            throw Error("A rhythm's row is malformed.")
+        if (StrLen(row[3]) > longest)
+            throw Error("A rhythm's row is at most four bars long.")
     }
     return JoinArray(lines, "`n")
 }

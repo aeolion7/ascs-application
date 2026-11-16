@@ -1,6 +1,8 @@
 # The Maestro command line, run through C:\Scripts\maestro.cmd: maestro <command> [options]
 # To add a command: write a function, then add it to $Commands below.
-# Keep this file ASCII. Only `try` starts or closes Maestro, and nothing here commits.
+# Keep this file ASCII. Only `try` starts or closes Maestro, and only
+# `commit-release` commits: a release's checkout, as you, after showing what it
+# will do and asking (2.6.0).
 # `isolate --run` starts only a copy made by `isolate`, which can't act outside itself.
 # Only `restore-data` changes the data folder, and only with Maestro closed.
 # `new-release` and `bump` change files in a second checkout, never the main
@@ -247,6 +249,111 @@ function Invoke-CutRelease([string[]]$options) {
     Write-Host "Done: $Main is at $(Invoke-Git log --oneline -1), and is pushed. You're on $Main."
 }
 
+# ---- commit-release (2.6.0)
+
+# Runs git in a given folder; stops on failure and returns its output.
+function Invoke-GitIn([string]$folder) {
+    $output = & git -C $folder @args 2>&1
+    if ($LASTEXITCODE -ne 0) { Stop-WithError "git $($args -join ' ') failed in ${folder}:`n$($output -join "`n")" }
+    return $output | ForEach-Object { "$_" }
+}
+
+# Stages everything in a release's checkout and commits it as v<version>, in
+# your own git name, once check --release passes; with --cut, cut-release
+# follows. Shows what it will do and asks first. Never on master, never
+# amends, never skips git's hooks.
+function Invoke-CommitRelease([string[]]$options) {
+    $yes = $false; $dryRun = $false; $noCheck = $false; $cut = $false; $named = ''
+    foreach ($option in $options) {
+        switch -Regex ($option) {
+            '^(--yes|-y)$' { $yes = $true; break }
+            '^(--dry-run|-n)$' { $dryRun = $true; break }
+            '^--no-check$' { $noCheck = $true; break }
+            '^--cut$' { $cut = $true; break }
+            '^-' { Stop-WithError "commit-release doesn't know $option. See: maestro help" }
+            default { if ($named) { Stop-WithError 'Name one version at most.' }; $named = $option }
+        }
+    }
+    if ($named -and -not (Test-VersionText $named)) { Stop-WithError 'Give the version as three numbers: maestro commit-release 2.6.0' }
+
+    # The folder: the named version's checkout, or the one you're standing in.
+    if ($named) {
+        $folder = Get-ReleaseFolder $named
+        if (-not (Get-Checkouts | Where-Object { Test-SamePath $_.Path $folder })) { Stop-WithError "There's no checkout for $named at $folder (see: maestro status)." }
+    } else {
+        $folder = Get-HereCheckout
+    }
+    $branch = (Get-Checkouts | Where-Object { Test-SamePath $_.Path $folder } | Select-Object -First 1).Branch
+    if (-not $branch -or $branch -eq $Main) {
+        Stop-WithError "commit-release commits a release's branch, never $Main. Name the version, or stand in its checkout (see: maestro status)."
+    }
+
+    # The version as written, the same in all five places, and the one named.
+    $spots = Get-VersionSpots $folder
+    $values = @($spots.Values | Sort-Object -Unique)
+    if ($values.Count -ne 1 -or -not (Test-VersionText $values[0])) {
+        Stop-WithError ("The version isn't the same everywhere in ${folder}: " + (($spots.GetEnumerator() | ForEach-Object { "$($_.Key) $($_.Value)" }) -join ', ') + '. Nothing was changed.')
+    }
+    $version = $values[0]
+    if ($named -and $version -ne $named) { Stop-WithError "$folder has $version written, not $named. Nothing was changed." }
+    $message = "v$version"
+
+    # Your name, as git has it: the commit is yours alone.
+    $name = "$(& git -C $folder config user.name 2>$null)".Trim()
+    $email = "$(& git -C $folder config user.email 2>$null)".Trim()
+    $global:LASTEXITCODE = 0
+    if (-not $name -or -not $email) { Stop-WithError 'git has no user.name or user.email to commit as. Set them (git config --global user.name ...), then run this again.' }
+
+    $changes = @(Invoke-GitIn $folder status --porcelain)
+    if (-not $changes.Count) { Stop-WithError "Nothing to commit in $folder." }
+    $made = @(Invoke-GitIn $folder log --format=%s "$Main..HEAD")
+    if ($made -contains $message) { Stop-WithError "$branch already has a commit called $message. Nothing was changed; commit anything more by hand." }
+
+    $new = @($changes | Where-Object { $_ -like '`?`? *' } | ForEach-Object { $_.Substring(3) })
+    Write-Host ''
+    Write-Host "Folder:  $folder"
+    Write-Host "Branch:  $branch"
+    Write-Host "Stages:  $($changes.Count) change(s), $($new.Count) of them new file(s)"
+    $new | Select-Object -First 20 | ForEach-Object { Write-Host "  new: $_" }
+    if ($new.Count -gt 20) { Write-Host "  and $($new.Count - 20) more" }
+    Write-Host "Commit:  $message, as $name <$email>"
+    $steps = @(if ($noCheck) { 'stage everything' } else { 'run check --release (about five minutes), stage everything' }) + 'commit'
+    if ($cut) { $steps += 'cut-release (push the branch, fast-forward master, push master)' }
+    Write-Host "Steps:   $($steps -join ', ')"
+    Write-Host ''
+    if ($dryRun) {
+        Write-Host 'Dry run: nothing was changed.'
+        return
+    }
+    if (-not $yes) {
+        Write-Host -NoNewline 'Go ahead? [y/N] '
+        $answer = [Console]::ReadLine()
+        if ($answer -notmatch '^(y|yes)$') {
+            Write-Host 'Stopped. Nothing was changed.'
+            return
+        }
+    }
+
+    if (-not $noCheck) {
+        Push-Location -LiteralPath $folder
+        try { & pwsh -NoProfile -File $PSCommandPath check --release | ForEach-Object { Write-Host $_ } }
+        finally { Pop-Location }
+        if ($LASTEXITCODE -ne 0) { $global:LASTEXITCODE = 0; Stop-WithError "check --release didn't pass, so nothing was committed." }
+    }
+
+    Write-Host 'Staging...'
+    Invoke-GitIn $folder add -A | Out-Null
+    Write-Host "Committing $message..."
+    Invoke-GitIn $folder commit -m $message | Out-Null
+    Write-Host "Committed: $(Invoke-GitIn $folder log --oneline -1) on $branch."
+    if ($cut) {
+        Write-Host ''
+        Invoke-CutRelease @($branch, '--yes')
+        return
+    }
+    Write-Host 'Nothing was pushed. Then: maestro cut-release'
+}
+
 # ---- check
 
 # The AHK parse check: parses without running. The copy has to sit beside
@@ -385,7 +492,7 @@ function Invoke-Check([string[]]$options) {
             Write-Host "Release:    the version, CHANGELOG and README agree with this run"
         }
         $new = @(& git -C $folder status --porcelain | Where-Object { $_ -like '`?`? *' })
-        if ($new.Count) { Write-Host "Git:        $($new.Count) new file(s) aren't staged yet. Run git add -A before the release commit." }
+        if ($new.Count) { Write-Host "Git:        $($new.Count) new file(s) aren't staged yet; maestro commit-release stages everything." }
     }
 
     Write-Host ''
@@ -1465,6 +1572,19 @@ maestro <command> [options]
       is now to the backups folder. Maestro must be closed. Asks first.
         --yes, -y       Don't ask
 
+  commit-release [version] [--cut] [--no-check] [--dry-run] [--yes]
+      Commits a release: in the version's checkout (or the one you're standing
+      in), runs check --release, stages everything (git add -A) and commits it
+      as v<version> in your own git name. Shows the files and asks first.
+      Stops with nothing changed on master, if the version isn't the same
+      everywhere or isn't the one named, if there's nothing to commit, if the
+      branch already has that commit, or if the check fails. Never amends,
+      pushes (unless --cut) or skips git's hooks.
+        --cut           Then cut-release: push, fast-forward master, push it
+        --no-check      Skip check --release (just run it yourself)
+        --dry-run, -n   Show what would happen, and change nothing
+        --yes, -y       Don't ask
+
   cut-release [branch] [--dry-run] [--yes]
       Pushes the branch with the newest commit (or the one named), switches
       to master, fast-forwards master to it, and pushes master. Shows what it
@@ -1517,6 +1637,7 @@ $Commands = @{
     'backup-data' = { Invoke-BackupData }
     'restore-data' = { Invoke-RestoreData $Rest }
     'cut-release' = { Invoke-CutRelease $Rest }
+    'commit-release' = { Invoke-CommitRelease $Rest }
     'new-release' = { Invoke-NewRelease $Rest }
     'bump'        = { Invoke-Bump $Rest }
     'clean'       = { Invoke-Clean $Rest }

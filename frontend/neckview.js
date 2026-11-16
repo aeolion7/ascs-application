@@ -17,7 +17,7 @@ const cons = {
     chordVoices: [],        // the last chord's notes, damped when the next is played
     steady: null,           // the steady tone: { midi, oscillator, gain }
     drone: null,            // the drone on the root: { midi, oscillator, gain }
-    scalePlay: null,        // the scale being played: { voices, timer }
+    scalePlay: null,        // the scale being played: { run } (2.6.0: a drill)
     plucks: new Map(),      // pluck buffers by pitch and A4, newest last
     tonesOut: null,
     wave: null
@@ -233,34 +233,96 @@ function retuneConsDrone() {
 
 // What's shown, up an octave from the root near C3 and back down, a note a
 // beat at the metronome's tempo.
+// ---- Notes in time (2.6.0): booked a little ahead on the audio clock at
+// the metronome's tempo as it is now, so a change of tempo takes hold at once.
+// `events` are { midi, at, length } in beats, in order. Returns the run, with
+// stop(), or null if there's no sound.
+const CONS_SEQUENCE_AHEAD = 0.5;
+async function playConsSequence(events, { onBeat = null, onEnd = null } = {}) {
+    const context = await readyConsAudio();
+    if (!context) return null;
+    const end = Math.max(0, ...events.map(event => event.at + event.length));
+    const run = { events, next: 0, voices: [], timer: null, beat: 0, time: context.currentTime + 0.08, tempo: metro.settings.tempo, stopped: false };
+    run.stop = () => {
+        if (run.stopped) return;
+        run.stopped = true;
+        clearTimeout(run.timer);
+        run.voices.forEach(dampConsVoice);
+        restConsAudio();
+    };
+    const tick = () => {
+        if (run.stopped) return;
+        const now = context.currentTime;
+        // Where it is, in beats, at the tempo it had; from here, the tempo now.
+        const beat = run.beat + ((now - run.time) * run.tempo) / 60;
+        run.beat = beat;
+        run.time = now;
+        run.tempo = metro.settings.tempo;
+        const seconds = 60 / run.tempo;
+        const due = [];
+        while (run.next < events.length && events[run.next].at < beat + CONS_SEQUENCE_AHEAD / seconds) due.push(events[run.next++]);
+        if (due.length) {
+            const offsets = due.map(event => Math.max(0, (event.at - beat) * seconds));
+            const ends = due.map((event, at) => offsets[at] + event.length * seconds - 0.03);
+            pluckConsNotes(due.map(event => event.midi), offsets, ends).then(voices => {
+                if (run.stopped) voices.forEach(dampConsVoice);
+                else run.voices.push(...voices);
+            });
+        }
+        onBeat?.(beat);
+        if (beat > end + 0.3 / seconds) {
+            run.stop();
+            onEnd?.();
+            return;
+        }
+        run.timer = setTimeout(tick, 60);
+    };
+    tick();
+    return run;
+}
+
+// Play scale (a chord's notes when one is picked), as a drill (2.6.0): at
+// the tempo, as many notes a beat as the metronome's subdivision, each lit on
+// the neck as it sounds.
 async function playConsScale() {
     stopConsScale();
     const shown = consShownNotes();
     if (!shown.length) return;
     const base = 48 + shown[0].pc;
     const up = shown.map(note => base + (note.pc - shown[0].pc + 12) % 12);
-    const midis = [...up, base + 12, ...up.slice(1).reverse(), base];
-    const spread = 60 / metro.settings.tempo;
-    const playing = { voices: [], timer: null };
-    playing.timer = setTimeout(() => {
-        if (cons.scalePlay !== playing) return;
-        cons.scalePlay = null;
-        renderConsHear();
-    }, (midis.length * spread + 0.6) * 1000);
+    const midis = MaestroMusic.drillNotes(up, cons.settings.drill);
+    const each = 1 / (MaestroMetronome.COUNTS[metro.settings.count] || 1);
+    const playing = { run: null };
     cons.scalePlay = playing;
     renderConsHear();
-    const voices = await pluckConsNotes(midis, spread);
-    if (cons.scalePlay === playing) playing.voices = voices;
-    else voices.forEach(dampConsVoice);
+    const events = midis.map((midi, index) => ({ midi, at: index * each, length: each }));
+    const run = await playConsSequence(events, {
+        onBeat: beat => lightConsSounding(midis[Math.floor(beat / each)] ?? null),
+        onEnd: () => {
+            if (cons.scalePlay !== playing) return;
+            cons.scalePlay = null;
+            lightConsSounding(null);
+            renderConsHear();
+        }
+    });
+    if (cons.scalePlay === playing) playing.run = run;
+    else run?.stop();
 }
 
 function stopConsScale() {
     const playing = cons.scalePlay;
     if (!playing) return;
     cons.scalePlay = null;
-    clearTimeout(playing.timer);
-    playing.voices.forEach(dampConsVoice);
+    playing.run?.stop();
+    lightConsSounding(null);
     renderConsHear();
+}
+
+// The note sounding, lit wherever the neck or the keys show it.
+function lightConsSounding(midi) {
+    document.querySelectorAll("#consNeck .is-sounding, #consKeyboard .is-sounding").forEach(node => node.classList.remove("is-sounding"));
+    if (midi === null) return;
+    document.querySelectorAll(`#consNeck [data-midi="${midi}"], #consKeyboard [data-midi="${midi}"]`).forEach(node => node.classList.add("is-sounding"));
 }
 
 function renderConsHear() {
@@ -272,7 +334,8 @@ function renderConsHear() {
     const what = cons.chord >= 0 ? "chord" : "scale";
     play.setAttribute("aria-pressed", String(cons.scalePlay !== null));
     play.textContent = cons.scalePlay ? "Stop" : `Play ${what}`;
-    play.title = cons.scalePlay ? "Stop playing" : `Play the ${what} up an octave and back, a note a beat at ${metro.settings.tempo} BPM`;
+    play.title = cons.scalePlay ? "Stop playing" : `Play the ${what} ${MaestroMusic.DRILLS[cons.settings.drill].toLowerCase()}, at the metronome's tempo and subdivision`;
+    $("consDrill").value = cons.settings.drill;
 }
 
 function soundConsString(midi) {
@@ -493,7 +556,13 @@ function drawConsKeys(low, high, mark, label, nameOf) {
 // ---- Drawing the page
 
 // The neck hidden on this tab (2.5.0), where it's only a way to write.
-const consNeckHidden = () => MaestroMusic.NECK_OPTIONAL.includes(consSections.current()) && cons.settings.neckHidden.includes(consSections.current());
+const consNeckHidden = () => {
+    const tab = consSections.current();
+    if (MaestroMusic.NECKLESS.includes(tab)) return true;
+    // The Quiz's rhythms are written and tapped (2.6.0).
+    if (tab === "quiz") return MaestroMusic.QUIZ_NECKLESS.includes(cons.settings.quizKind);
+    return MaestroMusic.NECK_OPTIONAL.includes(tab) && cons.settings.neckHidden.includes(tab);
+};
 
 function renderConsNeck() {
     const hidden = consNeckHidden();
@@ -936,6 +1005,18 @@ document.querySelectorAll("#consChordSize [data-sevenths]").forEach(button => bu
 }));
 $("consDrone").addEventListener("click", () => (cons.drone ? stopConsDrone() : startConsDrone()));
 $("consPlayScale").addEventListener("click", () => (cons.scalePlay ? stopConsScale() : playConsScale()));
+$("consDrill").replaceChildren(...Object.entries(MaestroMusic.DRILLS).map(([value, label]) => {
+    const option = element("option", "", label);
+    option.value = value;
+    return option;
+}));
+$("consDrill").addEventListener("change", () => {
+    if (!Object.hasOwn(MaestroMusic.DRILLS, $("consDrill").value)) return;
+    cons.settings.drill = $("consDrill").value;
+    saveConsSettings();
+    if (cons.scalePlay) playConsScale();
+    renderConsHear();
+});
 $("consKeyChords").addEventListener("click", event => {
     const button = event.target.closest("[data-chord]");
     if (button) chooseConsChord(Number(button.dataset.chord));
@@ -1017,3 +1098,7 @@ $("consScale").replaceChildren(...MaestroMusic.FAMILIES.map(family => {
     return group;
 }));
 renderConservatory();
+// Each section's own script loads after this one, so the section open at
+// start is drawn again once every script has run (Counterpoint's and
+// Rhythm's were left as the page's bare markup before 2.6.0).
+document.addEventListener("DOMContentLoaded", renderConservatory, { once: true });

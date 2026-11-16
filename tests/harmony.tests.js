@@ -171,4 +171,57 @@
         && busy.every(event => (busyLine.find(note => note.start === event.start).midi - H.chordTones(event.chord)[0].pc) % 12 === 0));
     check("bass: no step repeats the note before", busyLine.every((note, at) => at === 0 || note.midi !== busyLine[at - 1].midi));
     equal("bass: nothing for no chords or no bar", `${H.bassLine([], four).length} ${H.bassLine(cf, []).length}`, "0 0");
+
+    // ---- Voicings (2.6.0)
+    const guitar = [40, 45, 50, 55, 59, 64];
+    const shapeText = shape => shape.frets.map(fret => (fret === null ? "x" : fret)).join(" ");
+    const shapesOf = (name, pitches = guitar, frets = 15) => H.chordShapes(name, pitches, frets).map(shapeText);
+    check("shapes: open C first", shapesOf("C")[0] === "x 3 2 0 1 0");
+    check("shapes: G, Am, E and D open as they're usually played", shapesOf("G").includes("3 2 0 0 0 3") && shapesOf("Am")[0] === "x 0 2 2 1 0" && shapesOf("E")[0] === "0 2 2 1 0 0" && shapesOf("D")[0] === "x x 0 2 3 2");
+    check("shapes: F as a barre, and no string open under a barre", shapesOf("F")[0] === "1 3 3 2 1 1" && H.chordShapes("F", guitar, 15).every(shape => !shape.barre || shape.frets.every((fret, string) => fret !== 0 || string < shape.frets.findIndex(each => each === shape.low))));
+    const everyShape = ["C", "Dm7", "G7", "Cmaj7", "Bm7♭5", "E7♯9", "A13", "C/E", "Fmaj9", "Gsus4"].flatMap(name => H.chordShapes(name, guitar, 15).map(shape => ({ name, shape })));
+    check("shapes: every note the chord's, within four frets, four fingers at most", everyShape.length > 200 && everyShape.every(({ name, shape }) => {
+        const pcs = H.chordTones(name).map(tone => tone.pc);
+        const fretted = shape.frets.filter(fret => fret > 0);
+        return shape.midis.every(midi => pcs.includes(midi % 12)) && (!fretted.length || Math.max(...fretted) - Math.min(...fretted) < H.SHAPE_SPAN);
+    }));
+    check("shapes: a seventh chord keeps its root, third and seventh; the fifth may go", H.chordShapes("G7", guitar, 15).every(shape => [7, 11, 5].every(pc => shape.midis.some(midi => midi % 12 === pc))) && H.chordShapes("G7", guitar, 15).some(shape => !shape.midis.some(midi => midi % 12 === 2)));
+    check("shapes: a slash chord has its bass lowest", H.chordShapes("C/E", guitar, 15).every(shape => Math.min(...shape.midis) % 12 === 4));
+    check("shapes: on a ukulele and a bass too", shapesOf("C", [67, 60, 64, 69])[0] === "0 0 0 3" && shapesOf("G", [28, 33, 38, 43], 20).length > 0);
+    equal("shapes: none for what isn't a chord", H.chordShapes("Q7", guitar, 15).length, 0);
+    const keys = H.keyVoicings("Dm7");
+    check("keys: close in each inversion, drop 2, a shell and a spread", ["close", "drop2", "shell", "open"].every(kind => keys.some(each => each.kind === kind)) && keys.filter(each => each.kind === "close").length === 4);
+    check("keys: every voicing the chord's notes, the shell root, third and seventh", keys.every(each => each.midis.every(midi => [2, 5, 9, 0].includes(midi % 12))) && keys.find(each => each.kind === "shell").midis.map(midi => midi % 12).join() === "2,5,0");
+    check("keys: a slash chord keeps its bass", H.keyVoicings("C/E").every(each => each.midis[0] % 12 === 4));
+    const tune = ["Cmaj7", "Am7", "Dm7", "G7", "Cmaj7"];
+    const choices = tune.map(name => H.chordShapes(name, guitar, 15));
+    const smooth = H.smoothVoicings(choices);
+    const travel = path => path.slice(1).reduce((sum, index, k) => sum + H.voicingDistance(choices[k][path[k]], choices[k + 1][index]), 0);
+    check("smooth: a voicing for each chord, moving less than the easiest of each", smooth.length === 5 && smooth.every(index => index >= 0) && travel(smooth) <= travel([0, 0, 0, 0, 0]));
+    equal("smooth: a voicing pinned is kept", H.smoothVoicings(choices, [null, null, 7])[2], 7);
+    equal("smooth: a chord with none is skipped", H.smoothVoicings([choices[0], [], choices[2]])[1], -1);
+    equal("smooth: nothing for nothing", H.smoothVoicings([]).length, 0);
+
+    // ---- Cadences and ways to another key (2.6.0)
+    const inC = { root: "C", scale: "major" }, inAm = { root: "A", scale: "minor" };
+    const cadence = (key, id) => H.cadencesIn(key).find(each => each.id === id)?.chords.join(" ");
+    equal("cadences: authentic in C", cadence(inC, "authentic"), "F G7 C");
+    equal("cadences: deceptive in C", cadence(inC, "deceptive"), "Dm G7 Am");
+    equal("cadences: backdoor in C", cadence(inC, "backdoor"), "Fm7 B♭7 Cmaj7");
+    equal("cadences: the Phrygian half cadence's iv over its third", cadence(inAm, "phrygian"), "Dm/F E");
+    equal("cadences: a Picardy third in A minor", cadence(inAm, "picardy"), "Dm E7 A");
+    check("cadences: major's and minor's own", !cadence(inC, "phrygian") && !cadence(inAm, "backdoor") && H.cadencesIn(inC).length === 6 && H.cadencesIn(inAm).length === 7);
+    equal("cadences: a mode takes its parallel minor's", cadence({ root: "D", scale: "dorian" }, "deceptive"), "Gm A7 B♭");
+    equal("cadences: in a flat key", cadence({ root: "E♭", scale: "major" }, "authentic"), "A♭ B♭7 E♭");
+    equal("cadences: none outside a key", H.cadencesIn({ root: "C", scale: "chromatic" }).length, 0);
+    const routes = H.modulationRoutes(inC, { root: "G", scale: "major" });
+    equal("ways: C to G, each kind", routes.map(route => route.id).join(), "pivot,dominant,twofive,direct");
+    check("ways: each starts on the old tonic and ends on the new, the dominant before it", routes.every(route => route.chords[0] === "C" && route.chords.at(-1) === "G") && routes.find(route => route.id === "dominant").chords.join(" ") === "C D7 G");
+    check("ways: the pivot is a chord both keys hold", H.pivotChords(inC, { root: "G", scale: "major" }, 3).some(pivot => pivot.name === routes[0].chords[1]));
+    check("ways: to a key that shares no chord, no pivot", !H.modulationRoutes(inC, { root: "F♯", scale: "major" }).some(route => route.id === "pivot"));
+    const blues = H.cleanChart({ title: "B", root: "C", scale: "major", beats: 4, sections: [{ name: "", repeat: 1, bars: [["C7"], ["F7"], ["%"], ["G7"]] }] });
+    const aaba = H.chartInForm(blues, [["A", 2, 2], ["B", 3, 1], ["A", 2, 1]], "C");
+    equal("form: the chords poured in order, repeats written out, the rest the filler", aaba.sections.map(section => `${section.name}${section.repeat}:${section.bars.map(bar => bar[0]).join(" ")}`).join(" | "), "A2:C7 F7 | B1:F7 G7 C | A1:C7 F7");
+    equal("form: more bars than a song holds is refused", H.chartInForm(blues, ["A", "B", "C", "D", "E"].map(name => [name, 64, 1]), "C"), null);
+    equal("ways: into a minor key, its ii is half-diminished", H.modulationRoutes(inC, inAm).find(route => route.id === "twofive").chords.join(" "), "C Bm7♭5 E7 Am");
 })();

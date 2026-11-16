@@ -463,6 +463,81 @@ foreach ($copy in "$($r.work)\tools\cli\Maestro-Cli.ps1", "$($r.work)\_1.3\tools
     Add-Check "no folder named: $from works on the main folder" ($own -match ('Keeping:\s+' + [regex]::Escape("$($r.work)\_1.3 ")) -and $own -notmatch ('Keeping:\s+' + [regex]::Escape("$($r.work) "))) $own
 }
 
+# ---- commit-release (2.6.0): a release's checkout, staged and committed as you
+# A release made ready the way the user's are: a checkout, bumped, its docs agreeing.
+function New-ReadyRelease([string]$name) {
+    $repo = New-VersionedRepo $name
+    $folder = "$($repo.work)\_1.3"
+    Invoke-Cli $repo @('new-release', '1.3.0') | Out-Null
+    Invoke-Cli $repo @('bump', '1.3.0') '' $folder | Out-Null
+    [IO.File]::WriteAllText("$folder\README.md", [IO.File]::ReadAllText("$folder\README.md").Replace('**Status:** 1.2.3', '**Status:** 1.3.0'))
+    [IO.File]::WriteAllText("$folder\CHANGELOG.md", [IO.File]::ReadAllText("$folder\CHANGELOG.md").Replace('1.3.0 (in progress)', "1.3.0`r`n`r`nChecks at release: core 5, cli 7."))
+    Set-Content "$folder\added.txt" new
+    return @{ repo = $repo; folder = $folder }
+}
+function Get-Subject([string]$folder) { (& git -C $folder log -1 --format=%s).Trim() }
+
+$ready = New-ReadyRelease commit
+$r = $ready.repo; $dev = $ready.folder
+$before = Get-Rev $r feat/v1.3.0
+$run = Invoke-Cli $r @('commit-release', '--yes')
+Add-Check 'commit-release: refused on master' ($run.code -ne 0 -and $run.text -match 'never master' -and (Get-Changes $r.work).Count -eq 0) $run.text
+$run = Invoke-Cli $r @('commit-release', '1.4.0', '--yes')
+Add-Check 'commit-release: a version with no checkout is refused' ($run.code -ne 0 -and $run.text -match 'no checkout for 1\.4\.0') $run.text
+$run = Invoke-Cli $r @('commit-release', '1.3', '--yes')
+Add-Check 'commit-release: a version needs three numbers' ($run.code -ne 0 -and $run.text -match 'three numbers') $run.text
+$run = Invoke-Cli $r @('commit-release', '--force')
+Add-Check 'commit-release: an unknown option is refused' ($run.code -ne 0 -and $run.text -match "doesn't know --force") $run.text
+
+# What it would do, without doing it.
+$run = Invoke-Cli $r @('commit-release', '1.3.0', '--dry-run')
+Add-Check 'commit-release: a dry run shows the files, the message and you, and changes nothing' ($run.code -eq 0 -and $run.text -match 'new: added\.txt' -and $run.text -match 'Commit:\s+v1\.3\.0, as Test <test@example\.invalid>' -and $run.text -match 'Dry run' -and (Get-Rev $r feat/v1.3.0) -eq $before -and (Get-Changes $dev).Count -gt 0) $run.text
+$run = Invoke-Cli $r @('commit-release', '1.3.0') 'n'
+Add-Check 'commit-release: asks, and no means no' ($run.text -match 'Stopped' -and (Get-Rev $r feat/v1.3.0) -eq $before -and (Get-Changes $dev).Count -gt 0) $run.text
+
+# A check that fails commits nothing.
+[IO.File]::WriteAllText("$dev\tests\counts.txt", "core       PASS 5 FAIL 1`r`ncli        PASS 7 FAIL 0`r`n")
+$run = Invoke-Cli $r @('commit-release', '1.3.0', '--yes')
+Add-Check 'commit-release: a failing check commits and stages nothing' ($run.code -ne 0 -and $run.text -match "check --release didn't pass" -and (Get-Rev $r feat/v1.3.0) -eq $before -and @(& git -C $dev diff --cached --name-only).Count -eq 0) $run.text
+[IO.File]::WriteAllText("$dev\tests\counts.txt", "core       PASS 5 FAIL 0`r`ncli        PASS 7 FAIL 0`r`n")
+
+# A version that disagrees, or isn't the one named.
+$sidebar = [IO.File]::ReadAllText("$dev\frontend\index.html")
+[IO.File]::WriteAllText("$dev\frontend\index.html", $sidebar.Replace('1.3.0', '1.2.9'))
+$run = Invoke-Cli $r @('commit-release', '--yes', '--no-check') '' $dev
+Add-Check 'commit-release: a version that disagrees is refused' ($run.code -ne 0 -and $run.text -match "isn't the same everywhere" -and (Get-Rev $r feat/v1.3.0) -eq $before) $run.text
+[IO.File]::WriteAllText("$dev\frontend\index.html", $sidebar)
+Invoke-Cli $r @('bump', '1.3.5') '' $dev | Out-Null
+$run = Invoke-Cli $r @('commit-release', '1.3.0', '--yes', '--no-check')
+Add-Check 'commit-release: a checkout with another version written is refused' ($run.code -ne 0 -and $run.text -match 'has 1\.3\.5 written, not 1\.3\.0') $run.text
+Invoke-Cli $r @('bump', '1.3.0') '' $dev | Out-Null
+
+# No name to commit as.
+& git -C $r.work config user.name ''
+$run = Invoke-Cli $r @('commit-release', '1.3.0', '--yes', '--no-check')
+Add-Check 'commit-release: with no git name, refused' ($run.code -ne 0 -and $run.text -match 'no user\.name' -and (Get-Rev $r feat/v1.3.0) -eq $before) $run.text
+Invoke-QuietGit -C $r.work config user.name Test
+
+# The whole path, standing in the checkout: checked, staged, committed as you.
+$run = Invoke-Cli $r @('commit-release', '--yes') '' $dev
+$body = (& git -C $dev log -1 --format=%B) -join "`n"
+Add-Check 'commit-release: runs the check, then commits everything as v1.3.0' ($run.code -eq 0 -and $run.text -match 'All good' -and (Get-Subject $dev) -eq 'v1.3.0' -and (Get-Changes $dev).Count -eq 0 -and (& git -C $dev show --name-only --format= HEAD) -contains 'added.txt') $run.text
+Add-Check 'commit-release: in your name alone' ((& git -C $dev log -1 --format='%an <%ae>|%cn') -eq 'Test <test@example.invalid>|Test' -and $body -notmatch 'Co-Authored-By') $body
+Add-Check 'commit-release: pushes nothing without --cut' ((Get-OriginRev $r feat/v1.3.0) -eq '' -and $run.text -match 'Then: maestro cut-release') $run.text
+$run = Invoke-Cli $r @('commit-release', '1.3.0', '--yes')
+Add-Check 'commit-release: then, nothing to commit' ($run.code -ne 0 -and $run.text -match 'Nothing to commit') $run.text
+Set-Content "$dev\more.txt" more
+$after = Get-Rev $r feat/v1.3.0
+$run = Invoke-Cli $r @('commit-release', '1.3.0', '--yes', '--no-check')
+Add-Check 'commit-release: never a second commit of the same name' ($run.code -ne 0 -and $run.text -match 'already has a commit called v1\.3\.0' -and (Get-Rev $r feat/v1.3.0) -eq $after -and (Test-Path "$dev\more.txt")) $run.text
+
+# --cut: committed, then cut.
+$ready = New-ReadyRelease cut
+$r = $ready.repo; $dev = $ready.folder
+$run = Invoke-Cli $r @('commit-release', '1.3.0', '--cut', '--yes', '--no-check')
+$tip = Get-Rev $r feat/v1.3.0
+Add-Check 'commit-release --cut: committed, pushed, and master moved to it' ($run.code -eq 0 -and (Get-Subject $dev) -eq 'v1.3.0' -and (Get-OriginRev $r feat/v1.3.0) -eq $tip -and (Get-OriginRev $r master) -eq $tip -and (Get-Rev $r master) -eq $tip) $run.text
+
 # ---- doctor (2.2.0): it reads this PC, so only what a stand-in repo decides is checked
 $r = New-TestRepo doctor
 $before = @(Get-ChildItem -LiteralPath $r.work -Recurse -Force -Name)

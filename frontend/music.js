@@ -114,7 +114,22 @@ globalThis.MaestroMusic = (() => {
     // A position is five frets from its first; -1 is the whole neck.
     const POSITION_SPAN = 5;
     const POSITION_LAST = 11;
-    const TABS = Object.freeze(["scales", "chords", "progressions", "counterpoint", "finder", "quiz", "tuning"]);
+    const TABS = Object.freeze(["scales", "chords", "progressions", "counterpoint", "rhythm", "finder", "quiz", "tuning"]);
+    // Drills (2.6.0): ways through a scale's or a chord's notes, played at the
+    // metronome's tempo, as many to a beat as its subdivision counts.
+    const DRILLS = Object.freeze({ straight: "Up and back", thirds: "In thirds", fours: "In fours", triads: "Triads on each", sevenths: "Sevenths on each" });
+    // `midis` are the notes going up an octave, without the top; each figure
+    // starts on each in turn, and it ends on the octave above the first.
+    function drillNotes(midis, pattern) {
+        const n = midis.length;
+        if (!n) return [];
+        const at = i => midis[((i % n) + n) % n] + 12 * Math.floor(i / n);
+        const figures = { thirds: [0, 2], fours: [0, 1, 2, 3], triads: [0, 2, 4], sevenths: [0, 2, 4, 6] }[pattern];
+        if (!figures) return [...Array.from({ length: n + 1 }, (_, i) => at(i)), ...Array.from({ length: n }, (_, i) => at(n - 1 - i))];
+        return [...Array.from({ length: n }, (_, i) => figures.map(step => at(i + step))).flat(), at(n)];
+    }
+    // Tabs that don't use the neck at all (2.6.0), so it isn't shown.
+    const NECKLESS = Object.freeze(["rhythm"]);
     // The tabs whose short neck is only a way to write, so it can be hidden
     // (2.5.0); elsewhere the neck is what the tab shows.
     const NECK_OPTIONAL = Object.freeze(["progressions", "counterpoint"]);
@@ -464,7 +479,50 @@ globalThis.MaestroMusic = (() => {
         return { key, size, index, degrees, chords: degrees.map(degree => inKey[degree].name), numerals: inKey.map(chord => chord.numeral) };
     }
 
-    const QUIZ_KINDS = Object.freeze(["note", "interval", "quality", "progression"]);
+    // Melodies by ear (2.6.0): a short phrase in a major key, a note a beat.
+    // It starts on the tonic's triad, moves mostly by step (now and then a
+    // leap of a third to a fifth), stays from the fifth below the tonic to the
+    // third above its octave, and ends on the tonic, by step. The tonic is
+    // from C4 to B4, so it's written on a treble staff with few ledger lines.
+    const QUIZ_MELODY_LENGTHS = Object.freeze([4, 5, 6]);
+    const MAJOR_SEMIS = [0, 2, 4, 5, 7, 9, 11];
+    const degreeSemis = degree => MAJOR_SEMIS[modulo(degree, 7)] + 12 * Math.floor(degree / 7);
+    function quizMelody(length = 5, avoid = "", random = Math.random) {
+        const count = QUIZ_MELODY_LENGTHS.includes(length) ? length : 5;
+        const pick = list => list[Math.min(list.length - 1, Math.floor(random() * list.length))];
+        const moves = [[1, 6], [-1, 6], [2, 2], [-2, 2], [3, 1], [-3, 1], [4, 1], [-4, 1]];
+        const weighted = () => {
+            let at = random() * moves.reduce((sum, [, weight]) => sum + weight, 0);
+            for (const [move, weight] of moves) if ((at -= weight) < 0) return move;
+            return 1;
+        };
+        for (let tries = 0; tries < 60; tries++) {
+            const degrees = [pick([0, 2, 4])];
+            // A move out of range is drawn again, a few times, then the melody is.
+            for (let moves = 0; degrees.length < count - 1 && moves < 40; moves++) {
+                const next = degrees.at(-1) + weighted();
+                if (next >= -3 && next <= 9 && next !== degrees.at(-1)) degrees.push(next);
+            }
+            if (degrees.length < count - 1) continue;
+            const before = degrees.at(-1);
+            const last = Math.abs(before) <= Math.abs(before - 7) ? 0 : 7;
+            if (Math.abs(before - last) !== 1) continue;
+            degrees.push(last);
+            if (degrees.join() === avoid) continue;
+            const key = pick(QUIZ_KEYS);
+            const names = scaleNotes(key, "major");
+            const tonic = 60 + pitchClass(key);
+            return { key, tonic, degrees, midis: degrees.map(degree => tonic + degreeSemis(degree)), names: degrees.map(degree => names[modulo(degree, 7)].name) };
+        }
+        // Rarely reached: steps in C, ending 2 1 then the tonic.
+        const degrees = Array.from({ length: count - 1 }, (_, i) => ((count - 2 - i) % 2 ? 2 : 1)).concat(0);
+        return { key: "C", tonic: 60, degrees, midis: degrees.map(degree => 60 + degreeSemis(degree)), names: degrees.map(degree => ["C", "D", "E"][degree]) };
+    }
+
+    const QUIZ_KINDS = Object.freeze(["note", "interval", "quality", "progression", "rhythm", "reading", "melody"]);
+    const QUIZ_RHYTHMS = Object.freeze(["easy", "middle", "triplets", "mixed"]);
+    // Quizzes that don't use the neck: rhythms are written and tapped (2.6.0).
+    const QUIZ_NECKLESS = Object.freeze(["rhythm", "reading"]);
     const QUIZ_DIRECTIONS = Object.freeze(["up", "down", "together"]);
 
     // Every note's labels, for showing all twelve: a note of the scale keeps
@@ -775,7 +833,7 @@ globalThis.MaestroMusic = (() => {
     }
 
     const DEFAULTS = Object.freeze({
-        instrument: "guitar", tunings: {}, own: [], root: "G", scale: "major", labels: "names", degreeStyle: "flat", show: "scale", sevenths: false, capo: 0, lefty: false, position: -1, quizKind: "note", quizNaturals: false, quizDirection: "up", quizChords: "triads", chordStyle: "letters", tab: "scales", tone: "pluck", a4: 440, neckHidden: []
+        instrument: "guitar", tunings: {}, own: [], root: "G", scale: "major", labels: "names", degreeStyle: "flat", show: "scale", sevenths: false, capo: 0, lefty: false, position: -1, quizKind: "note", quizNaturals: false, quizDirection: "up", quizChords: "triads", chordStyle: "letters", tab: "scales", tone: "pluck", a4: 440, neckHidden: [], drill: "straight", quizRhythm: "easy", quizMelody: 5
     });
 
     function tuningsFor(instrument, own) {
@@ -807,10 +865,13 @@ globalThis.MaestroMusic = (() => {
         if (typeof stored.lefty === "boolean") settings.lefty = stored.lefty;
         if (Number.isInteger(stored.position) && stored.position >= -1 && stored.position <= POSITION_LAST) settings.position = stored.position;
         if (TABS.includes(stored.tab)) settings.tab = stored.tab;
+        if (Object.hasOwn(DRILLS, stored.drill)) settings.drill = stored.drill;
         if (QUIZ_KINDS.includes(stored.quizKind)) settings.quizKind = stored.quizKind;
         if (typeof stored.quizNaturals === "boolean") settings.quizNaturals = stored.quizNaturals;
         if (QUIZ_DIRECTIONS.includes(stored.quizDirection)) settings.quizDirection = stored.quizDirection;
         if (QUIZ_CHORD_SETS.includes(stored.quizChords)) settings.quizChords = stored.quizChords;
+        if (QUIZ_RHYTHMS.includes(stored.quizRhythm)) settings.quizRhythm = stored.quizRhythm;
+        if (QUIZ_MELODY_LENGTHS.includes(stored.quizMelody)) settings.quizMelody = stored.quizMelody;
         if (Object.hasOwn(CHORD_STYLES, stored.chordStyle)) settings.chordStyle = stored.chordStyle;
         if (stored.tone === "pluck" || stored.tone === "steady") settings.tone = stored.tone;
         if (Number.isInteger(stored.a4) && stored.a4 >= 415 && stored.a4 <= 466) settings.a4 = stored.a4;
@@ -825,7 +886,7 @@ globalThis.MaestroMusic = (() => {
     }
 
     return {
-        ROOTS, SCALES, FAMILIES, SHOWS, LABELS, DEGREE_STYLES, INSTRUMENTS, STRINGED, LOWEST, HIGHEST, OWN_MAX, CAPO_MAX, POSITION_SPAN, TABS, NECK_OPTIONAL, PLAIN_NAMES, CHORD_KINDS, QUIZ_INTERVALS, QUIZ_KINDS, QUIZ_DIRECTIONS, QUIZ_QUALITIES, QUIZ_CHORD_SETS, QUIZ_PROGRESSIONS, QUIZ_KEYS, DEFAULTS, CHORD_STYLES, STAFF_BOTTOM, CHORDS_MAX, KEY_LOW, KEY_HIGH, FRET_MAX, CHORD_LABEL_MAX, isChordName, cleanChordLabel,
+        ROOTS, SCALES, FAMILIES, SHOWS, LABELS, DEGREE_STYLES, INSTRUMENTS, STRINGED, LOWEST, HIGHEST, OWN_MAX, CAPO_MAX, POSITION_SPAN, TABS, NECK_OPTIONAL, NECKLESS, DRILLS, drillNotes, PLAIN_NAMES, CHORD_KINDS, QUIZ_INTERVALS, QUIZ_KINDS, QUIZ_DIRECTIONS, QUIZ_QUALITIES, QUIZ_CHORD_SETS, QUIZ_PROGRESSIONS, QUIZ_KEYS, QUIZ_RHYTHMS, QUIZ_NECKLESS, QUIZ_MELODY_LENGTHS, quizMelody, DEFAULTS, CHORD_STYLES, STAFF_BOTTOM, CHORDS_MAX, KEY_LOW, KEY_HIGH, FRET_MAX, CHORD_LABEL_MAX, isChordName, cleanChordLabel,
         parseName, pitchClass, spell, degreeLabel, intervalLabel, scaleNotes, triadName, seventhName, chordsInKey, capoShape, findChords, alteredDominant, findScales, positionsFor, quizNote, quizInterval, quizQuality, quizProgression, everyNote, pitchName, spelledPitch, frequency, tuningNotes,
         pluckPeriod, pluckSamples, cleanName, cleanOwnTuning, tuningsFor, parseSettings, currentTuning,
         chordSymbolParts, cleanChordName, staffStep, staffChord, cleanSavedChord, savedChordLine, savedChordNotes, shapeStart

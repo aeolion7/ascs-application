@@ -2,15 +2,21 @@
 // The sliding marker (2.2.0). Every segmented control (section tabs, the
 // calendar's views, the keymap's layers) draws one marker behind its chosen
 // button, and the marker slides when the choice changes. A control is watched
-// for that change and for its size (text size, window width); a hidden one
-// waits until it shows. A control made later keeps its plain filled choice.
+// for that change, for its buttons being made again (2.6.0: a choice drawn
+// anew, such as Counterpoint's Length, kept the marker where it was), and for
+// its size (text size, window width); a hidden one waits until it shows. A
+// control made later keeps its plain filled choice. A button that's a switch
+// of its own beside the choice (class segment-toggle: a note's dot, Tie)
+// keeps its own fill, and a control with more than one choice pressed (the
+// voices to hear) has no marker, so each shows filled.
 
 (() => {
     const GROUPS = '[role="tablist"], .cal-modes, .keymap-layers';
-    const CHOSEN = '[aria-selected="true"], [aria-pressed="true"]';
+    const CHOSEN = '[aria-selected="true"], [aria-pressed="true"]:not(.segment-toggle)';
 
     const place = group => {
-        const chosen = group.querySelector(CHOSEN);
+        const all = group.querySelectorAll(CHOSEN);
+        const chosen = all.length === 1 ? all[0] : null;
         if (!chosen || !chosen.offsetWidth || chosen.offsetParent !== group) {
             group.classList.remove("has-marker", "marker-moves");
             return;
@@ -30,10 +36,12 @@
     const changed = new MutationObserver(records => {
         new Set(records.map(record => record.target.closest(GROUPS))).forEach(group => group && place(group));
     });
+    const remade = new MutationObserver(records => new Set(records.map(record => record.target)).forEach(place));
 
     document.querySelectorAll(GROUPS).forEach(group => {
         resized.observe(group);
         changed.observe(group, { subtree: true, attributes: true, attributeFilter: ["aria-selected", "aria-pressed"] });
+        remade.observe(group, { childList: true });
         place(group);
     });
 })();

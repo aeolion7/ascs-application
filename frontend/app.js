@@ -1892,6 +1892,15 @@ function handleWebMessage(event) {
         case "exerciseDeleted":
             if (typeof data.id === "string") globalThis.exerciseDeleted?.(data.id);
             break;
+        case "rhythms":
+            globalThis.receiveRhythms?.(data.items);
+            break;
+        case "rhythmSaved":
+            if (typeof data.id === "string") globalThis.rhythmSaved?.(data.id);
+            break;
+        case "rhythmDeleted":
+            if (typeof data.id === "string") globalThis.rhythmDeleted?.(data.id);
+            break;
         case "exported":
             if (typeof data.file === "string") globalThis.exerciseExported?.(data.file);
             break;
@@ -2094,6 +2103,7 @@ function handleWebMessage(event) {
             }
             if (data.scope === "charts") globalThis.chartsFailed?.();
             if (data.scope === "counterpoint") globalThis.exercisesFailed?.();
+            if (data.scope === "rhythm") globalThis.rhythmsFailed?.();
             if (data.scope === "settings") {
                 globalThis.drivesSaveFailed?.(data.message);
                 quietSettingsSave = "";
@@ -3003,6 +3013,11 @@ function appendInline(parent, nodes) {
             if (web) {
                 link.classList.add("is-web");
                 link.dataset.url = node.url;
+            } else if (ASCSNotes.musicLink(node.url)) {
+                // A song, exercise, rhythm or chord kept in the Conservatory (2.6.0).
+                link.classList.add("is-music");
+                link.dataset.url = node.url;
+                link.title = "Ctrl + click to open it in the Conservatory";
             }
             appendInline(link, node.children || []);
             parent.append(link);
@@ -3106,6 +3121,12 @@ $("notePreview").addEventListener("change", event => {
 
 // Ctrl + click on a web address opens it; a plain click does nothing.
 $("notePreview").addEventListener("click", event => {
+    const music = event.target.closest(".md-link.is-music");
+    if (music && event.ctrlKey) {
+        event.preventDefault();
+        globalThis.openMusicLink?.(music.dataset.url);
+        return;
+    }
     const link = event.target.closest(".md-link.is-web");
     if (!link || !event.ctrlKey) return;
     event.preventDefault();

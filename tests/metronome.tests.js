@@ -74,8 +74,8 @@
     const fresh = M.parseSettings(null);
     check("settings: nothing kept gives the defaults", fresh.tempo === 96 && fresh.meter === "4/4" && fresh.count === "quarter" && fresh.sound === "woodblock" && fresh.volume === 70 && fresh.trainer.on === false);
     check("settings: junk gives the defaults", M.parseSettings("{nope").tempo === 96 && M.parseSettings("[1,2]").meter === "4/4");
-    const kept = M.parseSettings(JSON.stringify({ tempo: 132, meter: "6/8", count: "triplet", sound: "click", volume: 40, trainer: { on: true, from: 60, to: 90, step: 2, every: 4 }, countIn: 1, gap: { on: true, play: 3, mute: 1 } }));
-    equal("settings: what was kept is read", JSON.stringify(kept), JSON.stringify({ tempo: 132, meter: "6/8", count: "triplet", sound: "click", volume: 40, trainer: { on: true, from: 60, to: 90, step: 2, every: 4 }, countIn: 1, gap: { on: true, play: 3, mute: 1 } }));
+    const kept = M.parseSettings(JSON.stringify({ tempo: 132, meter: "6/8", count: "triplet", sound: "click", volume: 40, trainer: { on: true, from: 60, to: 90, step: 2, every: 4 }, countIn: 1, swing: 50, gap: { on: true, play: 3, mute: 1 } }));
+    equal("settings: what was kept is read", JSON.stringify(kept), JSON.stringify({ tempo: 132, meter: "6/8", count: "triplet", sound: "click", volume: 40, trainer: { on: true, from: 60, to: 90, step: 2, every: 4 }, countIn: 1, swing: 50, gap: { on: true, play: 3, mute: 1 } }));
     const oldKept = M.parseSettings(JSON.stringify({ tempo: 100 }));
     check("settings: kept before 2.3.0's practice, no count-in and no muted bars", oldKept.countIn === 0 && oldKept.gap.on === false && oldKept.gap.play === 2 && oldKept.gap.mute === 2);
     const badPractice = M.parseSettings(JSON.stringify({ countIn: 3, gap: { on: "yes", play: 0, mute: 9 } }));
@@ -105,4 +105,15 @@
     const backwards = M.cleanTrainer({ on: true, from: 140, to: 100, step: 5, every: 2 });
     check("trainer: From above To falls back to both defaults", backwards.from === 80 && backwards.to === 120 && backwards.step === 5 && backwards.on);
     check("settings: fractions aren't tempos", M.parseSettings(JSON.stringify({ tempo: 96.5 })).tempo === 96);
+    // Swing (2.6.0)
+    const gaps = (count, swing) => [0, 1, 2, 3].map(sub => Math.round(M.clickGap(120, count, swing, sub) * 1e4) / 1e4).join();
+    equal("swing: straight eighths are even", gaps("eighth", 50), "0.25,0.25,0.25,0.25");
+    equal("swing: triplet swing, two thirds then one", gaps("eighth", 66), "0.33,0.17,0.33,0.17");
+    equal("swing: swung sixteenths in pairs", gaps("sixteenth", 62), "0.155,0.095,0.155,0.095");
+    equal("swing: triplets stay even", gaps("triplet", 66), "0.1667,0.1667,0.1667,0.1667");
+    equal("swing: beats stay even", gaps("quarter", 71), "0.5,0.5,0.5,0.5");
+    check("swing: a pair still fills its time", Math.abs(M.clickGap(97, "eighth", 71, 0) + M.clickGap(97, "eighth", 71, 1) - 60 / 97) < 1e-12);
+    equal("swing: kept", M.parseSettings(JSON.stringify({ swing: 66 })).swing, 66);
+    equal("swing: a value not offered falls back", M.parseSettings(JSON.stringify({ swing: 64 })).swing, 50);
+    equal("swing: offered from straight to hard", M.SWINGS.map(([value]) => value).join(), "50,58,62,66,71");
 })();

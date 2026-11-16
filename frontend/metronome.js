@@ -57,6 +57,7 @@ globalThis.MaestroMetronome = (() => {
         tempo: 96, meter: "4/4", count: "quarter", sound: "woodblock", volume: 70,
         trainer: Object.freeze({ on: false, from: 80, to: 120, step: 4, every: 8 }),
         countIn: 0,
+        swing: 50,
         gap: Object.freeze({ on: false, play: 2, mute: 2 })
     });
     const COUNT_IN_MAX = 2;
@@ -110,6 +111,18 @@ globalThis.MaestroMetronome = (() => {
     }
 
     const secondsPerClick = (tempo, count) => 60 / tempo / (COUNTS[count] || 1);
+
+    // Swing (2.6.0): the second of each pair of clicks comes late, by how much
+    // of the pair the first takes (50 straight, 66 a triplet's lilt). It
+    // swings 2 or 4 clicks a beat; triplets and plain beats stay even.
+    const SWINGS = Object.freeze([[50, "Straight"], [58, "Light"], [62, "Medium"], [66, "Triplet"], [71, "Hard"]]);
+    function clickGap(tempo, count, swing, sub) {
+        const clicks = COUNTS[count] || 1;
+        const even = secondsPerClick(tempo, count);
+        if ((clicks !== 2 && clicks !== 4) || !(swing > 50)) return even;
+        const share = Math.min(75, swing) / 100;
+        return 2 * even * (sub % 2 ? 1 - share : share);
+    }
 
     // The trainer raises the tempo by its step every so many bars, up to its
     // top, and then holds it there.
@@ -199,8 +212,9 @@ globalThis.MaestroMetronome = (() => {
         if (Object.hasOwn(SOUNDS, stored.sound)) settings.sound = stored.sound;
         if (wholeIn(stored.volume, 0, 100)) settings.volume = stored.volume;
         if (wholeIn(stored.countIn, 0, COUNT_IN_MAX)) settings.countIn = stored.countIn;
+        if (SWINGS.some(([value]) => value === stored.swing)) settings.swing = stored.swing;
         return settings;
     }
 
-    return { MIN, MAX, METERS, METER_GROUPS, meterLabel, COUNTS, COUNT_LABELS, SOUNDS, DEFAULTS, clampTempo, tempoName, tapTempo, pulseWeight, advance, secondsPerClick, trainerNext, barsUntilStep, cleanTrainer, COUNT_IN_MAX, GAP_MAX, barIsMuted, cleanGap, dayKey, parsePractice, addPractice, practiceSummary, practiceText, parseSettings };
+    return { MIN, MAX, METERS, METER_GROUPS, meterLabel, COUNTS, COUNT_LABELS, SOUNDS, DEFAULTS, clampTempo, tempoName, tapTempo, pulseWeight, advance, secondsPerClick, SWINGS, clickGap, trainerNext, barsUntilStep, cleanTrainer, COUNT_IN_MAX, GAP_MAX, barIsMuted, cleanGap, dayKey, parsePractice, addPractice, practiceSummary, practiceText, parseSettings };
 })();

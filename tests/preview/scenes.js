@@ -249,6 +249,19 @@ const PreviewScenes = (() => {
         renderConservatory();
         then?.();
     };
+    // 2.6.0: the Rhythm tab, a rhythm open, the trainer set.
+    const rhScene = (make, then) => () => {
+        baseData();
+        navigate("conservatory");
+        cons.settings = { ...MaestroMusic.parseSettings(null), tab: "rhythm" };
+        consSections.show("rhythm");
+        rh.rhythm = make();
+        rh.id = null;
+        rh.savedText = null;
+        receiveRhythms([]);
+        renderConservatory();
+        then?.();
+    };
     const consScene = (changes, after) => () => {
         baseData();
         navigate("conservatory");
@@ -500,6 +513,10 @@ const PreviewScenes = (() => {
         // 2.4.1: a bar's drawer under its line, a section open in its heading, the
         // key, and the bass beside Loop.
         "progressions-drawer": progScene({}, { section: 0, bar: 2, slot: 0 }, () => { prog.barOpen = true; }),
+        // 2.6.0: a voicing on the neck and the next chord's outlined; one picked by hand; on the keys.
+        "progressions-voicing": progScene({ neck: "shapes" }, { section: 0, bar: 2, slot: 0 }, () => { prog.voicingPins.clear(); prog.barOpen = true; renderProgressions(); renderConsNeck(); }),
+        "progressions-voicing-pinned": progScene({ neck: "shapes" }, { section: 0, bar: 1, slot: 0 }, () => { prog.voicingPins.clear(); prog.barOpen = true; renderProgressions(); stepProgVoicing(3); }),
+        "progressions-voicing-keys": progScene({ neck: "shapes" }, { section: 0, bar: 3, slot: 0 }, () => { prog.voicingPins.clear(); prog.barOpen = true; renderProgressions(); renderConsNeck(); }, { instrument: "keyboard" }),
         "progressions-section": progScene({}, undefined, () => { prog.sectionOpen = 1; }),
         "progressions-key": progScene({}, undefined, () => toggleProgPopover("key", true)),
         "progressions-bass-menu": progScene({ bass: "walking" }, undefined, () => toggleProgPopover("bass", true)),
@@ -523,6 +540,8 @@ const PreviewScenes = (() => {
             () => document.fonts.ready.then(() => setTimeout(() => openPromptMenu("avoid"), 300))),
         // 2.4.0: Keys, the circle of fifths: the sketch's key, then G major picked to move toward; and the bass under the loop.
         "progressions-keys": progScene({ side: "keys" }, undefined, () => { keysState.toward = null; }),
+        // 2.6.0: the Form panel.
+        "progressions-form": progScene({}, undefined, () => { toggleProgPopover("form", true); }),
         "progressions-keys-toward": progScene({ side: "keys" }, undefined, () => { keysState.toward = { index: 1, ring: "major" }; }),
         "progressions-bass": progScene({ bass: "walking" }),
         // The chart as printed: render it with msedge --print-to-pdf, which uses the print styles.
@@ -549,17 +568,29 @@ const PreviewScenes = (() => {
         "conservatory-instrument-keyboard": consScene({ instrument: "keyboard" }, () => toggleConsInstPanel(true)),
         "progressions-instrument": progScene({}, undefined, () => toggleConsInstPanel(true)),
         // 2.5.0: Counterpoint, species and four parts, written partway, with the checker.
+        // 2.6.0: a melody for B flat trumpet, its motif developed and its chords beneath; the part as written.
+        "counterpoint-melody": cpScene(() => {
+            const notes = ["C5", "D5", "E5", "C5", "D5", "E5", "F5", "D5", "E5", "F5", "G5", "E5", "D5", "B4", "G4", "B4", "C5", "G4", "E4", "C4"].map(text => ({ p: MaestroNotation.parsePitch(text), d: "q", dot: false, tie: false }));
+            return MaestroCounterpoint.melodyExercise({ tonic: "C", mode: "major", instrument: "trumpet", notes: [...notes.slice(0, 16), { p: MaestroNotation.parsePitch("C5"), d: "w", dot: false, tie: false }, ...Array.from({ length: 12 }, () => ({ p: null, d: "q", dot: false, tie: false }))], title: "A melody in C major" });
+        }, { voice: 0, index: 0 }, () => { cpMelody.chords = "1"; cpMelody.view = "concert"; renderCounterpoint(); }),
+        // 2.6.0: bars 2 and 3 selected by the strip above them, their rhythm's tools shown.
+        "counterpoint-melody-bars": cpScene(() => {
+            const notes = ["C5", "D5", "E5", "C5", "D5", "E5", "F5", "D5", "E5", "F5", "G5", "E5"].map(text => ({ p: MaestroNotation.parsePitch(text), d: "q", dot: false, tie: false }));
+            return MaestroCounterpoint.melodyExercise({ tonic: "C", mode: "major", instrument: "trumpet", notes: [...notes, ...Array.from({ length: 4 }, () => ({ p: null, d: "q", dot: false, tie: false }))], title: "A melody in C major" });
+        }, { voice: 0, index: 0 }, () => { cpMelody.chords = "off"; cpMelody.view = "concert"; selectCpBar(1); selectCpBar(2, true); }),
+        // 2.6.0: sixteenths, thirty-seconds and sixty-fourths, beamed, flagged and dotted.
+        "counterpoint-melody-short": cpScene(() => MaestroCounterpoint.melodyExercise({ tonic: "C", mode: "major", instrument: "flute", notes: [["C5", "s"], ["D5", "s"], ["E5", "s"], ["F5", "s"], ["G5", "e."], ["A5", "s"], ["B5", "t"], ["A5", "t"], ["G5", "s"], ["F5", "e"], ["E5", "f"], ["F5", "f"], ["G5", "t"], ["A5", "s"], ["B5", "e"], ["C6", "q"], [null, "s"], ["B5", "s"], ["A5", "e"], ["G5", "h"], ["E5", "s"], [null, "s"], ["D5", "t"], [null, "t"], [null, "s"], ["C5", "f"], [null, "f"], [null, "t"], [null, "s"], [null, "e"], [null, "h"]].map(([text, code]) => ({ p: text ? MaestroNotation.parsePitch(text) : null, d: code[0], dot: code.endsWith("."), tie: false })), title: "Short values" }), { voice: 0, index: 4 }, () => { cpMelody.chords = "off"; cpMelody.view = "concert"; renderCounterpoint(); }),
+        "counterpoint-melody-written": cpScene(() => MaestroCounterpoint.melodyExercise({ tonic: "C", mode: "major", instrument: "altosax", notes: ["C5", "E5", "G5", "C6", "B4", "D5", "G5", "B5"].map(text => ({ p: MaestroNotation.parsePitch(text), d: "q", dot: false, tie: false })), title: "For alto sax" }), { voice: 0, index: 0 }, () => { cpMelody.chords = "off"; cpMelody.view = "written"; renderCounterpoint(); }),
         "counterpoint": cpScene(() => {
             const fux = MaestroCounterpoint.speciesExercise({ species: 1, cantus: MaestroCounterpoint.fuxNotes(MaestroCounterpoint.FUX[0]), cantusBelow: true, mode: "dorian", final: "D", title: "First species, Fux's Dorian" });
             return cpWrite(fux, [["A3", "D4", "C4", "D4", "D4", "A3", "C4"]]);
         }, { voice: 0, index: 7 }),
-        // The neck hidden on this tab, and the keys and mouse listed.
+        // The neck hidden on this tab.
         "counterpoint-noneck": cpScene(() => {
             const fux = MaestroCounterpoint.speciesExercise({ species: 1, cantus: MaestroCounterpoint.fuxNotes(MaestroCounterpoint.FUX[0]), cantusBelow: true, mode: "dorian", final: "D", title: "First species, Fux's Dorian" });
             return cpWrite(fux, [["A3", "D4", "C4", "D4", "D4", "A3", "C4"]]);
         }, { voice: 0, index: 7 }, () => {
             cons.settings.neckHidden = ["counterpoint"];
-            cp.showKeys = true;
             renderConservatory();
         }),
         "counterpoint-fourth": cpScene(() => cpWrite(MaestroCounterpoint.speciesExercise({ species: 4, cantus: MaestroCounterpoint.fuxNotes(MaestroCounterpoint.FUX[4]), cantusBelow: true, mode: "aeolian", final: "A", title: "Fourth species, Fux's Aeolian" }),
@@ -588,6 +619,26 @@ const PreviewScenes = (() => {
             renderCpNewPanel();
             toggleConsPopover("cpNew", true);
         }),
+        // 2.6.0: the Rhythm tab: a groove, a polymeter row, the trainer and Spread evenly; drums behind Progressions.
+        "rhythm": rhScene(() => MaestroRhythm.GROOVES.find(each => each.id === "funk").rhythm),
+        "rhythm-poly": rhScene(() => MaestroRhythm.cleanRhythm({ title: "Three over four", meter: "4/4", steps: 2, bars: 2, swing: 62, rows: [
+            { sound: "clave", on: true, hits: [2, 0, 0, 1, 0, 0] },
+            { sound: "hatClosed", on: true, hits: [2, 1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1] },
+            { sound: "snare", on: false, hits: [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0] },
+            { sound: "kick", on: true, hits: [1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0] }
+        ] }), () => {
+            rh.settings.trainer = { ...rh.settings.trainer, kind: "polymeter", a: 3, b: 4 };
+            rhTrainer.last = [MaestroRhythm.tapSummary([0.012, -0.02, 0.008, 0.015]), MaestroRhythm.tapSummary([0.09, 0.11, 0.07], 0)];
+            renderRhTrainer();
+        }),
+        "rhythm-seven": rhScene(() => MaestroRhythm.GROOVES.find(each => each.id === "seven").rhythm, () => openRhythmEven(0)),
+        "rhythm-triplets": rhScene(() => MaestroRhythm.GROOVES.find(each => each.id === "shuffle").rhythm, () => toggleConsPopover("rhMenu", true)),
+        "progressions-drums": progScene({}, undefined, () => {
+            receiveRhythms([]);
+            prog.settings.drums = "groove:rock";
+            renderProgressions();
+            toggleProgPopover("bass", true);
+        }),
         "counterpoint-menu": cpScene(() => null, null, () => {
             receiveExercises([{ id: "fuxdorian01", text: MaestroCounterpoint.exerciseText(cp.exercise) }]);
             toggleConsPopover("cpMenu", true);
@@ -610,6 +661,16 @@ const PreviewScenes = (() => {
         "conservatory-quiz-progression": consScene({ tab: "quiz", quizKind: "progression", quizChords: "triads" }, () => { resetQuizScore(); quiz.question = MaestroMusic.quizProgression("triads", -1, () => 0.1); quiz.picks = [quiz.question.degrees[1], quiz.question.degrees[2]]; renderQuiz(); renderConsNeck(); }),
         "conservatory-quiz-progression-wrong": consScene({ tab: "quiz", quizKind: "progression", quizChords: "sevenths" }, () => { resetQuizScore(); quiz.question = MaestroMusic.quizProgression("sevenths", -1, () => 0.3); quiz.picks = [quiz.question.degrees[1], quiz.question.degrees[2], (quiz.question.degrees[3] + 2) % 7]; quiz.answered = [...quiz.picks]; Object.assign(quiz, { right: 3, asked: 5 }); renderQuiz(); renderConsNeck(); }),
         "conservatory-quiz-interval": consScene({ tab: "quiz", quizKind: "interval", quizDirection: "up" }, () => { resetQuizScore(); quiz.question = { low: 52, high: 59, semis: 7 }; quiz.answered = 7; Object.assign(quiz, { right: 4, asked: 4, streak: 4 }); renderQuiz(); renderConsNeck(); }),
+        // 2.6.0: melodies by ear, partway and answered wrong; a rhythm being written and checked; a bar to read, and tapped.
+        "conservatory-quiz-melody": consScene({ tab: "quiz", quizKind: "melody", quizMelody: 5 }, () => { resetQuizScore(); quiz.question = MaestroMusic.quizMelody(5, "", () => 0.3); startQuizMelody(quiz.question); quiz.notes = quiz.question.pitches.map((p, at) => (at < 3 ? p : null)); quiz.at = 3; renderQuiz(); renderConsNeck(); }),
+        // Checked, its fourth note an octave off.
+        "conservatory-quiz-melody-wrong": consScene({ tab: "quiz", quizKind: "melody", quizMelody: 6 }, () => { resetQuizScore(); quiz.question = MaestroMusic.quizMelody(6, "", () => 0.6); startQuizMelody(quiz.question); quiz.notes = quiz.question.pitches.map((p, at) => (at === 3 ? MaestroNotation.pitch(p.step + 7, p.alter) : p)); quiz.answered = quiz.notes.slice(1).map(MaestroNotation.midiOf); Object.assign(quiz, { right: 1, asked: 3 }); renderQuiz(); renderConsNeck(); }),
+        "conservatory-quiz-rhythm": consScene({ tab: "quiz", quizKind: "rhythm", quizRhythm: "middle" }, () => { resetQuizScore(); quiz.question = { meter: "4/4", steps: 4, cells: [1, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1, 0] }; quiz.cells = [1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]; renderQuiz(); renderConsNeck(); }),
+        "conservatory-quiz-rhythm-checked": consScene({ tab: "quiz", quizKind: "rhythm", quizRhythm: "triplets" }, () => { resetQuizScore(); quiz.question = { meter: "3/4", steps: 3, cells: [1, 0, 0, 1, 1, 1, 1, 0, 1] }; quiz.cells = [1, 0, 0, 1, 0, 1, 1, 0, 1]; quiz.answered = [...quiz.cells]; Object.assign(quiz, { right: 2, asked: 4 }); renderQuiz(); renderConsNeck(); }),
+        "conservatory-quiz-reading": consScene({ tab: "quiz", quizKind: "reading", quizRhythm: "easy" }, () => { resetQuizScore(); quiz.question = { meter: "4/4", steps: 2, cells: [1, 1, 1, 0, 0, 1, 1, 1] }; renderQuiz(); renderConsNeck(); }),
+        // 2.6.0: triplets to read, one a quarter and an eighth under a bracket, one three beamed eighths.
+        "conservatory-quiz-reading-triplets": consScene({ tab: "quiz", quizKind: "reading", quizRhythm: "triplets" }, () => { resetQuizScore(); quiz.question = { meter: "2/4", steps: 3, cells: [1, 0, 1, 1, 1, 1] }; renderQuiz(); renderConsNeck(); }),
+        "conservatory-quiz-reading-tapped": consScene({ tab: "quiz", quizKind: "reading", quizRhythm: "easy" }, () => { resetQuizScore(); quiz.question = { meter: "4/4", steps: 2, cells: [1, 1, 1, 0, 0, 1, 1, 1] }; quiz.answered = MaestroRhythm.gradeTaps([0, 0.3, 0.6, 1.5, 1.8, 2.1], [0.02, 0.33, 0.58, 1.55, 2.12, 2.4]); Object.assign(quiz, { right: 3, asked: 5 }); renderQuiz(); renderConsNeck(); }),
         "conservatory-drone": consScene({ root: "D", scale: "dorian" }, () => { cons.drone = { midi: 38 }; cons.scalePlay = { voices: [], timer: null }; renderConsHear(); }),
         "conservatory-bass": consScene({ instrument: "bass", tunings: { bass: "five" }, root: "E", scale: "minorPentatonic" }),
         "conservatory-mandolin": consScene({ instrument: "mandolin", root: "A", scale: "major", labels: "degrees" }),

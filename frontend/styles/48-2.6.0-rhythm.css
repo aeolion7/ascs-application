@@ -1,0 +1,1008 @@
+/* ==== 2.6.0: Rhythm, and the writing tools ====
+   The Conservatory's Rhythm tab: the step sequencer beside the polyrhythm and
+   polymeter trainer, with no neck; the rhythm written out on one-line staves
+   beneath its rows. Also Drums behind Progressions' loop. Later 2.6.0 rules
+   (the Melody tab, the Quiz's new kinds, voicings and the rest) follow. */
+
+.rh-grid {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+
+#consRhythmPanel > .rh-grid {
+  flex: 1 1 0;
+  grid-template-rows: minmax(min-content, 1fr);
+}
+
+.rh-main,
+.rh-side {
+  position: relative;
+  min-width: 0;
+}
+
+:root .rh-click {
+  margin-left: auto;
+}
+
+/* ---- The rows: the sound and its switches, then its steps a bar a line. */
+
+.rh-rows {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rh-row {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.rh-row-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+:root .rh-sound {
+  width: 168px;
+}
+
+:root .rh-on {
+  min-width: 52px;
+}
+
+:root .rh-on[aria-pressed="false"] {
+  color: var(--text-soft);
+}
+
+.rh-length {
+  color: var(--brand-gold-text);
+  font-size: var(--t-floor);
+  white-space: nowrap;
+}
+
+.rh-cells {
+  display: grid;
+  grid-template-columns: repeat(var(--rh-steps, 16), minmax(0, 1fr));
+  gap: 6px 4px;
+}
+
+:root .rh-cell {
+  min-width: 0;
+  height: 38px;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--surface-hover);
+  box-shadow: none;
+}
+
+/* A beat starts a little apart, a group of beats (7/8's 2+2+3) further. */
+:root .rh-cell.is-beat:not(.is-bar) {
+  margin-left: 4px;
+}
+
+:root .rh-cell.is-group:not(.is-bar) {
+  margin-left: 12px;
+}
+
+:root .rh-cell[aria-pressed="true"] {
+  background: var(--brand-indigo-control);
+}
+
+:root .rh-cell.is-accent {
+  border-color: var(--brand-tint-text);
+  background: color-mix(in srgb, var(--brand-tint-text) 70%, var(--brand-indigo-control));
+}
+
+:root .rh-cell.is-playing {
+  outline: 2px solid var(--brand-tint-text);
+  outline-offset: 1px;
+}
+
+.rh-row.is-off .rh-cells {
+  opacity: 0.4;
+}
+
+/* Spread evenly opens under the row's button. */
+:root .rh-even-panel {
+  right: auto;
+  width: 420px;
+}
+
+.rh-even-preview {
+  margin: 0;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  letter-spacing: 2px;
+  overflow-wrap: anywhere;
+}
+
+/* ---- Written out: below the rows, scrolling inside the module when long. */
+
+.rh-staff {
+  flex: 1 1 0;
+  min-height: 120px;
+  overflow: auto;
+}
+
+.rh-score .rhythm-label {
+  fill: var(--text-soft);
+  font-family: var(--font-display);
+  font-size: 15px;
+}
+
+.rh-score .rh-now {
+  fill: color-mix(in srgb, var(--brand-indigo-control) 55%, transparent);
+}
+
+.rh-score .bar-line {
+  stroke: #c9c6da;
+  stroke-width: 1.2;
+}
+
+/* ---- The trainer */
+
+.rh-train-fields {
+  display: grid;
+  grid-template-columns: max-content max-content max-content;
+  align-items: end;
+  gap: 12px 14px;
+}
+
+.rh-train-fields > label:nth-of-type(3),
+.rh-train-fields > label:nth-of-type(4) {
+  grid-column: span 3;
+}
+
+.rh-against {
+  padding-bottom: 12px;
+  color: var(--text-soft);
+}
+
+.rh-train-view {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+}
+
+.rh-circle .rh-ring {
+  fill: none;
+  stroke: var(--surface-hover);
+  stroke-width: 2;
+}
+
+.rh-circle .rh-dot.is-layer-0 {
+  fill: var(--brand-tint-text);
+}
+
+.rh-circle .rh-dot.is-layer-1 {
+  fill: var(--text-strong);
+}
+
+.rh-circle .rh-dot.is-first {
+  stroke: var(--surface-module, #1a1830);
+  stroke-width: 2;
+}
+
+.rh-circle .rh-hand {
+  stroke: var(--brand-tint-text);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.rh-train-grid {
+  display: flex;
+  flex: 1 1 160px;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rh-grid-row {
+  display: grid;
+  grid-template-columns: 2ch minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.rh-grid-label {
+  color: var(--text-soft);
+  font-weight: 600;
+}
+
+.rh-grid-cells {
+  display: grid;
+  grid-template-columns: repeat(var(--rh-grid, 6), minmax(0, 1fr));
+  gap: 3px;
+}
+
+.rh-grid-cell {
+  height: 18px;
+  border-radius: 4px;
+  background: var(--surface-hover);
+}
+
+.rh-grid-cell.is-layer-0 {
+  background: var(--brand-tint-text);
+}
+
+.rh-grid-cell.is-layer-1 {
+  background: var(--text-strong);
+}
+
+.rh-pads {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+:root .rh-pad {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: auto;
+  min-height: 60px;
+  touch-action: manipulation;
+}
+
+:root .rh-pad.is-layer-0:not(:disabled) {
+  border-color: var(--brand-tint-text);
+}
+
+.rh-pad small {
+  min-height: 1.3em;
+  color: var(--text-soft);
+  font-size: var(--t-floor);
+}
+
+.rh-results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rh-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.rh-word {
+  font-weight: 600;
+}
+
+.rh-word.is-steady {
+  color: var(--brand-gold-text);
+}
+
+.rh-word.is-rushing,
+.rh-word.is-dragging,
+.rh-word.is-some-missed {
+  color: var(--brand-burgundy-text);
+}
+
+/* ---- Drums behind Progressions: under Bass in the Backing popover. */
+
+/* Backing names the bass and the drums, so the metronome's one line gives
+   a little of its gaps to it; a long name is cut, and said in full on hover. */
+:root .metro-bar:has(> .prog-transport:not([hidden])) {
+  column-gap: 12px;
+}
+
+#progBassNow {
+  max-width: 7.5em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:root .prog-bass-panel {
+  width: 380px;
+}
+
+.prog-drums-head {
+  margin: 12px 0 0;
+}
+
+.prog-drums {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 380px;
+  overflow: auto;
+}
+
+:root .prog-drum {
+  justify-content: space-between;
+}
+
+:root .prog-drum[aria-pressed="true"] {
+  background: var(--surface-hover);
+  color: var(--brand-tint-text);
+}
+
+.prog-drum small {
+  color: var(--text-soft);
+  font-size: var(--t-floor);
+}
+
+.prog-drums-group {
+  padding: 10px 14px 2px;
+}
+
+/* The menu's grooves and rhythms: the title over its facts. */
+:root .prog-song-menu #rhGrooves .prog-song-open,
+:root .prog-song-menu #rhRhythms .prog-song-open {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+:root #rhBars {
+  width: 96px;
+  min-width: 0;
+}
+
+/* ---- Play scale's drills: the note sounding lit on the neck or the keys. */
+
+:root .cons-drill select {
+  min-width: 190px;
+}
+
+:root .cons-dot.is-sounding circle {
+  fill: var(--brand-indigo-control);
+  stroke: var(--text-strong);
+  stroke-width: 3;
+}
+
+:root .cons-key.is-sounding rect {
+  fill: var(--brand-indigo-control);
+}
+
+@media print {
+  .print-rhythm .rhythm-label {
+    fill: #000000;
+  }
+
+  .print-rhythm .rh-now {
+    display: none;
+  }
+}
+
+/* ---- The Quiz's rhythms: a bar written on its steps, or read and tapped */
+
+.cons-quiz-rhythm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cons-quiz-staves {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 40px;
+}
+
+.cons-quiz-staff {
+  margin: 0;
+}
+
+.cons-quiz-staff figcaption {
+  color: var(--text-soft);
+  font: 600 var(--t-floor) var(--font-display);
+}
+
+.cons-quiz-staff .cons-quiz-mark.is-hit {
+  fill: var(--brand-tint-text);
+}
+
+.cons-quiz-staff .cons-quiz-mark.is-missed {
+  fill: var(--brand-burgundy-text);
+}
+
+.cons-quiz-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+}
+
+.cons-quiz-beat {
+  display: flex;
+  gap: 4px;
+}
+
+:root .cons-quiz-cell {
+  width: 56px;
+  height: 48px;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid var(--line-control);
+  border-radius: 6px;
+  background: var(--surface-hover);
+  box-shadow: none;
+  color: var(--text-soft);
+  font: 600 var(--t-button) var(--font-display);
+}
+
+:root .cons-quiz-cell[aria-pressed="true"] {
+  border-color: var(--brand-tint-text);
+  background: var(--brand-indigo-control);
+  color: #fff;
+}
+
+:root .cons-quiz-cell:disabled {
+  cursor: default;
+}
+
+:root .cons-quiz-cell.is-wrong {
+  border-color: var(--brand-burgundy);
+  box-shadow: inset 0 0 0 1px var(--brand-burgundy);
+}
+
+:root .cons-quiz-pad {
+  align-self: flex-start;
+  width: min(100%, 360px);
+  height: 88px;
+  font: 600 var(--t-button) var(--font-display);
+  touch-action: manipulation;
+}
+
+:root .cons-quiz-pad:not(:disabled) {
+  border-color: var(--brand-tint-text);
+}
+
+/* ---- Progressions' voicings: one shape on the neck, the next chord's outlined */
+
+.cons-dot.is-next circle {
+  fill: none;
+  stroke: var(--brand-tint);
+  stroke-width: 2;
+  stroke-dasharray: 6 5;
+}
+
+/* A silent string: an ×, no circle. */
+.cons-dot.is-muted circle {
+  fill: none;
+  stroke: none;
+}
+
+.cons-dot.is-muted text {
+  fill: var(--text-soft);
+  font-size: 24px;
+}
+
+.cons-key-dot.is-next {
+  fill: none;
+  stroke: var(--brand-tint);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+}
+
+.prog-voicing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.prog-voicing-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.prog-voicing-step[hidden] {
+  display: none;
+}
+
+.prog-voicing-name {
+  min-width: 15em;
+  text-align: center;
+}
+
+/* ---- The top bar with eight tabs (2.6.0): one row at 1600 wide, the
+   instrument chip's tuning shortened with an ellipsis rather than wrapping. */
+
+.cons-toolbar {
+  flex-wrap: nowrap;
+}
+
+.cons-tabs {
+  flex: none;
+}
+
+:root .cons-instbox {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+:root .cons-inst-chip {
+  min-width: 0;
+  max-width: 100%;
+}
+
+:root .cons-inst-chip #consInstDetail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:root .cons-inst-chip svg,
+:root .cons-inst-chip #consInstName {
+  flex: none;
+}
+
+/* ---- Cadences and ways to another key, in the Keys view */
+
+.prog-moves {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.prog-move .cons-note {
+  margin: 2px 0 0;
+}
+
+.prog-move-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+:root .prog-move-name {
+  text-align: left;
+}
+
+/* The name and Add on a line, the chords under them. */
+.prog-move-chords {
+  display: flex;
+  flex-wrap: wrap;
+  flex-basis: 100%;
+  order: 3;
+  gap: 6px;
+}
+
+:root .prog-move-chord {
+  min-height: 0;
+  padding: 3px 10px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  box-shadow: none;
+  color: var(--text-strong);
+}
+
+:root .prog-move-chord:hover {
+  border-color: var(--brand-tint);
+}
+
+:root .prog-move-add {
+  margin-left: auto;
+}
+
+/* Narrower windows: the circle above what it shows, not squeezed beside it
+   (at 1600 wide the lists beside it were a word a line). */
+@media (max-width: 2200px) {
+  #progKeysPane:not([hidden]) {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 18px;
+  }
+
+  #progKeysPane .prog-keys-side {
+    justify-self: stretch;
+  }
+}
+
+/* ---- Progressions' Form panel: each form as a strip of its sections */
+
+:root .prog-form-panel {
+  width: 640px;
+  overflow-y: auto;
+}
+
+.prog-form-now {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-self: stretch;
+}
+
+.prog-forms {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-self: stretch;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+:root .prog-form-use {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  box-shadow: none;
+  text-align: left;
+}
+
+:root .prog-form-use:hover {
+  border-color: var(--brand-tint);
+}
+
+.prog-form-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.prog-form-strip {
+  display: flex;
+  gap: 3px;
+  height: 26px;
+}
+
+.prog-form-block {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 4px;
+  color: #fff;
+  font: 600 var(--t-floor) var(--font-display);
+  white-space: nowrap;
+}
+
+/* A section and its returns share a color: indigo, burgundy, gold, then quieter. */
+.prog-form-block.is-tone-0 { background: var(--brand-indigo-control); }
+.prog-form-block.is-tone-1 { background: var(--brand-burgundy); }
+.prog-form-block.is-tone-2 { background: color-mix(in srgb, var(--brand-gold-text) 55%, #3a2c08); }
+.prog-form-block.is-tone-3 { background: var(--surface-hover); color: var(--text-strong); }
+.prog-form-block.is-tone-4 { background: var(--line-control); color: var(--text-strong); }
+
+/* ---- Counterpoint's melodies: the motif, the chords and the written part */
+
+.cp-melody-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 22px;
+}
+
+.cp-melody-tools[hidden] {
+  display: none;
+}
+
+.cp-motif {
+  gap: 10px;
+}
+
+.cp-score .cp-chord {
+  fill: var(--brand-tint-text);
+  font-weight: 700;
+}
+
+/* A Quick Notes link to the Conservatory: a web link's color, a dotted line. */
+:root .md-link.is-music {
+  text-decoration-style: dotted;
+  cursor: pointer;
+}
+
+/* ---- 2.6.0 feedback: style parity and layout ---- */
+
+/* Save sits with the title in every tab that writes music; the tab's own
+   choices and Play keep to the right. */
+:root .prog-save {
+  margin-left: 0;
+}
+
+:root .prog-head-show,
+:root .cp-hear,
+:root .rh-click {
+  margin-left: auto;
+}
+
+:root .cp-hear .cal-modes {
+  margin-left: 0;
+}
+
+/* The staff's lines, centered in their room when they all show. */
+.cp-staff.is-whole {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.cp-staff.is-whole > .cp-score {
+  flex: none;
+}
+
+/* What each row under the staff is, in the page's own type. */
+.cp-score .cp-row-label {
+  fill: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+
+/* The menu's destructive item, burgundy as elsewhere. */
+:root .prog-menu-item.is-danger {
+  color: var(--brand-burgundy-text);
+}
+
+/* New Exercise: each label beside its control, in two columns, and no
+   control wider than the panel. */
+:root .cp-new-fields {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 14px 16px;
+  width: 100%;
+}
+
+:root .cp-new-fields > .metro-field,
+:root .cp-new-fields > .cons-choice {
+  display: contents;
+}
+
+:root .cp-new-fields[hidden],
+:root .cp-new-fields > [hidden] {
+  display: none;
+}
+
+:root .cp-new-fields > .cal-modes {
+  grid-column: 1 / -1;
+}
+
+:root .cp-new-fields .cal-modes {
+  justify-self: start;
+}
+
+:root .cp-new-fields .metro-field > span,
+:root .cp-new-fields .cons-choice-label {
+  white-space: nowrap;
+}
+
+:root .cp-new-panel .metro-field select,
+:root #cpNewCantus,
+:root #cpNewKey {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Selects outside a labeled field get the house inner padding too. */
+:root .rh-sound,
+:root #cpMotifHow {
+  padding: 0 34px 0 12px;
+}
+
+/* A row's switches: the house's outlined buttons, compact. */
+:root .rh-on,
+:root .rh-even {
+  padding-inline: 14px;
+}
+
+:root .rh-remove {
+  display: inline-grid;
+  place-items: center;
+  width: var(--height-control);
+  padding: 0;
+}
+
+:root .rh-remove svg {
+  color: var(--text-soft);
+}
+
+/* A delete in a list shows on hover: no fill of its own. */
+:root .prog-song-delete,
+:root .cons-saved-delete {
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-soft);
+}
+
+:root .prog-song-delete:hover,
+:root .cons-saved-delete:hover {
+  border-color: var(--brand-burgundy);
+  background: var(--surface-hover);
+  color: var(--brand-burgundy-text);
+}
+
+/* The trainer: "against" on the fields' line. */
+.rh-train-fields {
+  align-items: center;
+}
+
+.rh-against {
+  padding-bottom: 0;
+}
+
+/* ---- Rhythm bar by bar and note by note (2.6.0) ---- */
+
+/* Above each bar, a strip to select it, and the bar's number. */
+.cp-score .cp-bar-strip {
+  fill: transparent;
+  cursor: pointer;
+}
+
+.cp-score .cp-bar-strip:hover {
+  fill: color-mix(in srgb, var(--brand-tint-text) 18%, transparent);
+}
+
+.cp-score .cp-bar-strip.is-selected {
+  fill: color-mix(in srgb, var(--brand-indigo-control) 70%, transparent);
+}
+
+.cp-score .cp-bar-number {
+  fill: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 9px;
+  pointer-events: none;
+}
+
+/* Length: the note values drawn as the bar's patterns are, their heads on
+   one line low enough that a sixty-fourth's flags clear the top (2.6.0). */
+:root #cpLengths .cp-length {
+  height: var(--height-control-small);
+  min-width: 40px;
+  padding: 20px 10px 0;
+  font-family: "Bravura Text";
+  font-size: var(--t-module);
+  line-height: 1;
+}
+
+:root #cpLengths .cp-tie {
+  padding-top: 0;
+  font-family: var(--font-display);
+  font-size: var(--t-button);
+}
+
+.cp-bar-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+:root #cpBarTap[aria-pressed="true"] {
+  border-color: var(--brand-tint-text);
+  background: var(--brand-indigo-control);
+  color: #ffffff;
+}
+
+/* The bars' tools wrap inside the module, never past its edge. */
+:root #cpRhythmField {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+/* The facts give way first: shortened, so the heading keeps to one row. */
+:root .cp-facts {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The motif's lists as wide as what they say. */
+:root .cp-motif .metro-field select,
+:root #cpMotifHow {
+  min-width: 0;
+}
+
+/* The trainer, tighter (2.6.0): its kind in the heading, the two sounds on
+   one line, the fields wrapping in a narrow module. */
+:root .rh-train-head {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 10px 14px;
+}
+
+:root .rh-train-head #rhTrainKind {
+  margin-left: auto;
+}
+
+.rh-train-fields {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+:root .rh-sounds {
+  flex-basis: 100%;
+  min-width: 0;
+}
+
+/* The two sounds share the row, however narrow. */
+:root .rh-sounds select {
+  flex: 0 1 160px;
+  min-width: 0;
+  padding: 0 34px 0 12px;
+}
+
+.rh-speed .cons-note:empty {
+  display: none;
+}
+
+/* With every line shown, nothing under the staff: the line of hints is gone. */
+.cp-hintbar:has(#cpLines[hidden]) {
+  display: none;
+}
+
+/* In a narrow module the title and Play keep the first row, the kind under them. */
+.rh-side {
+  container-type: inline-size;
+}
+
+@container (max-width: 460px) {
+  :root .rh-train-head #rhTrainKind {
+    order: 3;
+    margin-left: 0;
+  }
+
+  :root .rh-train-head #rhTrainPlay {
+    margin-left: auto;
+  }
+
+  /* The circle smaller, beside where the layers fall. */
+  .rh-circle {
+    width: 120px;
+    height: 120px;
+  }
+}
+
+/* The Quiz's melody, written on a staff (2.6.0). */
+.cons-quiz-write {
+  border-radius: 10px;
+  cursor: crosshair;
+}
+
+.cons-quiz-write:focus-visible {
+  outline: 2px solid var(--brand-tint-text);
+  outline-offset: 2px;
+}
+
+.cp-ring.is-right {
+  stroke: var(--brand-tint-text);
+}
+
+.cp-ring.is-wrong {
+  stroke: var(--brand-burgundy-text);
+}
+
+/* A switch of its own beside a segmented choice (a note's dot, Tie) keeps
+   its fill when the choice has a marker. */
+:root .has-marker.cal-modes button.segment-toggle[aria-pressed="true"] {
+  background: var(--brand-indigo-control);
+}
+
+/* Notes as drawn: never made bold when chosen, which Bravura, with one
+   weight, would fake. */
+:root #cpRhythms .cp-rhythm,
+:root #cpLengths .cp-length:not(.cp-tie) {
+  font-weight: 400;
+}

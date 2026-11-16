@@ -13,9 +13,11 @@ const CP_SCALE = 1.25;                      // on the page, each unit of the eng
 const CP_MIN_SCALE = 0.8;                   // and at least, when the room is short
 // Units under each system for what's written beneath: a line of intervals or
 // numerals, or a figured bass's stacked figures with the analysis under them.
-const cpRoom = exercise => (exercise.kind !== "fourpart" ? 22 : exercise.form === "figured" ? 56 : 30);
+// Room under each line for what's written beneath it: a melody's chords take a second row (2.6.0).
+const cpRoom = exercise => (exercise.kind === "melody" && cpMelody.chords !== "off" ? 41 : exercise.kind !== "fourpart" ? 22 : exercise.form === "figured" ? 56 : 30);
 const CP_GLYPH = {
-    w: String.fromCodePoint(0xE1D2), h: String.fromCodePoint(0xE1D3), q: String.fromCodePoint(0xE1D5), e: String.fromCodePoint(0xE1D7), dot: String.fromCodePoint(0xE1E7)
+    w: String.fromCodePoint(0xE1D2), h: String.fromCodePoint(0xE1D3), q: String.fromCodePoint(0xE1D5), e: String.fromCodePoint(0xE1D7),
+    s: String.fromCodePoint(0xE1D9), t: String.fromCodePoint(0xE1DB), f: String.fromCodePoint(0xE1DD), dot: String.fromCodePoint(0xE1E7)
 };
 const CP_SPECIES_WORDS = ["", "First species", "Second species", "Third species", "Fourth species", "Fifth species"];
 const CP_FORM_WORDS = { numerals: "From numerals", figured: "Figured bass", soprano: "Harmonizing a soprano" };
@@ -41,7 +43,11 @@ const cp = {
     // The first line of staves shown, and how much of the bottom is hidden
     // because a line there doesn't fit whole (in pixels).
     lines: { top: 0, clip: 0 },
-    showKeys: false
+    // Bars selected by the strip above them (2.6.0): { from, to, anchor },
+    // or null when the tools act on the selected note's bar; and the bars'
+    // rhythms copied, kept while Maestro runs.
+    bars: null,
+    copied: null
 };
 
 const cpVoices = () => MaestroNotation.voicesOf(cp.exercise.score);
@@ -50,6 +56,14 @@ const cpIsShown = () => $("conservatory").classList.contains("active") && consSe
 const cpText = () => MaestroCounterpoint.exerciseText(cp.exercise);
 const cpIsSaved = () => cp.id !== null && cp.savedText === cpText();
 const cpKeyName = key => `${MaestroNotation.keyTonic(key.fifths, key.mode)} ${key.mode}`;
+
+// A melody's tools (2.6.0): the motif's size and how it's developed, the
+// chords under it, and whether a transposing part is shown as it's written.
+const cpMelody = { size: 1, how: "up", chords: "off", view: "concert" };
+const cpIsMelody = () => cp.exercise?.kind === "melody";
+// Written for a transposing instrument, the staff is to read, not to write.
+const cpReadOnly = () => cpIsMelody() && cpMelody.view === "written" && MaestroMelody.transposes(cp.exercise.instrument);
+const cpShownScore = () => (cpReadOnly() ? MaestroMelody.writtenScore(cp.exercise.score, cp.exercise.instrument) ?? cp.exercise.score : cp.exercise.score);
 
 // ---- Kept on this PC: the exercise as written, which is saved, and the voices heard.
 
@@ -65,13 +79,12 @@ function loadCounterpoint() {
     cp.id = exercise && typeof stored.id === "string" && CP_ID.test(stored.id) ? stored.id : null;
     cp.savedText = cp.id && typeof stored.savedText === "string" ? stored.savedText : null;
     if (Array.isArray(stored?.hear) && stored.hear.length === 4) cp.hear = stored.hear.map(Boolean);
-    cp.showKeys = stored?.showKeys === true;
     cp.at = { voice: cpWritable()[0] ?? 0, index: 0 };
 }
 
 function saveCounterpoint() {
     try {
-        localStorage.setItem(CP_KEY, JSON.stringify({ text: cpText(), id: cp.id, savedText: cp.savedText, hear: cp.hear, showKeys: cp.showKeys }));
+        localStorage.setItem(CP_KEY, JSON.stringify({ text: cpText(), id: cp.id, savedText: cp.savedText, hear: cp.hear }));
     } catch {
         // Storage full or blocked: the exercise stays for this session.
     }
@@ -90,6 +103,7 @@ function setCpExercise(exercise, { id = null, savedText = null, undo = null } = 
     cp.at = { voice: cpWritable()[0] ?? 0, index: firstOpenSlot(cpWritable()[0] ?? 0) };
     cp.history = { past: [], future: [] };
     cp.lines.top = 0;
+    cp.bars = null;
     saveCounterpoint();
     renderCounterpoint();
     renderConsNeck();
@@ -142,6 +156,88 @@ function clearCpExercise() {
     showToast("Cleared the exercise.", { label: "Undo", run: () => changeCp(before.exercise, before.at) });
 }
 
+// A model answer (2.6.0) in place of what's written, with Undo: one the
+// checker finds no error in, the given voice kept.
+function modelCpExercise() {
+    const answer = MaestroCounterpoint.modelAnswer(cp.exercise);
+    if (!answer) {
+        showToast("No model answer turned up for this exercise. Try another bar rhythm, or Clear exercise.");
+        return;
+    }
+    const before = { exercise: cp.exercise, at: cp.at };
+    stopCpPlaying();
+    changeCp(answer, cp.at);
+    showToast("Wrote a model answer.", { label: "Undo", run: () => changeCp(before.exercise, before.at) });
+}
+
+// ---- A melody's tools (2.6.0)
+
+const cpBarOf = (index, exercise = cp.exercise) => MaestroMelody.barsOfNotes(MaestroNotation.voicesOf(exercise.score)[0].notes, MaestroNotation.barLength(exercise.score.meter))[index] ?? 0;
+
+function renderCpMelodyTools() {
+    const melody = cpIsMelody();
+    // While bars are selected, their rhythm's tools take this row's place.
+    $("cpMelodyTools").hidden = !melody || Boolean(cp.bars);
+    if (!melody) return;
+    const from = cpBarOf(cp.at.index);
+    $("cpMotifSize").replaceChildren(...[1, 2, 4].map(size => Object.assign(element("option", "", size === 1 ? `Bar ${from + 1}` : `Bars ${from + 1}\u2013${from + size}`), { value: String(size) })));
+    $("cpMotifSize").value = String(cpMelody.size);
+    $("cpMotifHow").value = cpMelody.how;
+    $("cpMotifWrite").disabled = cpReadOnly();
+    document.querySelectorAll("#cpChords [data-chords]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.chords === cpMelody.chords)));
+    $("cpChordsOpen").hidden = cpMelody.chords === "off";
+    const transposes = MaestroMelody.transposes(cp.exercise.instrument);
+    $("cpViewField").hidden = !transposes;
+    document.querySelectorAll("#cpView [data-shown]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.shown === cpMelody.view)));
+    // Show (2.6.0): what's chosen, in the chip, the choices in its panel.
+    const chords = cpMelody.chords === "off" ? "No chords" : "Chords";
+    $("cpShowName").textContent = transposes && cpMelody.view === "written" ? `${chords} \u00B7 Written` : chords;
+}
+
+// The motif (from the bar selected) developed and written after it, with Undo.
+function developCpMotif() {
+    if (!cpIsMelody() || cpReadOnly()) return;
+    const exercise = cp.exercise;
+    const notes = MaestroNotation.voicesOf(exercise.score)[0].notes;
+    const how = MaestroMelody.DEVELOPMENTS.find(each => each.id === cpMelody.how);
+    const result = MaestroMelody.developMotif(notes, { from: cpBarOf(cp.at.index), size: cpMelody.size, how: cpMelody.how, fifths: exercise.score.key.fifths, bar: MaestroNotation.barLength(exercise.score.meter), most: MaestroCounterpoint.MELODY_BARS.max });
+    const next = result && MaestroCounterpoint.withMelodyNotes(exercise, result.notes);
+    if (!result || next === exercise) {
+        showToast(!MaestroMelody.barsOfNotes(notes).some((bar, index) => bar >= cpBarOf(cp.at.index) && bar < cpBarOf(cp.at.index) + cpMelody.size && notes[index].p)
+            ? "The motif's bars hold no notes yet." : cpMelody.how === "diminish" ? "Eighths can't be halved: Maestro's shortest note is an eighth."
+            : `There's no room: a melody has at most ${MaestroCounterpoint.MELODY_BARS.max} bars.`);
+        return;
+    }
+    const before = { exercise, at: cp.at };
+    const index = MaestroMelody.barsOfNotes(MaestroNotation.voicesOf(next.score)[0].notes).findIndex(bar => bar === result.from);
+    changeCp(next, { voice: 0, index: Math.max(0, index) });
+    showToast(`Wrote the motif's ${how.label.toLowerCase()} from bar ${result.from + 1}.`, { label: "Undo", run: () => changeCp(before.exercise, before.at) });
+}
+
+function cpMelodyChords() {
+    if (!cpIsMelody() || cpMelody.chords === "off") return [];
+    const exercise = cp.exercise;
+    return MaestroMelody.harmonize(MaestroNotation.voicesOf(exercise.score)[0].notes, exercise.score.key, { per: Number(cpMelody.chords), bar: MaestroNotation.barLength(exercise.score.meter) });
+}
+
+// The chords made Progressions' sketch: a bar each (or two a bar), in the melody's key.
+function openCpChordsInProgressions() {
+    const chords = cpMelodyChords();
+    if (!chords.length) return;
+    const key = cp.exercise.score.key;
+    const scale = { major: "major", ionian: "major", minor: "minor", aeolian: "minor" }[key.mode] ?? key.mode;
+    const per = Number(cpMelody.chords);
+    const bars = [];
+    for (let at = 0; at < chords.length; at += per) bars.push(chords.slice(at, at + per).map(chord => chord.name));
+    const sketch = MaestroHarmony.cleanChart({ title: (cp.exercise.title || "Melody").slice(0, MaestroHarmony.CHART_LIMITS.title), root: MaestroNotation.keyTonic(key.fifths, key.mode), scale, beats: 4, sections: [{ name: "", repeat: 1, bars }] });
+    if (!sketch) {
+        showToast("Progressions can't hold these chords.");
+        return;
+    }
+    replaceProgSketch(sketch, null, `Opened the melody's chords as ${sketch.title}.`);
+    consSections.show("progressions");
+}
+
 function firstOpenSlot(voice, exercise = cp.exercise) {
     const notes = MaestroNotation.voicesOf(exercise.score)[voice]?.notes ?? [];
     const open = notes.findIndex((note, index) => !note.p && !(index === 0 && exercise.kind === "species" && exercise.species > 1));
@@ -149,6 +245,10 @@ function firstOpenSlot(voice, exercise = cp.exercise) {
 }
 
 function setCpNote(p, { hear = true } = {}) {
+    if (cpReadOnly()) {
+        showToast("The part is shown as written. Choose Concert to write.");
+        return;
+    }
     const { voice, index } = cp.at;
     if (!changeCp(MaestroCounterpoint.setNote(cp.exercise, voice, index, p))) return;
     if (hear && p) pluckConsNote(MaestroNotation.midiOf(p));
@@ -159,6 +259,234 @@ function moveCpSelection(delta) {
     cp.at = { voice: cp.at.voice, index: Math.max(0, Math.min(notes.length - 1, cp.at.index + delta)) };
     renderCounterpoint();
     renderConsNeck();
+}
+
+// ---- Rhythm, bar by bar and note by note (2.6.0): the fifth species and
+// melodies. Bars are chosen by the strip above them; a note's length by
+// Length or 1, 2, 4, 8 and the dot.
+
+const CP_LENGTH_KEYS = Object.freeze({ 1: "w", 2: "h", 4: "q", 8: "e", 6: "s" });
+// A melody's shorter values (2.6.0): a sixteenth on 6; the rest by button alone.
+const CP_LENGTHS = Object.freeze([["w", "1"], ["h", "2"], ["q", "4"], ["e", "8"], ["s", "6"], ["t", ""], ["f", ""]]);
+const CP_LENGTH_WORDS = Object.freeze({
+    w: "A whole note", h: "A half note", q: "A quarter note", e: "An eighth note", s: "A sixteenth note", t: "A thirty-second note", f: "A sixty-fourth note",
+    "h.": "A dotted half", "q.": "A dotted quarter", "e.": "A dotted eighth", "s.": "A dotted sixteenth", "t.": "A dotted thirty-second"
+});
+const CP_TAP_MOST = 4;          // bars tapped at once
+const CP_TAP_EARLY = 0.12;      // s: a tap this early on the first beat counts
+const cpBarSize = () => MaestroNotation.barLength(cp.exercise.score.meter);
+const cpRhythmTimed = () => MaestroNotation.timed(cpVoices()[MaestroCounterpoint.rhythmVoice(cp.exercise)].notes);
+const cpBarNumbers = (from, to) => (from === to ? `bar ${from + 1}` : `bars ${from + 1}\u2013${to + 1}`);
+
+// The bars the rhythm tools act on: those selected, or the selected note's;
+// null where the rhythm isn't written (or the bar is the species' last).
+function cpRhythmSpan() {
+    const count = MaestroCounterpoint.rhythmBars(cp.exercise);
+    if (!count) return null;
+    if (cp.bars) return { from: Math.min(cp.bars.from, count - 1), to: Math.min(cp.bars.to, count - 1) };
+    if (cp.at.voice !== MaestroCounterpoint.rhythmVoice(cp.exercise)) return null;
+    const bar = Math.floor((cpRhythmTimed()[cp.at.index]?.onset ?? 0) / cpBarSize());
+    return bar < count ? { from: bar, to: bar } : null;
+}
+
+// A bar chosen (with Shift, the bars from the one chosen before); the note
+// selected moves to the first bar's first, so writing carries on there.
+function selectCpBar(bar, extend = false) {
+    const count = MaestroCounterpoint.rhythmBars(cp.exercise);
+    if (!Number.isInteger(bar) || bar < 0 || bar >= count) return;
+    const anchor = extend && cp.bars ? cp.bars.anchor : bar;
+    cp.bars = { from: Math.min(anchor, bar), to: Math.max(anchor, bar), anchor };
+    const first = cpRhythmTimed().find(entry => Math.floor(entry.onset / cpBarSize()) === cp.bars.from);
+    if (first) cp.at = { voice: MaestroCounterpoint.rhythmVoice(cp.exercise), index: first.index };
+    renderCounterpoint();
+    renderConsNeck();
+}
+
+// A change to bars' rhythm, the note selected the first of the first bar.
+function changeCpRhythm(next, bar) {
+    if (!next || next === cp.exercise) return false;
+    const voice = MaestroCounterpoint.rhythmVoice(next);
+    const index = MaestroNotation.timed(MaestroNotation.voicesOf(next.score)[voice].notes).findIndex(entry => Math.floor(entry.onset / cpBarSize()) === bar);
+    return changeCp(next, { voice, index: Math.max(0, index) });
+}
+
+function copyCpBars() {
+    const span = cpRhythmSpan();
+    if (!span) return;
+    cp.copied = [];
+    for (let bar = span.from; bar <= span.to; bar++) cp.copied.push(MaestroCounterpoint.barRhythm(cp.exercise, bar));
+    showToast(`Copied the rhythm of ${cpBarNumbers(span.from, span.to)}.`);
+    renderCpTools();
+}
+
+function pasteCpBars() {
+    const span = cpRhythmSpan();
+    if (!span || !cp.copied) return;
+    if (!changeCpRhythm(MaestroCounterpoint.pasteRhythms(cp.exercise, span.from, span.to, cp.copied), span.from)) showToast("The bars already have that rhythm.");
+}
+
+function clearCpBars() {
+    const span = cpRhythmSpan();
+    if (span) changeCpRhythm(MaestroCounterpoint.clearBars(cp.exercise, span.from, span.to), span.from);
+}
+
+// The selected note's length, within its bar; a toast says why not.
+function setCpLength(code) {
+    if (cpReadOnly() || cp.at.voice !== MaestroCounterpoint.rhythmVoice(cp.exercise)) return;
+    if (!MaestroCounterpoint.codesFor(cp.exercise).includes(code)) {
+        showToast("The fifth species is written in whole notes to eighths.");
+        return;
+    }
+    const next = MaestroCounterpoint.setNoteLength(cp.exercise, cp.at.index, code);
+    if (next === null) {
+        showToast(`${CP_LENGTH_WORDS[code] ?? "That length"} doesn't fit there: it would cross the bar line or start off the beat.`);
+        return;
+    }
+    cp.bars = null;
+    changeCp(next, cp.at);
+}
+
+function toggleCpDot() {
+    const note = cpVoices()[cp.at.voice]?.notes[cp.at.index];
+    if (!note) return;
+    if (!note.dot && !MaestroCounterpoint.codesFor(cp.exercise).includes(`${note.d}.`)) {
+        showToast(note.d === "w" ? "A whole note can't be dotted in 4/4." : note.d === "f" ? "A sixty-fourth can't be dotted: there are no hundred-twenty-eighths." : "An eighth can't be dotted in the fifth species.");
+        return;
+    }
+    setCpLength(note.dot ? note.d : `${note.d}.`);
+}
+
+function toggleCpTie() {
+    const next = MaestroCounterpoint.toggleTie(cp.exercise, cp.at.index);
+    if (next) changeCp(next, cp.at);
+}
+
+// Length: the selected note's, each choice off where it wouldn't fit.
+function renderCpLengths() {
+    const exercise = cp.exercise;
+    const voice = MaestroCounterpoint.rhythmEditable(exercise) ? MaestroCounterpoint.rhythmVoice(exercise) : -1;
+    const shown = voice >= 0 && voice === cp.at.voice && !cpReadOnly() && !cp.bars && Boolean(cpRhythmSpan());
+    $("cpLengthField").hidden = !shown;
+    if (!shown) return;
+    const note = cpVoices()[voice].notes[cp.at.index];
+    const fits = code => MaestroCounterpoint.setNoteLength(exercise, cp.at.index, code) !== null;
+    const make = (text, label, data, pressed, enabled) => {
+        const button = element("button", "cp-rhythm cp-length");
+        button.type = "button";
+        Object.assign(button.dataset, data);
+        button.textContent = text;
+        button.setAttribute("aria-label", label);
+        button.title = label;
+        button.setAttribute("aria-pressed", String(pressed));
+        button.disabled = !enabled;
+        return button;
+    };
+    const codes = MaestroCounterpoint.codesFor(exercise);
+    const buttons = CP_LENGTHS.filter(([d]) => codes.includes(d)).map(([d, key]) => make(CP_GLYPH[d], key ? `${CP_LENGTH_WORDS[d]} (${key})` : CP_LENGTH_WORDS[d], { length: d }, note.d === d, fits(d)));
+    const dotted = note.dot ? note.d : `${note.d}.`;
+    // The dot and Tie are switches of their own, filled when on beside the length's marker.
+    const dot = make(CP_GLYPH.dot, "Dotted (.)", { dot: "1" }, note.dot, codes.includes(dotted) && fits(dotted));
+    dot.classList.add("segment-toggle");
+    buttons.push(dot);
+    if (exercise.kind === "melody") {
+        const tie = make("Tie", "Tied to the next note, which takes its pitch", { tie: "1" }, note.tie, MaestroCounterpoint.toggleTie(exercise, cp.at.index) !== null);
+        tie.classList.add("cp-tie", "segment-toggle");
+        buttons.push(tie);
+    }
+    $("cpLengths").replaceChildren(...buttons);
+}
+
+// Above each bar whose rhythm is written, a strip to select it, with the
+// bar's number; the bars selected shaded.
+function drawCpBarStrips(svg, drawn) {
+    if (cpReadOnly() || !drawn.barSpans) return;
+    const count = MaestroCounterpoint.rhythmBars(cp.exercise);
+    if (!count) return;
+    const space = drawn.space;
+    for (const span of drawn.barSpans) {
+        const top = drawn.systems[span.system].top;
+        if (span.bar < count) {
+            const selected = cp.bars && span.bar >= cp.bars.from && span.bar <= cp.bars.to;
+            const strip = svgNode("rect", { class: `cp-bar-strip${selected ? " is-selected" : ""}`, x: span.x1 + 0.2 * space, y: top + 0.1 * space, width: Math.max(space, span.x2 - span.x1 - 0.4 * space), height: 0.9 * space, rx: 3 });
+            strip.dataset.bar = String(span.bar);
+            const title = svgNode("title", {});
+            title.textContent = `Bar ${span.bar + 1}: click to select it, with Shift the bars to it`;
+            strip.append(title);
+            svg.append(strip);
+        }
+        const number = svgNode("text", { class: "cp-bar-number", x: span.x1 + 0.6 * space, y: top + 0.8 * space });
+        number.textContent = String(span.bar + 1);
+        svg.append(number);
+    }
+}
+
+// ---- Tap: after a bar's count at the metronome's tempo, the bars' rhythm
+// tapped on Space (or the button), each tap to the nearest eighth.
+
+const cpTap = { sound: null };
+
+async function tapCpBars() {
+    const span = cpRhythmSpan();
+    if (!span || cpTap.sound) return;
+    stopCpPlaying();
+    if (metro.running) stopMetronome();
+    const bars = Math.min(CP_TAP_MOST, span.to - span.from + 1);
+    const sound = { out: null, timers: [], taps: [], from: span.from, bars, phase: "count", start: 0, beat: 0 };
+    cpTap.sound = sound;
+    renderCpTools();
+    const context = await readyConsAudio();
+    if (!context || cpTap.sound !== sound) return;
+    const beats = cpBarSize() / 2;
+    sound.beat = 60 / metro.settings.tempo;
+    sound.out = context.createGain();
+    sound.out.connect(consToneOutput(context));
+    sound.start = context.currentTime + 0.1 + beats * sound.beat;
+    const end = sound.start + bars * beats * sound.beat;
+    for (let at = -beats; at < bars * beats; at++) playDrum(context, QUIZ_PULSE.sound, sound.start + at * sound.beat, at % beats === 0 ? QUIZ_PULSE.accent : QUIZ_PULSE.level, sound.out);
+    sound.timers.push(setTimeout(() => {
+        if (cpTap.sound !== sound) return;
+        sound.phase = "tap";
+        renderCpTools();
+    }, (sound.start - CP_TAP_EARLY - context.currentTime) * 1000));
+    sound.timers.push(setTimeout(() => finishCpTap(sound), (end - context.currentTime + 0.15) * 1000));
+}
+
+// A tap, timed on the audio clock from the first bar's start.
+function tapCp(event) {
+    const sound = cpTap.sound;
+    if (!sound?.start || !metro.context) return;
+    const time = rhTapTime(event) - sound.start;
+    if (time >= -CP_TAP_EARLY) sound.taps.push(Math.max(0, time));
+    $("cpBarTap").animate([{ transform: "scale(0.96)" }, { transform: "scale(1)" }], { duration: 140, easing: "ease-out" });
+}
+
+function stopCpTap() {
+    const sound = cpTap.sound;
+    cpTap.sound = null;
+    if (!sound) return;
+    sound.timers.forEach(clearTimeout);
+    if (sound.out) {
+        sound.out.gain.setTargetAtTime(0, metro.context.currentTime, 0.015);
+        setTimeout(() => sound.out.disconnect(), 120);
+    }
+    restConsAudio();
+    if (cpIsShown()) renderCpTools();
+}
+
+// The taps written as the bars' rhythm, in one change Undo takes back.
+function finishCpTap(sound) {
+    if (cpTap.sound !== sound) return;
+    stopCpTap();
+    if (!cpIsShown()) return;
+    const rhythms = MaestroCounterpoint.rhythmFromTaps(sound.taps.map(time => time / (sound.beat / 2)), sound.bars);
+    if (!rhythms) {
+        showToast("No taps heard; the bars are as they were.");
+        return;
+    }
+    let next = cp.exercise;
+    rhythms.forEach((each, at) => { next = MaestroCounterpoint.setBarRhythm(next, sound.from + at, each.pattern, { rests: each.rests }); });
+    if (changeCpRhythm(next, sound.from)) showToast(`Tapped ${cpBarNumbers(sound.from, sound.from + sound.bars - 1)}.`, { label: "Undo", run: undoCp });
+    else showToast("Tapped as it was written.");
 }
 
 // The selected note moved a step (or, chromatically, a half step), from where
@@ -204,7 +532,7 @@ function letterCpNote(letter) {
 // the staff's, less its padding, the brace and the margin after the last bar.
 function cpEngrave(scale) {
     const width = Math.max(400, ($("cpStaff").clientWidth || 1200) - 24) / scale - 3 * MaestroNotation.SPACE;
-    return MaestroNotation.engrave(cp.exercise.score, { maxWidth: width, room: cpRoom(cp.exercise), justify: true });
+    return MaestroNotation.engrave(cpShownScore(), { maxWidth: width, room: cpRoom(cp.exercise), justify: true });
 }
 
 function drawCpStaff() {
@@ -241,19 +569,13 @@ function drawCpStaff() {
         if (head.voice === exercise.given) classes.push("is-given");
         svg.append(svgNode("ellipse", { class: classes.join(" "), cx: head.x + 0.75 * drawn.space, cy: head.y, rx: 1.35 * drawn.space, ry: 1.05 * drawn.space, "data-ring": `${head.voice}:${head.index}` }));
     });
-    for (const item of drawn.items) {
-        let node;
-        if (item.kind === "line") node = svgNode("line", { x1: item.x1, y1: item.y1, x2: item.x2, y2: item.y2 });
-        else if (item.kind === "glyph") {
-            node = svgNode("text", { x: item.x, y: item.y });
-            if (item.scaleY) node.setAttribute("transform", `translate(${item.x} ${item.y}) scale(1 ${item.scaleY.toFixed(3)}) translate(${-item.x} ${-item.y})`);
-            node.textContent = item.text;
-        } else if (item.kind === "path") node = svgNode("path", { d: item.d });
-        else node = svgNode("polygon", { points: `${item.x1},${item.y1} ${item.x2},${item.y2} ${item.x2},${item.y2 + item.thickness} ${item.x1},${item.y1 + item.thickness}` });
-        node.setAttribute("class", item.class);
-        svg.append(node);
-    }
+    // A note still to write has no head: its rest is ringed when selected, so
+    // the voice chosen shows where two share a staff (2.6.0).
+    const rest = drawn.rests?.find(each => each.voice === cp.at.voice && each.index === cp.at.index);
+    if (rest) svg.append(svgNode("ellipse", { class: "cp-ring is-selected is-rest", cx: rest.x + 0.6 * drawn.space, cy: rest.y, rx: 1.25 * drawn.space, ry: 1.7 * drawn.space, "data-ring": `${rest.voice}:${rest.index}` }));
+    drawScoreItems(svg, drawn);
     drawCpBeneath(svg, drawn, timed);
+    drawCpBarStrips(svg, drawn);
     holder.replaceChildren(svg);
     if (cpGhost.at && !cpGhost.frame) cpGhost.frame = requestAnimationFrame(drawCpGhost);
 }
@@ -265,6 +587,13 @@ function drawCpBeneath(svg, drawn, timed) {
     const space = drawn.space;
     const xAt = onset => drawn.columns.find(each => each.time === onset);
     const lineY = (system, row) => drawn.systems[system].bottom + space * (1.6 + row * 1.9);
+    // What each row under the staff is, named once at the first line's start.
+    const name = (y, text) => {
+        const node = svgNode("text", { class: "cp-beneath cp-row-label", x: drawn.systems[0].left, y });
+        node.textContent = text;
+        svg.append(node);
+    };
+    const nameRow = (row, text) => name(lineY(0, row) + space, text);
     const write = (onset, text, row, cls) => {
         const column = xAt(onset);
         if (!column || !text) return;
@@ -292,11 +621,24 @@ function drawCpBeneath(svg, drawn, timed) {
         }
     };
     if (exercise.kind !== "fourpart") {
+        nameRow(0, exercise.kind === "species" ? "Intervals" : "Degrees");
+        if (exercise.kind === "melody" && cpMelody.chords !== "off") nameRow(1, "Chords");
         MaestroCounterpoint.analysisLine(exercise).forEach(each => write(each.onset, each.text, 0, "cp-beneath"));
+        // A melody's chords (2.6.0), each under the note sounding where it begins.
+        if (exercise.kind === "melody" && cpMelody.chords !== "off") {
+            cpMelodyChords().filter(chord => !chord.silent).forEach(chord => {
+                const column = drawn.columns.filter(each => each.time <= chord.at).at(-1);
+                if (!column) return;
+                const node = svgNode("text", { class: "cp-beneath cp-chord", x: column.x + 0.8 * space, y: lineY(column.system, 1) + space });
+                node.textContent = chord.name;
+                svg.append(node);
+            });
+        }
         return;
     }
     const onsets = timed[0].map(entry => entry.onset);
     if (exercise.form === "numerals") {
+        nameRow(0, "Numerals");
         exercise.numerals.forEach((text, k) => writeNumeral(onsets[k], MaestroCounterpoint.numeralParts(text), 0, "cp-beneath"));
         return;
     }
@@ -309,8 +651,10 @@ function drawCpBeneath(svg, drawn, timed) {
             node.textContent = figure;
             svg.append(node);
         }));
+        name(drawn.systems[0].bottom + space * 2.2, "Figures");
         row = 2;
     }
+    nameRow(row, "Analysis");
     MaestroCounterpoint.analysisLine(exercise).forEach(each => writeNumeral(each.onset, each.parts, row, "cp-beneath cp-analysis"));
 }
 
@@ -323,6 +667,7 @@ function cpStaffLabel() {
 // nearest it, the step there, and the voices that can be written there.
 // Null off the drawing or where nothing can be written.
 function cpStaffHit(event) {
+    if (cpReadOnly()) return null;
     const svg = $("cpStaff").querySelector("svg");
     if (!svg || !cp.drawn) return null;
     // Below the last whole line shown, a line is hidden: nothing there.
@@ -344,8 +689,7 @@ function cpStaffHit(event) {
     const candidates = cpWritable().filter(index => voices[index].staff === staff);
     if (!candidates.length) return null;
     const noteAt = index => MaestroNotation.timed(voices[index].notes).find(entry => entry.onset <= time && time < entry.onset + entry.length);
-    const position = Math.round((system.staffY[staff] - y) / (space / 2));
-    const step = MaestroNotation.STAFF_BOTTOM[voices[candidates[0]].clef] + position;
+    const step = staffStepAt(cp.drawn, systemIndex, staff, voices[candidates[0]].clef, y);
     // How far the pointer is from the moment's heads, in staff spaces.
     const across = Math.abs(column.x + 0.75 * space - x) / space;
     return { time, staff, step, candidates, noteAt, across };
@@ -370,6 +714,13 @@ function cpNearestWritten(hit) {
 // A click on the staff: the moment nearest it, on the staff clicked, for
 // the voice there (the one written nearest the click when two share it).
 function cpStaffClick(event) {
+    const strip = event.target.closest?.(".cp-bar-strip");
+    if (strip) {
+        selectCpBar(Number(strip.dataset.bar), event.shiftKey);
+        $("cpStaff").focus({ preventScroll: true });
+        return;
+    }
+    cp.bars = null;
     const hit = cpStaffHit(event);
     if (!hit) return;
     const { step, noteAt } = hit;
@@ -387,7 +738,7 @@ function cpStaffClick(event) {
 // they are. The menu key (no pointer to aim) does nothing here.
 function cpStaffErase(event) {
     event.preventDefault();
-    if (event.button !== 2) return;
+    if (event.button !== 2 || event.target.closest?.(".cp-bar-strip")) return;
     const hit = cpStaffHit(event);
     const nearest = hit && cpNearestWritten(hit);
     if (!nearest) return;
@@ -402,7 +753,8 @@ function cpStaffErase(event) {
 const cpGhost = { frame: 0, at: null };
 
 function cpStaffHover(event) {
-    cpGhost.at = { clientX: event.clientX, clientY: event.clientY };
+    // Over a bar's strip, no note would be written.
+    cpGhost.at = event.target.closest?.(".cp-bar-strip") ? null : { clientX: event.clientX, clientY: event.clientY };
     if (!cpGhost.frame) cpGhost.frame = requestAnimationFrame(drawCpGhost);
 }
 
@@ -424,20 +776,7 @@ function drawCpGhost() {
     const p = MaestroNotation.pitch(hit.step, MaestroNotation.keyAlter(((hit.step % 7) + 7) % 7, cp.exercise.score.key.fifths));
     const column = entry && cp.drawn.columns.find(each => each.time === entry.onset);
     if (!column || !MaestroNotation.isPitch(p)) return;
-    const space = cp.drawn.space;
-    const staffY = cp.drawn.systems[column.system].staffY[hit.staff];
-    const position = hit.step - MaestroNotation.STAFF_BOTTOM[cpVoices()[voice].clef];
-    const centerY = staffY - position * space / 2;
-    const width = MaestroNotation.HEAD_WIDTH[entry.note.d];
-    const ghost = svgNode("g", { class: "cp-ghost", "aria-hidden": "true" });
-    const ledger = at => ghost.append(svgNode("line", { class: "staff-ledger", x1: column.x - 0.4 * space, x2: column.x + width + 0.4 * space, y1: staffY - at * space / 2, y2: staffY - at * space / 2 }));
-    for (let at = -2; at >= position; at -= 2) ledger(at);
-    for (let at = 10; at <= position; at += 2) ledger(at);
-    const head = svgNode("text", { class: "staff-glyph", x: column.x, y: centerY + MaestroNotation.LIFT });
-    const glyphs = MaestroNotation.GLYPHS;
-    head.textContent = entry.note.d === "w" ? glyphs.whole : entry.note.d === "h" ? glyphs.half : glyphs.black;
-    ghost.append(head);
-    svg.append(ghost);
+    drawStaffGhost(svg, cp.drawn, { x: column.x, staffY: cp.drawn.systems[column.system].staffY[hit.staff], clef: cpVoices()[voice].clef, step: hit.step, d: entry.note.d });
 }
 
 // ---- The wheel on the staff: over the selected note, a step (with Shift,
@@ -566,6 +905,7 @@ function fitCpLines({ follow = false, smooth = false } = {}) {
     // Inset past the edges on three sides, so the focus outline isn't cut.
     staff.style.clipPath = cp.lines.clip ? `inset(-6px -6px ${cp.lines.clip}px -6px)` : "";
     const all = top === 0 && last === count - 1;
+    staff.classList.toggle("is-whole", all);
     $("cpLines").hidden = all;
     $("cpLines").textContent = all ? "" : cp.lines.top === last ? `Line ${last + 1} of ${count}` : `Lines ${cp.lines.top + 1}\u2013${last + 1} of ${count}`;
 }
@@ -575,8 +915,10 @@ function fitCpLines({ follow = false, smooth = false } = {}) {
 function renderCounterpoint() {
     if (!cp.exercise) loadCounterpoint();
     const exercise = cp.exercise;
+    if (cp.bars && !MaestroCounterpoint.rhythmBars(exercise)) cp.bars = null;
     $("cpTitleText").textContent = exercise.title || "Untitled";
     $("cpFacts").textContent = cpFacts(exercise);
+    $("cpFacts").title = $("cpFacts").textContent;
     const saved = cpIsSaved();
     $("cpSave").textContent = saved ? "Saved" : cp.id ? "Save changes" : "Save exercise";
     $("cpSave").classList.toggle("is-saved", saved);
@@ -593,6 +935,11 @@ function renderCounterpoint() {
 function cpFacts(exercise) {
     const key = exercise.score.key;
     if (exercise.kind === "cantus") return `Cantus firmus \u00B7 ${cpKeyName(key)} \u00B7 ${MaestroNotation.voicesOf(exercise.score)[0].notes.length} notes`;
+    if (exercise.kind === "melody") {
+        const bars = MaestroNotation.bars(MaestroNotation.voicesOf(exercise.score)[0].notes, exercise.score.meter).bars.length;
+        const instrument = MaestroMelody.instrumentOf(exercise.instrument);
+        return `Melody \u00B7 ${cpKeyName(key)}${instrument.id === "concert" ? "" : ` \u00B7 ${instrument.label}`} \u00B7 ${bars === 1 ? "1 bar" : `${bars} bars`}`;
+    }
     if (exercise.kind === "species") return `${CP_SPECIES_WORDS[exercise.species]} \u00B7 ${cpKeyName(key)} \u00B7 the cantus ${exercise.cantusBelow ? "below" : "above"}`;
     return `Four parts \u00B7 ${CP_FORM_WORDS[exercise.form]} \u00B7 ${cpKeyName(key)}`;
 }
@@ -600,7 +947,7 @@ function cpFacts(exercise) {
 function renderCpVoices() {
     const voices = cpVoices();
     $("cpVoices").replaceChildren(...voices.map((voice, index) => {
-        const button = element("button", "secondary cons-toggle cp-voice");
+        const button = element("button", "cp-voice");
         button.type = "button";
         button.dataset.hear = String(index);
         button.setAttribute("aria-pressed", String(cp.hear[index]));
@@ -636,15 +983,25 @@ function renderCpTools() {
     });
     $("cpClearNote").disabled = !note?.p;
     $("cpClearAll").disabled = MaestroCounterpoint.clearWritten(exercise) === exercise;
-    // The fifth species: the selected bar's rhythm.
-    const fifth = exercise.kind === "species" && exercise.species === 5;
-    const timed = MaestroNotation.timed(cpVoices()[cp.at.voice].notes);
-    const bar = Math.floor((timed[cp.at.index]?.onset ?? 0) / MaestroNotation.barLength(exercise.score.meter));
-    const bars = Math.ceil(timed.reduce((sum, entry) => sum + entry.length, 0) / MaestroNotation.barLength(exercise.score.meter));
-    $("cpRhythmField").hidden = !fifth || bar >= bars - 1;
-    if (fifth) {
-        $("cpRhythmLabel").textContent = `Bar ${bar + 1}`;
-        const current = timed.filter(entry => Math.floor(entry.onset / 8) === bar).map(entry => entry.note.d + (entry.note.dot ? "." : "")).join(" ");
+    $("cpModel").hidden = exercise.kind === "cantus" || exercise.kind === "melody";
+    renderCpMelodyTools();
+    renderCpLengths();
+    // With bars selected, the note's own tools step aside for theirs.
+    $("cpAccidentalField").hidden = Boolean(cp.bars);
+    $("cpClearNote").hidden = Boolean(cp.bars);
+    // The fifth species (and since 2.6.0 a melody): the rhythm of the bars
+    // selected by the strip above them; with none, the note's Length shows.
+    const span = cpReadOnly() || !cp.bars ? null : cpRhythmSpan();
+    $("cpRhythmField").hidden = !span;
+    if (span) {
+        $("cpRhythmLabel").textContent = span.from === span.to ? `Bar ${span.from + 1}` : `Bars ${span.from + 1}\u2013${span.to + 1}`;
+        const current = span.from === span.to ? MaestroCounterpoint.barRhythm(exercise, span.from)?.join(" ") : null;
+        $("cpBarPaste").disabled = !cp.copied;
+        $("cpBarClear").disabled = MaestroCounterpoint.clearBars(exercise, span.from, span.to) === exercise;
+        $("cpBarClear").textContent = span.from === span.to ? "Clear bar" : "Clear bars";
+        const tapping = cpTap.sound;
+        $("cpBarTap").textContent = !tapping ? "Tap" : tapping.phase === "tap" ? "Tap with Space" : "Count in\u2026";
+        $("cpBarTap").setAttribute("aria-pressed", String(Boolean(tapping)));
         $("cpRhythms").replaceChildren(...MaestroCounterpoint.FIFTH_BARS.map((pattern, index) => {
             const button = element("button", "cp-rhythm");
             button.type = "button";
@@ -656,43 +1013,18 @@ function renderCpTools() {
             return button;
         }));
     }
-    renderCpKeys();
-    $("cpHint").textContent = "Click the staff, the neck or a key to write; right-click a note to clear it; Ctrl+Z undoes.";
-    $("cpStaff").title = exercise.kind !== "fourpart"
-        ? "Up and Down move the note a step (with Shift, a half step); Left and Right go to the next note; A to G write a letter; Delete or a right-click clears it; Enter plays the moment; Ctrl+Z undoes, Ctrl+Y redoes."
-        : "Up and Down move the note a step (with Shift, a half step); Left and Right go to the next chord; 1 to 4 choose the voice; A to G write a letter; Delete or a right-click clears it; Enter plays the chord; Ctrl+Z undoes, Ctrl+Y redoes.";
-}
-
-// What the keys and the mouse do on the staff, shown under it on request.
-function renderCpKeys() {
-    const fourPart = cp.exercise.kind === "fourpart";
-    const rows = [
-        [["Click"], "Write the note there"],
-        [["Right-click"], "Clear the note there"],
-        [["Wheel"], "On the selected note, a step (with Shift, a half step); elsewhere, the next line"],
-        [["\u2191", "\u2193"], "A step (with Shift, a half step)"],
-        [["\u2190", "\u2192"], fourPart ? "The last or next chord" : "The last or next note"],
-        [["A", "G"], "Write that letter, the nearest one", true],
-        ...(fourPart ? [[["1", "4"], "Choose the voice to write", true]] : []),
-        [["Delete"], "Clear the note"],
-        [["Enter"], fourPart ? "Hear the chord" : "Hear the moment"],
-        [["Page Up", "Page Down"], "The last or next line"],
-        [["Ctrl+Z", "Ctrl+Y"], "Undo, redo"]
-    ];
-    // A range (A to G) is joined by a dash; two keys stand side by side.
-    $("cpKeys").replaceChildren(...rows.map(([keys, text, range = false]) => {
-        const row = element("li", "cp-key");
-        const held = element("span", "cp-key-keys");
-        keys.forEach((label, at) => {
-            if (at && range) held.append(element("span", "", "\u2013"));
-            held.append(element("kbd", "", label));
-        });
-        row.append(held, element("span", "", text));
-        return row;
-    }));
-    $("cpKeys").hidden = !cp.showKeys;
-    $("cpKeysButton").setAttribute("aria-expanded", String(cp.showKeys));
-    $("cpKeysButton").textContent = cp.showKeys ? "Hide keys and mouse" : "Keys and mouse";
+    // The staff's keys and mouse, listed here alone (2.6.0: the list under the staff is gone).
+    $("cpStaff").title = [
+        "Click to write a note; right-click to clear it; the wheel moves the selected note a step (with Shift, a half step)",
+        "Up and Down: a step (with Shift, a half step)",
+        exercise.kind === "fourpart" ? "Left and Right: the next chord" : "Left and Right: the next note",
+        "A to G: write that letter",
+        ...(exercise.kind === "fourpart" ? ["Shift with S, A, T or B: the voice to write"] : []),
+        ...(MaestroCounterpoint.rhythmEditable(exercise) ? ["1, 2, 4, 8: a whole, half, quarter or eighth; . dots it", "Click above a bar to select it (with Shift, bars); Ctrl+C and Ctrl+V copy and paste their rhythm; Esc goes back to the note"] : []),
+        "Delete: clear the note",
+        exercise.kind === "fourpart" ? "Enter: hear the chord" : "Enter: hear the moment",
+        "Ctrl+Z undoes, Ctrl+Y redoes"
+    ].join("\n");
 }
 
 function renderCpProblems() {
@@ -717,12 +1049,12 @@ function renderCpProblems() {
         item.append(button);
         return item;
     }));
-    $("cpProblemsNote").hidden = problems.length > 0;
 }
 
 function renderCpMenu() {
     const items = cp.saved;
     $("cpSaveCopy").disabled = items === null;
+    $("cpCopyLink").disabled = !cp.id;
     if (items === null) {
         $("cpExercises").replaceChildren(placeholderItem("list", 3));
         $("cpExercisesNote").textContent = "";
@@ -736,7 +1068,7 @@ function renderCpMenu() {
         const current = item.id === cp.id;
         if (current) open.setAttribute("aria-current", "true");
         open.append(element("strong", "", item.exercise.title || "Untitled"), element("span", "", `${cpFacts(item.exercise)}${current && !cpIsSaved() ? " \u00B7 changed" : ""}`));
-        const remove = element("button", "quiet prog-song-delete");
+        const remove = element("button", "prog-song-delete");
         remove.type = "button";
         remove.dataset.exerciseDelete = item.id;
         remove.setAttribute("aria-label", `Delete ${item.exercise.title || "Untitled"}`);
@@ -750,7 +1082,8 @@ function renderCpMenu() {
 
 // ---- A new exercise
 
-const cpNew = { kind: "species", species: 1, cantus: "fux-dorian", below: true, form: "figured", key: "0", mode: "dorian", final: "D", clef: "treble", length: MaestroCounterpoint.CANTUS_LENGTH.usual };
+const cpNew = { kind: "species", species: 1, cantus: "fux-dorian", below: true, form: "figured", key: "0", mode: "dorian", final: "D", clef: "treble", length: MaestroCounterpoint.CANTUS_LENGTH.usual, instrument: "concert", bars: MaestroCounterpoint.MELODY_BARS.usual };
+const CP_MELODY_BARS = Object.freeze([2, 4, 8, 12, 16]);
 const CP_MODE_WORDS = { dorian: "Dorian", phrygian: "Phrygian", lydian: "Lydian", mixolydian: "Mixolydian", aeolian: "Aeolian", ionian: "Ionian", major: "Major", minor: "Minor" };
 
 // A cantus firmus to write against: Fux's, a phrase of chant, the one open
@@ -800,7 +1133,14 @@ function renderCpNewPanel() {
     document.querySelectorAll("#cpNewClef [data-clef]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.clef === cpNew.clef)));
     $("cpNewSpeciesFields").hidden = cpNew.kind !== "species";
     $("cpNewFourFields").hidden = cpNew.kind !== "fourpart";
-    $("cpNewCantusFields").hidden = cpNew.kind !== "cantus";
+    // A cantus and a melody share the mode and its final (a melody's key) (2.6.0).
+    const melody = cpNew.kind === "melody";
+    $("cpNewCantusFields").hidden = cpNew.kind !== "cantus" && !melody;
+    $("cpNewFinalLabel").textContent = melody ? "Key" : "Final";
+    $("cpNewClefField").hidden = $("cpNewLengthField").hidden = melody;
+    $("cpNewInstrumentField").hidden = $("cpNewBarsField").hidden = !melody;
+    $("cpNewInstrument").value = cpNew.instrument;
+    $("cpNewBars").value = String(cpNew.bars);
     $("cpNewCantus").replaceChildren(...cpCantusChoices());
     const choosable = [...$("cpNewCantus").options].some(option => option.value === cpNew.cantus && !option.disabled);
     if (!choosable) cpNew.cantus = "fux-dorian";
@@ -816,15 +1156,16 @@ function renderCpNewPanel() {
 
 function startCpExercise() {
     let exercise;
-    if (cpNew.kind === "cantus") {
+    if (cpNew.kind === "melody") {
+        exercise = MaestroCounterpoint.melodyExercise({ tonic: cpNew.final, mode: cpNew.mode, instrument: cpNew.instrument, bars: cpNew.bars, title: `A melody in ${cpNew.final} ${CP_MODE_WORDS[cpNew.mode].toLowerCase()}` });
+    } else if (cpNew.kind === "cantus") {
         exercise = MaestroCounterpoint.cantusExercise({ mode: cpNew.mode, final: cpNew.final, clef: cpNew.clef, length: cpNew.length, title: `A cantus in ${cpNew.final} ${CP_MODE_WORDS[cpNew.mode].toLowerCase()}` });
     } else if (cpNew.kind === "species") {
         const chosen = cpChosenCantus();
         if (chosen) {
             exercise = MaestroCounterpoint.speciesExercise({ species: cpNew.species, cantus: chosen.pitches, cantusBelow: cpNew.below, mode: chosen.mode, final: chosen.final, title: `${CP_SPECIES_WORDS[cpNew.species]}, ${chosen.name}`.slice(0, MaestroNotation.TITLE_MAX) });
         } else if (cpNew.cantus.startsWith("made-")) {
-            exercise = MaestroCounterpoint.speciesExercise({ species: cpNew.species, cantus: MaestroCounterpoint.fuxNotes(fux), cantusBelow: cpNew.below, mode: fux.mode, final: fux.final, title: `${CP_SPECIES_WORDS[cpNew.species]}, ${fux.label.replace("Fux, ", "Fux's ")}` });
-        } else {
+            // A cantus made to the rules (fixed in 2.6.0: this read a Fux cantus that wasn't there).
             const mode = cpNew.cantus === "made-minor" ? "minor" : "major";
             const tonics = MaestroCounterpoint.FOURPART_KEYS[mode];
             const tonic = tonics[Math.floor(Math.random() * tonics.length)];
@@ -864,6 +1205,7 @@ function receiveExercises(items) {
         return exercise ? [{ id: item.id, exercise, text: MaestroCounterpoint.exerciseText(exercise) }] : [];
     }).slice(0, CP_MAX).sort((a, b) => (a.exercise.title || "").localeCompare(b.exercise.title || "", undefined, { sensitivity: "base" }) || a.id.localeCompare(b.id));
     if (cpIsShown()) renderCounterpoint();
+    globalThis.resolveMusicLink?.();
 }
 
 const newCpId = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), byte => "abcdefghijklmnopqrstuvwxyz0123456789"[byte % 36]).join("");
@@ -996,46 +1338,30 @@ async function playCpExercise() {
         stopCpPlaying();
         return;
     }
-    const context = await readyConsAudio();
-    if (!context) return;
-    const eighth = 30 / metro.settings.tempo;
-    const events = cpVoices().flatMap((voice, index) => (cp.hear[index] ? MaestroNotation.soundingEvents(voice.notes).map(event => ({ ...event, voice: index })) : []))
-        .sort((a, b) => a.start - b.start);
+    // In beats: the score counts eighths, the tempo quarters.
+    const events = cpVoices().flatMap((voice, index) => (cp.hear[index] ? MaestroNotation.soundingEvents(voice.notes).map(event => ({ midi: event.midi, at: event.start / 2, length: event.length / 2 })) : []))
+        .sort((a, b) => a.at - b.at);
     if (!events.length) return;
-    const end = Math.max(...events.map(event => event.start + event.length));
-    cp.playing = { start: context.currentTime + 0.12, next: 0, events, eighth, end, voices: [], timer: null, context };
-    const tick = () => {
-        const playing = cp.playing;
-        if (!playing) return;
-        if (!cpIsShown()) {
-            stopCpPlaying();
-            return;
-        }
-        const elapsed = playing.context.currentTime - playing.start;
-        const due = [];
-        while (playing.next < playing.events.length && playing.events[playing.next].start * playing.eighth < elapsed + 0.8) due.push(playing.events[playing.next++]);
-        if (due.length) {
-            const offsets = due.map(event => Math.max(0, event.start * playing.eighth - elapsed));
-            const ends = due.map((event, at) => offsets[at] + event.length * playing.eighth - 0.03);
-            pluckConsNotes(due.map(event => event.midi), offsets, ends).then(voices => playing.voices.push(...voices));
-        }
-        lightCpPlaying(elapsed / playing.eighth);
-        if (elapsed > playing.end * playing.eighth + 0.3) {
-            stopCpPlaying();
-            return;
-        }
-        playing.timer = setTimeout(tick, 120);
-    };
-    tick();
+    const playing = { run: null };
+    cp.playing = playing;
     renderCpVoices();
+    // At the metronome's tempo as it is now (2.6.0), so a change takes hold as it plays.
+    const run = await playConsSequence(events, {
+        onBeat: beat => {
+            if (!cpIsShown()) stopCpPlaying();
+            else lightCpPlaying(beat * 2);
+        },
+        onEnd: () => { if (cp.playing === playing) stopCpPlaying(); }
+    });
+    if (cp.playing === playing) playing.run = run;
+    else run?.stop();
 }
 
 function stopCpPlaying() {
     const playing = cp.playing;
     if (!playing) return;
     cp.playing = null;
-    clearTimeout(playing.timer);
-    playing.voices.forEach(dampConsVoice);
+    playing.run?.stop();
     lightCpPlaying(-1);
     if ($("cpPlay")) renderCpVoices();
 }
@@ -1088,16 +1414,12 @@ consNeckModes.counterpoint = {
 
 wireConsPopover("cpMenu", $("cpTitleButton"), $("cpMenu"));
 wireConsPopover("cpNew", $("cpMenuNew"), $("cpNewPanel"), { onOpen: () => $("cpNewKind").querySelector('[aria-pressed="true"]') });
+wireConsPopover("cpShow", $("cpShowButton"), $("cpShowPanel"));
 $("cpStaff").addEventListener("click", cpStaffClick);
 $("cpStaff").addEventListener("contextmenu", cpStaffErase);
 $("cpStaff").addEventListener("pointermove", cpStaffHover);
 $("cpStaff").addEventListener("pointerleave", cpStaffLeave);
 $("cpStaff").addEventListener("wheel", cpStaffWheel, { passive: false });
-$("cpKeysButton").addEventListener("click", () => {
-    cp.showKeys = !cp.showKeys;
-    saveCounterpoint();
-    renderCpKeys();
-});
 // Ctrl+Z and Ctrl+Y (or Ctrl+Shift+Z) anywhere on the tab but in a field.
 $("consCounterPanel").addEventListener("keydown", event => {
     if (!event.ctrlKey || event.altKey || event.metaKey || event.target.closest("input, select, textarea, [contenteditable]")) return;
@@ -1107,18 +1429,37 @@ $("consCounterPanel").addEventListener("keydown", event => {
 });
 $("cpStaff").addEventListener("keydown", event => {
     const voices = cpVoices();
-    if (event.key === "ArrowLeft" || event.key === "ArrowRight") moveCpSelection(event.key === "ArrowLeft" ? -1 : 1);
+    const rhythm = MaestroCounterpoint.rhythmEditable(cp.exercise) && !cpReadOnly();
+    const plain = !event.ctrlKey && !event.altKey && !event.metaKey;
+    const ctrl = event.ctrlKey && !event.altKey && !event.metaKey;
+    if (rhythm && ctrl && event.key.toLowerCase() === "c") copyCpBars();
+    else if (rhythm && ctrl && event.key.toLowerCase() === "v") pasteCpBars();
+    else if (rhythm && plain && Object.hasOwn(CP_LENGTH_KEYS, event.key)) setCpLength(CP_LENGTH_KEYS[event.key]);
+    else if (rhythm && plain && event.key === ".") toggleCpDot();
+    else if (event.key === "Escape" && cp.bars) {
+        cp.bars = null;
+        renderCounterpoint();
+    } else if (cp.bars && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+        const moving = cp.bars.anchor === cp.bars.from ? cp.bars.to : cp.bars.from;
+        const last = MaestroCounterpoint.rhythmBars(cp.exercise) - 1;
+        selectCpBar(Math.max(0, Math.min(last, moving + (event.key === "ArrowLeft" ? -1 : 1))), event.shiftKey);
+    } else if (cp.bars && (event.key === "Delete" || event.key === "Backspace")) clearCpBars();
+    else if (event.key === "ArrowLeft" || event.key === "ArrowRight") moveCpSelection(event.key === "ArrowLeft" ? -1 : 1);
     else if (event.key === "ArrowUp" || event.key === "ArrowDown") stepCpNote(event.key === "ArrowUp" ? 1 : -1, event.shiftKey);
     else if (event.key === "Delete" || event.key === "Backspace") setCpNote(null);
     else if (event.key === "PageDown" || event.key === "PageUp") {
         if (cpCanTurnLine(event.key === "PageDown")) showCpLine(cp.lines.top + (event.key === "PageDown" ? 1 : -1));
     }
-    else if (/^[a-gA-G]$/.test(event.key) && !event.ctrlKey && !event.altKey && !event.metaKey) letterCpNote(event.key.toUpperCase());
-    else if (/^[1-4]$/.test(event.key) && cp.exercise.kind === "fourpart" && Number(event.key) - 1 !== cp.exercise.given) {
-        cp.at = { voice: Number(event.key) - 1, index: Math.min(cp.at.index, voices[Number(event.key) - 1].notes.length - 1) };
-        renderCounterpoint();
-        renderConsNeck();
-    } else if (event.key === "Enter") {
+    else if (cp.exercise.kind === "fourpart" && event.shiftKey && plain && /^[satb]$/i.test(event.key)) {
+        // Shift and a voice's letter (2.6.0; 1 to 4 before): the given voice can't be chosen.
+        const voice = voices.findIndex(each => each.name[0].toUpperCase() === event.key.toUpperCase());
+        if (voice >= 0 && voice !== cp.exercise.given) {
+            cp.at = { voice, index: Math.min(cp.at.index, voices[voice].notes.length - 1) };
+            renderCounterpoint();
+            renderConsNeck();
+        }
+    } else if (/^[a-gA-G]$/.test(event.key) && plain) letterCpNote(event.key.toUpperCase());
+    else if (event.key === "Enter") {
         const at = MaestroNotation.timed(voices[cp.at.voice].notes)[cp.at.index];
         const midis = voices.flatMap(voice => {
             const entry = MaestroNotation.timed(voice.notes).find(each => each.onset <= at.onset && at.onset < each.onset + each.length);
@@ -1160,17 +1501,48 @@ $("cpAccidentals").addEventListener("click", event => {
     setCpNote(MaestroNotation.pitch(note.p.step, Number(button.dataset.alter)));
 });
 $("cpClearNote").addEventListener("click", () => setCpNote(null));
-$("cpClearAll").addEventListener("click", clearCpExercise);
+$("cpClearAll").addEventListener("click", () => {
+    toggleConsPopover("cpMenu", false);
+    clearCpExercise();
+});
+$("cpModel").addEventListener("click", modelCpExercise);
 $("cpRhythms").addEventListener("click", event => {
     const button = event.target.closest("[data-rhythm]");
-    if (!button) return;
-    const timed = MaestroNotation.timed(cpVoices()[cp.at.voice].notes);
-    const bar = Math.floor((timed[cp.at.index]?.onset ?? 0) / MaestroNotation.barLength(cp.exercise.score.meter));
-    const next = MaestroCounterpoint.setBarRhythm(cp.exercise, bar, MaestroCounterpoint.FIFTH_BARS[Number(button.dataset.rhythm)]);
-    if (next === cp.exercise) return;
-    const after = MaestroNotation.timed(MaestroNotation.voicesOf(next.score)[cp.at.voice].notes);
-    changeCp(next, { voice: cp.at.voice, index: Math.max(0, after.findIndex(entry => Math.floor(entry.onset / 8) === bar)) });
+    const span = cpRhythmSpan();
+    if (!button || !span) return;
+    changeCpRhythm(MaestroCounterpoint.pasteRhythms(cp.exercise, span.from, span.to, [MaestroCounterpoint.FIFTH_BARS[Number(button.dataset.rhythm)]]), span.from);
 });
+$("cpLengths").addEventListener("click", event => {
+    const button = event.target.closest("[data-length], [data-dot], [data-tie]");
+    if (!button || button.disabled) return;
+    if (button.dataset.length) setCpLength(button.dataset.length);
+    else if (button.dataset.dot) toggleCpDot();
+    else toggleCpTie();
+});
+$("cpBarCopy").addEventListener("click", copyCpBars);
+$("cpBarPaste").addEventListener("click", pasteCpBars);
+$("cpBarClear").addEventListener("click", clearCpBars);
+$("cpBarTap").addEventListener("pointerdown", event => {
+    // While the bars play, the button is a pad to tap on.
+    if (cpTap.sound?.phase === "tap" && event.button === 0) {
+        tapCp(event);
+        event.preventDefault();
+    }
+});
+$("cpBarTap").addEventListener("click", () => {
+    if (cpTap.sound?.phase === "tap") return;
+    if (cpTap.sound) stopCpTap();
+    else tapCpBars();
+});
+// While the bars are tapped: Space taps and Esc stops, wherever the focus is.
+document.addEventListener("keydown", event => {
+    if (!cpTap.sound) return;
+    if (event.key === "Escape") stopCpTap();
+    else if (event.code === "Space" && !event.repeat && !event.ctrlKey && !event.altKey && !event.metaKey) tapCp(event);
+    else return;
+    event.preventDefault();
+    event.stopPropagation();
+}, true);
 $("cpProblems").addEventListener("click", event => {
     const button = event.target.closest("[data-voice]");
     if (!button) return;
@@ -1193,6 +1565,11 @@ $("cpTitleInput").addEventListener("keydown", event => {
 $("cpTitleInput").addEventListener("blur", () => endCpRename(true));
 $("cpPrint").addEventListener("click", printCpExercise);
 $("cpExport").addEventListener("click", exportCpExercise);
+$("cpCopyLink").addEventListener("click", () => {
+    if (!cp.id) return;
+    toggleConsPopover("cpMenu", false);
+    copyMusicLink(cp.exercise.title, { kind: "exercise", id: cp.id });
+});
 $("cpExercises").addEventListener("click", event => {
     const open = event.target.closest("[data-exercise-open]");
     if (open) return openCpExercise(open.dataset.exerciseOpen);
@@ -1241,12 +1618,43 @@ $("cpNewClef").addEventListener("click", event => {
     cpNew.clef = button.dataset.clef;
     renderCpNewPanel();
 });
+$("cpNewInstrument").addEventListener("change", () => {
+    if (MaestroMelody.INSTRUMENTS.some(each => each.id === $("cpNewInstrument").value)) cpNew.instrument = $("cpNewInstrument").value;
+});
+$("cpNewBars").addEventListener("change", () => {
+    const bars = Number($("cpNewBars").value);
+    if (CP_MELODY_BARS.includes(bars)) cpNew.bars = bars;
+});
 $("cpNewLength").addEventListener("change", () => {
     const length = Number($("cpNewLength").value);
     if (Number.isInteger(length)) cpNew.length = length;
 });
 
 $("cpNewMode").replaceChildren(...MaestroCounterpoint.CANTUS_MODES.map(mode => Object.assign(element("option", "", CP_MODE_WORDS[mode]), { value: mode })));
+$("cpNewInstrument").replaceChildren(...MaestroMelody.INSTRUMENTS.map(each => Object.assign(element("option", "", each.label), { value: each.id })));
+$("cpNewBars").replaceChildren(...CP_MELODY_BARS.map(bars => Object.assign(element("option", "", String(bars)), { value: String(bars) })));
+$("cpMotifHow").replaceChildren(...MaestroMelody.DEVELOPMENTS.map(each => Object.assign(element("option", "", each.label), { value: each.id, title: each.title })));
+$("cpMotifSize").addEventListener("change", () => {
+    const size = Number($("cpMotifSize").value);
+    if ([1, 2, 4].includes(size)) cpMelody.size = size;
+});
+$("cpMotifHow").addEventListener("change", () => {
+    if (MaestroMelody.DEVELOPMENTS.some(each => each.id === $("cpMotifHow").value)) cpMelody.how = $("cpMotifHow").value;
+});
+$("cpMotifWrite").addEventListener("click", developCpMotif);
+$("cpChords").addEventListener("click", event => {
+    const button = event.target.closest("[data-chords]");
+    if (!button || !["off", "1", "2"].includes(button.dataset.chords)) return;
+    cpMelody.chords = button.dataset.chords;
+    renderCounterpoint();
+});
+$("cpChordsOpen").addEventListener("click", openCpChordsInProgressions);
+$("cpView").addEventListener("click", event => {
+    const button = event.target.closest("[data-shown]");
+    if (!button || !["concert", "written"].includes(button.dataset.shown)) return;
+    cpMelody.view = button.dataset.shown;
+    renderCounterpoint();
+});
 const { shortest, longest } = MaestroCounterpoint.CANTUS_LENGTH;
 $("cpNewLength").replaceChildren(...Array.from({ length: longest - shortest + 1 }, (_, at) => Object.assign(element("option", "", String(shortest + at)), { value: String(shortest + at) })));
 $("cpNewKey").replaceChildren(...cpNewKeys().map(([tonic, mode], index) => {

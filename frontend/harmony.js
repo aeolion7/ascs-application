@@ -428,6 +428,32 @@ globalThis.MaestroHarmony = (() => {
         return events;
     }
 
+    // A chart poured into a form (2.6.0): sections given as [name, bars,
+    // times played]. Its bars, repeats written out, fill the form in order; a
+    // section named as one before plays that one's bars again (AABA's last A
+    // is the first A); bars still wanted take `filler`, the key's first chord.
+    function chartInForm(chart, form, filler) {
+        const source = [];
+        for (const section of chart.sections) {
+            let before = null;
+            for (const bar of section.bars) {
+                const chords = bar[0] === REPEAT_BAR ? before : bar;
+                before = chords;
+                if (chords) source.push([...chords]);
+            }
+        }
+        const written = new Map();
+        let next = 0;
+        const sections = form.map(([name, bars, repeat]) => {
+            const label = String(name ?? "").trim();
+            if (label && written.has(label) && written.get(label).length === bars) return { name: label, repeat, bars: written.get(label).map(bar => [...bar]) };
+            const filled = Array.from({ length: bars }, () => (next < source.length ? source[next++] : [filler]));
+            if (label) written.set(label, filled);
+            return { name: label, repeat, bars: filled.map(bar => [...bar]) };
+        });
+        return cleanChart({ ...chart, sections });
+    }
+
     // A chart in another key: every chord moved by the interval between roots.
     function transposeChart(chart, root) {
         if (!isKey({ root, scale: chart.scale })) return null;
@@ -578,10 +604,258 @@ globalThis.MaestroHarmony = (() => {
         return notes;
     }
 
+    // ---- Voicings (2.6.0): where a chord can be played, and a way through a
+    // progression that moves as little as it can.
+
+    // The notes a voicing may leave out: an unaltered fifth, and under an
+    // eleventh or thirteenth the ninth and eleventh below it. Everything else
+    // (the root, the third or sus note, the sixth or seventh, and the note the
+    // chord is named for) is played.
+    function optionalTones(tones) {
+        const top = Math.max(...tones.map(tone => tone.degree));
+        return new Set(tones.filter(tone => (tone.degree === 5 && modulo(tone.pc - tones.find(each => each.degree === 1)?.pc, 12) === 7)
+            || (top >= 11 && tone.degree === 9) || (top === 13 && tone.degree === 11)).map(tone => tone.pc));
+    }
+
+    // Shapes on a neck: on each string one fret or none, within `span` frets
+    // (open strings too, low on the neck); every note the chord's, holding all
+    // it must; the bass the named one in a slash chord, else any chord tone;
+    // no more than one silent string between sounding ones; as one hand can
+    // finger it (four fingers, a barre across the lowest fret counting as one).
+    // `pitches` are the open strings, lowest first. Easiest first.
+    const SHAPE_SPAN = 4;
+    function chordShapes(name, pitches, frets, { span = SHAPE_SPAN, limit = 30 } = {}) {
+        const tones = chordTones(name);
+        const strings = pitches.length;
+        if (!tones.length || !strings) return [];
+        const chord = parseChord(name);
+        const rootPc = M.pitchClass(chord.root);
+        const pcs = [...new Set(tones.map(tone => tone.pc))];
+        const optional = optionalTones(tones);
+        const required = pcs.filter(pc => !optional.has(pc));
+        const slashBass = chord.bass ? M.pitchClass(chord.bass) : null;
+        const fewest = Math.min(strings, strings >= 6 ? 4 : 3);
+        const found = new Map();
+        for (let low = 1; low + span - 1 <= frets; low++) {
+            const choices = pitches.map(open => {
+                const list = [null];
+                if (low <= 4 && pcs.includes(modulo(open, 12))) list.push(0);
+                for (let fret = low; fret < low + span; fret++) if (pcs.includes(modulo(open + fret, 12))) list.push(fret);
+                return list;
+            });
+            const pick = new Array(strings).fill(null);
+            const walk = string => {
+                if (string === strings) return consider();
+                for (const fret of choices[string]) {
+                    pick[string] = fret;
+                    walk(string + 1);
+                }
+            };
+            const consider = () => {
+                const sounding = pick.map((fret, string) => (fret === null ? -1 : string)).filter(string => string >= 0);
+                if (sounding.length < fewest) return;
+                const first = sounding[0], last = sounding.at(-1);
+                const gaps = last - first + 1 - sounding.length;
+                if (gaps > 1) return;
+                const midis = sounding.map(string => pitches[string] + pick[string]);
+                const have = new Set(midis.map(midi => modulo(midi, 12)));
+                if (!required.every(pc => have.has(pc))) return;
+                // The lowest note, not the lowest string: a ukulele's G string is high.
+                const bass = modulo(Math.min(...midis), 12);
+                if (slashBass !== null && bass !== slashBass) return;
+                const fretted = sounding.map(string => pick[string]).filter(fret => fret > 0);
+                const lowest = fretted.length ? Math.min(...fretted) : 0;
+                const highest = fretted.length ? Math.max(...fretted) : 0;
+                const barre = fretted.filter(fret => fret === lowest).length >= 2;
+                // A barre lies across every string from its lowest up: none of them can ring open.
+                if (barre && sounding.some(string => pick[string] === 0 && string > sounding.find(each => pick[each] === lowest))) return;
+                const fingers = barre ? 1 + fretted.filter(fret => fret > lowest).length : fretted.length;
+                if (fingers > 4) return;
+                const key = pick.map(fret => (fret === null ? "x" : fret)).join(",");
+                if (found.has(key)) return;
+                const opens = sounding.filter(string => pick[string] === 0).length;
+                const cost = (bass === (slashBass ?? rootPc) ? 0 : 4)
+                    + (strings - sounding.length) * 0.6 + gaps * 1.5
+                    + [...optional].filter(pc => !have.has(pc)).length * 0.5
+                    + lowest * 0.08 + fingers * 0.3 + (barre ? 0.5 : 0) + (highest - lowest) * 0.2 - opens * 0.2;
+                const bassTone = tones.find(tone => tone.pc === bass);
+                found.set(key, Object.freeze({
+                    frets: Object.freeze([...pick]), midis: Object.freeze(midis), low: lowest, high: highest,
+                    bass: bassTone?.name ?? "", bassDegree: bassTone?.degree ?? 0, open: opens > 0, barre, cost
+                }));
+            };
+            walk(0);
+        }
+        return [...found.values()].sort((a, b) => a.cost - b.cost || a.low - b.low).slice(0, limit);
+    }
+
+    // Voicings on a keyboard: close position from the root and each inversion,
+    // drop 2 (the second note from the top an octave lower), a shell (root,
+    // third and seventh) and an open voicing (the root low, the rest above).
+    // Each { midis, kind, inversion }; nothing below `low`.
+    function keyVoicings(name, { low = 48 } = {}) {
+        const tones = chordTones(name);
+        if (!tones.length) return [];
+        const pcs = [...new Set(tones.map(tone => tone.pc))];
+        const close = from => {
+            const notes = [];
+            let floor = low + modulo(pcs[from] - low, 12);
+            for (let at = 0; at < pcs.length; at++) {
+                const pc = pcs[(from + at) % pcs.length];
+                const midi = floor + modulo(pc - floor, 12);
+                notes.push(midi);
+                floor = midi + 1;
+            }
+            return notes;
+        };
+        const list = [];
+        const push = (midis, kind, inversion = 0) => {
+            const key = midis.join(",");
+            if (midis.length && !list.some(each => each.key === key)) list.push({ key, midis: Object.freeze(midis), kind, inversion });
+        };
+        // A slash chord keeps its bass at the bottom.
+        const turns = tones[0].degree === 1 ? pcs.map((_, at) => at) : [0];
+        for (const turn of turns) push(close(turn), "close", turn);
+        if (pcs.length >= 4) {
+            for (const turn of turns) {
+                const notes = close(turn);
+                const dropped = notes.at(-2) - 12;
+                if (dropped >= low - 12) push([dropped, ...notes.filter((_, at) => at !== notes.length - 2)].sort((a, b) => a - b), "drop2", turn);
+            }
+        }
+        const third = tones.find(tone => [2, 3, 4].includes(tone.degree));
+        const seventh = tones.find(tone => tone.degree === 7 || tone.degree === 6);
+        const rootMidi = low + modulo(pcs[0] - low, 12);
+        if (third && seventh && tones[0].degree === 1) {
+            const up = pc => rootMidi + 1 + modulo(pc - rootMidi - 1, 12);
+            push([rootMidi, up(third.pc), up(seventh.pc)].sort((a, b) => a - b), "shell");
+        }
+        if (pcs.length >= 3) {
+            const rest = pcs.slice(1);
+            let floor = rootMidi + 7;
+            const upper = rest.map(pc => {
+                const midi = floor + modulo(pc - floor, 12);
+                floor = midi + 1;
+                return midi;
+            });
+            push([rootMidi, ...upper], "open");
+        }
+        return list.map(({ key, ...each }) => Object.freeze(each));
+    }
+
+    // How far a hand and its notes travel from one voicing to the next: the
+    // notes paired from the top down, and on a neck the hand's move along it.
+    function voicingDistance(a, b) {
+        const x = [...a.midis].sort((m, n) => n - m), y = [...b.midis].sort((m, n) => n - m);
+        let moved = 0;
+        for (let at = 0; at < Math.max(x.length, y.length); at++) moved += Math.abs((x[at] ?? x.at(-1)) - (y[at] ?? y.at(-1)));
+        if (a.frets && b.frets) {
+            const middle = shape => (shape.low + shape.high) / 2;
+            moved += Math.abs(middle(a) - middle(b)) * 1.5;
+        }
+        return moved;
+    }
+
+    // A voicing for each chord, as smooth a way through as there is: each
+    // chord's choices (easiest first, each with its cost), and any pinned by
+    // index. Returns each chord's choice by index, -1 for a chord with none.
+    function smoothVoicings(choices, pins = []) {
+        const result = choices.map(() => -1);
+        const kept = choices.map((_, k) => k).filter(k => choices[k].length);
+        if (!kept.length) return result;
+        const allowed = (k, index) => !Number.isInteger(pins[k]) || pins[k] < 0 || pins[k] >= choices[k].length || pins[k] === index;
+        const own = (voicing, index) => voicing.cost ?? index * 0.3;
+        let best = choices[kept[0]].map((voicing, index) => (allowed(kept[0], index) ? { total: own(voicing, index), path: [index] } : null));
+        for (let n = 1; n < kept.length; n++) {
+            const before = choices[kept[n - 1]];
+            best = choices[kept[n]].map((voicing, index) => {
+                if (!allowed(kept[n], index)) return null;
+                let choice = null;
+                before.forEach((from, at) => {
+                    if (!best[at]) return;
+                    const total = best[at].total + voicingDistance(from, voicing) + own(voicing, index);
+                    if (!choice || total < choice.total) choice = { total, path: best[at].path.concat(index) };
+                });
+                return choice;
+            });
+        }
+        const winner = best.filter(Boolean).sort((a, b) => a.total - b.total)[0];
+        winner?.path.forEach((index, n) => { result[kept[n]] = index; });
+        return result;
+    }
+
+    // ---- Cadences and ways to another key (2.6.0)
+
+    // Closes, as numerals in a major and a minor key (null where it has none
+    // there); a numeral may be [numeral, inversion]: the Phrygian half
+    // cadence's iv has its third in the bass.
+    const CADENCES = Object.freeze([
+        { id: "authentic", label: "Authentic", major: ["IV", "V7", "I"], minor: ["iv", "V7", "i"], text: "The dominant home to the tonic: the strongest close." },
+        { id: "plagal", label: "Plagal", major: ["I", "IV", "I"], minor: ["i", "iv", "i"], text: "The subdominant to the tonic, the Amen: softer than the dominant." },
+        { id: "half", label: "Half", major: ["I", "ii", "V"], minor: ["i", "iv", "V"], text: "Stops on the dominant, open: a comma rather than a full stop." },
+        { id: "deceptive", label: "Deceptive", major: ["ii", "V7", "vi"], minor: ["iv", "V7", "VI"], text: "The dominant to the submediant: the close sidestepped, to go on." },
+        { id: "twofive", label: "ii–V–I", major: ["ii7", "V7", "Imaj7"], minor: ["iiø7", "V7", "i7"], text: "The close of jazz and standards: a fifth, a fifth, home." },
+        { id: "backdoor", label: "Backdoor", major: ["iv7", "♭VII7", "Imaj7"], minor: null, text: "Home from below, by the minor iv and ♭VII7, borrowed from the minor." },
+        { id: "phrygian", label: "Phrygian half", major: null, minor: [["iv", 1], "V"], text: "The bass falls a half step onto the dominant: a Baroque pause." },
+        { id: "picardy", label: "Picardy third", major: null, minor: ["iv", "V7", "I"], text: "A minor key closing on a major tonic." }
+    ].map(Object.freeze));
+
+    // Whether a key's third is minor: its cadences are the minor ones.
+    const keyIsMinor = key => isKey(key) && modulo(keyNotes(key)[2].pc - keyNotes(key)[0].pc, 12) === 3;
+
+    // A numeral's chord, or with [numeral, inversion] that chord over its third (or fifth).
+    function numeralChord(item, key) {
+        const [text, inversion] = Array.isArray(item) ? item : [item, 0];
+        const name = chordFromNumeral(text, key);
+        if (!name || !inversion) return name;
+        const tones = chordTones(name);
+        return tones[inversion] ? chordName({ ...parseChord(name), bass: tones[inversion].name }) : name;
+    }
+
+    // The cadences a key has: { id, label, text, numerals, chords }. A mode
+    // takes those of its parallel major or minor (D dorian, D minor's).
+    function cadencesIn(key) {
+        if (!isKey(key)) return [];
+        const side = keyIsMinor(key) ? "minor" : "major";
+        const base = { root: key.root, scale: side };
+        if (!isKey(base)) return [];
+        return CADENCES.filter(cadence => cadence[side]).map(cadence => {
+            const items = cadence[side];
+            const chords = items.map(item => numeralChord(item, base));
+            if (chords.some(chord => !chord)) return null;
+            const numerals = items.map(item => (Array.isArray(item) ? `${item[0]}6` : item));
+            return Object.freeze({ id: cadence.id, label: cadence.label, text: cadence.text, numerals: Object.freeze(numerals), chords: Object.freeze(chords) });
+        }).filter(Boolean);
+    }
+
+    // Ways from one key to another, each a few chords from the old tonic to
+    // the new: through a chord both keys hold, the new key's dominant, its
+    // ii–V, or directly, when the two tonics share a note.
+    function modulationRoutes(from, to) {
+        if (!isKey(from) || !isKey(to)) return [];
+        const minorTo = keyIsMinor(to);
+        const home = chordFromNumeral(keyIsMinor(from) ? "i" : "I", from);
+        const there = chordFromNumeral(minorTo ? "i" : "I", to);
+        const dominant = chordFromNumeral("V7", to);
+        const two = chordFromNumeral(minorTo ? "iiø7" : "ii7", to);
+        if (!home || !there || !dominant) return [];
+        const routes = [];
+        // A pivot the new key hears as a chord before its dominant (ii, IV, vi) is best.
+        const pivots = pivotChords(from, to, 3).filter(pivot => pivot.name !== home && pivot.name !== there);
+        const leading = ["ii", "IV", "iv", "vi", "VI", "ii°"];
+        const pivot = pivots.find(each => leading.includes(each.to)) ?? pivots[0];
+        if (pivot) routes.push({ id: "pivot", label: "By a pivot chord", text: `${pivot.name} is ${pivot.from} here and ${pivot.to} there; then the new key's dominant.`, chords: [home, pivot.name, dominant, there] });
+        routes.push({ id: "dominant", label: "By its dominant", text: `The new key's V7 (${dominant}), straight after the old tonic.`, chords: [home, dominant, there] });
+        if (two) routes.push({ id: "twofive", label: "By its ii–V", text: "The new key's ii and V lead in: smooth in a song, common in jazz.", chords: [home, two, dominant, there] });
+        const shared = chordTones(home).filter(tone => chordTones(there).some(other => other.pc === tone.pc));
+        if (shared.length) routes.push({ id: "direct", label: "Directly", text: `The tonics share ${shared.map(tone => tone.name).join(" and ")}: the new one can simply follow, best after a cadence.`, chords: [home, there] });
+        return routes.map(route => Object.freeze({ ...route, chords: Object.freeze(route.chords) }));
+    }
+
     return {
-        CIRCLE, circlePlace, chordOnCircle, keyHolds, findKey, pivotChords, bassLine,
+        CIRCLE, circlePlace, chordOnCircle, keyHolds, findKey, pivotChords, bassLine, CADENCES, cadencesIn, keyIsMinor, modulationRoutes,
         FORMULAS, OPEN_SHAPES, CHART_LIMITS, REPEAT_BAR,
         formulaOf, parseChord, chordName, chordTones, isKey, placeInKey, isDiatonic, romanNumeral, nashville, chordFromNumeral,
-        transposeChord, capoOptions, scalesForChord, guideTones, reharmonize, voiceChord, cleanChart, chartTimeline, transposeChart, chartText, readChartText, CHART_FORMAT
+        transposeChord, capoOptions, scalesForChord, guideTones, reharmonize, voiceChord, chartInForm, SHAPE_SPAN, chordShapes, keyVoicings, voicingDistance, smoothVoicings, cleanChart, chartTimeline, transposeChart, chartText, readChartText, CHART_FORMAT
     };
 })();

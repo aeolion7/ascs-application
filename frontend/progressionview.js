@@ -20,6 +20,10 @@ const PROG_UNDER = Object.freeze(["numerals", "nashville", "nothing"]);
 const PROG_SIDES = Object.freeze(["chord", "keys", "prompt"]);
 // 2.4.0: a bass under the loop: none, each chord's root, or walking.
 const PROG_BASSES = Object.freeze(["off", "roots", "walking"]);
+// Drums behind the loop (2.6.0): off, a groove, or a saved rhythm.
+const PROG_DRUMS = /^(off|groove:[a-z0-9]{1,24}|rhythm:[a-z0-9]{8,24})$/;
+// The neck shows (2.6.0): every note of the chord, or one voicing of it.
+const PROG_NECKS = Object.freeze(["notes", "shapes"]);
 const PROG_BASS_GAIN = 1.3;    // a single low note, against a chord's several
 const PROG_PLAYED = Object.freeze(["Once", "Twice", "3 times", "4 times", "5 times", "6 times", "7 times", "8 times"]);
 
@@ -27,7 +31,7 @@ const PROG_PLAYED = Object.freeze(["Once", "Twice", "3 times", "4 times", "5 tim
 function parseProgression(text) {
     let stored = null;
     try { stored = JSON.parse(text ?? "null"); } catch { stored = null; }
-    const settings = { sketch: structuredClone(PROG_DEFAULT), show: "symbols", loop: true, sevenths: true, song: null, under: "numerals", side: "chord", prompt: null, locked: [], bass: "off", move: false };
+    const settings = { sketch: structuredClone(PROG_DEFAULT), show: "symbols", loop: true, sevenths: true, song: null, under: "numerals", side: "chord", prompt: null, locked: [], bass: "off", drums: "off", move: false, neck: "notes", elsewhere: false };
     if (!stored || typeof stored !== "object" || Array.isArray(stored)) return settings;
     const sketch = MaestroHarmony.cleanChart(stored.sketch);
     if (sketch) {
@@ -37,12 +41,16 @@ function parseProgression(text) {
     }
     if (PROG_SHOWS.includes(stored.show)) settings.show = stored.show;
     if (typeof stored.loop === "boolean") settings.loop = stored.loop;
+    // Whether the loop keeps playing on other tabs (2.6.0); it doesn't unless asked.
+    if (typeof stored.elsewhere === "boolean") settings.elsewhere = stored.elsewhere;
     if (typeof stored.sevenths === "boolean") settings.sevenths = stored.sevenths;
     // The saved song the sketch is, if it is one.
     if (sketch && typeof stored.song === "string" && PROG_SONG_ID.test(stored.song)) settings.song = stored.song;
     if (PROG_UNDER.includes(stored.under)) settings.under = stored.under;
     if (PROG_SIDES.includes(stored.side)) settings.side = stored.side;
     if (PROG_BASSES.includes(stored.bass)) settings.bass = stored.bass;
+    if (typeof stored.drums === "string" && PROG_DRUMS.test(stored.drums)) settings.drums = stored.drums;
+    if (PROG_NECKS.includes(stored.neck)) settings.neck = stored.neck;
     // Whether a new root moves the chords with it (2.4.1).
     if (typeof stored.move === "boolean") settings.move = stored.move;
     // The writing prompt (2.4.0) and the parts locked; one is drawn when first shown.
@@ -57,6 +65,9 @@ const prog = {
     barOpen: false,         // whether its drawer is open under its line (2.4.1)
     sectionOpen: null,      // the section whose heading is open to edit, by index
     scale: null,            // a scale picked for it, shown on the neck: { root, scale }
+    // Voicings picked by hand (2.6.0), by the chord's place and name: kept
+    // while Maestro runs, the rest chosen around them.
+    voicingPins: new Map(),
     ideas: [],              // the other chords offered for it
     timeline: [],           // the sketch as played: harmony.js's chartTimeline
     timelineWeights: null,  // the metronome's bar it was made with
@@ -350,6 +361,7 @@ function receiveCharts(items) {
         return chart ? [{ id: item.id, chart, text: MaestroHarmony.chartText(chart) }] : [];
     }).slice(0, PROG_SONGS_MAX).sort(byProgTitle);
     if (progIsShown()) renderProgressions();
+    globalThis.resolveMusicLink?.();
 }
 
 const byProgTitle = (a, b) => a.chart.title.localeCompare(b.chart.title, undefined, { sensitivity: "base" }) || a.id.localeCompare(b.id);
@@ -553,6 +565,63 @@ function closeProgPopovers(except = null) {
     });
 }
 
+// ---- Form (2.6.0): the song's sections as a strip of blocks, each as long as
+// its bars and played as often as it is; forms to pour its chords into.
+
+function progFormStrip(sections) {
+    const strip = element("div", "prog-form-strip");
+    const names = [];
+    for (const [name, bars, repeat] of sections) {
+        let tone = names.indexOf(name);
+        if (tone < 0) tone = names.push(name) - 1;
+        for (let time = 0; time < repeat; time++) {
+            const block = element("span", `prog-form-block is-tone-${tone % 5}`, name);
+            block.style.flexGrow = String(bars);
+            block.title = `${name || "A section"}: ${bars === 1 ? "1 bar" : `${bars} bars`}`;
+            strip.append(block);
+        }
+    }
+    strip.setAttribute("aria-hidden", "true");
+    return strip;
+}
+
+const progFormBars = sections => sections.reduce((sum, [, bars, repeat]) => sum + bars * repeat, 0);
+
+function renderProgForm() {
+    const now = progSketch().sections.map(section => [section.name, section.bars.length, section.repeat]);
+    $("progFormNow").replaceChildren(element("span", "cons-choice-label", `This song, ${progFormBars(now)} bars as played`), progFormStrip(now));
+    $("progForms").replaceChildren(...MaestroPrompts.FORMS.map(form => {
+        const item = element("li");
+        const button = element("button", "prog-form-use");
+        button.type = "button";
+        button.dataset.form = form.id;
+        button.title = `Pour the chords into this form: ${form.sections.map(([name, bars, repeat]) => `${name || "a section"} of ${bars}${repeat > 1 ? ` played ${repeat} times` : ""}`).join(", ")}`;
+        const head = element("span", "prog-form-head");
+        head.append(element("strong", "", form.label[0].toUpperCase() + form.label.slice(1)), element("span", "prog-menu-note", `${progFormBars(form.sections)} bars`));
+        button.append(head, progFormStrip(form.sections));
+        item.append(button);
+        return item;
+    }));
+}
+
+function useProgForm(id) {
+    const form = MaestroPrompts.FORMS.find(each => each.id === id);
+    const sketch = progSketch();
+    const home = MaestroMusic.chordsInKey(sketch.root, sketch.scale, prog.settings.sevenths ? 4 : 3)[0]?.name;
+    if (!form || !home) return;
+    const shaped = MaestroHarmony.chartInForm(sketch, form.sections, home);
+    if (!shaped) {
+        showToast("That form holds more bars than a song can.");
+        return;
+    }
+    toggleProgPopover("form", false);
+    changeProgression(() => {
+        sketch.sections = shaped.sections;
+        prog.at = { section: 0, bar: 0, slot: 0 };
+        prog.sectionOpen = null;
+    }, `Poured the chords into the form: ${form.label}.`);
+}
+
 function renderPrintPanel() {
     document.querySelectorAll("#progUnder [data-under]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.under === prog.settings.under)));
 }
@@ -592,14 +661,21 @@ function strumProgChord(name) {
     if (!name || (metro.running && prog.settings.loop)) return;
     cons.chordVoices.forEach(dampConsVoice);
     cons.chordVoices = [];
-    pluckConsNotes(MaestroHarmony.voiceChord(name), consChordSpread(0.03)).then(voices => { cons.chordVoices = voices; });
+    // The voicing shown, when the chord strummed is the one picked (2.6.0).
+    const now = name === progChosen() ? progVoicingNow({ picked: true }) : null;
+    pluckConsNotes(now ? [...now.voicing.midis] : MaestroHarmony.voiceChord(name), consChordSpread(0.03)).then(voices => { cons.chordVoices = voices; });
 }
 
 // Called by the metronome as it books each beat, after any count-in, with
 // the bars it has finished and the beat in this one. The loop starts on a
 // bar's first beat. A function declaration, so it's on globalThis.
 function bookProgressionBeat(at, bars, beat) {
-    if (!prog.settings.loop) return;
+    if (!progLoopHeard()) {
+        // Away from Progressions, a loop that was playing stops; back on it,
+        // the loop starts again at a bar's first beat.
+        if (prog.fromBar !== null) cutProgLoop();
+        return;
+    }
     if (prog.timelineWeights !== progWeights()) rebuildProgTimeline();
     if (!prog.length) return;
     if (prog.fromBar === null) {
@@ -614,7 +690,7 @@ function bookProgressionBeat(at, bars, beat) {
     if (bass !== undefined) soundProgBass(at, bass);
     const event = prog.timeline.find(each => each.start === position);
     if (!event) return;
-    soundProgChord(at, event.chord);
+    soundProgChord(at, event.chord, event);
     prog.booked.push({ at, event });
 }
 
@@ -627,7 +703,7 @@ function progLoopOutput(context) {
     return prog.out;
 }
 
-function soundProgChord(at, name) {
+function soundProgChord(at, name, event = null) {
     const context = metro.context;
     progLoopOutput(context);
     // The chord before is damped as this one sounds, as a strum stops the last.
@@ -635,7 +711,9 @@ function soundProgChord(at, name) {
         voice.gain.gain.setTargetAtTime(0, at, 0.03);
         try { voice.source.stop(at + 0.3); } catch { /* already stopped */ }
     }
-    const midis = MaestroHarmony.voiceChord(name, prog.voicing);
+    // The voicing on the neck, when it shows one (2.6.0).
+    const shown = event && prog.settings.neck === "shapes" ? progVoicingAt(event) : null;
+    const midis = shown ? [...shown.midis] : MaestroHarmony.voiceChord(name, prog.voicing);
     prog.voicing = midis.length ? midis : prog.voicing;
     // With a bass playing, the chord leaves its own low note to it.
     const played = prog.settings.bass === "off" ? midis : midis.slice(1);
@@ -682,10 +760,65 @@ function cutProgLoop() {
     prog.bassVoice = null;
     prog.voicing = null;
     prog.fromBar = null;
+    globalThis.cutRhythmBehind?.();
     if (prog.playing) {
         prog.playing = null;
         showProgPlaying();
     }
+}
+
+// The loop plays while Progressions is open (2.6.0): Play elsewhere plays
+// only what that tab shows, unless the loop is set to keep playing.
+const progLoopHeard = () => prog.settings.loop && (prog.settings.elsewhere || progIsShown());
+
+// The rhythm behind the loop, while it plays, if it's in the metronome's
+// time signature. A function declaration, so rhythmview.js reaches it.
+function progressionDrums() {
+    if (!progLoopHeard() || prog.settings.drums === "off") return null;
+    const rhythm = globalThis.rhythmByKey?.(prog.settings.drums) ?? null;
+    return rhythm && rhythm.meter === metro.settings.meter ? rhythm : null;
+}
+
+function setProgDrums(key) {
+    if (!PROG_DRUMS.test(key)) return;
+    prog.settings.drums = key;
+    saveProgression();
+    if (key === "off") globalThis.cutRhythmBehind?.();
+    renderProgDrums();
+}
+
+// Drums, in the Backing popover: off, then the grooves and saved rhythms;
+// those in another time signature are shown but can't be chosen.
+function renderProgDrums() {
+    const choices = globalThis.rhythmChoices?.() ?? [];
+    const meter = metro.settings.meter;
+    const current = choices.find(choice => choice.key === prog.settings.drums);
+    // The chip names the bass, and the drums after it when there are any.
+    const bass = $("progBass").querySelector(`[data-bass="${prog.settings.bass}"]`)?.textContent ?? "Off";
+    const drums = prog.settings.drums === "off" || !current ? "" : current.label;
+    $("progBassNow").textContent = drums ? (prog.settings.bass === "off" ? drums : `${bass} + ${drums}`) : bass;
+    $("progBassButton").title = drums ? `Under the loop: ${prog.settings.bass === "off" ? "no bass" : `a ${bass.toLowerCase()} bass`} and ${drums}` : "A bass line and drums under the loop";
+    const button = (key, label, detail, disabled) => {
+        const item = element("button", "prog-menu-item prog-drum");
+        item.type = "button";
+        item.dataset.drums = key;
+        item.setAttribute("aria-pressed", String(key === prog.settings.drums));
+        item.disabled = disabled;
+        item.append(element("span", "", label));
+        if (detail) item.append(element("small", "", detail));
+        return item;
+    };
+    const list = [button("off", "Off", "The chords alone", false)];
+    let group = "";
+    for (const choice of choices) {
+        if (choice.group !== group) {
+            group = choice.group;
+            list.push(element("span", "cons-choice-label prog-drums-group", group));
+        }
+        const other = choice.rhythm.meter !== meter;
+        list.push(button(choice.key, choice.label, other ? `In ${MaestroMetronome.meterLabel(choice.rhythm.meter)}` : MaestroRhythm.STEP_LABELS[choice.rhythm.steps], other));
+    }
+    $("progDrums").replaceChildren(...list);
 }
 
 // Called by the metronome at Stop.
@@ -728,9 +861,102 @@ function showProgPlaying() {
     if (progNeckFor() !== progMarkCache.key) renderConsNeck();
 }
 
+// ---- Voicings (2.6.0): each chord a way to play it (a shape on a neck, a
+// voicing on the keys), chosen so the way through moves as little as it can.
+
+const progPinOf = entry => `${entry.section}.${entry.bar}.${entry.slot}:${entry.name}`;
+let progVoicingCache = { key: null, chords: [], choices: [], path: [] };
+function progVoicings() {
+    const chords = progChords();
+    const keyboard = consKeyboard();
+    const tuning = keyboard ? null : MaestroMusic.currentTuning(cons.settings);
+    const frets = keyboard ? 0 : MaestroMusic.INSTRUMENTS[cons.settings.instrument].frets;
+    const pins = chords.map(entry => prog.voicingPins.get(progPinOf(entry)) ?? null);
+    const key = JSON.stringify([keyboard ? "keys" : tuning?.pitches, frets, chords.map(entry => entry.name), pins]);
+    if (progVoicingCache.key === key) return progVoicingCache;
+    const byName = new Map();
+    const choices = chords.map(entry => {
+        if (!byName.has(entry.name)) byName.set(entry.name, keyboard ? MaestroHarmony.keyVoicings(entry.name) : MaestroHarmony.chordShapes(entry.name, tuning.pitches, frets));
+        return byName.get(entry.name);
+    });
+    progVoicingCache = { key, chords, choices, path: MaestroHarmony.smoothVoicings(choices, pins) };
+    return progVoicingCache;
+}
+
+// A place in the timeline as written: a repeated bar's chords are those of the bar it repeats.
+function progWrittenIndex(event) {
+    const bars = progSketch().sections[event.section]?.bars ?? [];
+    let bar = event.written;
+    while (bar > 0 && bars[bar]?.[0] === MaestroHarmony.REPEAT_BAR) bar -= 1;
+    return progChords().findIndex(entry => entry.section === event.section && entry.bar === bar && entry.slot === event.slot);
+}
+
+function progVoicingAt(event) {
+    const { choices, path } = progVoicings();
+    const index = progWrittenIndex(event);
+    return index >= 0 && path[index] >= 0 ? choices[index][path[index]] : null;
+}
+
+// The voicing playing (or picked) and the next one, to show on the neck.
+function progVoicingNow({ picked = false } = {}) {
+    if (prog.settings.neck !== "shapes") return null;
+    const { chords, choices, path } = progVoicings();
+    let index, next;
+    if (prog.playing && !picked) {
+        index = progWrittenIndex(prog.playing);
+        const at = prog.timeline.indexOf(prog.playing);
+        const after = prog.timeline[(at + 1) % prog.timeline.length];
+        next = after ? progWrittenIndex(after) : -1;
+    } else {
+        index = progIndex(chords);
+        next = index >= 0 && chords.length > 1 ? (index + 1) % chords.length : -1;
+    }
+    if (index < 0 || path[index] < 0) return null;
+    return {
+        index, entry: chords[index], voicing: choices[index][path[index]], chosen: path[index], count: choices[index].length,
+        next: next >= 0 && next !== index && path[next] >= 0 ? choices[next][path[next]] : null
+    };
+}
+
+// How a voicing is named: which it is of how many, where, and what's in the bass.
+const PROG_KEY_KINDS = Object.freeze({ close: "Close", drop2: "Drop 2", shell: "Shell", open: "Spread" });
+const PROG_INVERSIONS = Object.freeze(["root position", "first inversion", "second inversion", "third inversion"]);
+const PROG_BASS_WORDS = Object.freeze({ 2: "the 2nd", 3: "the 3rd", 4: "the 4th", 5: "the 5th", 6: "the 6th", 7: "the 7th", 9: "the 9th", 11: "the 11th", 13: "the 13th" });
+function progVoicingLabel(now) {
+    const { voicing, chosen, count } = now;
+    const where = voicing.frets
+        ? `${voicing.high <= 4 && voicing.open ? "Open" : voicing.low === voicing.high ? `Fret ${voicing.low}` : `Frets ${voicing.low}\u2013${voicing.high}`}${voicing.bassDegree > 1 ? `, ${PROG_BASS_WORDS[voicing.bassDegree] ?? voicing.bass} in the bass` : ""}`
+        : `${PROG_KEY_KINDS[voicing.kind]}${voicing.kind === "close" || voicing.kind === "drop2" ? `, ${PROG_INVERSIONS[voicing.inversion] ?? "inverted"}` : ""}`;
+    return `${chosen + 1} of ${count} \u00B7 ${where}`;
+}
+
+function stepProgVoicing(by) {
+    const now = progVoicingNow({ picked: true });
+    if (!now || now.count < 2) return;
+    prog.voicingPins.set(progPinOf(now.entry), (now.chosen + by + now.count) % now.count);
+    renderProgVoicing();
+    renderConsNeck();
+    strumProgChord(now.entry.name);
+}
+
+function renderProgVoicing() {
+    const shapes = prog.settings.neck === "shapes";
+    document.querySelectorAll("#progNeckShow [data-neck]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.neck === prog.settings.neck)));
+    const now = shapes ? progVoicingNow({ picked: true }) : null;
+    $("progVoicingStep").hidden = !shapes;
+    $("progVoicingName").textContent = !shapes ? "" : now ? progVoicingLabel(now) : "No voicing within four frets";
+    $("progVoicingPrev").disabled = $("progVoicingNext").disabled = !now || now.count < 2;
+    $("progVoicingSmooth").hidden = !prog.voicingPins.size;
+}
+
 // ---- The neck: the chord playing, or the one picked, with a scale picked for it.
 
-const progNeckFor = () => `${prog.playing?.chord ?? progChosen() ?? ""}|${prog.scale ? `${prog.scale.root} ${prog.scale.scale}` : ""}`;
+const progNeckFor = () => {
+    const chord = `${prog.playing?.chord ?? progChosen() ?? ""}|${prog.scale ? `${prog.scale.root} ${prog.scale.scale}` : ""}`;
+    if (prog.settings.neck !== "shapes") return chord;
+    const now = progVoicingNow();
+    return `${chord}|${now ? `${now.index}:${now.voicing.midis.join(",")}>${now.next?.midis.join(",") ?? ""}` : "none"}`;
+};
 
 let progMarkCache = { key: null, marks: new Map(), names: new Map() };
 function progMarks() {
@@ -753,14 +979,40 @@ function progMarks() {
             if (!names.has(note.pc)) names.set(note.pc, note.name);
         }
     }
-    progMarkCache = { key, marks, names };
+    // One voicing (2.6.0): its notes where they're played, a silent string's
+    // ×, and the next chord's notes outlined.
+    const now = progVoicingNow();
+    let spots = null, keys = null;
+    if (now) {
+        spots = new Map();
+        keys = new Map();
+        const tone = midi => {
+            const pc = ((midi % 12) + 12) % 12;
+            return { kind: marks.get(pc)?.kind === "root" ? "root" : "note", label: names.get(pc) ?? MaestroMusic.PLAIN_NAMES[pc] };
+        };
+        if (now.voicing.frets) {
+            now.next?.frets.forEach((fret, string) => { if (fret !== null) spots.set(`${string}:${fret}`, { kind: "next", label: "" }); });
+            const pitches = MaestroMusic.currentTuning(cons.settings).pitches;
+            now.voicing.frets.forEach((fret, string) => spots.set(`${string}:${fret ?? 0}`, fret === null ? { kind: "muted", label: "\u00D7" } : tone(pitches[string] + fret)));
+        } else {
+            now.next?.midis.forEach(midi => keys.set(midi, { kind: "next", label: "" }));
+            now.voicing.midis.forEach(midi => keys.set(midi, tone(midi)));
+        }
+    }
+    progMarkCache = { key, marks, names, spots, keys };
     return progMarkCache;
 }
 
 consNeckModes.progressions = {
     short: true,
-    mark: midi => progMarks().marks.get(((midi % 12) + 12) % 12) ?? null,
-    key: midi => progMarks().marks.get(((midi % 12) + 12) % 12) ?? null,
+    mark: (midi, string, fret) => {
+        const marks = progMarks();
+        return marks.spots ? marks.spots.get(`${string}:${fret}`) ?? null : marks.marks.get(((midi % 12) + 12) % 12) ?? null;
+    },
+    key: midi => {
+        const marks = progMarks();
+        return marks.keys ? marks.keys.get(midi) ?? null : marks.marks.get(((midi % 12) + 12) % 12) ?? null;
+    },
     nameOf: midi => progMarks().names.get(((midi % 12) + 12) % 12) ?? MaestroMusic.PLAIN_NAMES[((midi % 12) + 12) % 12],
     render: () => renderProgressions()
 };
@@ -785,13 +1037,11 @@ function renderProgBar() {
     $("progScale").value = sketch.scale;
     $("progKeyName").textContent = progKeyLabel();
     $("progMove").checked = prog.settings.move;
-    $("progMoveNote").textContent = prog.settings.move
-        ? "A new root moves every chord with it. A new scale relabels them."
-        : "The chords stay as they are. Their numerals count from the new key.";
     document.querySelectorAll("#progShow [data-show]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.show === prog.settings.show)));
     $("progLoop").setAttribute("aria-pressed", String(prog.settings.loop));
     document.querySelectorAll("#progBass [data-bass]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.bass === prog.settings.bass)));
-    $("progBassNow").textContent = $("progBass").querySelector(`[data-bass="${prog.settings.bass}"]`)?.textContent ?? "Off";
+    $("progElsewhere").checked = prog.settings.elsewhere;
+    renderProgDrums();
     // A capo, when it lets more of the chords be played as open shapes.
     let capoText = "";
     if (cons.settings.instrument === "guitar") {
@@ -945,6 +1195,7 @@ function renderProgEdit() {
     }));
     $("progKeyChords").classList.toggle("is-sevenths", prog.settings.sevenths);
     document.querySelectorAll("#progChordSize [data-sevenths]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.sevenths === String(prog.settings.sevenths))));
+    renderProgVoicing();
 }
 
 // The side module: the chord picked, the keys or a prompt (2.4.0).
@@ -966,6 +1217,8 @@ function renderProgSongs() {
     $("progSongCount").textContent = songs?.length ? `${songs.length} of ${PROG_SONGS_MAX}` : "";
     $("progNewSong").disabled = songs === null;
     $("progSaveCopy").disabled = songs === null;
+    // A link for Quick Notes (2.6.0), to a song as it's saved.
+    $("progCopyLink").disabled = !prog.settings.song;
     if (songs === null) {
         $("progSongs").replaceChildren(placeholderItem("list", 3));
         $("progSongsNote").textContent = "";
@@ -983,7 +1236,7 @@ function renderProgSongs() {
         const meter = song.chart.meter ? MaestroMetronome.meterLabel(song.chart.meter) : `${song.chart.beats}/4`;
         const key = `${song.chart.root} ${MaestroMusic.SCALES[song.chart.scale].label.replace(/ \(.*\)$/, "").toLowerCase()}`;
         open.append(element("strong", "", song.chart.title), element("span", "", `${key} · ${meter} · ${bars} ${bars === 1 ? "bar" : "bars"}${current && !progIsSaved() ? " · changed" : ""}`));
-        const remove = element("button", "quiet prog-song-delete");
+        const remove = element("button", "prog-song-delete");
         remove.type = "button";
         remove.dataset.songDelete = song.id;
         remove.setAttribute("aria-label", `Delete ${song.chart.title}`);
@@ -1088,11 +1341,40 @@ wireProgPopover("songs", $("progSongButton"), $("progSongMenu"), { onOpen: () =>
     renderProgSongs();
     requestAnimationFrame(() => $("progNewSong").focus());
 } });
+wireProgPopover("form", $("progMenuForm"), $("progFormPanel"), { returnTo: $("progSongButton"), onOpen: () => {
+    renderProgForm();
+    // As tall as the module leaves room for; the forms scroll inside it.
+    const panel = $("progFormPanel");
+    const room = panel.closest(".module").getBoundingClientRect().bottom - panel.getBoundingClientRect().top - 16;
+    panel.style.maxHeight = `${Math.max(220, Math.round(room))}px`;
+    requestAnimationFrame(() => $("progForms").querySelector("button")?.focus());
+} });
+$("progCopyLink").addEventListener("click", () => {
+    if (!prog.settings.song) return;
+    toggleProgPopover("songs", false);
+    copyMusicLink(progSketch().title, { kind: "song", id: prog.settings.song });
+});
+$("progForms").addEventListener("click", event => {
+    const button = event.target.closest("[data-form]");
+    if (button) useProgForm(button.dataset.form);
+});
 wireProgPopover("print", $("progMenuPrint"), $("progPrintPanel"), { returnTo: $("progSongButton"), onOpen: () => {
     renderPrintPanel();
     requestAnimationFrame(() => $("progPrint").focus());
 } });
-wireProgPopover("bass", $("progBassButton"), $("progBassPanel"), { onOpen: () => requestAnimationFrame(() => $("progBass").querySelector('[aria-pressed="true"]')?.focus()) });
+$("progElsewhere").addEventListener("change", () => {
+    prog.settings.elsewhere = $("progElsewhere").checked;
+    saveProgression();
+});
+$("progDrums").addEventListener("click", event => {
+    const item = event.target.closest("[data-drums]");
+    if (item && !item.disabled) setProgDrums(item.dataset.drums);
+});
+wireProgPopover("bass", $("progBassButton"), $("progBassPanel"), { onOpen: () => {
+    globalThis.askForRhythms?.();
+    renderProgDrums();
+    requestAnimationFrame(() => $("progBass").querySelector('[aria-pressed="true"]')?.focus());
+} });
 document.addEventListener("pointerdown", event => {
     Object.entries(progPopovers).forEach(([name, pop]) => {
         if (!pop.panel.hidden && !pop.panel.contains(event.target) && !pop.button.contains(event.target)) toggleProgPopover(name, false);
@@ -1119,10 +1401,23 @@ $("progLoop").addEventListener("click", () => {
     if (!prog.settings.loop) cutProgLoop();
     renderProgressions();
 });
-document.querySelectorAll("#progBass [data-bass]").forEach(button => button.addEventListener("click", () => {
-    setProgBass(button.dataset.bass);
-    toggleProgPopover("bass", false);
+// Backing (2.6.0): the bass and the drums in one popover, which stays open
+// so both can be set.
+document.querySelectorAll("#progBass [data-bass]").forEach(button => button.addEventListener("click", () => setProgBass(button.dataset.bass)));
+document.querySelectorAll("#progNeckShow [data-neck]").forEach(button => button.addEventListener("click", () => {
+    if (!PROG_NECKS.includes(button.dataset.neck)) return;
+    prog.settings.neck = button.dataset.neck;
+    saveProgression();
+    renderProgVoicing();
+    renderConsNeck();
 }));
+$("progVoicingPrev").addEventListener("click", () => stepProgVoicing(-1));
+$("progVoicingNext").addEventListener("click", () => stepProgVoicing(1));
+$("progVoicingSmooth").addEventListener("click", () => {
+    prog.voicingPins.clear();
+    renderProgVoicing();
+    renderConsNeck();
+});
 document.querySelectorAll("#progChordSize [data-sevenths]").forEach(button => button.addEventListener("click", () => {
     prog.settings.sevenths = button.dataset.sevenths === "true";
     saveProgression();
@@ -1283,5 +1578,4 @@ window.addEventListener("resize", () => {
 });
 
 rebuildProgTimeline();
-if (consSections.current() === "progressions") renderConservatory();
 

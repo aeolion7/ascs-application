@@ -124,6 +124,7 @@ function renderProgKeys() {
         ? `Outside ${keysLabel(key)}: ${outside.map(name => `${name} (${MaestroHarmony.romanNumeral(name, key) || "?"})`).join(", ")}.`
         : `Every chord is in ${keysLabel(key)}.`;
     renderKeysToward(key);
+    renderKeysMoves(key);
 }
 
 // The chords the key shares with the one picked on the circle.
@@ -133,7 +134,7 @@ function renderKeysToward(key) {
     $("progTowardKey").hidden = !picked;
     if (!picked) {
         $("progPivots").replaceChildren();
-        $("progPivotNote").textContent = `Pick a key on the circle to see the chords ${keysLabel(key)} shares with it: a way to move there.`;
+        $("progPivotNote").textContent = "";
         return;
     }
     const pivots = MaestroHarmony.pivotChords(key, picked, prog.settings.sevenths ? 4 : 3);
@@ -151,6 +152,82 @@ function renderKeysToward(key) {
     }));
     $("progPivotNote").textContent = pivots.length ? "" : "None: they share no chords. A key nearer on the circle shares more.";
     $("progTowardKey").title = `Make ${keysLabel(picked)} the sketch's key; the chords stay as they are`;
+}
+
+// ---- Cadences and ways to the key picked (2.6.0): each a few chords to hear,
+// or to put in the sketch after the chord picked.
+
+const keysMoves = { cadences: [], ways: [] };
+
+function keysMoveItem(move, group) {
+    const item = element("div", "prog-move");
+    item.setAttribute("role", "listitem");
+    const head = element("div", "prog-move-head");
+    const hear = element("button", "link-button prog-move-name", move.label);
+    hear.type = "button";
+    hear.dataset.hear = `${group}:${move.id}`;
+    hear.title = `Hear it: ${move.chords.join(" ")}, at the metronome's tempo`;
+    const chords = element("span", "prog-move-chords");
+    move.chords.forEach((name, at) => {
+        const chip = element("button", "prog-move-chord");
+        chip.type = "button";
+        chip.dataset.name = name;
+        chip.title = move.numerals ? `${move.numerals[at]}: hear it` : "Hear it";
+        chip.append(chordSymbol(name, "list"));
+        chords.append(chip);
+    });
+    const add = element("button", "link-button prog-move-add", "Add");
+    add.type = "button";
+    add.dataset.add = `${group}:${move.id}`;
+    add.title = "Put these chords in the sketch, a bar each, after the chord picked";
+    head.append(hear, chords, add);
+    item.append(head, element("p", "cons-note", move.text));
+    return item;
+}
+
+function renderKeysMoves(key) {
+    keysMoves.cadences = MaestroHarmony.cadencesIn(key);
+    const picked = keysState.toward ? keysAt(keysState.toward) : null;
+    keysMoves.ways = picked && !keysSame(picked, key) ? MaestroHarmony.modulationRoutes(key, picked) : [];
+    $("progCadencesLabel").textContent = `Cadences in ${keysLabel(MaestroHarmony.keyIsMinor(key) ? { root: key.root, scale: "minor" } : { root: key.root, scale: "major" })}`;
+    $("progCadences").replaceChildren(...keysMoves.cadences.map(move => keysMoveItem(move, "cadences")));
+    $("progWaysLabel").hidden = !keysMoves.ways.length;
+    $("progWaysLabel").textContent = picked ? `Ways to ${keysLabel(picked)}` : "Ways there";
+    $("progWays").replaceChildren(...keysMoves.ways.map(move => keysMoveItem(move, "ways")));
+}
+
+const keysMoveOf = id => {
+    const [group, name] = String(id).split(":");
+    return keysMoves[group]?.find(move => move.id === name) ?? null;
+};
+
+// Heard a chord a bar (two beats) at the metronome's tempo, each voiced from the last.
+let keysHearing = null;
+async function hearKeysMove(move) {
+    keysHearing?.stop();
+    keysHearing = null;
+    let before = null;
+    const events = move.chords.flatMap((name, at) => {
+        before = MaestroHarmony.voiceChord(name, before);
+        return before.map(midi => ({ midi, at: at * 2, length: 2 }));
+    });
+    const run = await playConsSequence(events);
+    keysHearing = run;
+}
+
+// After the chord picked, a bar each, within a section's and a song's bars.
+function addKeysMove(move) {
+    const bars = progSketch().sections[prog.at.section].bars;
+    const room = Math.min(MaestroHarmony.CHART_LIMITS.bars - bars.length, MaestroHarmony.CHART_LIMITS.totalBars - progTotalBars());
+    if (room < move.chords.length) {
+        showToast("There's no room for these bars in the section.");
+        return;
+    }
+    const at = prog.at.bar + 1;
+    changeProgression(() => {
+        bars.splice(at, 0, ...move.chords.map(name => [name]));
+        prog.at = { section: prog.at.section, bar: at, slot: 0 };
+    }, `Added ${move.chords.join(" ")} after bar ${at}.`);
 }
 
 // ---- Changes
@@ -186,6 +263,16 @@ $("progPivots").addEventListener("click", event => {
     const button = event.target.closest("[data-name]");
     if (button && MaestroHarmony.parseChord(button.dataset.name)) setProgChord(button.dataset.name);
 });
+for (const list of ["progCadences", "progWays"]) {
+    $(list).addEventListener("click", event => {
+        const chord = event.target.closest("[data-name]");
+        if (chord && MaestroHarmony.parseChord(chord.dataset.name)) return strumProgChord(chord.dataset.name);
+        const hear = event.target.closest("[data-hear]");
+        if (hear) return keysMoveOf(hear.dataset.hear) && hearKeysMove(keysMoveOf(hear.dataset.hear));
+        const add = event.target.closest("[data-add]");
+        if (add && keysMoveOf(add.dataset.add)) addKeysMove(keysMoveOf(add.dataset.add));
+    });
+}
 $("progTowardKey").addEventListener("click", () => {
     if (keysState.toward) makeProgKey(keysAt(keysState.toward));
 });

@@ -139,6 +139,10 @@
     fifth = C.setBarRhythm(fifth, 1, C.FIFTH_BARS[6]);
     equal("fifth species: a bar's rhythm changes", N.voicesOf(fifth.score)[0].notes.slice(3, 7).map(note => note.d).join(""), "qeeh");
     equal("fifth species: the last bar stays a whole note", C.setBarRhythm(fifth, 3, C.FIFTH_BARS[1]), fifth);
+    check("fifth species: whole to eighth only, no dotted eighth (2.6.0)", ["s", "t", "f", "e."].every(code => C.setNoteLength(fifth, 0, code) === null) && !C.codesFor(fifth).includes("s") && C.codesFor(C.melodyExercise({ tonic: "C" })).includes("f"));
+    check("fifth species: a file with a dotted eighth and a sixteenth isn't read", C.exerciseText(fifth).includes("re re") && C.readExercise(C.exerciseText(fifth)) !== null && C.readExercise(C.exerciseText(fifth).replace("re re", "re. rs")) === null);
+    check("fifth species: a note's length changes in its bar, but not in the last", C.setNoteLength(fifth, 0, "w") !== null && C.setNoteLength(fifth, N.voicesOf(fifth.score)[0].notes.length - 1, "h") === null);
+    check("other species: their rhythm is given", C.rhythmBars(C.speciesExercise({ species: 2, cantus: short, cantusBelow: true, mode: "dorian", final: "D" })) === 0 && C.setNoteLength(C.speciesExercise({ species: 2, cantus: short, cantusBelow: true, mode: "dorian", final: "D" }), 0, "w") === null);
     const notes5 = N.voicesOf(fifth.score)[0].notes.length;
     equal("fifth species: notes to write after the change", notes5, 11);
     const leaping = fill(fifth, [null, "D4", "C4", "D4", "A3", "C4", "D4", "C4", "B3", "C#4", "D4"]);
@@ -243,4 +247,36 @@
     equal("kept: nothing at all", C.readExercise(""), null);
     const titled = C.readExercise(text.replace(/^(.*)\n(.*)\n/, `$1\nA ${String.fromCharCode(1)}title\n`));
     equal("kept: a title's control characters become spaces", titled?.title, "A title");
+
+    // ---- Model answers (2.6.0): every voice to write, written so the checker finds no error.
+    const errorsIn = exercise => C.check(exercise).filter(each => each.level === "error").map(each => each.rule);
+    const unwrittenIn = exercise => C.check(exercise).some(each => each.rule === "unfinished");
+    let speciesModels = 0, speciesTried = 0;
+    for (const cantus of [...C.FUX, ...C.CHANT]) for (let species = 1; species <= 5; species++) for (const below of [true, false]) {
+        const exercise = C.speciesExercise({ species, cantus: C.fuxNotes(cantus), cantusBelow: below, mode: cantus.mode, final: cantus.final });
+        const model = C.modelAnswer(exercise, { random: seeded(species * 7 + (below ? 1 : 2)) });
+        speciesTried += 1;
+        if (model && !errorsIn(model).length && !unwrittenIn(model)) speciesModels += 1;
+        else check(`model: ${cantus.label}, species ${species}, cantus ${below ? "below" : "above"}`, false);
+    }
+    equal("model: every Fux and chant cantus, all five species, above and below, answered without an error", speciesModels, speciesTried);
+    const modelLine = C.modelAnswer(suspended, { random: seeded(4) });
+    check("model: the given cantus is kept", modelLine && JSON.stringify(N.voicesOf(modelLine.score)[suspended.given]) === JSON.stringify(N.voicesOf(suspended.score)[suspended.given]));
+    let partsModels = 0, partsTried = 0;
+    for (const mode of ["major", "minor"]) for (const progression of C.PROGRESSIONS[mode]) for (const form of C.FORMS) {
+        const exercise = C.fourPartExercise({ form, tonic: C.FOURPART_KEYS[mode][partsTried % C.FOURPART_KEYS[mode].length], mode, progression, random: seeded(partsTried + 1) });
+        const model = C.modelAnswer(exercise, { random: seeded(partsTried + 3) });
+        partsTried += 1;
+        if (model && !errorsIn(model).length && !unwrittenIn(model)) partsModels += 1;
+        else check(`model: ${mode} ${progression.join(" ")} (${form})`, false);
+    }
+    equal("model: every progression in four parts, in each form, answered without an error", partsModels, partsTried);
+    const givenBass = C.modelAnswer(figured, { random: seeded(2) });
+    check("model: a figured bass is kept", givenBass && JSON.stringify(N.voicesOf(givenBass.score)[3]) === JSON.stringify(N.voicesOf(figured.score)[3]));
+    equal("model: a cantus firmus of one's own has none", C.modelAnswer(C.cantusExercise({ mode: "dorian", final: "D" })), null);
+    const deceptive = C.fourPartExercise({ form: "numerals", tonic: "C", mode: "major", progression: ["I", "V6", "vi", "IV", "V7", "I"], random: seeded(1) });
+    const fromV6 = C.setNote(C.setNote(C.setNote(C.setNote(deceptive, 3, 1, P("B2")), 3, 2, P("A2")), 0, 1, P("D5")), 0, 2, P("C5"));
+    check("four parts: the leading tone in the bass may fall from V6 to vi (2.6.0)", !has(C.checkFourPart(fromV6), "leading", 2));
+    const intoTonic = C.fourPartExercise({ form: "numerals", tonic: "C", mode: "major", progression: ["I", "V6", "I"], random: seeded(1) });
+    check("four parts: but rises from V6 into I", has(C.checkFourPart(C.setNote(C.setNote(intoTonic, 3, 1, P("B2")), 3, 2, P("A2"))), "leading", 2) || has(C.checkFourPart(C.setNote(C.setNote(intoTonic, 3, 1, P("B2")), 3, 2, P("G2"))), "leading", 2));
 })();

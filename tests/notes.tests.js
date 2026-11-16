@@ -309,4 +309,17 @@
         check("and a 201st pushes the oldest out", data.trash.length === 200 && data.trash[0].id === "x" && data.trash[199].id === "n198");
         check("hostile text in a trashed note is only ever data", N.cleanTrash([{ ...note("h", { title: "<img src=x onerror=alert(1)>", content: "<script>alert(1)</script>" }), deletedAt: daysAgo(1) }], now).trash[0].title === "<img src=x onerror=alert(1)>");
     })();
+    // 2.6.0: links to the Conservatory.
+    (() => {
+        equal("music link: a song by its id", json(N.musicLink("maestro:song/abc123def4")), json({ kind: "song", id: "abc123def4" }));
+        equal("music link: an exercise and a rhythm", `${N.musicLink("maestro:exercise/x1y2z3")?.kind} ${N.musicLink("maestro:rhythm/qq11ww22")?.kind}`, "exercise rhythm");
+        equal("music link: a chord by instrument and name, a slash chord too", json(N.musicLink(`maestro:chord/guitar/${encodeURIComponent("C/E")}`)), json({ kind: "chord", instrument: "guitar", name: "C/E" }));
+        check("music link: anything else is no link", ["https://example.com", "maestro:song/ABC", "maestro:song/a b", "maestro:folder/x", "maestro:chord/guitar/", "maestro:chord/guitar/%E0%A4%A", "javascript:alert(1)"].every(url => N.musicLink(url) === null));
+        const text = N.musicLinkText("Autumn [Study]", { kind: "song", id: "abc123def4" });
+        equal("music link: its Markdown, the title clear of brackets", text, "[Autumn Study ](maestro:song/abc123def4)".replace(" ]", "]"));
+        const chordText = N.musicLinkText("E7♯9 (Hendrix chord)", { kind: "chord", instrument: "guitar", name: "E7♯9" });
+        const linked = N.parseMarkdown(chordText)[0].children.find(node => node.type === "link");
+        equal("music link: parsed back from a note", json(N.musicLink(linked?.url)), json({ kind: "chord", instrument: "guitar", name: "E7♯9" }));
+        equal("music link: none for a reference that isn't one", N.musicLinkText("X", { kind: "song", id: "NOT VALID" }), null);
+    })();
 })();

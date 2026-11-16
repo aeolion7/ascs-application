@@ -772,7 +772,27 @@
         return Math.max(1, Math.ceil((trashedAt(entry) + TRASH_DAYS * DAY_MS - now.getTime()) / DAY_MS));
     }
 
+    // ---- Links to the Conservatory (2.6.0): [title](maestro:kind/ref), a
+    // song, an exercise or a rhythm by its id, or a saved chord by its
+    // instrument and name. Opened inside Maestro, never as a web address.
+    const MUSIC_LINK = /^maestro:(song|exercise|rhythm)\/([a-z0-9]{1,40})$|^maestro:chord\/([a-z]{2,16})\/([^\s/]{1,120})$/;
+    function musicLink(url) {
+        const match = MUSIC_LINK.exec(String(url ?? ""));
+        if (!match) return null;
+        if (match[1]) return { kind: match[1], id: match[2] };
+        let name;
+        try { name = decodeURIComponent(match[4]); } catch { return null; }
+        return name.trim() ? { kind: "chord", instrument: match[3], name } : null;
+    }
+    // The Markdown for one, its title kept clear of the brackets around it.
+    function musicLinkText(title, link) {
+        const label = String(title ?? "").replace(/[[\]\s]+/g, " ").trim() || "Untitled";
+        const target = link.kind === "chord" ? `chord/${link.instrument}/${encodeURIComponent(link.name)}` : `${link.kind}/${link.id}`;
+        return musicLink(`maestro:${target}`) ? `[${label}](maestro:${target})` : null;
+    }
+
     global.ASCSNotes = {
+        musicLink, musicLinkText,
         extractTags, matchesNoteQuery, findMatches, tagCounts, parseMarkdown, parseInline, toggleTask, MARKDOWN_REFERENCE, wordCount, openingMode,
         MARK_CLIPBOARD, MARK_CURSOR, PLACEHOLDER_MENU, askLabel, placeholderAsks,
         normalizeGroup, groupKey, groupNames, groupNotes, renameGroup, deleteGroup, groupedLabel, hasPlaceholders, fillPlaceholders, fillsPlaceholders,
