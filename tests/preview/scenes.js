@@ -525,6 +525,13 @@ const PreviewScenes = (() => {
         "progressions-staff-keys": progScene({ view: "staff", show: "numerals" }, { section: 1, bar: 2, slot: 1 }, undefined, { instrument: "keyboard" }),
         "progressions-staff-bass": progScene({ view: "staff" }, { section: 0, bar: 1, slot: 0 }, undefined, { instrument: "bass" }),
         "progressions-staff-ukulele": progScene({ view: "staff" }, { section: 0, bar: 1, slot: 0 }, undefined, { instrument: "ukulele" }),
+        // 2.8.0: the staff with tablature under it, and the song in negative harmony.
+        "progressions-tab": progScene({ view: "tab" }, { section: 0, bar: 1, slot: 0 }, () => { prog.settings.sketch.sections[0].bars[3] = ["%"]; rebuildProgTimeline(); renderProgressions(); }),
+        "progressions-tab-bass": progScene({ view: "tab" }, { section: 0, bar: 1, slot: 0 }, undefined, { instrument: "bass" }),
+        "progressions-tab-ukulele": progScene({ view: "tab" }, { section: 0, bar: 1, slot: 0 }, undefined, { instrument: "ukulele", neckShown: false }),
+        "progressions-tab-keys": progScene({ view: "tab" }, { section: 0, bar: 1, slot: 0 }, undefined, { instrument: "keyboard" }),
+        "progressions-negative-menu": progScene({}, undefined, () => toggleProgPopover("songs", true)),
+        "progressions-negative": progScene({}, undefined, () => negativeProgression()),
         "progressions-staff-playing": progScene({ view: "staff" }, undefined, () => { prog.settings.sketch.sections[0].bars[3] = ["%"]; rebuildProgTimeline(); renderProgressions(); metro.running = true; prog.playing = prog.timeline.find(event => event.section === 0 && event.written === 3); markProgStaff(); }),
         "progressions-section": progScene({}, undefined, () => { prog.sectionOpen = 1; }),
         "progressions-key": progScene({}, undefined, () => toggleProgPopover("key", true)),
@@ -615,6 +622,11 @@ const PreviewScenes = (() => {
             cpGhost.at = { clientX: box.left + (column.x + 0.75 * cp.drawn.space) * box.width / cp.drawn.width, clientY: (top + box.top) / 2 };
             drawCpGhost();
         }, 1200)),
+        // 2.8.0: the checker's rules, some off.
+        "counterpoint-rules": cpScene(() => {
+            const fux = MaestroCounterpoint.speciesExercise({ species: 1, cantus: MaestroCounterpoint.fuxNotes(MaestroCounterpoint.FUX[0]), cantusBelow: true, mode: "dorian", final: "D", title: "First species, Fux's Dorian" });
+            return cpWrite(fux, [["A3", "D4", "C4", "D4", "D4", "A3", "C4"]]);
+        }, { voice: 0, index: 7 }, () => { cp.rulesOff = ["repeat", "leap", "shape"]; renderCpProblems(); drawCpStaff(); toggleConsPopover("cpRules", true); }),
         // The neck hidden on this tab.
         "counterpoint-noneck": cpScene(() => {
             const fux = MaestroCounterpoint.speciesExercise({ species: 1, cantus: MaestroCounterpoint.fuxNotes(MaestroCounterpoint.FUX[0]), cantusBelow: true, mode: "dorian", final: "D", title: "First species, Fux's Dorian" });
@@ -683,6 +695,11 @@ const PreviewScenes = (() => {
         "conservatory-chords-empty": chordScene({}, [null, null, null, null, null, null], 1, null, []),
         "conservatory-chords-keyboard": chordScene({ instrument: "keyboard" }, [], 1, () => { chords.keys = [48, 52, 55, 59, 62, 66]; }),
         "conservatory-chords-bass": chordScene({ instrument: "bass" }, [null, 3, 2, 0], 1),
+        // 2.8.0: the Theory tab: Berg's row and its matrix, a set, negative harmony in C.
+        "conservatory-theory": consScene({ tab: "theory" }, () => { Object.assign(theory.settings, { row: "G B♭ D F♯ A C E G♯ B C♯ E♭ F", set: [0, 4, 7, 10], show: "names", root: "C", scale: "major", sevenths: false }); theory.form = { kind: "P", number: 0 }; renderTheory(); renderConsNeck(); }),
+        "conservatory-theory-numbers": consScene({ tab: "theory", neckShown: false }, () => { Object.assign(theory.settings, { row: "0 t 3 e 1 2 4 5 6 7 8 9", set: [0, 1, 4, 6], show: "numbers", root: "G", scale: "minor", sevenths: true }); theory.form = { kind: "RI", number: 3 }; theory.move = { n: 5, inverted: true }; renderTheory(); renderConsNeck(); }),
+        "conservatory-theory-empty": consScene({ tab: "theory" }, () => { Object.assign(theory.settings, { row: "C D E C G", set: [] }); renderTheory(); renderConsNeck(); }),
+        "conservatory-theory-keyboard": consScene({ tab: "theory", instrument: "keyboard" }, () => { Object.assign(theory.settings, { row: "G B♭ D F♯ A C E G♯ B C♯ E♭ F", set: [0, 2, 4, 5, 7, 9, 11], show: "names" }); renderTheory(); renderConsNeck(); }),
         "conservatory-finder-empty": consScene({ tab: "finder" }, () => { finder.picked = []; renderFinder(); renderConsNeck(); }),
         "conservatory-quiz": consScene({ tab: "quiz", quizKind: "note", position: 5 }, () => { resetQuizScore(); Object.assign(quiz, { right: 6, asked: 8, streak: 3 }); quiz.question = { string: 3, fret: 7, midi: 62 }; renderQuiz(); renderConsNeck(); }),
         "conservatory-quiz-wrong": consScene({ tab: "quiz", quizKind: "note" }, () => { resetQuizScore(); quiz.question = { string: 1, fret: 4, midi: 49 }; quiz.answered = 0; Object.assign(quiz, { right: 2, asked: 3 }); renderQuiz(); renderConsNeck(); }),

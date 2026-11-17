@@ -149,13 +149,14 @@ Every Windows sound from 3.x to 11, from a local library, plus a custom folder. 
 
 ### Conservatory
 
-A music workshop for guitar, bass, mandolin, ukulele and keyboard, with a neck or keyboard across the top, eight tabs and a metronome along the bottom. **Neck** (or **Keys**), beside the instrument's chip, shows or hides it on every tab at once, so moving between tabs or quiz kinds never moves the page; hidden, the modules take the room. It stays where a tab works on it (Scales, Chords, the Finder and the Notes quiz), and the Rhythm tab never has it.
+A music workshop for guitar, bass, mandolin, ukulele and keyboard, with a neck or keyboard across the top, nine tabs and a metronome along the bottom. **Neck** (or **Keys**), beside the instrument's chip, shows or hides it on every tab at once, so moving between tabs or quiz kinds never moves the page; hidden, the modules take the room. It stays where a tab works on it (Scales, Chords, the Finder and the Notes quiz), and the Rhythm tab never has it.
 
 - **Scales:** 49 scales on the neck, spelled by key, with their chords, positions, a drone and drills.
 - **Chords:** build a chord on the neck, name it, see it on a staff, and keep a library of chords.
-- **Progressions:** a song as a chord chart in sections, looped with the metronome, with bass and drums; chord suggestions, voicings, the circle of fifths, cadences, forms and writing prompts; a **Staff** view where each chord's voicing is written and edited note by note; songs saved, printed and linked from Quick Notes.
-- **Counterpoint:** species and four-part exercises and melodies, written on a staff and checked as they're written, with model answers, playback, clefs chosen per staff, printing and MusicXML export.
+- **Progressions:** a song as a chord chart in sections, looped with the metronome, with bass and drums; chord suggestions, voicings, the circle of fifths, cadences, forms and writing prompts; a **Staff** view where each chord's voicing is written and edited note by note, and a **Tab** view with its frets under the staff on a stringed instrument; the whole song in negative harmony; songs saved, printed and linked from Quick Notes.
+- **Counterpoint:** species and four-part exercises and melodies, written on a staff and checked as they're written, with model answers, playback, clefs chosen per staff, the checker's rules switched on and off, printing and MusicXML export.
 - **Rhythm:** a step sequencer on a synthesized kit, rhythms written on percussion staves, and a polyrhythm trainer that scores taps.
+- **Theory:** a twelve-tone row's matrix, its forms played or sent to Counterpoint; a pitch-class set's Forte name, prime form, interval vector and transformations; and negative harmony in a key.
 - **Finder:** names the chord from notes picked on the neck, and the scales that hold them.
 - **Quiz:** notes on the neck, and intervals, chords, progressions, melodies and rhythms by ear and by reading; progressions can be written on the staff and graded note by note.
 - **Tuning:** reference tones for each string, at a chosen concert pitch, and your own tunings.
@@ -369,7 +370,8 @@ The current version, and each release's contents, checks and manual results, are
 - **Backups:** need PowerShell 7, run only while Maestro runs, and aren't compressed or encrypted.
 - **Conservatory:**
   - **Progressions:** a song has one key and time signature, up to 12 sections of 64 bars (256 in all) and four chords a bar. A chord's voicing has up to ten notes, eight on a stringed instrument's single staff. Print writes the chart, not the staff.
-  - **Counterpoint:** species are in 4/4 against whole notes and four-part writing in half notes, checked by one strict reading of the rules. Clefs are treble, alto, tenor and bass.
+  - **Counterpoint:** species are in 4/4 against whole notes and four-part writing in half notes, checked by one strict reading of the rules, which can be switched off by group but not changed. Clefs are treble, alto, tenor and bass.
+  - **Theory:** prime forms are Rahn's; matrix forms are numbered from the row's first note. Negative harmony mirrors across the tonic and its dominant only, and a written voicing is let go. In a window narrower than 2100 px, the set and negative harmony take turns.
   - **Melodies and rhythms:** melodies are in 4/4 up to 32 bars; a rhythm has one time signature, up to eight rows and four bars.
   - **Library and timing:** saved chords ignore the capo, and the library holds 200. The metronome and tones play through Windows' default output.
   - **Quiz:** in a 1600 × 1000 window with the neck shown, the Quiz's taller kinds need the tab scrolled; hiding the neck gives them the room.
@@ -387,6 +389,5 @@ The current version, and each release's contents, checks and manual results, are
 - **The achievement viewer:** softcore and hardcore together, and an uncapped image cache.
 - **The Command Center:** modules in more sizes, saved layouts, and a small game-notes window over a game.
 - **Tasks on the calendar server,** media controls, and 3D printer status (which needs its own network plan).
-- **Possible in the Conservatory:** tablature beside the chord charts, a twelve-tone matrix, pitch-class sets, negative harmony, and rules switched on and off in Counterpoint's checker.
 - **Ideas needing new access, each with its own plan first:** MIDI in and out, MusicXML import, slowing a track, and tools that use the microphone.
 - **Smaller ideas:** notes and settings export, reminders that aren't events, a per-app volume mixer, live Markdown in the editor, palette actions on results, and a scripted WebView test on the target machine.

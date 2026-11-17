@@ -25,7 +25,7 @@ const PROG_DRUMS = /^(off|groove:[a-z0-9]{1,24}|rhythm:[a-z0-9]{8,24})$/;
 // The neck shows (2.6.0): every note of the chord, or one voicing of it.
 const PROG_NECKS = Object.freeze(["notes", "shapes"]);
 // The song as a chart of chords, or on a staff as the instrument is written (2.7.0, progstaffview.js).
-const PROG_VIEWS = Object.freeze(["chart", "staff"]);
+const PROG_VIEWS = Object.freeze(["chart", "staff", "tab"]);
 const PROG_BASS_GAIN = 1.3;    // a single low note, against a chord's several
 const PROG_PLAYED = Object.freeze(["Once", "Twice", "3 times", "4 times", "5 times", "6 times", "7 times", "8 times"]);
 
@@ -93,7 +93,10 @@ const progWeights = () => MaestroMetronome.METERS[metro.settings.meter] ?? Maest
 const progBeats = () => progWeights().length;
 const progLetter = index => String.fromCharCode(65 + index);
 const progIsShown = () => $("conservatory").classList.contains("active") && consSections.current() === "progressions";
-const progStaffShown = () => prog.settings.view === "staff";
+// The Tab view (2.8.0) is the staff with tablature under it, for strings;
+// on a keyboard it shows the staff alone.
+const progStaffShown = () => prog.settings.view === "staff" || prog.settings.view === "tab";
+const progTabShown = () => prog.settings.view === "tab" && !consKeyboard();
 // One voicing a chord (2.6.0), shown on the neck and played: in the Voicing
 // view of the neck, and always with the staff (2.7.0).
 const progShowsVoicing = () => prog.settings.neck === "shapes" || progStaffShown();
@@ -251,6 +254,21 @@ function transposeProgression(root) {
     if (!moved || root === progSketch().root) return;
     const from = progSketch().root;
     changeProgression(() => { prog.settings.sketch = moved; }, `Moved from ${from} to ${root}.`);
+}
+
+// The song in negative harmony (2.8.0): every chord mirrored across the axis
+// between the tonic and its dominant, and the key with it where a scale holds
+// the mirror (major becomes minor). Voicings written for chords are let go.
+function negativeProgression() {
+    toggleProgPopover("songs", false);
+    const sketch = progSketch();
+    const result = MaestroTheory.negativeChart(sketch);
+    if (!result) return;
+    const fifth = MaestroMusic.scaleNotes(sketch.root, sketch.scale)[4]?.name ?? "";
+    const scaleWord = scale => MaestroMusic.SCALES[scale]?.label.replace(/ \(.*\)$/, "").toLowerCase() ?? scale;
+    const keyText = result.keyKept ? `the key stays ${sketch.root} ${scaleWord(sketch.scale)}` : `${sketch.root} ${scaleWord(sketch.scale)} became ${sketch.root} ${scaleWord(result.chart.scale)}`;
+    const voicings = result.dropped ? ` ${result.dropped} written ${result.dropped === 1 ? "voicing was" : "voicings were"} let go.` : "";
+    changeProgression(() => { prog.settings.sketch = result.chart; }, `Mirrored across ${sketch.root} and ${fifth}: ${keyText}.${voicings}`);
 }
 
 function setProgKey(changes) {
@@ -1573,6 +1591,7 @@ $("progTitle").addEventListener("blur", event => {
     if (!event.relatedTarget && $("progSheet").closest(".view.active")) $("progSongButton").focus({ preventScroll: true });
 });
 $("progRename").addEventListener("click", renameProgSong);
+$("progNegative").addEventListener("click", negativeProgression);
 const progSectionShown = () => prog.sectionOpen ?? prog.at.section;
 wireProgText($("progSectionName"), text => setProgSection(progSectionShown(), { name: text.replace(/[\u0000-\u001F\u007F"]/g, "").trim().slice(0, MaestroHarmony.CHART_LIMITS.section) }), () => progSketch().sections[progSectionShown()].name);
 $("progSectionRepeat").replaceChildren(...PROG_PLAYED.map((label, index) => {

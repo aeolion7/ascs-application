@@ -392,6 +392,56 @@ globalThis.MaestroCounterpoint = (() => {
     const perfectKind = i => (i.simple === 1 ? "octaves" : "fifths");
     const VOICE_WORDS = ["soprano", "alto", "tenor", "bass"];
 
+    // The checker's rules as switches (2.8.0): each group a plain name for
+    // the problems it covers, by section. What's written so far, and a
+    // suggestion for what comes next, are always shown.
+    const RULE_GROUPS = Object.freeze([
+        ["voices", "parallel", "Parallel fifths and octaves", ["parallel"]],
+        ["voices", "hidden", "Hidden fifths and octaves", ["hidden"]],
+        ["voices", "contrary", "Fifths and octaves by contrary motion", ["contrary"]],
+        ["voices", "crossing", "Voices crossing and overlapping", ["crossing", "overlap"]],
+        ["voices", "spacing", "Space between the voices", ["spacing", "apart"]],
+        ["voices", "unison", "Unisons inside the exercise", ["unison"]],
+        ["voices", "dissonance", "Dissonances and suspensions", ["dissonance", "suspension"]],
+        ["voices", "eighths", "Eighths in fifth species", ["eighths"]],
+        ["voices", "run", "Long runs of thirds or sixths", ["run"]],
+        ["line", "leap", "Leaps: how wide, and which intervals", ["leap", "augmented", "awkward"]],
+        ["line", "recover", "Turning back after a leap", ["recover"]],
+        ["line", "leaps", "Two leaps the same way", ["leaps"]],
+        ["line", "repeat", "Repeated notes", ["repeat"]],
+        ["line", "tritone", "Outlined tritones", ["tritone"]],
+        ["line", "climax", "One high point", ["climax"]],
+        ["line", "range", "Range", ["range"]],
+        ["line", "mode", "Notes outside the mode", ["mode", "inflection"]],
+        ["line", "shape", "Notes on the line's shape", ["circling", "leapy", "narrow", "stepwise", "sequence"]],
+        ["ends", "opening", "How it begins", ["opening"]],
+        ["ends", "cadence", "The cadence and the leading tone", ["cadence", "leading", "close"]],
+        ["parts", "chords", "Chords of the key, and their bass", ["chord", "inversion", "third"]],
+        ["parts", "doubling", "Doubling the leading tone", ["doubled"]],
+        ["parts", "seventh", "Sevenths falling by step", ["seventh"]]
+    ].map(([section, id, label, rules]) => Object.freeze({ section, id, label, rules: Object.freeze(rules) })));
+    const RULE_SECTIONS = Object.freeze({ voices: "Between the voices", line: "Each line", ends: "Beginning and end", parts: "Four parts" });
+    const RULES_ALWAYS = Object.freeze(["empty", "unfinished", "suggest"]);
+    // Essentials: only what breaks the voices' independence, the dissonance
+    // treatment, and the chords themselves; Strict, every rule.
+    const RULE_ESSENTIALS = Object.freeze(["parallel", "crossing", "dissonance", "chords", "doubling"]);
+    const RULE_PRESETS = Object.freeze({
+        strict: Object.freeze([]),
+        essentials: Object.freeze(RULE_GROUPS.map(group => group.id).filter(id => !RULE_ESSENTIALS.includes(id)))
+    });
+
+    // The groups switched off, as stored: known ids, once each, in order.
+    function cleanRulesOff(list) {
+        if (!Array.isArray(list)) return [];
+        return RULE_GROUPS.map(group => group.id).filter(id => list.includes(id));
+    }
+
+    // The problems the rules still on report.
+    function withRules(problems, off) {
+        const quiet = new Set(cleanRulesOff(off).flatMap(id => RULE_GROUPS.find(group => group.id === id).rules));
+        return problems.filter(each => !quiet.has(each.rule));
+    }
+
     // Problems: { level: "error" | "warning" | "info", rule, text, bar, at: [{ voice, index }] }.
     function problem(list, level, rule, text, onset, at) {
         list.push(Object.freeze({ level, rule, text, bar: onset === null ? 0 : barOf(onset), at: Object.freeze(at) }));
@@ -1509,6 +1559,7 @@ globalThis.MaestroCounterpoint = (() => {
     }
 
     return Object.freeze({
+        RULE_GROUPS, RULE_SECTIONS, RULES_ALWAYS, RULE_PRESETS, cleanRulesOff, withRules,
         FUX, CHANT, PROGRESSIONS, FOURPART_KEYS, FORMS, RANGES, FIFTH_BARS, HEADER, ID, METER, CANTUS_MODES, CANTUS_LENGTH,
         fuxNotes, makeCantus, cantusProblems, cantusFinals, cantusExercise, cantusOf, checkCantus, speciesTemplate, tieSuspensions, speciesExercise, consonance, checkSpecies,
         chordFromNumeral, figuresFor, numeralParts, numeralText, keyChords, analyze, chordRhythm, fourPartExercise, figuredBass, checkFourPart,

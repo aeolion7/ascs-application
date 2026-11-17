@@ -47,7 +47,9 @@ const cp = {
     // or null when the tools act on the selected note's bar; and the bars'
     // rhythms copied, kept while Maestro runs.
     bars: null,
-    copied: null
+    copied: null,
+    // The checker's rule groups switched off (2.8.0), kept on this PC.
+    rulesOff: []
 };
 
 const cpVoices = () => MaestroNotation.voicesOf(cp.exercise.score);
@@ -79,12 +81,13 @@ function loadCounterpoint() {
     cp.id = exercise && typeof stored.id === "string" && CP_ID.test(stored.id) ? stored.id : null;
     cp.savedText = cp.id && typeof stored.savedText === "string" ? stored.savedText : null;
     if (Array.isArray(stored?.hear) && stored.hear.length === 4) cp.hear = stored.hear.map(Boolean);
+    cp.rulesOff = MaestroCounterpoint.cleanRulesOff(stored?.rulesOff);
     cp.at = { voice: cpWritable()[0] ?? 0, index: 0 };
 }
 
 function saveCounterpoint() {
     try {
-        localStorage.setItem(CP_KEY, JSON.stringify({ text: cpText(), id: cp.id, savedText: cp.savedText, hear: cp.hear }));
+        localStorage.setItem(CP_KEY, JSON.stringify({ text: cpText(), id: cp.id, savedText: cp.savedText, hear: cp.hear, rulesOff: cp.rulesOff }));
     } catch {
         // Storage full or blocked: the exercise stays for this session.
     }
@@ -545,7 +548,7 @@ function drawCpStaff() {
     const svg = svgNode("svg", { class: "cp-score", viewBox: `0 0 ${drawn.width} ${drawn.height}`, width: Math.round(drawn.width * cp.scale), height: Math.round(drawn.height * cp.scale), role: "img", "aria-label": cpStaffLabel() });
     const voices = cpVoices();
     const timed = voices.map(voice => MaestroNotation.timed(voice.notes));
-    const problems = MaestroCounterpoint.check(exercise);
+    const problems = cpProblems(exercise);
     const marked = new Map();
     problems.forEach(each => each.at.forEach(spot => {
         const key = `${spot.voice}:${spot.index}`;
@@ -1106,8 +1109,11 @@ function renderCpTools() {
     ].join("\n");
 }
 
+// What the checker reports, with the rules switched off left out (2.8.0).
+const cpProblems = (exercise = cp.exercise) => MaestroCounterpoint.withRules(MaestroCounterpoint.check(exercise), cp.rulesOff);
+
 function renderCpProblems() {
-    const problems = MaestroCounterpoint.check(cp.exercise);
+    const problems = cpProblems();
     const errors = problems.filter(each => each.level === "error").length;
     const warnings = problems.filter(each => each.level === "warning").length;
     const unfinished = problems.some(each => each.rule === "unfinished");
@@ -1128,6 +1134,59 @@ function renderCpProblems() {
         item.append(button);
         return item;
     }));
+    renderCpRules();
+}
+
+// ---- The checker's rules (2.8.0): each group on or off, by section, with
+// Strict (every rule) and Essentials; the chip says how many are off.
+
+function renderCpRules() {
+    const off = cp.rulesOff;
+    $("cpRulesName").textContent = off.length ? `${MaestroCounterpoint.RULE_GROUPS.length - off.length} of ${MaestroCounterpoint.RULE_GROUPS.length}` : "All";
+    $("cpRulesButton").title = off.length ? `${off.length} of the checker's rules ${off.length === 1 ? "is" : "are"} off` : "Every rule the checker knows is on";
+    const preset = Object.entries(MaestroCounterpoint.RULE_PRESETS).find(([, list]) => list.join() === off.join())?.[0] ?? "";
+    document.querySelectorAll("#cpRulePresets [data-rules]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.rules === preset)));
+    const sections = Object.entries(MaestroCounterpoint.RULE_SECTIONS).map(([section, label]) => {
+        const group = element("fieldset", "cp-rule-section");
+        group.append(element("legend", "cons-choice-label", label));
+        MaestroCounterpoint.RULE_GROUPS.filter(rule => rule.section === section).forEach(rule => {
+            const field = element("label", "metro-check cp-rule");
+            const box = element("input");
+            box.type = "checkbox";
+            box.checked = !off.includes(rule.id);
+            box.dataset.rule = rule.id;
+            field.append(box, element("span", "", rule.label));
+            group.append(field);
+        });
+        return group;
+    });
+    // In three columns: between the voices, each line, and the rest together.
+    const columns = [[sections[0]], [sections[1]], sections.slice(2)].map(list => {
+        const column = element("div", "cp-rule-column");
+        column.append(...list);
+        return column;
+    });
+    $("cpRuleList").replaceChildren(...columns);
+}
+
+// The rules open over the page, not inside the Checker, which is too short
+// for them: under the chip, ending at its right edge, kept on screen.
+function placeCpRules() {
+    const panel = $("cpRulesPanel");
+    if (panel.hidden) return;
+    const chip = $("cpRulesButton").getBoundingClientRect();
+    const left = Math.max(16, Math.min(chip.right - panel.offsetWidth, innerWidth - panel.offsetWidth - 16));
+    const below = chip.bottom + 10;
+    const top = below + panel.offsetHeight <= innerHeight - 16 ? below : Math.max(16, innerHeight - 16 - panel.offsetHeight);
+    panel.style.left = `${Math.round(left)}px`;
+    panel.style.top = `${Math.round(top)}px`;
+}
+
+function setCpRulesOff(list) {
+    cp.rulesOff = MaestroCounterpoint.cleanRulesOff(list);
+    saveCounterpoint();
+    renderCpProblems();
+    drawCpStaff();
 }
 
 function renderCpMenu() {
@@ -1494,6 +1553,18 @@ consNeckModes.counterpoint = {
 wireConsPopover("cpMenu", $("cpTitleButton"), $("cpMenu"));
 wireConsPopover("cpNew", $("cpMenuNew"), $("cpNewPanel"), { onOpen: () => $("cpNewKind").querySelector('[aria-pressed="true"]') });
 wireConsPopover("cpShow", $("cpShowButton"), $("cpShowPanel"));
+wireConsPopover("cpRules", $("cpRulesButton"), $("cpRulesPanel"), { onOpen: () => { renderCpRules(); placeCpRules(); } });
+addEventListener("resize", placeCpRules);
+$("cpRuleList").addEventListener("change", event => {
+    const box = event.target.closest("[data-rule]");
+    if (!box) return;
+    const others = cp.rulesOff.filter(id => id !== box.dataset.rule);
+    setCpRulesOff(box.checked ? others : [...others, box.dataset.rule]);
+});
+document.querySelectorAll("#cpRulePresets [data-rules]").forEach(button => button.addEventListener("click", () => {
+    setCpRulesOff(MaestroCounterpoint.RULE_PRESETS[button.dataset.rules]);
+    renderCpRules();
+}));
 $("cpStaff").addEventListener("click", cpStaffClick);
 $("cpClefs").addEventListener("click", event => {
     const button = event.target.closest("[data-staff-clef]");

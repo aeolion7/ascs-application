@@ -19,6 +19,13 @@ const PROG_STAFF_HEADROOM = 4.6;        // spaces above each system for the word
 const PROG_STAFF_REPEAT_ROOM = 1.8;     // spaces a repeat sign takes inside its bar
 const PROG_STAFF_LABEL = 19;            // the words' size, in the score's units (16 to 21 px on screen)
 const PROG_STAFF_REPEAT_SIGN = "";    // Bravura's bar-repeat sign
+// The tablature under each line (2.8.0): its top line this far under the
+// staff, clear of a click on the staff's lowest notes, its lines this far
+// apart, and room under its last.
+const PROG_TAB_DROP = 3.5;
+const PROG_TAB_GAP = 2;
+const PROG_TAB_FRET = 1.45;            // a fret's size, in staff spaces
+const PROG_TAB_BELOW = 1.2;
 
 const progStaff = {
     drawn: null,            // the engraving, and what it was made from
@@ -61,7 +68,8 @@ function progStaffLayout() {
     const notes = chords.map(entry => [...progStaffNotes(entry)]);
     const show = prog.settings.show;
     const clefs = progStaffClefs();
-    const key = JSON.stringify([progSketch(), metro.settings.meter, notes, room, show, clefs]);
+    const tab = progTabStrings();
+    const key = JSON.stringify([progSketch(), metro.settings.meter, notes, room, show, clefs, tab, tab ? chords.map(progTabFrets) : null]);
     if (progStaff.cacheKey === key) return progStaff.drawn;
     const made = MaestroHarmony.chartScore(progSketch(), metro.settings.meter, entry => notes[entry.index], progKey(), clefs);
     if (!made) return null;
@@ -72,14 +80,14 @@ function progStaffLayout() {
     const closes = new Set(made.sections.filter(section => section.repeat > 1).map(section => section.last));
     const space = MaestroNotation.SPACE;
     const engraveAt = scale => MaestroNotation.engrave(made.score, {
-        maxWidth: Math.max(320, Math.floor(room.width / scale) - 4 - 3 * space), justify: true, headroom: PROG_STAFF_HEADROOM * space,
+        maxWidth: Math.max(320, Math.floor(room.width / scale) - 4 - 3 * space), justify: true, headroom: PROG_STAFF_HEADROOM * space, room: progTabRoom(tab),
         barPadding: bar => [opens.has(bar) ? PROG_STAFF_REPEAT_ROOM : 0, closes.has(bar) ? PROG_STAFF_REPEAT_ROOM : 0],
         hideRest: (voice, index) => quiet.has(`${voice}:${index}`)
     });
     // Smaller, if the tallest line wouldn't fit, then laid out again for the width that gives.
     let scale = PROG_STAFF_SCALE;
     let drawn = engraveAt(scale);
-    const tallest = Math.max(...drawn.systems.map(system => system.bottom - system.top)) + 2 * space;
+    const tallest = Math.max(...drawn.systems.map(system => system.bottom - system.top)) + progTabRoom(tab) + 2 * space;
     const fit = room.height > 0 ? Math.max(PROG_STAFF_LEAST, Math.min(PROG_STAFF_SCALE, (room.height - 12) / tallest)) : scale;
     if (fit < scale - 0.01) {
         scale = fit;
@@ -91,6 +99,80 @@ function progStaffLayout() {
     progStaff.room = JSON.stringify(room);
     progStaff.scale = scale;
     return drawn;
+}
+
+// ---- Tablature (2.8.0)
+
+// How many strings the tab has: none on a keyboard or with the staff alone.
+const progTabStrings = () => (progTabShown() ? MaestroMusic.currentTuning(cons.settings)?.pitches.length ?? 0 : 0);
+const progTabRoom = strings => (strings ? (PROG_TAB_DROP + (strings - 1) * PROG_TAB_GAP + PROG_TAB_BELOW) * MaestroNotation.SPACE : 0);
+
+// A chord's frets, lowest string first (null where a string is silent): the
+// voicing written into the song, or the one chosen for it, on the strings as
+// tuned. Null when it can't be played on them.
+function progTabFrets(entry) {
+    const tuning = MaestroMusic.currentTuning(cons.settings);
+    if (!tuning) return null;
+    const frets = MaestroMusic.INSTRUMENTS[cons.settings.instrument].frets;
+    if (!entry.voicing) {
+        const { choices, path } = progVoicings();
+        const chosen = path[entry.index] >= 0 ? choices[entry.index]?.[path[entry.index]] : null;
+        if (chosen?.frets) return chosen.frets;
+    }
+    return MaestroHarmony.fretsForVoicing([...progStaffNotes(entry)], tuning.pitches, frets);
+}
+
+// The tab under each line: its lines, TAB at its start, its bar lines, each
+// chord's frets on their strings (highest string on top) and a % bar's sign.
+function drawProgTab(svg, drawn, strings) {
+    const space = drawn.space;
+    const entries = progChords();
+    const lineY = (system, string) => system.bottom + (PROG_TAB_DROP + (strings - 1 - string) * PROG_TAB_GAP) * space;
+    drawn.systems.forEach((system, at) => {
+        const top = lineY(system, strings - 1), bottom = lineY(system, 0);
+        const group = svgNode("g", { class: "prog-tab" });
+        for (let string = 0; string < strings; string++) group.append(svgNode("line", { class: "staff-line", x1: system.left, x2: system.right, y1: lineY(system, string), y2: lineY(system, string) }));
+        group.append(svgNode("line", { class: "bar-line", x1: system.left, x2: system.left, y1: top, y2: bottom }));
+        drawn.barSpans.filter(span => span.system === at).forEach(span => group.append(svgNode("line", { class: "bar-line", x1: span.x2, x2: span.x2, y1: top, y2: bottom })));
+        // TAB, its letters stacked down the lines.
+        ["T", "A", "B"].forEach((letter, row) => {
+            const node = svgNode("text", { class: "prog-tab-clef", x: system.left + 1.6 * space, y: top + (bottom - top) * (row + 0.5) / 3, "font-size": Math.min(1.6 * space, (bottom - top) / 3.4) });
+            node.textContent = letter;
+            group.append(node);
+        });
+        svg.append(group);
+    });
+    progStaff.made.chords.forEach(chord => {
+        const place = progStaffPlace(chord);
+        const entry = entries[chord.index];
+        if (!place || !entry) return;
+        const frets = progTabFrets({ ...entry, index: chord.index });
+        const x = place.column.x + 0.6 * space;
+        if (!frets) {
+            const node = svgNode("text", { class: "prog-tab-fret is-unplayable", x, y: lineY(place.system, Math.floor((strings - 1) / 2)), "font-size": PROG_TAB_FRET * space });
+            node.textContent = "?";
+            const title = svgNode("title", {});
+            title.textContent = "This voicing can't be played on these strings";
+            node.append(title);
+            svg.append(node);
+            return;
+        }
+        frets.forEach((fret, string) => {
+            if (fret === null) return;
+            const node = svgNode("text", { class: "prog-tab-fret", x, y: lineY(place.system, string), "font-size": PROG_TAB_FRET * space });
+            node.textContent = String(fret);
+            svg.append(node);
+        });
+    });
+    progStaff.made.bars.forEach((bar, index) => {
+        if (!bar.repeat) return;
+        const span = drawn.barSpans.find(each => each.bar === index);
+        if (!span) return;
+        const system = drawn.systems[span.system];
+        const sign = svgNode("text", { class: "staff-glyph", x: (span.x1 + span.x2) / 2 - 1.3 * space, y: (lineY(system, 0) + lineY(system, strings - 1)) / 2 + MaestroNotation.LIFT });
+        sign.textContent = PROG_STAFF_REPEAT_SIGN;
+        svg.append(sign);
+    });
 }
 
 // Where a chord's notes are drawn: its column, system and heads by MIDI number.
@@ -125,10 +207,11 @@ function drawProgStaff() {
     const svg = svgNode("svg", {
         class: "cp-score prog-staff-svg", viewBox: `0 0 ${drawn.width} ${drawn.height}`,
         width: Math.round(drawn.width * progStaff.scale), height: Math.round(drawn.height * progStaff.scale),
-        role: "img", "aria-label": `${progSketch().title} on ${progStaffClefs().length > 1 ? "a grand staff" : "a staff"}: ${chords.length} ${chords.length === 1 ? "chord" : "chords"}`
+        role: "img", "aria-label": `${progSketch().title} on ${progStaffClefs().length > 1 ? "a grand staff" : "a staff"}${progTabStrings() ? ", with tablature" : ""}: ${chords.length} ${chords.length === 1 ? "chord" : "chords"}`
     });
     svg.append(svgNode("g", { class: "prog-staff-marks" }));
     drawScoreItems(svg, drawn);
+    if (progTabStrings()) drawProgTab(svg, drawn, progTabStrings());
     const text = (content, x, y, kind) => {
         const node = svgNode("text", { x, y, class: kind, "font-size": PROG_STAFF_LABEL });
         node.textContent = content;
@@ -273,12 +356,15 @@ function revealProgStaff(svg, system) {
     else if (bottom > view.bottom) holder.scrollTop += bottom - view.bottom + 6;
 }
 
-// The view: Chart or Staff. The voicing's ‹ › and Reset sit under the staff
+// The view: Chart, Staff or Tab (the staff with tablature, 2.8.0). The voicing's ‹ › and Reset sit under the staff
 // while it's shown, and back in a chord's drawer with the chart.
 const progVoicingHome = { parent: $("progVoicing").parentElement, next: $("progVoicing").nextElementSibling };
 function renderProgStaffView() {
     const staff = progStaffShown();
-    document.querySelectorAll("#progView [data-prog-view]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.progView === prog.settings.view)));
+    // On a keyboard there's no tab: Tab shows as Staff.
+    const view = prog.settings.view === "tab" && consKeyboard() ? "staff" : prog.settings.view;
+    document.querySelectorAll("#progView [data-prog-view]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.progView === view)));
+    $("progViewTab").hidden = consKeyboard();
     $("progSheet").hidden = staff;
     $("progStaff").hidden = !staff;
     $("progStaffBar").hidden = !staff;

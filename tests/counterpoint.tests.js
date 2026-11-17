@@ -286,4 +286,17 @@
     check("four parts: the leading tone in the bass may fall from V6 to vi (2.6.0)", !has(C.checkFourPart(fromV6), "leading", 2));
     const intoTonic = C.fourPartExercise({ form: "numerals", tonic: "C", mode: "major", progression: ["I", "V6", "I"], random: seeded(1) });
     check("four parts: but rises from V6 into I", has(C.checkFourPart(C.setNote(C.setNote(intoTonic, 3, 1, P("B2")), 3, 2, P("A2"))), "leading", 2) || has(C.checkFourPart(C.setNote(C.setNote(intoTonic, 3, 1, P("B2")), 3, 2, P("G2"))), "leading", 2));
+
+    // 2.8.0: the rules as switches.
+    {
+        const all = C.RULE_GROUPS.flatMap(group => group.rules);
+        check("rules: each problem's rule is in one group only", all.filter((rule, at) => all.indexOf(rule) !== at));
+        equal("rules: what's off is cleaned, in order", C.cleanRulesOff(["range", "nope", "parallel", "range"]).join(), "parallel,range");
+        equal("rules: off isn't a list", C.cleanRulesOff("parallel").length, 0);
+        const sample = [{ rule: "parallel" }, { rule: "overlap" }, { rule: "unfinished" }, { rule: "range" }];
+        equal("rules: a group off silences each of its rules", C.withRules(sample, ["crossing"]).map(each => each.rule).join(), "parallel,unfinished,range");
+        equal("rules: Essentials keeps parallels and crossing voices, drops range, keeps what's still to write", C.withRules(sample, C.RULE_PRESETS.essentials).map(each => each.rule).join(), "parallel,overlap,unfinished");
+        check("rules: Strict is every rule on", C.RULE_PRESETS.strict.length === 0 ? [] : ["not empty"]);
+        check("rules: what always shows is in no group", C.RULES_ALWAYS.filter(rule => all.includes(rule)));
+    }
 })();

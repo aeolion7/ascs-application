@@ -114,7 +114,7 @@ globalThis.MaestroMusic = (() => {
     // A position is five frets from its first; -1 is the whole neck.
     const POSITION_SPAN = 5;
     const POSITION_LAST = 11;
-    const TABS = Object.freeze(["scales", "chords", "progressions", "counterpoint", "rhythm", "finder", "quiz", "tuning"]);
+    const TABS = Object.freeze(["scales", "chords", "progressions", "counterpoint", "rhythm", "theory", "finder", "quiz", "tuning"]);
     // Drills (2.6.0): ways through a scale's or a chord's notes, played at the
     // metronome's tempo, as many to a beat as its subdivision counts.
     const DRILLS = Object.freeze({ straight: "Up and back", thirds: "In thirds", fours: "In fours", triads: "Triads on each", sevenths: "Sevenths on each" });

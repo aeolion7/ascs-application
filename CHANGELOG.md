@@ -2,6 +2,19 @@
 
 All notable changes to Aeolionware Maestro (code name ASCS; before 2.0.0, the Aeolionware Super Command System). The newest release is first. For current behavior, see [README.md](README.md).
 
+## Version 2.8.0
+
+**Summary.** The Conservatory's last "possible" ideas from the roadmap. A **Theory** tab, the ninth: a twelve-tone row and its matrix, its forms played or written in Counterpoint; a pitch-class set's Forte name, prime form, interval vector, Z-relation, complement and symmetry, moved by Tn and TnI; and negative harmony in a key. Progressions gains a **Tab** view, the staff with tablature under it for guitar, bass, mandolin and ukulele, and the whole song mirrored into negative harmony from its menu. Counterpoint's checker gains **Rules**, its 23 groups switched on and off, with Strict and Essentials. There was no manual pass, since manual testing is suspended until one large pass. Checks at release: core 964, timers 37, startup 11, frontend 2539, smoke 1173, cli 237. Nothing moved out: everything planned for 2.8.0 shipped.
+
+- **The Theory tab:** a new Conservatory tab between Rhythm and the Finder, using the short neck in a wide window as Progressions does.
+  - **Twelve-tone row:** typed as names or numbers (0 to 11, with t and e), or at random. Until it's whole, the twelve notes show under it: those missing to click and add, any written twice marked, and the message names the missing ones. The 12 × 12 matrix has P and R beside each line and I and RI above and below each column, numbered from the row's first note; a label plays its form, and **Write in Counterpoint** makes the form a melody to write against.
+  - **Pitch-class set:** notes picked on the neck or keys, or typed. It shows Forte's name (with a common name, as 4-27 the dominant or half-diminished seventh), the prime form (Rahn's), normal form, interval vector, Z-related set, complement and symmetry, and moves the set by Tn or TnI to play or keep. Forte's table checks itself in the tests: the number of classes of each size, each distinct, and Z exactly where a vector is shared.
+  - **Negative harmony:** each chord of a key beside its mirror across the tonic and its dominant (V G becomes iv Fm), with both numerals, played one after the other.
+  - In a window 2100 px wide or more the three sit side by side; narrower, the set and negative harmony take turns. Names or Numbers writes every note on the tab.
+- **Tablature:** Progressions' **Tab** view writes the staff with tablature under each line, each chord's voicing as frets on its strings (TAB, bar lines and the % sign with it), for guitar, bass, mandolin and ukulele. On a keyboard it shows the staff alone.
+- **Negative harmony in Progressions:** the song menu's **Negative harmony** mirrors every chord, and the key with it where a scale holds the mirror (C major becomes C natural minor); Undo takes it back, and a voicing written for a chord is let go.
+- **Counterpoint's rules:** **Rules** beside the checker's count switches its 23 groups of rules on and off, in four sections, with **Strict** (every rule) and **Essentials** (parallels, crossing voices, dissonances and the chords). A rule that's off isn't reported or marked on the staff; what's still to write always shows. Kept on this PC.
+
 ## Version 2.7.2
 
 **Summary.** A patch for the `maestro` command line. Plain `maestro` commands now run the newest copy of the command line, so a release in progress is tried, checked and committed by its own rules with no command run by hand, and a checkout whose folder was deleted no longer confuses `status` or `clean`. There was no manual pass, since manual testing is suspended until one large pass. Checks at release: core 964, timers 37, startup 11, frontend 2476, smoke 1160, cli 237. Nothing moved out.

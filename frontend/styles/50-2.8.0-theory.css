@@ -1,0 +1,422 @@
+/* ---- The Theory tab (2.8.0): a twelve-tone row and its matrix, a pitch-class
+   set, and negative harmony in a key ---- */
+
+.theory-grid {
+  flex: 1 0 auto;
+  align-items: stretch;
+}
+
+.theory-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-between);
+  min-width: 0;
+}
+
+.theory-side > .module {
+  flex: 1 0 auto;
+}
+
+.theory-row-module {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+:root .theory-head {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+}
+
+
+/* A head's actions sit at its end, as the Finder's do. */
+#theoryRandom,
+#theorySetPlay {
+  margin-left: auto;
+}
+
+/* A row or a set as typed, its label beside it; the row's form picked,
+   with Play, on the same line. */
+.theory-field {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.theory-field-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+}
+
+.theory-field-row > .theory-field {
+  flex-basis: 240px;
+}
+
+.theory-field input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.theory-field input[aria-invalid="true"] {
+  border-color: var(--brand-burgundy-text);
+}
+
+/* The module's own gap spaces its parts; a note adds none. */
+#consTheoryPanel .cons-note {
+  margin: 0;
+}
+
+#consTheoryPanel .cons-note:empty {
+  display: none;
+}
+
+/* Until the row is whole: the twelve notes, those still missing raised and
+   ready to add, those written dimmed, any written twice in the warning color. */
+.theory-row-notes {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.theory-row-notes[hidden] {
+  display: none;
+}
+
+:root .theory-row-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  height: var(--height-control-small);
+  padding: 0;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-strong);
+  font: 600 var(--t-sub) var(--font-display);
+  cursor: pointer;
+}
+
+:root .theory-row-chip.is-missing:hover {
+  border-color: var(--brand-tint);
+  color: var(--brand-tint-text);
+}
+
+:root .theory-row-chip.is-used {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 400;
+  text-decoration: line-through;
+  cursor: default;
+  opacity: 1;
+}
+
+:root .theory-row-chip.is-repeated {
+  border-color: var(--brand-burgundy-text);
+  background: transparent;
+  color: var(--brand-burgundy-text);
+  cursor: default;
+  opacity: 1;
+}
+
+/* The matrix: twelve lines of twelve, with P and R beside each line and I and
+   RI above and below each column. A label plays its form when clicked. */
+.theory-matrix {
+  display: grid;
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+  gap: 2px;
+  font-family: var(--font-display);
+  font-size: var(--t-sub);
+  font-variant-numeric: tabular-nums;
+}
+
+.theory-matrix[hidden] {
+  display: none;
+}
+
+.theory-cell,
+:root .theory-label,
+.theory-corner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  height: 21px;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.theory-cell {
+  border-radius: 4px;
+  background: var(--surface-raised);
+  color: var(--text-soft);
+}
+
+.theory-cell.is-first {
+  color: var(--text-strong);
+}
+
+.theory-cell.is-picked {
+  background: color-mix(in srgb, var(--brand-tint) 28%, var(--surface-raised));
+  color: var(--text-strong);
+}
+
+:root .theory-label {
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--t-sub);
+  cursor: pointer;
+}
+
+:root .theory-label:hover {
+  color: var(--brand-tint-text);
+}
+
+:root .theory-label[aria-pressed="true"] {
+  color: var(--brand-tint-text);
+  font-weight: 600;
+}
+
+.theory-form {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+/* The set moved: Tn or TnI, its notes, Play. */
+.theory-move {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+}
+
+/* Play and Take it wrap as one. */
+.theory-move-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 18px;
+}
+
+:root .theory-move .metro-field select,
+:root .theory-head .metro-field select {
+  min-width: 0;
+  width: 110px;
+}
+
+.theory-form[hidden],
+.theory-move[hidden] {
+  display: none;
+}
+
+.theory-form-name {
+  min-width: 3ch;
+  color: var(--brand-tint-text);
+  font: 600 var(--t-button) var(--font-display);
+}
+
+/* What the set is: term and value in two columns. */
+.theory-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 22px;
+  margin: 0;
+}
+
+.theory-fact {
+  display: contents;
+}
+
+.theory-fact dt {
+  color: var(--text-muted);
+  font-size: var(--t-sub);
+}
+
+.theory-fact dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 0;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-body);
+  font-variant-numeric: tabular-nums;
+}
+
+.theory-fact-detail {
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: var(--t-sub);
+}
+
+.theory-move .cons-notes-list {
+  font-size: var(--t-button);
+}
+
+/* Negative harmony: each chord of the key, its mirror beside it. */
+.theory-negatives {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+:root .theory-neg {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-strong);
+  cursor: pointer;
+}
+
+:root .theory-neg:hover {
+  border-color: var(--brand-tint);
+}
+
+.theory-neg-from,
+.theory-neg-to {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.theory-neg-numeral {
+  min-width: 3ch;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-size: var(--t-sub);
+}
+
+.theory-neg-arrow {
+  color: var(--text-muted);
+}
+
+/* In a wide window the three sit side by side: the row, the set, and
+   negative harmony. Narrower, the set and negative harmony take turns in
+   one column, a switch between them in place of their titles. */
+.theory-side-tabs {
+  margin-right: auto;
+}
+
+@media (min-width: 2100px) {
+  .theory-grid {
+    grid-template-columns: 1.25fr 1fr 1fr;
+  }
+
+  .theory-side {
+    display: contents;
+  }
+
+  :root .theory-side-tabs {
+    display: none;
+  }
+}
+
+@media (max-width: 2099px) {
+  #consTheoryPanel[data-side="set"] .theory-neg-module,
+  #consTheoryPanel[data-side="negative"] .theory-set-module {
+    display: none;
+  }
+
+  .theory-side h2 {
+    display: none;
+  }
+
+  .theory-facts {
+    gap: 4px 22px;
+  }
+}
+
+/* ---- Progressions' Tab view (2.8.0): tablature under the staff ---- */
+
+/* TAB at the start, and each fret on its string, the line broken behind it
+   by a stroke of the module's color. */
+.prog-staff-svg .prog-tab-clef {
+  fill: #c9c6da;
+  font-family: var(--font-body);
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.prog-staff-svg .prog-tab-fret {
+  fill: #e9e6f5;
+  stroke: var(--surface-module);
+  stroke-width: 5px;
+  paint-order: stroke;
+  font-family: var(--font-body);
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.prog-staff-svg .prog-tab-fret.is-unplayable {
+  fill: var(--brand-burgundy-text);
+}
+
+/* ---- Counterpoint's rules (2.8.0): a popover over the page, its sections
+   in columns, each rule on one line ---- */
+
+:root .cp-rules-panel {
+  position: fixed;
+  right: auto;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+.cp-rules-box {
+  margin-left: auto;
+}
+
+.cp-rule-list {
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
+  gap: 0 36px;
+}
+
+.cp-rule-column {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.cp-rule-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.cp-rule-section legend {
+  float: left;
+  margin-bottom: 4px;
+  padding: 0;
+}
+
+:root .cp-rule {
+  white-space: nowrap;
+}
+
+.cp-rules-panel .cons-note {
+  max-width: 70ch;
+}
