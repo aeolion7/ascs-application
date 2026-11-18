@@ -42,7 +42,7 @@ function notePageError(message) {
 const $ = id => document.getElementById(id);
 const validViews = new Set(["home", "notes", "calendar", "workspaces", "games", "sounds", "dashboard", "commands", "conservatory", "settings"]);
 const viewLabels = {
-    home: "Command Center",
+    home: "Podium",
     notes: "Quick Notes",
     calendar: "Calendar",
     workspaces: "Workspaces",
@@ -222,7 +222,10 @@ function navigate(view, fromHistory = false) {
     if (view === "dashboard") send("GetSignInHistory");
     globalThis.syncSystemView?.();
     globalThis.syncMetronomeView?.();
-    if (view === "settings") send("GetSettings");
+    if (view === "settings") {
+        send("GetSettings");
+        send("GetStorage");
+    }
     if (view === "workspaces") {
         send("GetWorkspaces");
         send("GetLaunchRules");
@@ -243,6 +246,8 @@ function navigate(view, fromHistory = false) {
         stopHomePolling();
     }
     $("arrangeButton").hidden = view !== "home";
+    $("homeLayoutChip").hidden = view !== "home";
+    if (view !== "home") globalThis.closeHomeLayoutMenu?.();
     updateSaveStatus();
     if (view !== "home" && typeof setArranging === "function") setArranging(false);
     if (view === "commands") {
@@ -279,7 +284,7 @@ const Workspaces = globalThis.ASCSWorkspaces;
 const USAGE_KEY = "ascs.palette.usage";
 
 const builtInCommands = [
-    { id: "view:home", label: "Command Center", description: "Open the home page", keywords: "home overview activity", view: "home" },
+    { id: "view:home", label: "Podium", description: "Open the home page", keywords: "home overview activity command center", view: "home" },
     { id: "view:notes", label: "Quick Notes", description: "Open your notes", keywords: "notes scratchpad snippets", view: "notes", hotkey: "notes" },
     { id: "view:calendar", label: "Calendar", description: "Your calendars: day, week, month and agenda", keywords: "calendar events schedule agenda appointments", view: "calendar" },
     { id: "calendar:new", label: "New calendar event", description: "Opens the event editor (Ctrl + E). Or type + and the event: +Dentist tue 3pm", keywords: "calendar event add appointment meeting new", shortcut: "Ctrl+E", run: () => newEventFromShortcut() },
@@ -381,6 +386,20 @@ function paletteSources(mode) {
             id: "game-notes", label: "Notes for current game", description: "Opens the running game's notes in Quick Notes",
             keywords: "game notes playing session", badge: "NOTE", run: () => openCurrentGameNotes()
         });
+        // 2.9.0
+        items.push({
+            id: "game-notes-window", label: "Game notes window", description: "A small window over the game with its notes; it doesn't take the focus until clicked",
+            keywords: "game notes window overlay playing", badge: "NOTE", hint: "Super+G", run: () => send("ToggleGameNotes")
+        });
+    }
+    if (mode === "all") {
+        // 2.9.0: the Podium's saved layouts.
+        (globalThis.homeSavedLayouts?.() ?? []).forEach(entry => items.push({
+            id: `layout:${entry.name.toLowerCase()}`, label: `Podium layout “${entry.name}”`,
+            description: entry.active ? "In use" : entry.gaming ? "Used while a game runs" : "Show the Podium with it",
+            keywords: `podium layout layouts modules command center ${entry.name}`, badge: "LAYOUT",
+            run: () => { navigate("home"); globalThis.chooseHomeLayout?.(entry.name); }
+        }));
     }
     if (mode === "all" || mode === "workspaces" || mode === "pick") {
         savedWorkspaces.forEach(workspace => items.push({
@@ -893,6 +912,74 @@ $("backupsTime").addEventListener("change", saveBackups);
 $("backupsChoose").addEventListener("click", () => send("ChooseBackupsFolder"));
 $("backupsOpen").addEventListener("click", () => send("OpenBackupsFolder"));
 $("backupsNow").addEventListener("click", () => send("BackupNow"));
+
+// Storage (2.9.0): the caches' sizes, asked for each time Preferences opens.
+// The image cache's limit saves as it changes; clearing a cache asks first.
+let storageState = null;
+
+function renderStorage() {
+    const list = $("storageRows");
+    const limit = $("storageLimit");
+    if (storageState === null) {
+        limit.disabled = true;
+        return;
+    }
+    const storage = MaestroStorage.clean(storageState);
+    if (storage.error) {
+        list.replaceChildren(element("li", "settings-note", storage.error));
+        limit.disabled = true;
+        return;
+    }
+    list.replaceChildren(...MaestroStorage.rows(storageState).map(row => {
+        const item = element("li", "storage-row");
+        const text = element("span");
+        text.append(element("strong", "", row.label), element("small", "", row.detail));
+        const clear = element("button", "secondary icon-action");
+        clear.append(MaestroIcons.create("trash"));
+        clear.type = "button";
+        clear.dataset.clearCache = row.id;
+        clear.disabled = row.empty;
+        clear.setAttribute("aria-label", `Clear the ${row.name}`);
+        clear.title = `Clear the ${row.name}…`;
+        item.append(text, clear);
+        if (row.percent !== null) {
+            const track = element("div", "metric-track storage-track");
+            track.setAttribute("role", "progressbar");
+            track.setAttribute("aria-label", `${row.label}, used of the limit`);
+            track.setAttribute("aria-valuemin", "0");
+            track.setAttribute("aria-valuemax", "100");
+            const fill = element("span");
+            track.append(fill);
+            item.append(track);
+            setProgressBar(fill, row.percent);
+        }
+        return item;
+    }));
+    limit.replaceChildren(...storage.limits.map(mb => new Option(MaestroStorage.limitLabel(mb), String(mb))));
+    limit.value = String(storage.limitMB);
+    limit.disabled = false;
+}
+
+$("storageLimit").addEventListener("change", () => {
+    if (storageState === null) return;
+    setPageSaveStatus("settingsStatus", "Saving…");
+    if (!send("SetCacheLimit", $("storageLimit").value)) setPageSaveStatus("settingsStatus", "Unable to contact Maestro.");
+});
+
+$("storageRows").addEventListener("click", async event => {
+    const button = event.target.closest("[data-clear-cache]");
+    if (!button || button.disabled) return;
+    const id = button.dataset.clearCache;
+    const cache = MaestroStorage.CACHES.find(item => item.id === id);
+    if (!cache) return;
+    const confirmed = await confirmDialog({
+        title: `Clear the ${cache.name}?`,
+        message: MaestroStorage.clearMessage(id),
+        confirmLabel: "Clear",
+        danger: true
+    });
+    if (confirmed) send("ClearCache", id);
+});
 
 // The other pages that keep a setting here.
 document.querySelectorAll("[data-pref-go]").forEach(button => button.addEventListener("click", () => {
@@ -2068,6 +2155,38 @@ function handleWebMessage(event) {
             backupsState = data;
             renderBackups();
             renderTopStatus();
+            break;
+        case "storage":
+            storageState = data;
+            renderStorage();
+            break;
+        case "gameNotesWindow":
+            setNotesWindowOpen(data.open);
+            break;
+        case "consoles":
+        case "payloadBytes":
+        case "payloadPushed":
+        case "albumImported":
+            handleConsolesMessage(data);
+            break;
+        case "gameNotesWindowEdit":
+            notesWindowEdit(data.key, data.text);
+            break;
+        case "gameNotesWindowStamp":
+            notesWindowStamp(data.key);
+            break;
+        case "gameNotesWindowOpen":
+            notesWindowOpenNote(data.key);
+            break;
+        case "storageSaved":
+            if (data.ok === true) setPageSaveStatus("settingsStatus", savedAtNow());
+            else {
+                setPageSaveStatus("settingsStatus", "Not saved");
+                showToast(typeof data.message === "string" ? data.message : "The limit couldn't be saved.");
+            }
+            break;
+        case "storageCleared":
+            if (data.ok !== true) showToast("Some files couldn't be removed. Maestro's log says how many.");
             break;
         case "backupsSaved":
             if (data.ok === true) setPageSaveStatus("settingsStatus", savedAtNow());
@@ -3394,11 +3513,11 @@ function toggleSidebar() {
 $("sidebarToggle").addEventListener("click", toggleSidebar);
 
 // ------------------------------------------------------------ almanac (1.7.0)
-// The strip beneath the Command Center title. Moon, daylight, the quote of
+// The strip beneath the Podium title. Moon, daylight, the quote of
 // the day and countdowns are worked out here; the Wikipedia feeds arrive
 // from ASCS as plain strings (only when enabled) and are parsed by
 // ASCSAlmanac, which keeps text and article titles only. Everything is
-// rendered with textContent. The line advances when the Command Center is
+// rendered with textContent. The line advances when the Podium is
 // opened or ↻ is pressed, never on a timer.
 
 const Almanac = globalThis.ASCSAlmanac;
@@ -3581,6 +3700,7 @@ function renderAlmanacStory(direction) {
     const item = Almanac.rotationItem(almanacSources(), almanacState.step);
     const story = stage.closest(".alm-story");
     story.hidden = !item;
+    renderAlmanacMore();
     if (!item) return;
 
     const copy = document.createElement(item.title && almanacState.settings.wikipedia ? "button" : "div");
@@ -3628,12 +3748,42 @@ function renderAlmanacStory(direction) {
     stage.append(copy);
 }
 
+// Today two squares tall (2.9.0): the rotation's other kinds listed under its
+// line, each once, following it as it turns. A Wikipedia item opens its article.
+function renderAlmanacMore() {
+    const strip = $("homeAlmanac");
+    strip.querySelector(".alm-more")?.remove();
+    if (!almanacState.settings || strip.hidden || typeof tallness !== "function" || tallness("today") < 2) return;
+    const sources = almanacSources();
+    const first = Almanac.rotationItem(sources, almanacState.step);
+    if (!first || first.count < 2) return;
+    const list = element("ul", "alm-more");
+    for (let offset = 1; offset < Math.min(first.count, 6); offset++) {
+        const item = Almanac.rotationItem(sources, almanacState.step + offset);
+        const row = element("li");
+        const words = item.attribution ? `${item.text} — ${item.attribution}` : item.text;
+        const body = item.title && almanacState.settings.wikipedia ? element("button", "alm-more-item") : element("div", "alm-more-item");
+        if (body.tagName === "BUTTON") {
+            body.type = "button";
+            body.title = `${words}\n\nRead on Wikipedia`;
+            const title = item.title;
+            body.addEventListener("click", () => send("OpenWikipedia", title));
+        } else {
+            body.title = words;
+        }
+        body.append(element("span", "alm-label", item.label), element("p", "", words));
+        row.append(body);
+        list.append(row);
+    }
+    strip.append(list);
+}
+
 function stepAlmanac(direction) {
     almanacState.step += direction;
     renderAlmanacStory(direction);
 }
 
-// Rotates every 20 seconds while the Command Center is showing, pausing
+// Rotates every 20 seconds while the Podium is showing, pausing
 // while the pointer or keyboard focus is on the strip (so it never moves
 // while being read). Pressing ‹ or › restarts the 20 seconds.
 const ALMANAC_ROTATE_MS = 20000;
@@ -3659,7 +3809,7 @@ $("homeAlmanac").addEventListener("focusout", event => {
 });
 restartAlmanacTimer();
 
-// Called when the Command Center is opened again: next item, fresh feeds.
+// Called when the Podium is opened again: next item, fresh feeds.
 function advanceAlmanac() {
     if (!almanacState.settings) return;
     almanacState.step++;
@@ -3805,7 +3955,7 @@ const gamesState = {
     liveTimer: null, runningTimer: null, playing: [], nowTimer: null, detailsAsked: new Set()
 };
 
-// Games' four sections. Library and Achievements draw only while they show, so
+// Games' sections. Library, Achievements and (2.9.0) Consoles draw only while they show, so
 // nothing is rebuilt, or fetched for them, until you open them.
 const gamesSections = MaestroSections.create($("gamesTabs"), {
     onChange(section) {
@@ -3813,6 +3963,10 @@ const gamesSections = MaestroSections.create($("gamesTabs"), {
         if (section === "library") renderLibrary();
         if (section === "achievements") renderAchievements();
         if (section === "setup") send("GetGameSettings");
+        if (section === "consoles") {
+            send("GetConsoles", "refresh");
+            renderConsoles();
+        }
         updateSaveStatus();
         window.scrollTo(0, 0);
     }
@@ -4010,6 +4164,7 @@ function renderGamesLive(data) {
 
     if (data.apps && typeof data.apps === "object") setRunningApps(data.apps);
     gameNotesLiveArrived();
+    globalThis.homeLayoutsFollowGames?.(gamesState.playing.length > 0);
 }
 
 // Now playing, drawn by drawNowPlaying (homeview.js) here and on Home. The notes
@@ -4122,7 +4277,7 @@ const PLACEHOLDERS = {
     // A thumbnail, a title and a line, and a button: Continue Playing, the library.
     list: (count = 5) => Array.from({ length: count }, (_, i) => skelGroup("skel-row is-item",
         skelShape("thumb"), skelGroup("skel-stack is-fill", skelShape("", PLACEHOLDER_WIDTHS[i % 8]), skelShape("", "34%")), skelShape("pill", "56px"))),
-    // A game's tile on the Command Center's shelf.
+    // A game's tile on the Podium's shelf.
     tile: () => [skelShape("cover"), skelShape("", "86%"), skelShape("", "60%")],
     // Next Up on Games: the game, the next achievement, then its facts.
     nextup: () => [skelShape("", "40%"),
@@ -4589,6 +4744,51 @@ function raTypeTag(type) {
 const raDateText = text => Games.formatRaTime(text, weatherZone());
 const raZoneNote = () => weatherZone() ? `Times in ${weatherZone().replace(/_/g, " ")}, the weather's location` : "Times in this PC's time zone";
 
+// A progress bar in two parts (2.9.0): unlocked in hardcore, then in softcore
+// only, lighter. A mastered game's bar is gold, as before.
+function raProgressBar(possible, achieved, hardcore, mastered) {
+    const bar = element("span", Games.raBarClass(mastered));
+    const parts = Games.raBarParts(possible, achieved, hardcore);
+    const hard = element("b", "is-hardcore");
+    hard.style.width = `${parts.hardcore}%`;
+    const soft = element("b", "is-softcore");
+    soft.style.width = `${parts.softcore}%`;
+    bar.append(hard, soft);
+    const softOnly = Math.max(0, Math.min(achieved, possible) - Math.min(hardcore, achieved));
+    bar.title = possible ? [`${Math.min(hardcore, achieved)} in hardcore`, softOnly ? `${softOnly} in softcore only` : ""].filter(Boolean).join(" · ") : "";
+    return bar;
+}
+
+// When an achievement was unlocked, as aligned lines (2.9.0): a filled trophy
+// for hardcore, an outlined one for softcore, a lock while locked; how many
+// players have it at the end of the first line. Words are kept for screen
+// readers and in each line's tooltip.
+function raUnlockMeta(item) {
+    const meta = element("div", "ra-meta");
+    const line = (icon, words, text, tip) => {
+        const node = element("span", "ra-when");
+        node.title = tip;
+        node.append(MaestroIcons.create(icon), element("span", "sr-only", words), element("small", "", text));
+        meta.append(node);
+        return node;
+    };
+    const unlocks = Games.raUnlocks(item);
+    unlocks.forEach(part => {
+        const mode = part.mode === "hardcore" ? "Hardcore" : "Softcore";
+        line(part.mode === "hardcore" ? "trophy-filled" : "trophy", `Unlocked in ${part.mode}: `, raDateText(part.date), `${mode} unlock · ${raZoneNote()}`)
+            .classList.add(`is-${part.mode}`);
+    });
+    if (!unlocks.length) line("lock", "", "Locked", "Not unlocked yet").classList.add("is-locked");
+    if (item.rarity !== null) {
+        const share = `${item.rarity < 1 ? "<1" : Math.round(item.rarity)}%`;
+        const rarity = element("span", "ra-rarity");
+        rarity.title = "Players who have unlocked it";
+        rarity.append(MaestroIcons.create("players"), element("span", "sr-only", "Unlocked by "), element("small", "", share), element("span", "sr-only", " of players"));
+        meta.append(rarity);
+    }
+    return meta;
+}
+
 function raAchievementItem(item) {
     const earned = Boolean(item.earned || item.earnedHardcore);
     const row = element("li", `ra-with-image ra-achievement${earned ? " is-earned" : " is-locked"}`);
@@ -4602,12 +4802,7 @@ function raAchievementItem(item) {
     head.append(points);
     body.append(head);
     if (item.description) body.append(element("p", "", item.description));
-    const rarity = item.rarity === null ? "" : `${item.rarity < 1 ? "<1" : Math.round(item.rarity)}% of players`;
-    const when = element("small", "", earned
-        ? [`Unlocked ${raDateText(item.earnedHardcore || item.earned)}`, item.earnedHardcore ? "hardcore" : "softcore", rarity].filter(Boolean).join(" · ")
-        : ["Locked", rarity].filter(Boolean).join(" · "));
-    if (earned) when.title = raZoneNote();
-    body.append(when);
+    body.append(raUnlockMeta(item));
     row.append(raImage(item.badge, `ra-badge${item.earnedHardcore ? " is-hardcore" : ""}${earned ? "" : " is-locked"}`), body);
     return row;
 }
@@ -4633,13 +4828,14 @@ function renderRaBrowser(box) {
     const award = { "mastered": "Mastered", "completed": "Completed", "beaten-hardcore": "Beaten (hardcore)", "beaten-softcore": "Beaten" }[game.award] || "";
     titles.append(element("strong", "ra-browser-title", Games.displayTitle(game.title)));
     titles.append(element("small", "", [game.console, award].filter(Boolean).join(" · ")));
-    const percent = game.achievements.length ? Math.round(game.earned / game.achievements.length * 100) : 0;
-    const bar = element("span", Games.raBarClass(game.award === "mastered"));
-    const fill = element("b");
-    fill.style.width = `${percent}%`;
-    bar.append(fill);
+    const bar = raProgressBar(game.achievements.length, game.earned, game.earnedHardcore, game.award === "mastered");
+    // 2.9.0: hardcore and softcore together, in counts and in points.
+    const softOnly = game.earned - game.earnedHardcore;
     titles.append(bar, element("small", "", game.achievements.length
-        ? `${game.earned} of ${game.achievements.length} unlocked · ${game.pointsEarned.toLocaleString()} of ${game.points.toLocaleString()} points${game.earnedHardcore ? ` · ${game.earnedHardcore} hardcore` : ""}`
+        ? [`${game.earned} of ${game.achievements.length} unlocked`,
+            game.earnedHardcore ? `${game.earnedHardcore} in hardcore` : "",
+            softOnly ? `${softOnly} in softcore only` : "",
+            `${game.pointsEarned.toLocaleString()} of ${game.points.toLocaleString()} points${game.pointsHardcore && game.pointsHardcore < game.pointsEarned ? ` (${game.pointsHardcore.toLocaleString()} hardcore)` : ""}`].filter(Boolean).join(" · ")
         : "This game has no achievements yet."));
     head.append(raImage(game.icon, "ra-icon ra-browser-icon"), titles);
     panel.append(head);
@@ -4651,7 +4847,7 @@ function renderRaBrowser(box) {
     const chips = element("div", "sound-presets ra-filters");
     chips.setAttribute("role", "group");
     chips.setAttribute("aria-label", "Show");
-    [["all", "All"], ["locked", "Locked"], ["earned", "Unlocked"], ["missable", "Missable"], ["progression", "Progression"]].forEach(([key, label]) => {
+    [["all", "All"], ["locked", "Locked"], ["earned", "Unlocked"], ["softcore", "Softcore only"], ["missable", "Missable"], ["progression", "Progression"]].forEach(([key, label]) => {
         if (key !== "all" && key !== "locked" && key !== "earned" && !counts[key]) return;
         const chip = element("button", `sound-preset${ra.filter === key ? " is-on" : ""}`);
         chip.type = "button";
@@ -4786,17 +4982,25 @@ function renderAchievements() {
 
     // Header: player and standing.
     const stats = element("div", "ra-stats");
-    const stat = (label, value, note) => {
+    // 2.9.0: a label can lead with an icon, its full words kept in the tooltip
+    // and for screen readers.
+    const stat = (label, value, note, icon = "", words = "") => {
         const item = element("span");
-        item.append(element("small", "", label), element("strong", "", value));
+        const name = element("small", icon ? `ra-stat-label${icon === "trophy-filled" ? " is-hardcore" : ""}` : "", label);
+        if (icon) {
+            name.prepend(MaestroIcons.create(icon));
+            name.title = words;
+            name.setAttribute("aria-label", words);
+        }
+        item.append(name, element("strong", "", value));
         if (note) item.append(element("em", "", note));
         stats.append(item);
     };
     const player = element("span", "ra-player");
     player.append(raImage(data.userPicture, "ra-avatar"), element("h3", "ra-player-name", data.user || "—"));
     stats.append(player);
-    stat("Hardcore points", data.points.toLocaleString(), data.truePoints ? `${data.truePoints.toLocaleString()} true points` : "");
-    if (data.softcore) stat("Softcore points", data.softcore.toLocaleString());
+    stat("Hardcore", data.points.toLocaleString(), data.truePoints ? `${data.truePoints.toLocaleString()} true points` : "", "trophy-filled", "Hardcore points");
+    if (data.softcore) stat("Softcore", data.softcore.toLocaleString(), "", "trophy", "Softcore points");
     stat("Rank", data.rank ? `#${data.rank.toLocaleString()}` : "—", Games.rankPercentile(data.rank, data.ranked));
     if (ra.awards) {
         const { counts } = Games.parseRaAwards(ra.awards);
@@ -4830,11 +5034,8 @@ function renderAchievements() {
         head.append(element("strong", "", Games.displayTitle(game.title)));
         head.append(element("span", "ra-percent", game.mastered ? "Mastered" : game.completed ? "Completed" : `${game.percent}%`));
         const meta = element("small", "", [game.console, game.possible ? `${game.achieved} of ${game.possible}` : "No achievements",
-            game.hardcore && game.hardcore < game.achieved ? `${game.hardcore} hardcore` : ""].filter(Boolean).join(" · "));
-        const bar = element("span", "ra-bar");
-        const fill = element("b");
-        fill.style.width = `${game.percent}%`;
-        bar.append(fill);
+            game.possible && game.achieved ? `${Math.min(game.hardcore, game.achieved)} in hardcore` : ""].filter(Boolean).join(" · "));
+        const bar = raProgressBar(game.possible, game.achieved, game.hardcore, false);
         body.append(head, meta, bar);
         item.append(raImage(game.icon, "ra-icon"), body);
         if (game.id) {
@@ -4987,7 +5188,7 @@ function prepareGames() {
     send("GetRaAwards");
 }
 
-// The library loads once, in the background, after the Command Center first
+// The library loads once, in the background, after the Podium first
 // opens, so Games opens with it in place (1.9.2). It sends only the local
 // library: nothing from RetroAchievements, and covers wait until Games is open.
 let gamesPreloadStarted = false;

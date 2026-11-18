@@ -1751,7 +1751,7 @@ document.querySelectorAll("[data-cal-close]").forEach(b => b.addEventListener("c
 });
 // The page's own clock: keep "today" and the now line current while open.
 setInterval(() => { if ($("calendar").classList.contains("active") && $("calEventDialog").hidden) renderCalendar(); }, 5 * 60000);
-// ---- the Command Center's Next up (2.0.0)
+// ---- the Podium's Next up (2.0.0)
 // What's left today and coming in the next two weeks, up to five.
 function nextUpWhen(occ, now, today) {
     const tomorrow = addDays(today, 1);
@@ -1778,9 +1778,11 @@ function renderHomeToday() {
     }
     const now = Date.now();
     const today = startOfDay(now);
-    const coming = Cal.nextUp(visibleOccurrences(today, addDays(today, 15)), now);
+    // 2.9.0: a taller Next Up looks further ahead and lists more.
+    const tall = tallness("next") > 1;
+    const coming = Cal.nextUp(visibleOccurrences(today, addDays(today, tall ? 60 : 15)), now, homeRoom("next", 5, 8));
     if (!coming.length) {
-        list.replaceChildren(element("li", "module-empty", "Nothing in the next two weeks."));
+        list.replaceChildren(element("li", "module-empty", tall ? "Nothing in the next two months." : "Nothing in the next two weeks."));
         return;
     }
     list.replaceChildren(...coming.map(occ => {

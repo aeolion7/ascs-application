@@ -99,6 +99,7 @@
         v: { title: "Clipboard History", short: "Clip", cat: "windows", desc: "Opens Windows clipboard history." },
         j: { title: "Insert timestamp", short: "Time", cat: "saved", desc: "Types yyyy-MM-dd HH:mm:ss at the cursor." },
         y: { title: "Insert date", short: "Date", cat: "saved", desc: "Types yyyy-MM-dd at the cursor." },
+        g: { title: "Game notes window", short: "Notes", cat: "apps", desc: "Opens or closes a small window over the game with the running game's notes. It doesn't take the focus until you click it." },
         s: { title: "Save arrangement", short: "Save", cat: "saved", desc: "Saves the visible window layout as the Default arrangement." },
         r: { title: "Restore arrangement", short: "Load", cat: "saved", desc: "Restores the Default arrangement, reusing open windows first." },
         left: { title: "Snap left", short: "Snap", cat: "windows", desc: "Left half of the monitor; then ↑ or ↓ for a quadrant." },
@@ -184,7 +185,7 @@
     // backend checks all of this again when saving (CheckShortcutKey).
     const HOTKEY_ACTIONS = ["notes", "everything", "dashboard", "terminal", "explorer", "claude", "taskmanager"];
     const DEFAULT_HOTKEYS = { notes: "q", everything: "f", dashboard: "i", terminal: "t", explorer: "e", claude: "c", taskmanager: "h" };
-    const RESERVED_LETTERS = "bsrlmvjy";
+    const RESERVED_LETTERS = "bsrlmvjyg";
 
     // What a key's panel offers: "action" and "command" move to another letter,
     // "free" takes a command, and "fixed" only describes itself.

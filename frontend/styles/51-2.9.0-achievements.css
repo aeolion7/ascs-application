@@ -1,0 +1,146 @@
+/* 2.9.0: the achievement viewer, and Preferences › Storage, where the
+   RetroAchievements image cache is shown against its limit. */
+
+/* ---- Preferences › Storage ---- */
+
+.storage-rows {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.storage-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.storage-row > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.storage-row strong {
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-body);
+  font-weight: 600;
+}
+
+.storage-row small {
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+
+.storage-row > .storage-track {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+/* ---- Achievements: hardcore and softcore together ---- */
+
+/* A progress bar in two parts: hardcore unlocks, then softcore-only ones in
+   a lighter tint of the same color. */
+.ra-bar {
+  display: flex;
+}
+
+.ra-bar b {
+  flex: none;
+  border-radius: 0;
+}
+
+.ra-bar b.is-softcore {
+  background: color-mix(in srgb, var(--brand-tint) 42%, transparent);
+}
+
+/* When an achievement was unlocked: one line per mode, the dates aligned
+   behind same-width icons, and how many players have it at the end of the
+   first line. A hardcore unlock's trophy is filled and gold. */
+.ra-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px 14px;
+}
+
+.ra-when,
+.ra-rarity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text-soft);
+}
+
+.ra-when {
+  grid-column: 1;
+}
+
+.ra-rarity {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.ra-when small,
+.ra-rarity small {
+  overflow: hidden;
+  font-size: var(--t-sub);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ra-when svg.icon,
+.ra-rarity svg.icon {
+  flex: none;
+}
+
+.ra-when.is-hardcore svg.icon {
+  color: var(--brand-gold-text);
+}
+
+/* The header beside Last seen: where the section is narrow (a window about
+   1600 wide), the player gets a row of its own above the numbers, so no
+   number is cut short. */
+.games-achievements {
+  container: ra-section / inline-size;
+}
+
+@container ra-section (max-width: 1700px) {
+  .ra-stats {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(auto-fit, minmax(calc(130px * var(--text-scale)), 1fr));
+    row-gap: 18px;
+  }
+
+  :root .ra-stats .ra-player {
+    grid-column: 1 / -1;
+    max-width: none;
+    padding: 0 0 18px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .ra-player .ra-avatar {
+    width: 64px;
+    height: 64px;
+  }
+}
+
+/* Hardcore and Softcore in the header lead with their trophies. */
+:root .ra-stats .ra-stat-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ra-stat-label.is-hardcore svg.icon {
+  color: var(--brand-gold-text);
+}

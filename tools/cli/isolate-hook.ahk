@@ -173,6 +173,12 @@ Isolate_DirMove(source, dest, flag := 0) {
     Isolate_Note("blocked", "DirMove " source " > " dest)
 }
 
+Isolate_DirCreate(dir) {
+    if Isolate_Inside(dir)
+        return DirCreate(dir)
+    Isolate_Note("blocked", "DirCreate " dir)
+}
+
 Isolate_DirCopy(source, dest, overwrite := 0) {
     if Isolate_Inside(dest)
         return DirCopy(source, dest, overwrite)

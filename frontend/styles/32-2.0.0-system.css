@@ -4,7 +4,7 @@
    ========================================================================== */
 
 /* The section showing fills what's left of the window: the same height as the
-   Command Center's grid. */
+   Podium's grid. */
 :root #dashboard.view.active {
   display: flex;
   flex-direction: column;

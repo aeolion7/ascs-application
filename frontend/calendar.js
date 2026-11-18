@@ -432,7 +432,7 @@
         vevent.props = vevent.props.filter(p => p.name !== "SEQUENCE").concat({ name: "SEQUENCE", params: {}, value: "0" });
         const calendar = { name: "VCALENDAR", props: [
             { name: "VERSION", params: {}, value: "2.0" },
-            { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 2.8.0//EN" },
+            { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 2.9.0//EN" },
             { name: "CALSCALE", params: {}, value: "GREGORIAN" }
         ], children: [vevent] };
         return serializeComponent(calendar) + "\r\n";
@@ -822,7 +822,7 @@
             uid,
             text: serializeComponent({ name: "VCALENDAR", props: [
                 { name: "VERSION", params: {}, value: "2.0" },
-                { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 2.8.0//EN" }
+                { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 2.9.0//EN" }
             ], children: [...zones, ...vevents] }) + "\r\n"
         }));
     }
@@ -852,7 +852,7 @@
                 else if (c.name === "VEVENT") events.push(c);
             });
         });
-        const props = [{ name: "VERSION", params: {}, value: "2.0" }, { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 2.8.0//EN" }, { name: "CALSCALE", params: {}, value: "GREGORIAN" }];
+        const props = [{ name: "VERSION", params: {}, value: "2.0" }, { name: "PRODID", params: {}, value: "-//Aeolionware//ASCS 2.9.0//EN" }, { name: "CALSCALE", params: {}, value: "GREGORIAN" }];
         if (name) props.push({ name: "X-WR-CALNAME", params: {}, value: escapeText(name) });
         return serializeComponent({ name: "VCALENDAR", props, children: [...zones.values(), ...events] }) + "\r\n";
     }
@@ -945,7 +945,7 @@
         return out.sort((a, b) => a.start - b.start || a.name.localeCompare(b.name));
     }
 
-    // The Command Center's Next Up (2.2.0): what hasn't ended, in date order,
+    // The Podium's Next Up (2.2.0): what hasn't ended, in date order,
     // with a day's all-day events before its timed ones. The calendar's own
     // order puts every all-day event first, which suits a day's cell but would
     // put a holiday weeks away above tonight.

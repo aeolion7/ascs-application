@@ -240,11 +240,33 @@
             icon: imageToken("i", data.ImageIcon), award: clean(data.HighestAwardKind, 20), achievements,
             earned: earned.length, earnedHardcore: achievements.filter(item => item.earnedHardcore).length,
             points: achievements.reduce((sum, item) => sum + item.points, 0),
-            pointsEarned: earned.reduce((sum, item) => sum + item.points, 0)
+            pointsEarned: earned.reduce((sum, item) => sum + item.points, 0),
+            pointsHardcore: achievements.filter(item => item.earnedHardcore).reduce((sum, item) => sum + item.points, 0)
         };
     }
 
     const isEarned = item => Boolean(item.earned || item.earnedHardcore);
+    // Unlocked in softcore and not yet in hardcore (2.9.0): what's left to redo.
+    const isSoftcoreOnly = item => Boolean(item.earned && !item.earnedHardcore);
+
+    // When an achievement was unlocked, in each mode (2.9.0): the hardcore
+    // unlock first, then a softcore one made at another time. RetroAchievements
+    // gives a hardcore unlock a softcore date too, usually the same one.
+    function raUnlocks(item) {
+        const parts = [];
+        if (item?.earnedHardcore) parts.push({ mode: "hardcore", date: item.earnedHardcore });
+        if (item?.earned && item.earned !== item.earnedHardcore) parts.push({ mode: "softcore", date: item.earned });
+        return parts;
+    }
+
+    // A progress bar's two parts, in percent of every achievement (2.9.0):
+    // unlocked in hardcore, then unlocked in softcore only.
+    function raBarParts(possible, achieved, hardcore) {
+        if (!(possible > 0)) return { hardcore: 0, softcore: 0 };
+        const all = Math.min(possible, Math.max(0, achieved));
+        const hard = Math.min(all, Math.max(0, hardcore));
+        return { hardcore: hard / possible * 100, softcore: (all - hard) / possible * 100 };
+    }
 
     // The browser's filters: all, locked, earned, missable (earned or not),
     // and progression (including the win condition); sorted in the game's
@@ -253,6 +275,7 @@
     function filterRaAchievements(list, filter = "all", sort = "order") {
         const kept = list.filter(item => filter === "locked" ? !isEarned(item)
             : filter === "earned" ? isEarned(item)
+            : filter === "softcore" ? isSoftcoreOnly(item)
             : filter === "missable" ? item.type === "missable"
             : filter === "progression" ? item.type === "progression" || item.type === "win_condition"
             : true);
@@ -268,6 +291,7 @@
     function raCounts(list) {
         return {
             all: list.length, locked: list.filter(item => !isEarned(item)).length, earned: list.filter(isEarned).length,
+            softcore: list.filter(isSoftcoreOnly).length,
             missable: list.filter(item => item.type === "missable").length,
             progression: list.filter(item => item.type === "progression" || item.type === "win_condition").length
         };
@@ -509,7 +533,7 @@
     const raBarClass = mastered => (mastered ? "ra-bar is-mastered" : "ra-bar");
 
     global.ASCSGames = {
-        raBarClass, EMULATORS, systemName, formatDuration, formatLastPlayed, parseLocal, displayTitle, sortGames,
+        raBarClass, raUnlocks, raBarParts, EMULATORS, systemName, formatDuration, formatLastPlayed, parseLocal, displayTitle, sortGames,
         filterGames, totalsByEmulator, gameFromWindowTitle, parseRetroAchievements, rankPercentile, titleKey, imageToken,
         matchPlayingGame, formatClock, parseRaGame, filterRaAchievements, raCounts, nextUp, raHighlights, parseRaUnlocks,
         AWARD_TABS, parseRaAwards, awardsInTab, awardText,

@@ -202,8 +202,9 @@
                     handleWebMessage({ data: { type: "windowShown" } });
                     await pause(160);
                     checks.push(["shown again, the lights come back", metro.frame !== null ? [] : ["no frame"]]);
-                    // The Command Center's module plays the same metronome.
+                    // The Podium's module plays the same metronome.
                     const layoutBefore = localStorage.getItem(HOME_LAYOUT_KEY);
+                    const layoutsBefore = localStorage.getItem(HOME_LAYOUTS_KEY);
                     changeHomeLayout({ ...MaestroHomeLayout.defaults(), hidden: [] });
                     navigate("home");
                     checks.push(["the module shows the same tempo and its lights run", $("homeMetroTempo").textContent === "120" && $("homeMetroName").textContent === "BPM · Allegro" && metro.frame !== null ? [] : [$("homeMetroTempo").textContent, $("homeMetroName").textContent, metro.frame]]);
@@ -211,8 +212,9 @@
                     checks.push(["its + changes the bar's tempo too", metro.settings.tempo === 121 && $("metroTempo").value === "121" ? [] : [metro.settings.tempo, $("metroTempo").value]]);
                     changeHomeLayout(MaestroHomeLayout.defaults());
                     await pause(60);
-                    checks.push(["hidden from the Command Center, the title bar keeps the beat", !$("metroChip").hidden && metro.frame !== null ? [] : ["no chip"]]);
+                    checks.push(["hidden from the Podium, the title bar keeps the beat", !$("metroChip").hidden && metro.frame !== null ? [] : ["no chip"]]);
                     if (layoutBefore === null) localStorage.removeItem(HOME_LAYOUT_KEY); else localStorage.setItem(HOME_LAYOUT_KEY, layoutBefore);
+                    if (layoutsBefore === null) localStorage.removeItem(HOME_LAYOUTS_KEY); else localStorage.setItem(HOME_LAYOUTS_KEY, layoutsBefore);
                     navigate("conservatory");
                     // The tempo box.
                     $("metroTempo").value = "500";
@@ -328,7 +330,7 @@
                         metro.practiceFrom = performance.now() - 90000;
                         stopMetronome();
                         checks.push(["the time played is kept by day", MaestroMetronome.practiceSummary(MaestroMetronome.parsePractice(localStorage.getItem(PRACTICE_KEY)), new Date()).today >= 90 ? [] : [localStorage.getItem(PRACTICE_KEY)]]);
-                        checks.push(["and shown on the Command Center's module", !$("homeMetroPractice").hidden && /^Played today: \d+ min$/.test($("homeMetroPractice").textContent) ? [] : [$("homeMetroPractice").textContent]]);
+                        checks.push(["and shown on the Podium's module", !$("homeMetroPractice").hidden && /^Played today: \d+ min$/.test($("homeMetroPractice").textContent) ? [] : [$("homeMetroPractice").textContent]]);
                     } finally {
                         if (metro.running) stopMetronome();
                         Object.assign(metro.settings, { countIn: 0, gap: { on: false, play: 2, mute: 2 } });
@@ -2841,19 +2843,19 @@
             handleWebMessage({ data: { type: "commands", items: [{ id: 1, name: "Repo", kind: "folder", target: "C:\\x", key: "a" }, { id: 2, name: "Site", kind: "url", target: "https://x", key: "" }] } });
             pressKey("s");
             checks.push(["a built-in key has nothing to edit", $("keySave").hidden && $("keyLetterField").hidden && $("keyDetailText").textContent.includes("built in") ? [] : ["editable"]]);
-            pressKey("g");
+            pressKey("k");
             checks.push(["a free letter offers every command", !$("keyRunsField").hidden && $("keySave").textContent === "Assign" && $("keyRuns").options.length === 10 ? [] : [String($("keyRuns").options.length)]]);
             messages.length = 0;
             $("keyEditForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
             checks.push(["with no command chosen, nothing is sent", !messages.length && $("keyStatus").textContent.includes("Choose") ? [] : [messages.join()]]);
             $("keyRuns").value = "action:everything";
             $("keyEditForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-            checks.push(["assigning sends the whole settings line, with the new letter", messages.some(message => message.startsWith("SaveSettings") && message.includes("|q,g,i,t,e,c,h|")) ? [] : [messages.join()]]);
+            checks.push(["assigning sends the whole settings line, with the new letter", messages.some(message => message.startsWith("SaveSettings") && message.includes("|q,k,i,t,e,c,h|")) ? [] : [messages.join()]]);
             checks.push(["and keeps the other settings", messages.some(message => message.includes("https://x/?q=%s") && message.includes("Ctrl+Alt+Space")) ? [] : [messages.join()]]);
             checks.push(["nothing moves until it's saved", currentHotkeys.everything === "f" ? [] : [currentHotkeys.everything]]);
             handleWebMessage({ data: { type: "settingsSaved", message: "Saved and applied." } });
-            checks.push(["saved, the command is on its new key", currentHotkeys.everything === "g" && $("keyDetailName").textContent === "Everything" && keymapSelected === "g" ? [] : [currentHotkeys.everything]]);
-            pressKey("g");
+            checks.push(["saved, the command is on its new key", currentHotkeys.everything === "k" && $("keyDetailName").textContent === "Everything" && keymapSelected === "k" ? [] : [currentHotkeys.everything]]);
+            pressKey("k");
             $("keyLetter").value = "q";
             messages.length = 0;
             $("keyEditForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -2861,14 +2863,14 @@
             $("keyReset").click();
             checks.push(["Reset goes back to the default letter", messages.some(message => message.includes("|q,f,i,t,e,c,h|")) ? [] : [messages.join()]]);
             handleWebMessage({ data: { type: "error", scope: "settings", message: "Nope." } });
-            checks.push(["a backend refusal shows and changes nothing", $("keyStatus").textContent === "Nope." && currentHotkeys.everything === "g" ? [] : [$("keyStatus").textContent]]);
+            checks.push(["a backend refusal shows and changes nothing", $("keyStatus").textContent === "Nope." && currentHotkeys.everything === "k" ? [] : [$("keyStatus").textContent]]);
             handleWebMessage({ data: { type: "settings", drives: ["C:"], snapGap: 0, preserveSize: true, hotkeys: { notes: "q", everything: "f", dashboard: "i", terminal: "t", explorer: "e", claude: "c", taskmanager: "h" }, claudeShortcut: "Ctrl+Alt+Space", powerDelay: 0, ascsSounds: "show", searchTemplate: "https://x/?q=%s" } });
             pressKey("a");
             checks.push(["a custom command's key can lose its letter", $("keyReset").textContent === "Remove letter" ? [] : [$("keyReset").textContent]]);
             messages.length = 0;
-            $("keyLetter").value = "g";
+            $("keyLetter").value = "k";
             $("keyEditForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-            checks.push(["moving a custom command saves the commands", messages.some(message => message.startsWith("SaveCommands") && message.includes("Repo\tfolder\tC:\\x\tg")) ? [] : [messages.join()]]);
+            checks.push(["moving a custom command saves the commands", messages.some(message => message.startsWith("SaveCommands") && message.includes("Repo\tfolder\tC:\\x\tk")) ? [] : [messages.join()]]);
             pendingKeySelection = null;
             pressKey("c");
             checks.push(["Claude's key has its shortcut beside it", !$("claudeField").hidden ? [] : ["hidden"]]);
@@ -3057,7 +3059,7 @@
             [...$("gamesNextUp").querySelectorAll("button")].find(button => button.textContent === "All achievements").click();
             checks.push(["All achievements opens that game there", gamesSections.current() === "achievements" && gamesState.ra.openGame === 77 && $("gamesAchievements").querySelector(".ra-browser") ? [] : [gamesSections.current()]]);
             // 2.3.0: an unlock shows its time, read as UTC, in a named time zone.
-            const gotIt = [...$("gamesAchievements").querySelectorAll(".ra-achievement")].find(row => row.textContent.includes("Got It"))?.querySelector("small");
+            const gotIt = [...$("gamesAchievements").querySelectorAll(".ra-achievement")].find(row => row.textContent.includes("Got It"))?.querySelector(".ra-when");
             // 2.3.0: sorted unlocked first.
             const firstRow = () => $("gamesAchievements").querySelector(".ra-achievement strong")?.textContent;
             const gameOrderFirst = firstRow();
@@ -3066,7 +3068,23 @@
             raSort.dispatchEvent(new Event("change"));
             checks.push(["Unlocked first puts the unlocked one at the top", gameOrderFirst === "Early One" && firstRow() === "Got It" && gamesState.ra.sort === "unlocked" ? [] : [gameOrderFirst, firstRow()]]);
             gamesState.ra.sort = "order";
-            checks.push(["an unlock shows its date and time, saying which zone", /Unlocked \w{3} \d{1,2}, 2026, \d{1,2}:\d{2} [AP]M/.test(gotIt?.textContent || "") && /^Times in /.test(gotIt?.title || "") ? [] : [gotIt?.textContent, gotIt?.title]]);
+            checks.push(["an unlock shows its date and time, saying which zone", /^\w{3} \d{1,2}, 2026, \d{1,2}:\d{2} [AP]M$/.test(gotIt?.querySelector("small")?.textContent || "") && /Times in /.test(gotIt?.title || "") ? [] : [gotIt?.textContent, gotIt?.title]]);
+            // 2.9.0: hardcore and softcore together, a trophy for each mode.
+            checks.push(["and in which mode, by its trophy and in words", gotIt?.classList.contains("is-softcore") && gotIt.querySelector("svg.icon") && gotIt.querySelector(".sr-only")?.textContent === "Unlocked in softcore: " && /^Softcore unlock/.test(gotIt.title) ? [] : [gotIt?.className, gotIt?.title]]);
+            const lockedMeta = [...$("gamesAchievements").querySelectorAll(".ra-achievement")].find(row => row.textContent.includes("Next Step"))?.querySelector(".ra-meta");
+            checks.push(["a locked one says so, with how many players have it", lockedMeta?.querySelector(".ra-when.is-locked small")?.textContent === "Locked" && lockedMeta.querySelector(".ra-rarity small")?.textContent === "5%" ? [] : [lockedMeta?.textContent]]);
+            const raHead = $("gamesAchievements").querySelector(".ra-stats");
+            checks.push(["the header's points lead with trophies, named in words", raHead?.querySelector(".ra-stat-label.is-hardcore svg") && raHead.querySelector(".ra-stat-label.is-hardcore").getAttribute("aria-label") === "Hardcore points" ? [] : [raHead?.textContent]]);
+            const softChip = [...$("gamesAchievements").querySelectorAll(".ra-filters button")].find(button => button.textContent.startsWith("Softcore only"));
+            checks.push(["Softcore only is offered, with how many", softChip?.textContent === "Softcore only1" ? [] : [softChip?.textContent || "no chip"]]);
+            const browserBar = $("gamesAchievements").querySelector(".ra-browser-head .ra-bar");
+            const barParts = [...(browserBar?.children || [])].map(part => `${part.className}:${Math.round(parseFloat(part.style.width))}`).join();
+            checks.push(["the game's bar shows hardcore, then softcore only", barParts === "is-hardcore:0,is-softcore:33" ? [] : [barParts || "no bar"]]);
+            checks.push(["and its line counts both", /1 in softcore only/.test($("gamesAchievements").querySelector(".ra-browser-head").textContent) ? [] : [$("gamesAchievements").querySelector(".ra-browser-head").textContent]]);
+            softChip?.click();
+            const softRows = [...$("gamesAchievements").querySelectorAll(".ra-achievement strong")].map(node => node.textContent).join();
+            checks.push(["and lists only those", softRows === "Got It" ? [] : [softRows]]);
+            gamesState.ra.filter = "all";
             gamesState.ra.openGame = 0;
             gamesState.ra.games.delete(77);
             gamesState.items = [];
@@ -3096,7 +3114,9 @@
             handleRaImage("u:PLAYER", playerPixel);
             checks.push(["the same name in another case is the same picture", awardBox.querySelector(".ra-player .ra-avatar img").src === playerPixel ? [] : ["not updated"]]);
             const pictureBox = awardBox.querySelector(".ra-player").getBoundingClientRect();
-            checks.push(["the name and picture sit left of the numbers", pictureBox.right <= awardBox.querySelector(".ra-stats > span:not(.ra-player)").getBoundingClientRect().left ? [] : ["overlapping"]]);
+            // 2.9.0: above them where the section is narrow.
+            const firstNumber = awardBox.querySelector(".ra-stats > span:not(.ra-player)").getBoundingClientRect();
+            checks.push(["the name and picture sit left of the numbers, or above them", pictureBox.right <= firstNumber.left || pictureBox.bottom <= firstNumber.top ? [] : ["overlapping"]]);
             handleWebMessage({ data: { type: "gameSettings", paths: {}, retroAchievements: "off" } });
             checks.push(["Check now waits for RetroAchievements to be set up", $("raPictureRefresh").disabled ? [] : ["enabled"]]);
             handleWebMessage({ data: { type: "gameSettings", paths: {}, retroAchievements: "ready" } });
@@ -3459,7 +3479,7 @@
             handleWebMessage({ data: { type: "activity", items: Array.from({ length: 12 }, (_, index) => ({ kind: "launch", text: `Item ${index}`, time: new Date().toISOString() })) } });
             checks.push(["recent activity lists more than a few, newest first", $("activityList").children.length === 12 && $("activityList").firstElementChild.textContent.includes("Item 11") ? [] : [$("activityList").children.length]]);
 
-            // 2.0.0: the Command Center.
+            // 2.0.0: the Podium.
             navigate("games");
             sent.clear();
             navigate("home");
@@ -3497,11 +3517,14 @@
             const moduleCount = document.querySelectorAll("#homeFace > [data-module]").length;
             checks.push(["every module in the list is on the page", moduleCount === MaestroHomeLayout.MODULES.length ? [] : [moduleCount]]);
             const savedLayout = localStorage.getItem(HOME_LAYOUT_KEY);
+            const savedLayouts = localStorage.getItem(HOME_LAYOUTS_KEY);
+            const savedHomeState = { saved: homeSaved, session: homeGameSession };
             // 2.0.0: Arrange, on the page itself.
             const moduleOrder = id => Number(document.querySelector(`#homeFace [data-module="${id}"]`).style.order);
             const moduleWidth = id => document.querySelector(`#homeFace [data-module="${id}"]`).dataset.width;
             const arrangeGrip = id => document.querySelector(`[data-arrange="${id}-grip"]`);
-            const arrangeKey = (id, key, shift = false) => arrangeGrip(id).dispatchEvent(new KeyboardEvent("keydown", { key, shiftKey: shift, bubbles: true, cancelable: true }));
+            const arrangeKey = (id, key, shift = false, code = "") => arrangeGrip(id).dispatchEvent(new KeyboardEvent("keydown", { key, code, shiftKey: shift, bubbles: true, cancelable: true }));
+            const moduleHeight = id => document.querySelector(`#homeFace [data-module="${id}"]`).dataset.height;
             const tile = id => document.querySelector(`#homeFace [data-module="${id}"] > .arrange-overlay`);
             const storedLayout = () => MaestroHomeLayout.parse(localStorage.getItem(HOME_LAYOUT_KEY));
             changeHomeLayout(MaestroHomeLayout.defaults());
@@ -3534,8 +3557,29 @@
             arrangeKey("today", "ArrowRight", true);
             checks.push(["Shift and Right widen it", moduleWidth("today") === "2" && /2 squares wide/.test($("arrangeLive").textContent) ? [] : [moduleWidth("today")]]);
             checks.push(["and the dock says the page will scroll", /needs 4 rows/.test($("arrangeFit").textContent) ? [] : [$("arrangeFit").textContent]]);
-            tile("today").querySelector('[data-arrange="today-width-1"]').click();
-            checks.push(["its width buttons set it too", moduleWidth("today") === "1" && tile("today").querySelector('[data-arrange="today-width-1"]').getAttribute("aria-pressed") === "true" ? [] : [moduleWidth("today")]]);
+            tile("today").querySelector('[data-arrange="today-size-1x1"]').click();
+            checks.push(["its size picker sets it too", moduleWidth("today") === "1" && tile("today").querySelector('[data-arrange="today-size-1x1"]').getAttribute("aria-pressed") === "true" ? [] : [moduleWidth("today")]]);
+            // 2.9.0: heights.
+            tile("note").querySelector('[data-arrange="note-size-1x3"]').click();
+            checks.push(["the picker sets a height", moduleHeight("note") === "3" && storedLayout().heights.note === 3 && tile("note").querySelector(".arrange-size-label").textContent === "1 × 3" ? [] : [moduleHeight("note")]]);
+            checks.push(["and shades the squares it covers", tile("note").querySelectorAll(".arrange-size .is-covered").length === 3 ? [] : [tile("note").querySelectorAll(".arrange-size .is-covered").length]]);
+            checks.push(["a module that can't use more rows has them off", [...tile("system").querySelectorAll(".arrange-size button")].filter(button => button.disabled).length === 6 && tile("now").querySelectorAll(".arrange-size button:disabled").length === 3 ? [] : ["offered"]]);
+            arrangeGrip("note").focus();
+            arrangeKey("note", "!", true, "Digit1");
+            checks.push(["Shift and a number set the height from the grip", moduleHeight("note") === "1" ? [] : [moduleHeight("note")]]);
+            arrangeKey("note", "ArrowDown", true);
+            checks.push(["so do Shift and Down", moduleHeight("note") === "2" && /1 square wide, 2 tall/.test($("arrangeLive").textContent) ? [] : [moduleHeight("note"), $("arrangeLive").textContent]]);
+            arrangeKey("note", "ArrowUp", true);
+            checks.push(["and Shift and Up", moduleHeight("note") === "1" ? [] : [moduleHeight("note")]]);
+            arrangeGrip("now").focus();
+            arrangeKey("now", "#", true, "Digit3");
+            checks.push(["past what a module can use, it says so", moduleHeight("now") === "1" && /at most 2 tall/.test($("arrangeLive").textContent) ? [] : [moduleHeight("now"), $("arrangeLive").textContent]]);
+            arrangeKey("now", "@", true, "Digit2");
+            // The smoke window is 1600 wide: two columns, where heights wait for a wider window (the 2540 previews show them).
+            checks.push(["in a window under 1701 wide, a tall module keeps one row", innerWidth >= 1701 || getComputedStyle(homeModule("now")).gridRowEnd === "auto" ? [] : [getComputedStyle(homeModule("now")).gridRowEnd]]);
+            checks.push(["and is marked for a wider one", homeModule("now").dataset.height === "2" ? [] : [homeModule("now").dataset.height]]);
+            checks.push(["and the dock counts the rows it needs", /needs 4 rows/.test($("arrangeFit").textContent) ? [] : [$("arrangeFit").textContent]]);
+            arrangeKey("now", "!", true, "Digit1");
             // 2.0.0 manual pass: Tab goes grip to grip; the numbers set the width.
             arrangeGrip("today").focus();
             arrangeKey("today", "3");
@@ -3592,14 +3636,20 @@
             pointerAt(document, "pointermove", centerOf(nameOf("now")));
             checks.push(["Hide doesn't start a drag", !document.querySelector(".is-dragging") ? [] : ["dragging"]]);
             pointerAt(document, "pointerup", centerOf(nameOf("now")));
-            // The right edge sets the width.
+            // The corner sets the width, and (2.9.0) the height.
             const handle = tile("note").querySelector(".arrange-resize");
             const noteBox = document.querySelector('#homeFace [data-module="note"]').getBoundingClientRect();
             const farRight = { clientX: noteBox.left + noteBox.width * 2.1, clientY: noteBox.top + 20 };
             pointerAt(handle, "pointerdown", centerOf(handle));
             pointerAt(document, "pointermove", farRight);
             pointerAt(document, "pointerup", farRight);
-            checks.push(["dragging the right edge widens it", moduleWidth("note") !== "1" && storedLayout().widths.note > 1 ? [] : [moduleWidth("note")]]);
+            checks.push(["dragging the corner across widens it", moduleWidth("note") !== "1" && storedLayout().widths.note > 1 ? [] : [moduleWidth("note")]]);
+            const noteNow = document.querySelector('#homeFace [data-module="note"]').getBoundingClientRect();
+            const farDown = { clientX: noteNow.right - 10, clientY: noteNow.top + noteNow.height * 2.2 };
+            pointerAt(tile("note").querySelector(".arrange-resize"), "pointerdown", centerOf(tile("note").querySelector(".arrange-resize")));
+            pointerAt(document, "pointermove", farDown);
+            pointerAt(document, "pointerup", farDown);
+            checks.push(["and down makes it taller", storedLayout().heights.note > 1 ? [] : [moduleHeight("note")]]);
             document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
             checks.push(["Escape leaves Arrange", !$("home").classList.contains("is-arranging") && $("arrangeDock").hidden && !$("todayOpen").closest("[inert]") ? [] : ["still arranging"]]);
             $("arrangeButton").click();
@@ -3716,9 +3766,80 @@
             checks.push(["Today's Settings opens its dialog", !$("todaySettingsDialog").hidden && $("todaySettingsDialog").contains($("almanacWikipedia")) ? [] : ["not open"]]);
             document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
             checks.push(["Escape closes it, back on the button", $("todaySettingsDialog").hidden && document.activeElement === $("todaySettingsButton") ? [] : ["open"]]);
+            // 2.9.0: saved layouts.
+            {
+                const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+                homeSaved = MaestroHomeLayout.parseSaved(null);
+                homeGameSession = null;
+                homeLayout = MaestroHomeLayout.activeLayout(homeSaved);
+                applyHomeLayout();
+                renderHomeLayoutChip();
+                navigate("home");
+                checks.push(["the Podium names its layout beside the title", !$("homeLayoutChip").hidden && $("homeLayoutName").textContent === "Default" && $("homeLayoutAuto").hidden ? [] : [$("homeLayoutName").textContent]]);
+                navigate("games");
+                checks.push(["other pages don't show it", $("homeLayoutChip").hidden ? [] : ["shown"]]);
+                navigate("home");
+                $("homeLayoutChip").click();
+                checks.push(["it opens the Layouts menu, on the one in use", !$("homeLayoutMenu").hidden && $("homeLayoutChip").getAttribute("aria-expanded") === "true" && document.activeElement?.getAttribute("aria-pressed") === "true" ? [] : ["closed"]]);
+                checks.push(["the only layout can't be deleted", $("homeLayoutDelete").disabled ? [] : ["deletable"]]);
+                $("homeLayoutNew").click();
+                const nameInput = $("homeLayoutNameInput");
+                checks.push(["New asks for a name in the menu", !$("homeLayoutForm").hidden && $("homeLayoutActions").hidden && document.activeElement === nameInput && $("homeLayoutSave").disabled ? [] : ["no form"]]);
+                nameInput.value = "default";
+                nameInput.dispatchEvent(new Event("input"));
+                checks.push(["a name in use is refused, saying why", $("homeLayoutSave").disabled && $("homeLayoutProblem").textContent === "There's already a layout named Default." ? [] : [$("homeLayoutProblem").textContent]]);
+                nameInput.value = "Gaming";
+                nameInput.dispatchEvent(new Event("input"));
+                $("homeLayoutForm").requestSubmit();
+                checks.push(["a new layout is in use at once", $("homeLayoutName").textContent === "Gaming" && JSON.parse(localStorage.getItem(HOME_LAYOUTS_KEY)).active === "Gaming" ? [] : [$("homeLayoutName").textContent]]);
+                checks.push(["and listed, with the menu back", $("homeLayoutList").children.length === 2 && $("homeLayoutForm").hidden && !$("homeLayoutActions").hidden ? [] : [$("homeLayoutList").children.length]]);
+                changeHomeLayout(MaestroHomeLayout.setHeight(MaestroHomeLayout.defaults(), "now", 2));
+                checks.push(["Arrange's changes go to the one in use", JSON.parse(localStorage.getItem(HOME_LAYOUTS_KEY)).list.find(entry => entry.name === "Gaming").layout.heights.now === 2 && MaestroHomeLayout.parse(localStorage.getItem(HOME_LAYOUT_KEY)).heights.now === 2 ? [] : ["not kept"]]);
+                $("homeLayoutGaming").click();
+                checks.push(["one can be used while a game runs, and the chip says so", !$("homeLayoutAuto").hidden && $("homeLayoutList").textContent.includes("While a game runs") ? [] : ["not marked"]]);
+                [...$("homeLayoutList").querySelectorAll(".layout-option")].find(button => button.textContent.startsWith("Default")).click();
+                checks.push(["choosing one switches to it and closes the menu", $("homeLayoutName").textContent === "Default" && $("homeLayoutMenu").hidden && homeModule("now").dataset.height === "1" ? [] : [$("homeLayoutName").textContent]]);
+                const gameLive = playing => handleWebMessage({ data: { type: "gamesLive", playing: playing ? [{ emulator: "retroarch", title: "RetroArch 1.0 || Brave Fencer Musashi", since: Date.now() / 1000 - 60 }] : [], apps: {}, controllers: [] } });
+                gameLive(true);
+                checks.push(["a game starting switches to the one for games", $("homeLayoutName").textContent === "Gaming" && homeModule("now").dataset.height === "2" ? [] : [$("homeLayoutName").textContent]]);
+                gameLive(false);
+                checks.push(["and its closing switches back", $("homeLayoutName").textContent === "Default" ? [] : [$("homeLayoutName").textContent]]);
+                gameLive(true);
+                chooseHomeLayout("Default");
+                gameLive(false);
+                checks.push(["one chosen by hand meanwhile stays", $("homeLayoutName").textContent === "Default" ? [] : [$("homeLayoutName").textContent]]);
+                const layoutCommands = paletteSources("all").filter(item => item.badge === "LAYOUT").map(item => item.label);
+                checks.push(["the palette lists them", layoutCommands.join() === "Podium layout “Default”,Podium layout “Gaming”" ? [] : layoutCommands]);
+                $("homeLayoutChip").click();
+                $("homeLayoutRename").click();
+                nameInput.value = "Desk";
+                nameInput.dispatchEvent(new Event("input"));
+                $("homeLayoutForm").requestSubmit();
+                checks.push(["Rename renames the one in use", $("homeLayoutName").textContent === "Desk" && homeSaved.list.map(entry => entry.name).join() === "Desk,Gaming" ? [] : [homeSaved.list.map(entry => entry.name).join()]]);
+                $("homeLayoutDuplicate").click();
+                checks.push(["Duplicate copies it, in use", $("homeLayoutName").textContent === "Desk copy" && homeSaved.list.length === 3 ? [] : [$("homeLayoutName").textContent]]);
+                $("homeLayoutDelete").click();
+                await tick();
+                checks.push(["Delete asks first", !$("confirmDialog").hidden && $("confirmDialogTitle").textContent === "Delete the layout Desk copy?" ? [] : [$("confirmDialogTitle").textContent]]);
+                $("confirmDialogConfirm").click();
+                await tick();
+                checks.push(["and goes to the first left", $("homeLayoutName").textContent === "Desk" && homeSaved.list.length === 2 ? [] : [$("homeLayoutName").textContent]]);
+                $("homeLayoutChip").click();
+                $("homeLayoutMenu").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+                checks.push(["Escape closes the menu, back on the chip", $("homeLayoutMenu").hidden && document.activeElement === $("homeLayoutChip") ? [] : ["open"]]);
+                $("arrangeButton").click();
+                checks.push(["while arranging the chip waits, and the dock names the layout", $("homeLayoutChip").disabled && $("arrangeLayout").textContent === "Layout: Desk" ? [] : [$("arrangeLayout").textContent]]);
+                $("arrangeDone").click();
+                homeSaved = savedHomeState.saved;
+                homeGameSession = savedHomeState.session;
+                homeLayout = MaestroHomeLayout.activeLayout(homeSaved);
+                applyHomeLayout();
+                renderHomeLayoutChip();
+            }
             if (savedLayout === null) localStorage.removeItem(HOME_LAYOUT_KEY); else localStorage.setItem(HOME_LAYOUT_KEY, savedLayout);
+            if (savedLayouts === null) localStorage.removeItem(HOME_LAYOUTS_KEY); else localStorage.setItem(HOME_LAYOUTS_KEY, savedLayouts);
             const notesBefore = notesData.notes.length;
-            $("homeNoteInput").value = "From the Command Center";
+            $("homeNoteInput").value = "From the Podium";
             $("homeNoteInput").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
             checks.push(["Enter saves a quick note", notesData.notes.length === notesBefore + (notesLoaded ? 1 : 0) ? [] : [notesData.notes.length]]);
             checks.push(["and the box empties", !notesLoaded || $("homeNoteInput").value === "" ? [] : ["still there"]]);
@@ -3800,7 +3921,86 @@
             checks.push(["and adds the time into the session", /\n\n### .+ · 1:0\d into this session\n$/.test(nowBox()?.value || "") ? [] : [nowBox()?.value]]);
             checks.push(["leaving the cursor under it, ready to type", document.activeElement === nowBox() && nowBox().selectionStart === nowBox().value.length ? [] : ["elsewhere"]]);
 
-            const libraryGame = { id: "st:1", title: gameTitle, emulator: "steam", system: "", seconds: 0, last: "", plays: 0, launchable: false, installed: true, cover: false };
+            // 2.9.0: Games › Consoles.
+            {
+                const consolesData = {
+                    type: "consoles", sender: true, rcm: false, pushing: false, selected: 0, autoPush: false, folder: "",
+                    payloads: [{ name: "hekate_ctcaer_6.5.1.bin", folder: "J:\\brew", size: 126207, time: "20261108093000", version: "6.5.1" }, { name: "Lockpick_RCM.bin", folder: "C:\\Downloads", size: 90000, time: "20250101120000", version: "" }],
+                    cards: [{ drive: "E", kind: "switch", label: "SWITCH", free: 12595, total: 60928, copied: 1, versions: [{ name: "hekate", version: "6.5.1" }] }],
+                    updated: { switch: "2026-11-08", "3ds": "", wiiu: "" }, album: { running: false }, albumFolder: "C:\\Pictures\\Switch"
+                };
+                consolesState = null;
+                messages.length = 0;
+                gamesSections.show("consoles");
+                checks.push(["Consoles asks Maestro when it opens", messages.includes("GetConsoles\nrefresh") ? [] : [messages.join(";")]]);
+                checks.push(["and waits for it before anything can be pushed", $("consolesPush").disabled && $("consolesAuto").disabled ? [] : ["enabled"]]);
+                checks.push(["its messages are allowlisted", ["GetConsoles", "PushPayload", "GetPayloadBytes", "SetPayloadChoice", "ChoosePayloadFolder", "SetConsoleUpdated", "OpenConsoleCard", "ImportAlbum", "OpenAlbumFolder", "OpenConsoleBackups", "OpenConsoleLink"].filter(type => !new Set(window.SMOKE_ALLOWLIST || []).has(type))]);
+                messages.length = 0;
+                handleWebMessage({ data: consolesData });
+                const payloadRows = [...$("consolesPayloads").querySelectorAll(".consoles-payload-row")];
+                checks.push(["payloads are listed, with hekate's version", payloadRows.length === 2 && payloadRows[0].textContent.includes("hekate 6.5.1 · 123 KB") ? [] : [payloadRows.length]]);
+                checks.push(["none chosen, so Push and pushing by itself wait", $("consolesPush").disabled && $("consolesAuto").disabled ? [] : ["enabled"]]);
+                checks.push(["the first payload's bytes are asked for, to show its SHA-256", messages.includes("GetPayloadBytes\n1") ? [] : [messages.join(";")]]);
+                handleWebMessage({ data: { type: "payloadBytes", index: 1, size: 126207, time: "20261108093000", data: "YWJj" } });
+                await new Promise(resolve => setTimeout(resolve, 30));
+                const firstHash = $("consolesPayloads").querySelector(".consoles-hash");
+                checks.push(["and its SHA-256 shows, worked out here", firstHash?.textContent === "SHA-256 ba7816bf8f01…" && firstHash.title.includes("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad") ? [] : [firstHash?.textContent]]);
+                messages.length = 0;
+                payloadRows[0].click();
+                checks.push(["choosing a payload tells Maestro its place", messages.join(";") === "SetPayloadChoice\n1|0" ? [] : [messages.join(";")]]);
+                handleWebMessage({ data: { ...consolesData, selected: 1, rcm: true } });
+                checks.push(["chosen, it can be pushed, and the Switch shows connected", !$("consolesPush").disabled && !$("consolesAuto").disabled && $("consolesRcm").textContent === "Switch in RCM mode: connected" ? [] : [$("consolesRcm").textContent]]);
+                messages.length = 0;
+                $("consolesAuto").click();
+                $("consolesPush").click();
+                checks.push(["push and push-when-plugged-in ask Maestro", messages.join(";") === "SetPayloadChoice\n1|1;PushPayload\n1" ? [] : [messages.join(";")]]);
+                handleWebMessage({ data: { type: "payloadPushed", ok: false, message: "No Switch in RCM mode was found." } });
+                checks.push(["a failed push says why", $("consolesPushStatus").textContent === "No Switch in RCM mode was found." && $("consolesPushStatus").classList.contains("is-failed") ? [] : [$("consolesPushStatus").textContent]]);
+                const card = $("consolesCards").querySelector(".consoles-card");
+                checks.push(["a Switch card shows its versions and space", card?.textContent.includes("Nintendo Switch · E: SWITCH") && card.textContent.includes("hekate 6.5.1 · 12.3 GB free of 59.5 GB") && card.querySelector(".metric-track > span")?.style.width ? [] : [card?.textContent]]);
+                messages.length = 0;
+                [...card.querySelectorAll("button")].find(button => button.textContent === "Import album").click();
+                [...card.querySelectorAll("button")].find(button => button.textContent === "Open").click();
+                checks.push(["its album and folder by drive letter", messages.join(";") === "ImportAlbum\nE;OpenConsoleCard\nE" ? [] : [messages.join(";")]]);
+                const switchModule = document.querySelector('[data-console="switch"]');
+                checks.push(["each console keeps its last update and notes", switchModule.querySelector("input[type=date]")?.value === "2026-11-08" && switchModule.querySelector(".game-notes") ? [] : ["missing"]]);
+                messages.length = 0;
+                const dateInput = switchModule.querySelector("input[type=date]");
+                dateInput.value = "2026-11-17";
+                dateInput.dispatchEvent(new Event("change"));
+                [...switchModule.querySelectorAll(".consoles-links button")][0].click();
+                checks.push(["a date and a release page go to Maestro by name", messages.join(";") === "SetConsoleUpdated\nswitch|2026-11-17;OpenConsoleLink\nhekate" ? [] : [messages.join(";")]]);
+                consolesState = null;
+                gamesSections.show("playing");
+            }            // 2.9.0: the game notes window. Maestro relays; this page changes the notes.
+            {
+                nowBox().blur();
+                const statesSent = () => messages.filter(message => message.startsWith("GameNotesWindowState\n")).map(message => JSON.parse(message.slice("GameNotesWindowState\n".length)));
+                messages.length = 0;
+                handleWebMessage({ data: { type: "gameNotesWindow", open: true } });
+                const firstState = statesSent().at(-1);
+                checks.push(["the game notes window is told the running game's note", firstState?.key === gameKey && firstState.text === nowBox().value && firstState.ready === true && firstState.title === Games.displayTitle(gameTitle) ? [] : [JSON.stringify(firstState)]]);
+                checks.push(["its messages are allowlisted", ["GameNotesWindowState", "ToggleGameNotes"].filter(type => !new Set(window.SMOKE_ALLOWLIST || []).has(type))]);
+                handleWebMessage({ data: { type: "gameNotesWindowEdit", key: gameKey, text: "from the window" } });
+                checks.push(["its edits go to that game's note, and into the boxes", ASCSNotes.findGameNote(notesData.notes, gameKey)?.content === "from the window" && nowBox().value === "from the window" ? [] : [nowBox().value]]);
+                const otherKey = Games.gameNoteKey("Another Game");
+                const notesCount = notesData.notes.length;
+                handleWebMessage({ data: { type: "gameNotesWindowEdit", key: otherKey, text: "wrong game" } });
+                checks.push(["an edit for a game that isn't running goes nowhere", notesData.notes.length === notesCount && !ASCSNotes.findGameNote(notesData.notes, otherKey)?.content?.includes("wrong game") ? [] : ["written"]]);
+                messages.length = 0;
+                live("Another Game");
+                checks.push(["a new game is sent as it starts", statesSent().at(-1)?.key === otherKey ? [] : [JSON.stringify(statesSent().at(-1))]]);
+                live(gameTitle);
+                handleWebMessage({ data: { type: "gameNotesWindow", open: false } });
+                messages.length = 0;
+                live("Another Game");
+                checks.push(["closed, it's told nothing", statesSent().length === 0 ? [] : ["sent"]]);
+                live(gameTitle);
+                const windowCommand = paletteSources("all").find(item => item.id === "game-notes-window");
+                messages.length = 0;
+                windowCommand?.run();
+                checks.push(["the palette opens and closes it, naming Super + G", windowCommand?.hint === "Super+G" && messages.join(";") === "ToggleGameNotes\n" ? [] : [windowCommand?.hint, messages.join(";")]]);
+            }            const libraryGame = { id: "st:1", title: gameTitle, emulator: "steam", system: "", seconds: 0, last: "", plays: 0, launchable: false, installed: true, cover: false };
             gamesState.items = [libraryGame];
             gamesState.openId = "st:1";
             gamesSections.show("library");
@@ -3857,6 +4057,10 @@
             checks.push(["and says Super + Space opens it from anywhere", /Super\s*\+\s*Space opens it from anywhere/.test(document.querySelector(".launcher-anywhere")?.textContent.replace(/\s+/g, " ") || "") ? [] : ["missing"]]);
             const typeInPalette = text => { $("launcherSearch").value = text; $("launcherSearch").dispatchEvent(new Event("input", { bubbles: true })); };
             const firstResult = () => $("launcherResults").querySelector(".launcher-option strong")?.textContent;
+            // 2.9.0: the home page is the Podium; its old name still finds it.
+            typeInPalette("command center");
+            checks.push(["the old name finds the Podium", firstResult() === "Podium" ? [] : [firstResult()]]);
+            checks.push(["which the sidebar and title bar call by its name", document.querySelector('.nav[data-view="home"] span')?.textContent === "Podium" && $("homeTitle").textContent === "Podium" ? [] : ["not renamed"]]);
             typeInPalette("12.5 x 1.08");
             checks.push(["the answer shows as you type, with x for times", firstResult() === "= 13.5" ? [] : [firstResult()]]);
             typeInPalette("80 * 15%");
@@ -4036,6 +4240,51 @@
             checks.push(["a test build offers nothing, and says why", backupControls.every(id => $(id).disabled) && $("backupsStatus").textContent === "Backups are off in a test build." && !/backup/i.test($("attentionList").textContent) ? [] : [$("backupsStatus").textContent]]);
             handleWebMessage({ data: noBackups });
             checks.push(["with backups off, nothing about them needs attention", /backup/i.test($("attentionList").textContent) ? [$("attentionList").textContent] : []]);
+            // 2.9.0: Storage, in Preferences. Clearing asks first.
+            {
+                const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+                const MB = 1024 * 1024;
+                const storage = { type: "storage", limitMB: 500, limits: [100, 250, 500, 1000], caches: [
+                    { id: "images", bytes: 460 * MB, files: 1121, limit: 500 * MB },
+                    { id: "almanac", bytes: 446000, files: 2 },
+                    { id: "forecast", bytes: 0, files: 0 }] };
+                storageState = null;
+                messages.length = 0;
+                navigate("settings");
+                checks.push(["opening Preferences asks for the caches", messages.includes("GetStorage\n") ? [] : [messages.join(";")]]);
+                checks.push(["the limit waits for Maestro", $("storageLimit").disabled ? [] : ["enabled"]]);
+                checks.push(["Storage's messages are allowlisted", ["GetStorage", "SetCacheLimit", "ClearCache"].filter(type => !new Set(window.SMOKE_ALLOWLIST || []).has(type))]);
+                handleWebMessage({ data: storage });
+                const storageRows = [...$("storageRows").querySelectorAll(".storage-row")];
+                checks.push(["a row for each cache", storageRows.map(row => row.querySelector("strong").textContent).join() === "RetroAchievements images,Wikipedia almanac,Forecast" ? [] : [storageRows.length]]);
+                checks.push(["the images against their limit", storageRows[0]?.querySelector("small").textContent === "1,121 images · 460.0 MB of 500 MB" ? [] : [storageRows[0]?.querySelector("small").textContent]]);
+                const storageFill = storageRows[0]?.querySelector(".metric-track > span");
+                checks.push(["on a bar, gold past 90%", storageFill?.style.width === "92%" && storageFill.classList.contains("is-high") && storageRows[0].querySelector(".metric-track").getAttribute("aria-valuenow") === "92" ? [] : [storageFill?.style.width]]);
+                checks.push(["only the image cache has a bar", storageRows.slice(1).every(row => !row.querySelector(".metric-track")) ? [] : ["a bar"]]);
+                checks.push(["an empty cache can't be cleared", storageRows[2]?.querySelector("button").disabled && !storageRows[0]?.querySelector("button").disabled ? [] : ["clearable"]]);
+                checks.push(["the limits are offered, with the one that's set chosen", [...$("storageLimit").options].map(option => option.textContent).join() === "100 MB,250 MB,500 MB,1 GB" && $("storageLimit").value === "500" && !$("storageLimit").disabled ? [] : [$("storageLimit").value]]);
+                messages.length = 0;
+                $("storageLimit").value = "1000";
+                $("storageLimit").dispatchEvent(new Event("change", { bubbles: true }));
+                checks.push(["a new limit saves at once", messages.join(";") === "SetCacheLimit\n1000" ? [] : [messages.join(";")]]);
+                handleWebMessage({ data: { type: "storageSaved", ok: true } });
+                checks.push(["and says so in the title bar", /^Saved at /.test($("settingsStatus").textContent) ? [] : [$("settingsStatus").textContent]]);
+                messages.length = 0;
+                storageRows[0].querySelector("button").click();
+                await tick();
+                checks.push(["Clear asks first, saying what it costs", !$("confirmDialog").hidden && $("confirmDialogTitle").textContent === "Clear the RetroAchievements image cache?" ? [] : [$("confirmDialogTitle").textContent]]);
+                $("confirmDialogCancel").click();
+                await tick();
+                checks.push(["Cancel clears nothing", messages.length === 0 ? [] : [messages.join(";")]]);
+                $("storageRows").querySelector(".storage-row button").click();
+                await tick();
+                $("confirmDialogConfirm").click();
+                await tick();
+                checks.push(["confirming asks Maestro to clear that cache", messages.join(";") === "ClearCache\nimages" ? [] : [messages.join(";")]]);
+                handleWebMessage({ data: { type: "storage", error: "Maestro couldn't read its caches." } });
+                checks.push(["a cache that can't be read is said", $("storageRows").textContent === "Maestro couldn't read its caches." && $("storageLimit").disabled ? [] : [$("storageRows").textContent]]);
+                storageState = null;
+            }
             // 2.1.0: the notes trash. Delete asks nothing and can be undone; only
             // deleting from the trash is for good, and that asks first.
             {

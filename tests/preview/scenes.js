@@ -89,14 +89,15 @@ const PreviewScenes = (() => {
         const raGame = (id, title, achieved, possible, hardcore) => ({ GameID: id, Title: title, ConsoleName: "PlayStation", ImageIcon: `/Images/${id}.png`, NumPossibleAchievements: possible, PossibleScore: possible * 10, NumAchieved: achieved, ScoreAchieved: achieved * 10, NumAchievedHardcore: hardcore, ScoreAchievedHardcore: hardcore * 10 });
         const summary = { User: "Player", TotalPoints: 18420, TotalSoftcorePoints: 310, TotalTruePoints: 52110, Rank: 4210, TotalRanked: 80000, LastGame: { Title: "Brave Fencer Musashi", ConsoleName: "PlayStation" }, LastGameID: 11, RichPresenceMsg: "Exploring the ice cave, level 12", RecentlyPlayed: [], Awarded: {}, RecentAchievements: {} };
         say("RA\nsummary\n" + JSON.stringify(summary));
-        say("RA\nrecent\n" + JSON.stringify([raGame(11, "Brave Fencer Musashi", 12, 40, 12)]));
-        say("RA\nprogress\n" + JSON.stringify([raGame(11, "Brave Fencer Musashi", 12, 40, 12), raGame(12, "Metroid Prime", 45, 45, 45)]));
+        say("RA\nrecent\n" + JSON.stringify([raGame(11, "Brave Fencer Musashi", 12, 40, 9), raGame(12, "Metroid Prime", 45, 45, 45)]));
+        say("RA\nprogress\n" + JSON.stringify([raGame(11, "Brave Fencer Musashi", 12, 40, 9), raGame(12, "Metroid Prime", 45, 45, 45)]));
         const award = (type, extra, id, title, when) => ({ AwardedAt: when, Title: title, ConsoleName: "PlayStation", ImageIcon: `/Images/${id}.png`, AwardType: type, AwardData: id, AwardDataExtra: extra });
         const earnedAchievement = (id, title, points, date, awarded) => ({ ID: id, Title: title, Description: "Earned along the way.", Points: points, TrueRatio: points * 2, BadgeName: String(id), DisplayOrder: id, NumAwarded: awarded, DateEarned: date, DateEarnedHardcore: date });
         const lockedAchievement = (id, title, points, type, awarded) => ({ ID: id, Title: title, Description: "Reach the next town and open the gate to the ice cave.", Points: points, TrueRatio: points * 2, BadgeName: String(id), DisplayOrder: id, NumAwarded: awarded, type });
         say("RA\ngame:11\n" + JSON.stringify({ ID: 11, Title: "Brave Fencer Musashi", ConsoleName: "PlayStation", ImageIcon: "/Images/11.png", NumDistinctPlayers: 1000, Achievements: {
             1: earnedAchievement(1, "First Steps", 5, "2026-11-08 09:20:00", 800),
-            2: earnedAchievement(2, "Hidden Cellar", 25, "2026-11-01 20:15:00", 40),
+            2: { ...earnedAchievement(2, "Hidden Cellar", 25, "2026-11-01 20:15:00", 40), DateEarnedHardcore: "" },
+            6: { ...earnedAchievement(6, "Second Wind", 10, "2026-10-20 18:02:00", 400), DateEarnedHardcore: "2026-11-07 21:40:00" },
             3: lockedAchievement(3, "Keeper of the Keys", 10, "progression", 620),
             4: lockedAchievement(4, "One Chance at the Bridge", 25, "missable", 90),
             5: lockedAchievement(5, "Finale", 50, "win_condition", 300)
@@ -121,6 +122,15 @@ const PreviewScenes = (() => {
     };
     const live = (playing = [{ emulator: "retroarch", title: "RetroArch Beetle PSX HW 0.9.44 || Brave Fencer Musashi (USA) || FPS: 60", since: Date.now() / 1000 - 4325 }]) =>
         say({ type: "gamesLive", playing, apps: {}, controllers: [{ id: "x1", key: "x1", name: "Xbox Wireless Controller", mode: "xinput", connection: "bluetooth", slot: 1, battery: "high" }] });
+
+    // 2.9.0: Preferences › Storage, with the image cache at `imagesMB` of 500 MB.
+    function storageData(imagesMB = 10.4) {
+        const MB = 1024 * 1024;
+        say({ type: "storage", limitMB: 500, limits: [100, 250, 500, 1000], caches: [
+            { id: "images", bytes: Math.round(imagesMB * MB), files: Math.round(imagesMB * 108), limit: 500 * MB },
+            { id: "almanac", bytes: 446000, files: 2 },
+            { id: "forecast", bytes: 5120, files: 1 }] });
+    }
 
     function commandsData() {
         baseData();
@@ -473,6 +483,39 @@ const PreviewScenes = (() => {
             PreviewScenes["home-full"]();
             showHomeLayout(MaestroHomeLayout.setWidth(MaestroHomeLayout.defaults(), "today", 2));
             $("arrangeButton").click();
+        },
+        // 2.9.0: heights. Now Playing two tall beside Today and Recent Unlocks;
+        // then the same in Arrange, with each tile's size picker.
+        "home-tall": () => {
+            PreviewScenes["home-full"]();
+            showHomeLayout({ ...MaestroHomeLayout.defaults(), order: ["now", "today", "unlocks", "continue", "note", "next", "system", "stack"], hidden: ["next", "system", "stack", "weather", "processes", "network", "audio", "controllers", "pinned", "timer", "metronome"], heights: { ...MaestroHomeLayout.defaults().heights, now: 2 } });
+        },
+        "home-arrange-sizes": () => {
+            PreviewScenes["home-tall"]();
+            $("arrangeButton").click();
+        },
+        "home-tall-today": () => {
+            PreviewScenes["home-full"]();
+            showHomeLayout({ ...MaestroHomeLayout.defaults(), order: ["now", "today", "next", "system", "continue", "stack", "note"], heights: { ...MaestroHomeLayout.defaults().heights, today: 2, continue: 2 }, widths: { ...MaestroHomeLayout.defaults().widths, continue: 1, stack: 1 } });
+        },
+        // 2.9.0: saved layouts, shown and not stored: Gaming, used while a game runs, in use.
+        "home-layouts": () => {
+            PreviewScenes["home-tall"]();
+            homeSaved = { list: [{ name: "Default", gaming: false, layout: MaestroHomeLayout.defaults() }, { name: "Gaming", gaming: true, layout: homeLayout }, { name: "Music practice", gaming: false, layout: MaestroHomeLayout.defaults() }], active: "Gaming" };
+            renderHomeLayoutChip();
+        },
+        "home-layouts-menu": () => {
+            PreviewScenes["home-layouts"]();
+            openHomeLayoutMenu();
+        },
+        "home-layouts-new": () => {
+            PreviewScenes["home-layouts-menu"]();
+            openHomeLayoutForm("new");
+            $("homeLayoutNameInput").value = "gaming";
+            checkHomeLayoutName();
+        },        "home-tall-lists": () => {
+            PreviewScenes["home-full"]();
+            showHomeLayout({ ...MaestroHomeLayout.defaults(), order: ["now", "next", "today", "system", "note", "continue", "stack"], heights: { ...MaestroHomeLayout.defaults().heights, next: 2, note: 2 } });
         },
         // The longest a Wikipedia entry gets: it must stay inside its module.
         "home-almanac-long": () => {
@@ -834,7 +877,18 @@ const PreviewScenes = (() => {
         "games-library": () => { baseData(); navigate("games"); gamesData(); live(); gamesSections.show("library"); gamesState.openId = "ra:1"; say({ type: "gameDetails", id: "ra:1", fields: [["Core", "Beetle PSX"], ["File", "Musashi.chd"]], canShow: true, showLabel: "Show file" }); renderGames(); },
         "games-achievements": () => { baseData(); navigate("games"); gamesData(); live(); gamesSections.show("achievements"); handleRaImage("u:Player", painted(["#7b5cf0", "#d9b95f"])); },
         "games-achievement-list": () => { baseData(); navigate("games"); gamesData(); live(); openRaGame(11); },
-        "games-controllers": () => { baseData(); navigate("games"); gamesData(); live(); gamesSections.show("controllers"); },
+        // 2.9.0: the console hub, with a Switch in RCM mode and its card in.
+        "games-consoles": () => {
+            baseData(); navigate("games"); gamesData(); live();
+            say({ type: "consoles", sender: true, rcm: true, pushing: false, selected: 1, autoPush: true, folder: "J:\\Console Homebrew\\switch's brew",
+                payloads: [{ name: "hekate_ctcaer_6.5.1.bin", folder: "J:\\Console Homebrew\\switch's brew", size: 126207, time: "20261108093000", version: "6.5.1" },
+                    { name: "Lockpick_RCM.bin", folder: "C:\\Users\\Player\\Downloads", size: 90656, time: "20250101120000", version: "" },
+                    { name: "Fusee_Atmosphere.bin", folder: "C:\\Program Files (x86)\\TegraRcmGUI\\favorites", size: 90656, time: "20200501120000", version: "" },
+                    { name: "hekate_ctcaer_5.0.0.bin", folder: "C:\\Program Files (x86)\\TegraRcmGUI\\favorites", size: 126207, time: "20190601120000", version: "5.0.0" }],
+                cards: [{ drive: "E", kind: "switch", label: "SWITCH SD", free: 12595, total: 60928, copied: 1, versions: [{ name: "hekate", version: "6.5.1" }, { name: "Atmosphère", version: "" }] }],
+                updated: { switch: "2026-11-08", "3ds": "2025-06-14", wiiu: "" }, album: { running: false }, albumFolder: "C:\\Users\\Player\\Pictures\\Switch" });
+            gamesSections.show("consoles");
+        },        "games-controllers": () => { baseData(); navigate("games"); gamesData(); live(); gamesSections.show("controllers"); },
         "games-tester": () => { baseData(); navigate("games"); gamesData(); say({ type: "gamesLive", playing: [], apps: {}, controllers: [{ id: "x1", key: "x1", name: "Xbox Wireless Controller", mode: "xinput", connection: "bluetooth", slot: 1, rumble: true, power: "medium" }, { id: "h2", key: "h2", name: "8BitDo Pro 2", mode: "d-input", connection: "usb", slot: 0, rumble: false, testable: true }] }); gamesSections.show("controllers"); openTester(gamesState.pads[0]); renderControllerInput({ id: "x1", connected: true, kind: "xinput", lx: 12000, ly: -8000, rx: 0, ry: 0, lt: 120, rt: 40, buttons: 4096 }); },
         "sounds-version": () => {
             baseData(); navigate("sounds"); soundsData();
@@ -870,9 +924,10 @@ const PreviewScenes = (() => {
         "commands-custom": () => { commandsData(); commandsSections.show("custom"); },
         "commands-palette": () => { commandsData(); commandsSections.show("palette"); },
         "commands-quick": () => { commandsData(); commandsSections.show("quick"); },
-        settings: () => { commandsData(); say({ type: "backups", enabled: true, time: "1800", folder: "J:\\Maestro-Backups", running: false, off: false, lastTime: "20261110180004", lastResult: "ok", lastDetail: "4,190 files, 72.8 MB", goodTime: "20261110180004" }); navigate("settings"); },
-        "settings-backup-failed": () => { commandsData(); say({ ...{ type: "backups", enabled: true, time: "1800", folder: "J:\\Maestro-Backups", running: false, off: false, lastTime: "20261110180004", lastResult: "ok", lastDetail: "4,190 files, 72.8 MB", goodTime: "20261110180004" }, lastTime: "20261110180004", lastResult: "failed", lastDetail: "Drive J: isn't available.", goodTime: "20261109180003" }); navigate("settings"); },
-        "settings-no-backups": () => { commandsData(); say({ type: "backups", enabled: false, time: "1800", folder: "", running: false, off: false, lastTime: "", lastResult: "", lastDetail: "", goodTime: "" }); navigate("settings"); },
+        settings: () => { commandsData(); storageData(); say({ type: "backups", enabled: true, time: "1800", folder: "J:\\Maestro-Backups", running: false, off: false, lastTime: "20261110180004", lastResult: "ok", lastDetail: "4,190 files, 72.8 MB", goodTime: "20261110180004" }); navigate("settings"); },
+        "settings-storage-full": () => { commandsData(); storageData(472); say({ type: "backups", enabled: true, time: "1800", folder: "J:\\Maestro-Backups", running: false, off: false, lastTime: "20261110180004", lastResult: "ok", lastDetail: "4,190 files, 72.8 MB", goodTime: "20261110180004" }); navigate("settings"); },
+        "settings-backup-failed": () => { commandsData(); storageData(); say({ ...{ type: "backups", enabled: true, time: "1800", folder: "J:\\Maestro-Backups", running: false, off: false, lastTime: "20261110180004", lastResult: "ok", lastDetail: "4,190 files, 72.8 MB", goodTime: "20261110180004" }, lastTime: "20261110180004", lastResult: "failed", lastDetail: "Drive J: isn't available.", goodTime: "20261109180003" }); navigate("settings"); },
+        "settings-no-backups": () => { commandsData(); storageData(); say({ type: "backups", enabled: false, time: "1800", folder: "", running: false, off: false, lastTime: "", lastResult: "", lastDetail: "", goodTime: "" }); navigate("settings"); },
         "settings-loading": open("settings"),
         "games-setup": () => {
             baseData(); navigate("games"); gamesData(); live();

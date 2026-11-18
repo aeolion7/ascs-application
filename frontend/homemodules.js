@@ -1,5 +1,5 @@
 "use strict";
-// The Command Center's added modules (2.0.0): Weather, Top Apps, Network, Audio,
+// The Podium's added modules (2.0.0): Weather, Top Apps, Network, Audio,
 // Controllers, Pinned Notes, Recent Unlocks and Timer. Each starts hidden; Arrange
 // shows it. What a module needs is asked for only while it shows.
 
@@ -102,11 +102,16 @@ function handleWeather(text) {
 
 // ---- Top Apps and Network
 
-function renderHomeStats(data) {
+// The last readings, kept so a change of height (2.9.0) can redraw them.
+let homeStatsData = null;
+
+function renderHomeStats(data = homeStatsData) {
+    if (!data) return;
+    homeStatsData = data;
     if (data.processes && typeof data.processes === "object") {
         const list = (items, unit) => {
             const rows = element("ol", "stat-list");
-            (Array.isArray(items) ? items : []).slice(0, 3).forEach(item => {
+            (Array.isArray(items) ? items : []).slice(0, homeRoom("processes", 3, 4)).forEach(item => {
                 if (!item || typeof item.name !== "string" || !Number.isFinite(item.value)) return;
                 const row = element("li", "stat-row");
                 row.append(element("span", "stat-name", item.name), element("strong", "stat-value", unit(item.value)));
@@ -175,7 +180,7 @@ function renderHomePinned() {
         list.replaceChildren(placeholderItem("lines", 3));
         return;
     }
-    const pinned = notesData.notes.filter(note => note.pinned).slice(0, 6);
+    const pinned = notesData.notes.filter(note => note.pinned).slice(0, homeRoom("pinned", 6, 9));
     if (!pinned.length) {
         list.replaceChildren(element("li", "module-empty", "Pin a note in Quick Notes to keep it here."));
         return;
@@ -201,7 +206,7 @@ function renderHomeUnlocks() {
         list.replaceChildren(element("li", "module-empty", "Recent unlocks show once Games has loaded your RetroAchievements."));
         return;
     }
-    const achievements = Games.parseRetroAchievements(ra.summary, ra.recent).achievements.slice(0, 4);
+    const achievements = Games.parseRetroAchievements(ra.summary, ra.recent).achievements.slice(0, homeRoom("unlocks", 4, 4));
     if (!achievements.length) {
         list.replaceChildren(element("li", "module-empty", "No recent unlocks."));
         return;

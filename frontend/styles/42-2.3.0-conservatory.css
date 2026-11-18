@@ -1,7 +1,7 @@
 /* ==========================================================================
    2.3.0: the Conservatory. The page holds its body above (the neck and its
    sections, from stage 4) and the metronome's bar along the bottom. The
-   Command Center's Metronome module shares the bar's parts.
+   Podium's Metronome module shares the bar's parts.
    ========================================================================== */
 
 :root #conservatory.active {
@@ -255,7 +255,7 @@
   color: var(--brand-burgundy-text);
 }
 
-/* ---- The Command Center's Metronome module ---- */
+/* ---- The Podium's Metronome module ---- */
 
 .home-metro-tempo {
   justify-content: center;

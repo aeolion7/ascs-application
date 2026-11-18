@@ -39,7 +39,7 @@
         equal("a built-in moves", K.keyEditKind(keyOf("q"), edit.super.q), "action");
         equal("a custom command moves", K.keyEditKind(keyOf("a"), edit.super.a), "command");
         equal("a reserved letter is fixed", K.keyEditKind(keyOf("s"), edit.super.s), "fixed");
-        equal("a free letter takes a command", K.keyEditKind(keyOf("g"), edit.super.g), "free");
+        equal("a free letter takes a command", K.keyEditKind(keyOf("k"), edit.super.k), "free");
         equal("a passed-through Windows letter counts as free", K.keyEditKind(keyOf("d"), edit.super.d), "free");
         equal("a number is fixed", K.keyEditKind(keyOf("1"), edit.super["1"]), "fixed");
         equal("a function key is fixed", K.keyEditKind(keyOf("f1"), edit.super.f1), "fixed");
@@ -47,8 +47,9 @@
         equal("binding names its action", edit.super.q.action, "notes");
         equal("binding names its custom command", edit.super.a.commandIndex, 0);
 
-        equal("a free letter is fine", K.letterProblem("g", "action:notes", hotkeys, commands), "");
-        equal("capitals count", K.letterProblem("G", "action:notes", hotkeys, commands), "");
+        equal("a free letter is fine", K.letterProblem("k", "action:notes", hotkeys, commands), "");
+        equal("capitals count", K.letterProblem("K", "action:notes", hotkeys, commands), "");
+        equal("G is built in (2.9.0)", K.letterProblem("g", "action:notes", hotkeys, commands), "Super + G is built in, so it can't be changed.");
         equal("its own letter is fine", K.letterProblem("q", "action:notes", hotkeys, commands), "");
         check("two letters refused", K.letterProblem("gg", "action:notes", hotkeys, commands).includes("one letter"));
         check("a digit refused", K.letterProblem("1", "action:notes", hotkeys, commands).includes("one letter"));
@@ -97,7 +98,7 @@
     equal("unassigned P is drawn as Project", b.super.p.title, "Project to a display");
     check("assigned F keeps its action, not the passthrough", b.super.f.title === "Everything" && !b.super.f.passthrough);
     check("assigned C is not passthrough", !b.passthrough.c);
-    check("fixed reserved keys bound", ["b", "s", "r", "l", "m", "v", "j", "y", "space"].every(key => b.super[key]));
+    check("fixed reserved keys bound", ["b", "s", "r", "l", "m", "v", "j", "y", "g", "space"].every(key => b.super[key]));
 
     // A Terminal letter that collides with the Shift layer keeps the layer action.
     b = K.buildBindings({ ...defaults, terminal: "p" }, []);

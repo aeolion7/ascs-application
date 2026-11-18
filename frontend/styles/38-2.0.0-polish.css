@@ -1,6 +1,6 @@
 /* ==========================================================================
    2.0.0: polish after the pages were built: the command palette's foot,
-   text centered in its controls, and Command Center module widths.
+   text centered in its controls, and Podium module widths.
    ========================================================================== */
 
 /* ---- The command palette's foot: its keys, and how to open it from anywhere ---- */
@@ -41,7 +41,7 @@
   line-height: 1.15;
 }
 
-/* ---- Command Center: a grid three squares wide and three high ----
+/* ---- Podium: a grid three squares wide and three high ----
    Every module is one square high, and one to three wide (Arrange sets it). The
    three rows share the window evenly, so a module's room doesn't depend on what
    it holds or when that arrives. Modules keep the order you set: one too wide
@@ -661,7 +661,7 @@ body.is-arranging-home .sidebar > * {
   border-top: 0;
 }
 
-/* ---- The added Command Center modules (2.0.0) ---- */
+/* ---- The added Podium modules (2.0.0) ---- */
 .home-weather {
   display: flex;
   flex: 1 1 auto;

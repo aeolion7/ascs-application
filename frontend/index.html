@@ -32,6 +32,10 @@
   <link rel="stylesheet" href="styles/48-2.6.0-rhythm.css">
   <link rel="stylesheet" href="styles/49-2.7.0-staff.css">
   <link rel="stylesheet" href="styles/50-2.8.0-theory.css">
+  <link rel="stylesheet" href="styles/51-2.9.0-achievements.css">
+  <link rel="stylesheet" href="styles/52-2.9.0-podium.css">
+  <link rel="stylesheet" href="styles/53-2.9.0-consoles.css">
+  <link rel="stylesheet" href="styles/54-2.9.0-icons.css">
 </head>
 <body>
   <div class="app-shell">
@@ -42,13 +46,13 @@
           <span>Aeolionware</span>
           <strong>Maestro</strong>
         </span>
-        <span id="sidebarVersion" hidden>Maestro <span>2.8.0</span></span>
+        <span id="sidebarVersion" hidden>Maestro <span>2.9.0</span></span>
       </div>
 
       <nav class="primary-nav" aria-label="Pages">
-        <button class="nav active" type="button" data-view="home" aria-controls="home" title="Command Center" aria-current="page">
+        <button class="nav active" type="button" data-view="home" aria-controls="home" title="Podium" aria-current="page">
           <svg data-icon="home" data-size="24"></svg>
-          <span>Command Center</span>
+          <span>Podium</span>
         </button>
         <button class="nav" type="button" data-view="notes" aria-controls="notes" title="Quick Notes">
           <svg data-icon="notes" data-size="24"></svg>
@@ -118,7 +122,8 @@
     <main class="main">
       <header class="topbar">
         <div class="titlebar-drag">
-          <span id="breadcrumb" class="page-title">Command Center</span>
+          <span id="breadcrumb" class="page-title">Podium</span>
+          <button class="layout-chip" type="button" id="homeLayoutChip" aria-haspopup="dialog" aria-expanded="false" aria-controls="homeLayoutMenu" title="Layouts"><svg data-icon="layout"></svg><span id="homeLayoutName">Default</span><span class="layout-chip-auto" id="homeLayoutAuto" hidden><svg data-icon="games"></svg>while playing</span><svg data-icon="chevron-down"></svg></button>
           <p class="title-status" id="settingsStatus" role="status" hidden>Changes save as you make them, on this PC</p>
           <p class="title-status" id="gamesStatus" role="status" hidden>Changes save as you make them</p>
         </div>
@@ -158,6 +163,21 @@
         </div>
       </header>
 
+      <div class="layout-menu" id="homeLayoutMenu" role="dialog" aria-labelledby="homeLayoutMenuTitle" hidden>
+        <h2 id="homeLayoutMenuTitle">Layouts</h2>
+        <ul class="layout-list" id="homeLayoutList"></ul>
+        <label class="settings-toggle layout-gaming" for="homeLayoutGaming"><input id="homeLayoutGaming" type="checkbox"><span><strong>Use while a game is running</strong><small>The Podium switches to this layout as a game starts and back as it closes. Choosing another layout meanwhile keeps that one.</small></span></label>
+        <form class="layout-form" id="homeLayoutForm" hidden>
+          <label class="settings-field" for="homeLayoutNameInput"><span id="homeLayoutFormLabel">Name</span><input id="homeLayoutNameInput" type="text" maxlength="40" autocomplete="off" spellcheck="false"><small id="homeLayoutProblem" role="status"></small></label>
+          <div class="layout-form-buttons"><button class="secondary" type="button" id="homeLayoutCancel">Cancel</button><button class="primary" type="submit" id="homeLayoutSave">Save</button></div>
+        </form>
+        <div class="layout-actions" id="homeLayoutActions">
+          <button class="secondary" type="button" id="homeLayoutNew">New…</button>
+          <button class="secondary" type="button" id="homeLayoutRename">Rename…</button>
+          <button class="secondary" type="button" id="homeLayoutDuplicate">Duplicate</button>
+          <button class="secondary" type="button" id="homeLayoutDelete">Delete…</button>
+        </div>
+      </div>
       <div class="attention-panel" id="attentionPanel" role="dialog" aria-label="Needs attention" tabindex="-1" hidden>
         <div class="attention-head"><h2>Needs Attention</h2><button class="secondary" type="button" id="attentionDismissAll">Dismiss all</button></div>
         <div class="attention-list" id="attentionList"></div>
@@ -169,7 +189,7 @@
         <button class="secondary" type="button" id="powerCancel">Cancel</button>
       </div>
       <section class="view active" id="home" aria-labelledby="homeTitle">
-        <h1 class="sr-only" id="homeTitle">Command Center</h1>
+        <h1 class="sr-only" id="homeTitle">Podium</h1>
         <div class="face" id="homeFace">
           <article class="module home-now" id="homeNow" data-module="now" aria-live="polite"></article>
 
@@ -326,9 +346,10 @@
           </section>
         </div>
         <p class="sr-only" id="arrangeLive" role="status"></p>
-        <p class="sr-only" id="arrangeKeys">Drag it, or use the arrow keys to move it; 1, 2 or 3 sets its width in squares, and Delete hides it. Tab goes to the next module.</p>
+        <p class="sr-only" id="arrangeKeys">Drag it, or use the arrow keys to move it; 1, 2 or 3 sets its width in squares, Shift with 1, 2 or 3 its height, and Delete hides it. Tab goes to the next module.</p>
         <div class="arrange-dock" id="arrangeDock" role="region" aria-labelledby="arrangeDockTitle" hidden>
           <h2 id="arrangeDockTitle">Arrange</h2>
+          <p class="arrange-layout" id="arrangeLayout"></p>
           <p class="arrange-fit" id="arrangeFit"></p>
           <p class="arrange-tray-label" id="arrangeTrayLabel">Hidden: click one to show it</p>
           <div class="arrange-tray" id="arrangeTray" role="group" aria-labelledby="arrangeTrayLabel"></div>
@@ -387,7 +408,7 @@
               <button class="secondary" type="button" id="noteMarkdownButton" aria-haspopup="dialog" title="Everything the Markdown viewer shows, with examples">Markdown</button>
               <span class="note-controls-gap"></span>
               <button class="secondary" type="button" id="pinNoteButton" aria-pressed="false">Pin</button>
-              <button class="secondary danger" type="button" id="deleteNoteButton">Delete</button>
+              <button class="secondary danger icon-action" type="button" id="deleteNoteButton" aria-label="Delete note" title="Delete note (it goes to the trash for 30 days)"><svg data-icon="trash"></svg></button>
             </div>
             <div class="note-game-link" id="noteGameLink" hidden><span>Notes for <strong id="noteGameName"></strong></span><button class="secondary" type="button" id="noteGameStamp" title="Adds the date and time, and how far into the session you are if this game is running">Add timestamp</button><button class="secondary" type="button" id="noteGameUnlink" title="Keeps the note, but stops linking it to this game">Unlink</button></div>
             <textarea id="noteText" data-primary-input aria-label="Note text" placeholder="Begin with a thought, a reminder, or an idea. Markdown and #tags work here." spellcheck="true" hidden></textarea>
@@ -395,7 +416,7 @@
             <div class="editor-footer">
               <span id="noteUpdated">Changes save automatically</span>
               <span class="save-status" id="saveStatus" role="status" aria-live="polite"><span class="save-status-dot"></span> All changes saved</span>
-              <span class="editor-footer-meta"><label class="note-spellcheck" for="notesSpellcheck"><input id="notesSpellcheck" type="checkbox" checked><span>Spell-check</span></label><span id="noteWords"></span><button class="secondary copy-snippet" type="button" id="copySnippetButton" title="Copy the text exactly as written" hidden>Copy</button></span>
+              <span class="editor-footer-meta"><label class="note-spellcheck" for="notesSpellcheck"><input id="notesSpellcheck" type="checkbox" checked><span>Spell-check</span></label><span id="noteWords"></span><button class="secondary copy-snippet icon-action" type="button" id="copySnippetButton" aria-label="Copy" title="Copy the text exactly as written" hidden><svg data-icon="copy"></svg></button></span>
             </div>
           </section>
         </div>
@@ -505,6 +526,7 @@
             <button type="button" role="tab" id="gamesTabLibrary" data-section-tab="library" aria-controls="gamesLibraryPanel" aria-selected="false">Library</button>
             <button type="button" role="tab" id="gamesTabAchievements" data-section-tab="achievements" aria-controls="gamesAchievementsPanel" aria-selected="false">Achievements</button>
             <button type="button" role="tab" id="gamesTabControllers" data-section-tab="controllers" aria-controls="gamesControllersPanel" aria-selected="false">Controllers</button>
+            <button type="button" role="tab" id="gamesTabConsoles" data-section-tab="consoles" aria-controls="gamesConsolesPanel" aria-selected="false">Consoles</button>
             <button type="button" role="tab" id="gamesTabSetup" data-section-tab="setup" aria-controls="gamesSetupPanel" aria-selected="false">Setup</button>
           </div>
         </div>
@@ -551,7 +573,7 @@
         <div id="gamesAchievementsPanel" role="tabpanel" aria-labelledby="gamesTabAchievements" hidden>
           <div class="ra-heading">
             <h2 id="achievementsHeading">RetroAchievements</h2>
-            <span class="ra-actions"><small class="ra-updated" id="raUpdated"></small><button class="secondary" type="button" id="raProfile" hidden>Profile</button><button class="secondary" type="button" id="refreshAchievements" hidden>Refresh</button></span>
+            <span class="ra-actions"><small class="ra-updated" id="raUpdated"></small><button class="secondary" type="button" id="raProfile" hidden>Profile</button><button class="secondary icon-action" type="button" id="refreshAchievements" aria-label="Refresh" title="Refresh from RetroAchievements" hidden><svg data-icon="restart"></svg></button></span>
           </div>
           <div id="gamesAchievements" class="games-achievements"></div>
         </div>
@@ -566,6 +588,32 @@
             <div id="testerBody" class="controller-tester-body" aria-live="off"></div>
             <p class="controller-tester-note" id="testerNote"></p>
           </section>
+        </div>
+
+        <div class="games-consoles" id="gamesConsolesPanel" role="tabpanel" aria-labelledby="gamesTabConsoles" hidden>
+          <section class="module consoles-payload" aria-labelledby="consolesPayloadTitle">
+            <div class="module-head">
+              <h2 id="consolesPayloadTitle">Switch Payload</h2>
+              <span class="consoles-rcm" id="consolesRcm" role="status"></span>
+            </div>
+            <ul class="consoles-payloads" id="consolesPayloads" data-placeholder="list" data-placeholder-count="4"></ul>
+            <div class="consoles-push-row">
+              <button class="primary" type="button" id="consolesPush" disabled>Push payload</button>
+              <label class="settings-toggle consoles-auto" for="consolesAuto"><input id="consolesAuto" type="checkbox" disabled><span><strong>Push it when a Switch in RCM mode is plugged in</strong></span></label>
+            </div>
+            <p class="consoles-note" id="consolesPushStatus" role="status"></p>
+            <div class="consoles-folder-row"><span><strong>Payloads</strong><small id="consolesFolder">From TegraRcmGUI's favorites</small></span><button class="secondary" type="button" id="consolesChooseFolder">Choose folder…</button></div>
+          </section>
+          <section class="module consoles-cards-module" aria-labelledby="consolesCardsTitle">
+            <div class="module-head">
+              <h2 id="consolesCardsTitle">SD Cards</h2>
+              <span class="consoles-head-actions"><button class="link-button" type="button" id="consolesOpenCopies">Config copies</button><button class="link-button" type="button" id="consolesOpenAlbum">Album folder</button></span>
+            </div>
+            <ul class="consoles-cards" id="consolesCards"></ul>
+          </section>
+          <section class="module consoles-console" data-console="switch" aria-labelledby="consoleSwitchTitle"><div class="module-head"><h2 id="consoleSwitchTitle">Nintendo Switch</h2></div></section>
+          <section class="module consoles-console" data-console="3ds" aria-labelledby="console3dsTitle"><div class="module-head"><h2 id="console3dsTitle">Nintendo 3DS</h2></div></section>
+          <section class="module consoles-console" data-console="wiiu" aria-labelledby="consoleWiiuTitle"><div class="module-head"><h2 id="consoleWiiuTitle">Wii U</h2></div></section>
         </div>
 
         <div class="games-setup" id="gamesSetupPanel" role="tabpanel" aria-labelledby="gamesTabSetup" hidden>
@@ -802,7 +850,7 @@
               </div>
               <input id="logSearch" class="logs-search" type="search" placeholder="Filter lines" autocomplete="off" spellcheck="false" aria-label="Filter log lines">
               <span class="logs-actions">
-                <button class="secondary" type="button" id="copyLogButton">Copy</button>
+                <button class="secondary icon-action" type="button" id="copyLogButton" aria-label="Copy the log" title="Copy the log"><svg data-icon="copy"></svg></button>
                 <button class="secondary" type="button" id="openLogButton">Open file</button>
               </span>
             </div>
@@ -912,7 +960,7 @@
               <h2 id="quickActionsTitle">Quick Actions</h2>
               <span class="quick-head-end"><span id="quickActionCount"></span><button class="secondary" type="button" id="addQuickAction">Add quick action</button></span>
             </div>
-            <p class="commands-note">The buttons on the Command Center: any page, app, custom command, arrangement or note. Drag one to change the order, or use the arrow keys on its grip.</p>
+            <p class="commands-note">The buttons on the Podium: any page, app, custom command, arrangement or note. Drag one to change the order, or use the arrow keys on its grip.</p>
             <p class="sr-only" id="quickActionLive" role="status"></p>
             <ul class="quick-editor" id="quickActionEditor"></ul>
           </section>
@@ -1827,16 +1875,21 @@
             <div class="module-head"><h2 id="prefBackupsTitle">Backups</h2></div>
             <label class="settings-toggle" for="backupsEnabled"><input id="backupsEnabled" type="checkbox" disabled><span><strong>Back up every day</strong><small>Your notes, calendar, settings and arrangements, copied to the folder below. Each copy includes your secrets file.</small></span></label>
             <label class="settings-field" for="backupsTime"><span>Time</span><select id="backupsTime" disabled></select><small>If the PC is off then, the backup is made when Maestro next starts.</small></label>
-            <div class="settings-row backup-row"><span><strong>Folder</strong><small id="backupsFolder">No folder chosen</small></span><button class="secondary" type="button" id="backupsChoose" disabled>Choose…</button><button class="secondary" type="button" id="backupsOpen" disabled>Open folder</button></div>
+            <div class="settings-row backup-row"><span><strong>Folder</strong><small id="backupsFolder">No folder chosen</small></span><button class="secondary" type="button" id="backupsChoose" disabled>Choose…</button><button class="secondary icon-action" type="button" id="backupsOpen" aria-label="Open the backups folder" title="Open the backups folder" disabled><svg data-icon="folder-open"></svg></button></div>
             <div class="settings-row backup-row"><span><small id="backupsStatus" role="status" data-placeholder="inline"></small></span><button class="secondary" type="button" id="backupsNow" disabled>Back up now</button></div>
             <p class="pref-note">To put a backup back, exit Maestro and run <code>maestro restore-data</code>.</p>
+          </section>
+          <section class="module" aria-labelledby="prefStorageTitle">
+            <div class="module-head"><h2 id="prefStorageTitle">Storage</h2></div>
+            <ul class="storage-rows" id="storageRows" data-placeholder="list" data-placeholder-count="3"></ul>
+            <label class="settings-field" for="storageLimit"><span>Image cache limit</span><select id="storageLimit" disabled></select><small>Past the limit, the images shown least recently are removed.</small></label>
           </section>
           <section class="module" aria-labelledby="prefElsewhereTitle">
             <div class="module-head"><h2 id="prefElsewhereTitle">On Their Own Pages</h2></div>
             <p class="pref-note">A setting for one page lives on that page.</p>
             <ul class="pref-links">
               <li><button class="link-button has-chevron" type="button" data-pref-go="games:setup">Games › Setup</button><span>Programs, the PSO session, RetroAchievements</span></li>
-              <li><button class="link-button has-chevron" type="button" data-pref-go="home:today">Command Center › Today</button><span>The Wikipedia almanac, under the Today module's Settings</span></li>
+              <li><button class="link-button has-chevron" type="button" data-pref-go="home:today">Podium › Today</button><span>The Wikipedia almanac, under the Today module's Settings</span></li>
               <li><button class="link-button has-chevron" type="button" data-pref-go="notes">Quick Notes</button><span>Spell-check, at the foot of a note</span></li>
               <li><button class="link-button has-chevron" type="button" data-pref-go="sounds">Sounds</button><span>Maestro's own sounds, in the bar</span></li>
               <li><button class="link-button has-chevron" type="button" data-pref-go="commands">Commands</button><span>Keys, custom commands, the palette, quick actions</span></li>
@@ -2034,7 +2087,7 @@
           <p class="cal-form-error" id="calEventError" role="alert" hidden></p>
           <footer class="help-footer cal-dialog-actions">
             <button class="secondary danger" type="button" id="calDeleteEvent">Delete</button>
-            <button class="secondary" type="button" id="calPinCountdown" title="Show the days until this event in the Command Center's almanac">Pin as countdown</button>
+            <button class="secondary" type="button" id="calPinCountdown" title="Show the days until this event in the Podium's almanac">Pin as countdown</button>
             <button class="secondary" type="button" id="calRejoinSeries" title="Give this date the series' time and details again" hidden>Back to the series</button>
             <span class="cal-dialog-spacer"></span>
             <button class="secondary" type="button" data-cal-close>Cancel</button>
@@ -2080,7 +2133,7 @@
             </div>
             <button class="help-close" type="button" data-cal-close aria-label="Close" title="Close (Esc)"><svg data-icon="close"></svg></button>
           </header>
-          <p class="cal-move-text">MM-DD repeats every year; YYYY-MM-DD happens once. Up to 12, sorted when saved. The nearest shows on the Command Center.</p>
+          <p class="cal-move-text">MM-DD repeats every year; YYYY-MM-DD happens once. Up to 12, sorted when saved. The nearest shows on the Podium.</p>
           <div id="countdownRows" class="countdown-rows"></div>
           <p id="countdownsEmpty" class="settings-note">No countdowns yet.</p>
           <div><button class="secondary" type="button" id="addCountdownButton">Add countdown</button></div>
@@ -2140,6 +2193,8 @@
   <script src="icons.js"></script>
   <script src="attention.js"></script>
   <script src="backups.js"></script>
+  <script src="storage.js"></script>
+  <script src="consoles.js"></script>
   <script src="hardware.js"></script>
   <script src="powerkeys.js"></script>
   <script src="appearance.js"></script>
@@ -2170,6 +2225,7 @@
   <script src="workspacesview.js"></script>
   <script src="homeview.js"></script>
   <script src="homemodules.js"></script>
+  <script src="consolesview.js"></script>
   <script src="metronome.js"></script>
   <script src="conservatoryview.js"></script>
   <script src="music.js"></script>

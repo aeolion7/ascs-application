@@ -7,7 +7,7 @@
 
 ; Letters bound to fixed Super commands; never assignable.
 ReservedSuperKeys() {
-    return "bsrlmvjy"
+    return "bsrlmvjyg"          ; 2.9.0: G, the game notes window
 }
 
 ; Validates one Super-key letter. `used` maps already-claimed letters to the
@@ -24,7 +24,7 @@ CheckShortcutKey(key, label, used, optional := false) {
         throw Error(label " needs a single letter (A–Z).")
     if InStr(ReservedSuperKeys(), key)
         throw Error(label ": Super+" StrUpper(key)
-            " is reserved for a built-in command (B, S, R, L, M, V, J, Y).")
+            " is reserved for a built-in command (B, S, R, L, M, V, J, Y, G).")
     if used.Has(key)
         throw Error(label ": Super+" StrUpper(key)
             " is already assigned to " used[key] ".")
@@ -2351,6 +2351,193 @@ RaImagesToPrune(files, limit, target) {
     return remove
 }
 
+; ---- The console hub (2.9.0) ----
+
+; A payload Maestro may hand to TegraRcmSmash: a full local path to a .bin,
+; with none of the characters cmd.exe would read as its own (the push runs
+; through cmd to learn the sender's exit code).
+IsSafePayloadPath(path) {
+    return StrLen(path) <= 260
+        && RegExMatch(path, "i)^[a-z]:\\[^\x00-\x1f`"!%^&|<>*?:]+\.bin$") > 0
+        && !InStr(path, "\..\") && !InStr(path, "\.\")
+}
+
+; A path written relative to `base` (as TegraRcmGUI's favorites.conf does,
+; from its own folder), made whole. "" when it climbs above the drive.
+ResolvePayloadPath(base, path) {
+    path := Trim(path, " `t`r")
+    if RegExMatch(path, "i)^[a-z]:\\")
+        full := path
+    else
+        full := RTrim(base, "\") "\" path
+    parts := []
+    for part in StrSplit(full, "\") {
+        if (part = "." || (part = "" && parts.Length))
+            continue
+        if (part = "..") {
+            if (parts.Length < 2)
+                return ""
+            parts.Pop()
+            continue
+        }
+        parts.Push(part)
+    }
+    out := ""
+    for part in parts
+        out .= (A_Index = 1 ? "" : "\") part
+    return out
+}
+
+; TegraRcmGUI's favorites.conf: one path a line, relative to `base` or whole.
+ParseTegraFavorites(text, base) {
+    paths := []
+    for line in StrSplit(text, "`n") {
+        path := ResolvePayloadPath(base, line)
+        if (path != "" && IsSafePayloadPath(path))
+            paths.Push(path)
+    }
+    return paths
+}
+
+; TegraRcmGUI's presets.conf: its payload, or "".
+ParseTegraPreset(text) {
+    return RegExMatch(text, "im)^PAYLOAD_FILE=(.+?)\s*$", &m) && IsSafePayloadPath(m[1]) ? m[1] : ""
+}
+
+; Where bytes `pattern` (a string of ASCII) first occur in a Buffer, or 0.
+FindBytes(bytes, pattern, start := 0) {
+    first := Ord(pattern), length := StrLen(pattern)
+    limit := Min(bytes.Size, 4194304) - length        ; the first 4 MB
+    offset := start
+    while (offset <= limit) {
+        if (NumGet(bytes, offset, "UChar") = first) {
+            matched := true
+            loop length - 1 {
+                if (NumGet(bytes, offset + A_Index, "UChar") != Ord(SubStr(pattern, A_Index + 1, 1))) {
+                    matched := false
+                    break
+                }
+            }
+            if matched
+                return offset + 1
+        }
+        offset++
+    }
+    return 0
+}
+
+; ASCII digits and dots from `offset` (0-based), up to `most` of them.
+ReadVersionBytes(bytes, offset, most := 12) {
+    text := ""
+    loop most {
+        if (offset + A_Index - 1 >= bytes.Size)
+            break
+        code := NumGet(bytes, offset + A_Index - 1, "UChar")
+        if !((code >= 48 && code <= 57) || code = 46)
+            break
+        text .= Chr(code)
+    }
+    return RTrim(text, ".")
+}
+
+; hekate marks its payload "ICTC" and three digits: ICTC651 is 6.5.1.
+HekateVersion(bytes) {
+    at := FindBytes(bytes, "ICTC")
+    while at {
+        digits := ReadVersionBytes(bytes, at + 3, 3)
+        if RegExMatch(digits, "^\d{3}$")
+            return SubStr(digits, 1, 1) "." SubStr(digits, 2, 1) "." SubStr(digits, 3, 1)
+        at := FindBytes(bytes, "ICTC", at)
+    }
+    return ""
+}
+
+; Luma3DS names itself in its boot.firm: "Luma3DS v13.1.2".
+LumaVersion(bytes) {
+    at := FindBytes(bytes, "Luma3DS v")
+    return at ? ReadVersionBytes(bytes, at + 8) : ""
+}
+
+; Which console an SD card is for, from the folders at its root: `has` is a
+; function that says whether a folder exists there. "" for none.
+ConsoleOfCard(has) {
+    if has("atmosphere") || has("bootloader") || has("Nintendo\Contents")
+        return "switch"
+    if has("luma") || has("Nintendo 3DS")
+        return "3ds"
+    if has("wiiu\environments") || has("wiiu")
+        return "wiiu"
+    return ""
+}
+
+; A Switch album file's place in the import folder: Nintendo\Album\YYYY\MM\DD\name
+; goes to YYYY\MM\name. "" for anything else.
+AlbumTarget(relative) {
+    return RegExMatch(relative, "i)^Nintendo\\Album\\(\d{4})\\(\d{2})\\\d{2}\\([^\\]+\.(?:jpg|mp4))$", &m) ? m[1] "\" m[2] "\" m[3] : ""
+}
+
+; Backups of one file, named name-YYYYMMDD-HHMMSS.ext: the names to delete so
+; `keep` remain, oldest first.
+BackupsToPrune(names, keep) {
+    list := ""
+    for name in names
+        if RegExMatch(name, "-\d{8}-\d{6}\.[^.]+$")
+            list .= name "`n"
+    sorted := StrSplit(Sort(RTrim(list, "`n")), "`n")
+    remove := []
+    if (list = "")
+        return remove
+    loop sorted.Length - keep
+        remove.Push(sorted[A_Index])
+    return remove
+}
+
+; What TegraRcmSmash's exit code and words mean.
+RcmPushResult(code, output) {
+    if (code = 0 || InStr(output, "Smashed the stack"))
+        return Map("ok", true, "message", "Payload sent.")
+    if (code = -3 || InStr(output, "find") && InStr(output, "device"))
+        return Map("ok", false, "message", "No Switch in RCM mode was found. Hold Volume Up and press Power with the jig in, then try again.")
+    return Map("ok", false, "message", "The payload wasn't sent (TegraRcmSmash said " code ").")
+}
+
+; A game note's key (2.9.0, for the game notes window), as the page's
+; ASCSNotes.isGameKey: letters and digits only, 1 to 160 of them.
+IsGameNoteKey(key) {
+    return RegExMatch(key, "^[\p{L}\p{N}]{1,160}$") > 0
+}
+
+; Preferences › Storage (2.9.0): the image cache's limit is one of these, in MB.
+RaImageCacheLimits() {
+    return [100, 250, 500, 1000]
+}
+
+IsRaImageCacheLimit(mb) {
+    if !RegExMatch(mb, "^[1-9]\d{2,3}$")
+        return false
+    for value in RaImageCacheLimits() {
+        if (Integer(mb) = value)
+            return true
+    }
+    return false
+}
+
+; Trimming goes down to four-fifths of the limit, so it doesn't run again on
+; the next few downloads.
+RaImageCacheTarget(limitBytes) {
+    return limitBytes * 4 // 5
+}
+
+; The caches Storage lists and can clear.
+IsStorageCacheId(id) {
+    return id == "images" || id == "almanac" || id == "forecast"
+}
+
+; A Wikipedia almanac feed Maestro wrote, as data\almanac\yyyy-MM-dd-kind.json.
+IsAlmanacCacheFile(name) {
+    return RegExMatch(name, "^\d{4}-\d\d-\d\d-(featured|holidays)\.json$") > 0
+}
+
 ; Power actions (1.8.0): Windows closes apps one at a time, so an app that
 ; asks about unsaved work only gets to ask after others have already gone,
 ; and some (Windows 11 Notepad, VS Code) never ask at all. ASCS checks first,
@@ -2997,7 +3184,7 @@ IsAngledCover(emulator, cover) {
     return emulator = "pcsx2" && cover != ""
 }
 
-; ---- Command Center extras (2.0.0) ----
+; ---- Podium extras (2.0.0) ----
 
 ; Open-Meteo's forecast for a place: one fixed address, the place rounded to two
 ; decimals (about a kilometer), US units, today and the next two days.

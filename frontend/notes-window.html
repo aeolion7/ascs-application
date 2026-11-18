@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
+  <title>Maestro Game Notes</title>
+  <link rel="stylesheet" href="styles/25-2.0.0-tokens.css">
+  <link rel="stylesheet" href="styles/notes-window.css">
+</head>
+<body>
+  <header class="nw-head">
+    <div class="nw-titles">
+      <h1>Notes</h1>
+      <span class="nw-game" id="notesWindowGame">Waiting for Maestro…</span>
+    </div>
+    <button class="nw-close" type="button" id="notesWindowClose" aria-label="Close (Super + G)" title="Close (Super + G)"><svg data-icon="close"></svg></button>
+  </header>
+  <textarea class="nw-text" id="notesWindowText" aria-label="Notes for the running game" disabled></textarea>
+  <footer class="nw-foot">
+    <button class="nw-button" type="button" id="notesWindowStamp" disabled title="Adds the date and time, and how far into the session you are">Add timestamp</button>
+    <button class="nw-button" type="button" id="notesWindowOpen" disabled title="Shows Maestro with this note open in Quick Notes">Open in Quick Notes</button>
+  </footer>
+  <script src="icons.js"></script>
+  <script src="noteswindow.js"></script>
+</body>
+</html>

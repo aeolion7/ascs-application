@@ -8,6 +8,9 @@ const MaestroIcons = (() => {
     const speaker = '<path d="M4.5 9.5h3l4.5-4v13l-4.5-4h-3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1Z"/>';
     const folder = '<path d="M3.5 7.5a2 2 0 0 1 2-2h4.5l2 2h6.5a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/>';
     const heart = 'M12 19.5s-7.5-4.4-7.5-9.9A4.2 4.2 0 0 1 12 7.1a4.2 4.2 0 0 1 7.5 2.5c0 5.5-7.5 9.9-7.5 9.9Z';
+    // 2.9.0: a trophy's cup, and its handles, stem and base.
+    const cup = 'M7.5 4h9v5a4.5 4.5 0 0 1-9 0Z';
+    const trophyRest = '<path d="M7.5 6H4.5v1a3.5 3.5 0 0 0 3.6 3.5M16.5 6h3v1a3.5 3.5 0 0 1-3.6 3.5M12 13.5v3.5M8.5 20h7M9.5 17h5"/>';
     const PATHS = {
         // Pages
         home: '<rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/>',
@@ -52,6 +55,11 @@ const MaestroIcons = (() => {
         grip: '<circle class="icon-dot" cx="9" cy="6" r="1.5"/><circle class="icon-dot" cx="15" cy="6" r="1.5"/><circle class="icon-dot" cx="9" cy="12" r="1.5"/><circle class="icon-dot" cx="15" cy="12" r="1.5"/><circle class="icon-dot" cx="9" cy="18" r="1.5"/><circle class="icon-dot" cx="15" cy="18" r="1.5"/>',
         star: '<path d="M12 3.5 14.4 9l5.9.5-4.5 3.9 1.4 5.8L12 16.2l-5.2 3 1.4-5.8-4.5-3.9L9.6 9Z"/>',
         hourglass: '<path d="M7 3.5h10M7 20.5h10M8.5 3.5c0 4.5 7 4.5 7 8.5s-7 4-7 8.5M15.5 3.5c0 4.5-7 4.5-7 8.5s7 4 7 8.5"/>',
+        // 2.9.0: an unlock in softcore (outlined) and hardcore (filled), and how many players have one.
+        trophy: `<path d="${cup}"/>${trophyRest}`,
+        "trophy-filled": `<path class="icon-dot" d="${cup}"/>${trophyRest}`,
+        players: '<circle cx="9" cy="8" r="3"/><path d="M3.5 19.5a5.5 5.5 0 0 1 11 0M15.5 5.3a3 3 0 0 1 0 5.4M17 14.3a5.5 5.5 0 0 1 3.5 5.2"/>',
+        copy: '<rect x="8.5" y="8.5" width="12" height="12" rx="2"/><path d="M15.5 8.5v-3a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3"/>',
         // Kinds of palette item and the apps Maestro opens
         window: '<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M3.5 9.5h17"/>',
         terminal: '<path d="m5 7 5 5-5 5m7 0h7"/>',

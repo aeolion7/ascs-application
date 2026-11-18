@@ -1298,7 +1298,8 @@ $IsolateFiles = @('ASCS.ahk', 'ASCS.DriveProbe.ahk', 'ASCS.HardwareProbe.ahk')
 $IsolateFolders = @('lib', 'webview', 'frontend')
 # Built-ins that can act outside the copy. Calls are rewritten to the hook's
 # Isolate_ versions, which act only inside it (tools\cli\isolate-hook.ahk).
-$IsolateGuarded = 'Run|RunWait|ProcessClose|FileDelete|FileRecycle|FileMove|FileCopy|DirDelete|DirMove|DirCopy|FileAppend|FileOpen|IniWrite|IniDelete'
+# DirCreate since 2.9.0, for the console hub's album import.
+$IsolateGuarded = 'Run|RunWait|ProcessClose|FileDelete|FileRecycle|FileMove|FileCopy|DirDelete|DirMove|DirCopy|DirCreate|FileAppend|FileOpen|IniWrite|IniDelete'
 # DLL calls that lock, sleep or shut down Windows.
 $IsolatePowerCalls = 'LockWorkStation|PowrProf\\SetSuspendState|ExitWindowsEx|InitiateSystemShutdown\w*|InitiateShutdown\w*'
 $IsolateInclude = '#Include %A_ScriptDir%\isolate-hook.ahk'

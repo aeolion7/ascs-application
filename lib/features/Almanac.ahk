@@ -61,7 +61,7 @@ SendAlmanacSettings() {
     )
 }
 
-; Page asked for the almanac (start-up, or the Command Center opened):
+; Page asked for the almanac (start-up, or the Podium opened):
 ; settings, today's cached feeds, and a fetch if today's are missing.
 HandleGetAlmanac() {
     global ASCS_AlmanacWikipedia

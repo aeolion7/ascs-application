@@ -2857,7 +2857,7 @@ body {
    surfaces (active navigation, primary buttons, selections, the Apps keys),
    while lighter tints of the same hue carry anything that must be legible.
    Metallic gold is the ASCS signature, used in exactly four places (brand
-   mark, the Super keycap, the Command Center rule, the palette title).
+   mark, the Super keycap, the Podium rule, the palette title).
    Flat gold remains the color of attention and distinction.
    ========================================================================== */
 
@@ -2960,7 +2960,7 @@ body {
 
 /* 2. The Super keycap, where Super itself is the subject. */
 
-/* 3. A thin metallic rule above the Command Center heading. */
+/* 3. A thin metallic rule above the Podium heading. */
 
 /* 4. The palette title, in the brighter champagne gold that reads as text. */
 #launcherTitle {
@@ -3439,7 +3439,7 @@ body:not(.sidebar-collapsed) .brand {
 
 /* ==========================================================================
    1.7.0: One page header for every tab
-   The Command Center and every other tab share a single header spec, so
+   The Podium and every other tab share a single header spec, so
    titles, descriptions and spacing match exactly (verified by measurement).
    ========================================================================== */
 
@@ -3491,7 +3491,7 @@ body:not(.sidebar-collapsed) .brand {
    1.7.0 stage 3: almanac strip, navigation groups, Logs, almanac preferences
    ========================================================================== */
 
-/* ---- Almanac strip beneath the Command Center title ---- */
+/* ---- Almanac strip beneath the Podium title ---- */
 
 #homeAlmanac:not([hidden]) {
   display: grid;
@@ -3882,7 +3882,7 @@ button.alm-story-copy:focus-visible {
 }
 
 /* ==========================================================================
-   1.7.0: Command Center system and power buttons
+   1.7.0: Podium system and power buttons
    Guarded buttons carry a gold edge and fill while held; a plain click only
    flashes the hint. The countdown banner sits above every tab.
    ========================================================================== */
@@ -4039,7 +4039,7 @@ button.alm-story-copy:focus-visible {
 }
 
 /* ==========================================================================
-   1.7.0: the System bar, in the Command Center header
+   1.7.0: the System bar, in the Podium header
    Two groups: click actions (plain) and hold-to-confirm actions (framed in
    gold, labeled HOLD with a ring, each button gold-edged and filling while
    held). It sits to the right of the title, so it adds no height.

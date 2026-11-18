@@ -1,5 +1,5 @@
 "use strict";
-// The Command Center (2.0.0): modules you can glance at or act on, each opening
+// The Podium (2.0.0): modules you can glance at or act on, each opening
 // its page. It reads the state the other pages keep, and asks for nothing new
 // beyond what they already ask for. RetroAchievements is never requested from
 // here: progress shows once the Games page has loaded it.
@@ -85,7 +85,9 @@ function drawNowPlaying(panel, view, { headingId, open, actions, detailed = fals
     const shown = game || last;
     const progress = game ? raProgressFor(game) : null;
 
-    const signature = JSON.stringify([playing, game?.id, game?.seconds, last?.id, shown ? gamesState.covers.has(shown.id) : false, progress?.achieved, progress?.possible, gamesState.loaded, detailed ? gamesState.ra.updatedAt : 0]);
+    const tall = view === "home" && tallness("now") > 1;
+    const signature = JSON.stringify([playing, game?.id, game?.seconds, last?.id, shown ? gamesState.covers.has(shown.id) : false, progress?.achieved, progress?.possible, gamesState.loaded, detailed ? gamesState.ra.updatedAt : 0,
+        tall, tall && progress?.id ? gamesState.ra.games.has(progress.id) : false]);
     if (panel.dataset.signature === signature) return;
     panel.dataset.signature = signature;
     if (shown && $(view).classList.contains("active")) requestCovers([shown]);
@@ -187,7 +189,31 @@ function drawNowPlaying(panel, view, { headingId, open, actions, detailed = fals
     }
 
     copy.append(actions(lead, game, Games.playingTitle(gamesState.items, lead) || name, progress));
+    if (tall) copy.append(...nowPlayingMore(game, name, progress));
     tickNowPlaying();
+}
+
+// Now Playing two squares tall (2.9.0): the game's next achievement, when
+// Games has already loaded the game's list (the Podium asks RetroAchievements
+// for nothing), and the game's notes, to write in while playing.
+function nowPlayingMore(game, name, progress) {
+    const parts = [];
+    const raw = progress?.id ? gamesState.ra.games.get(progress.id) : null;
+    const next = raw ? Games.nextUp(Games.parseRaGame(raw)) : null;
+    if (next) {
+        const target = element("div", "home-now-next");
+        const body = element("div", "ra-item-body");
+        const line = element("div", "ra-unlock-head");
+        line.append(element("small", "home-now-next-label", "Next up"), element("strong", "", next.achievement.title), element("span", "ra-points", `${next.achievement.points}`));
+        body.append(line);
+        if (next.achievement.description) body.append(element("p", "", next.achievement.description));
+        target.append(raImage(next.achievement.badge, "ra-badge is-locked"), body);
+        parts.push(target);
+        requestRaImages([next.achievement.badge]);
+    }
+    const notes = gameNotesBox("home", game?.title || name);
+    if (notes) parts.push(notes);
+    return parts;
 }
 
 // The cover's place while the games are on their way: the cover's own size.
@@ -215,7 +241,7 @@ function renderGamesNow() {
 function renderHomeContinue() {
     const shelf = $("homeContinue");
     if (!shelf || !Games) return;
-    const recent = recentGames().slice(0, 9);
+    const recent = recentGames().slice(0, 9 * tallness("continue"));
     shelf.replaceChildren(...recent.map(gameTile));
     if (!recent.length && !gamesState.loaded) shelf.append(...Array.from({ length: 9 }, () => placeholder("tile")));
     else if (!recent.length) shelf.append(element("p", "module-empty", "Games you play appear here."));
@@ -290,7 +316,7 @@ function renderHomeWorkspaces() {
 function renderHomeNotes() {
     const list = $("homeNotes");
     if (!list) return;
-    const recent = [...notesData.notes].sort((left, right) => right.updated.localeCompare(left.updated)).slice(0, 2);
+    const recent = [...notesData.notes].sort((left, right) => right.updated.localeCompare(left.updated)).slice(0, homeRoom("note", 2, 9));
     list.replaceChildren(...recent.map(note => {
         const item = element("li");
         const button = homeButton("", "module-row", () => openNote(note.id));
@@ -322,13 +348,18 @@ $("homeNoteInput").addEventListener("keydown", event => {
 $("homeNewEvent").addEventListener("click", () => newEventFromShortcut());
 
 // ---- Arrange (2.0.0): on the page itself
-// Arrange turns the modules into tiles to drag into place, size by their right
-// edge, or hide; the dock holds the hidden ones, Reset and Done. The keyboard
-// does all of it from each tile's grip.
+// Arrange turns the modules into tiles to drag into place, size (2.9.0: wide
+// and tall, by a picker or the corner), or hide; the dock holds the hidden
+// ones, Reset and Done. The keyboard does all of it from each tile's grip.
 
+// The layout in use is also kept under its old key, which a version before
+// 2.9.0 reads; the saved layouts (2.9.0) are kept beside it.
 const HOME_LAYOUT_KEY = "maestro.homeLayout";
-let homeLayout = MaestroHomeLayout.defaults();
-try { homeLayout = MaestroHomeLayout.parse(localStorage.getItem(HOME_LAYOUT_KEY)); } catch { /* the default */ }
+const HOME_LAYOUTS_KEY = "maestro.homeLayouts";
+let homeSaved = MaestroHomeLayout.parseSaved(null);
+try { homeSaved = MaestroHomeLayout.parseSaved(localStorage.getItem(HOME_LAYOUTS_KEY), localStorage.getItem(HOME_LAYOUT_KEY)); } catch { /* the default */ }
+let homeLayout = MaestroHomeLayout.activeLayout(homeSaved);
+let homeGameSession = null;
 let arranging = false;
 let arrangeDrag = null;
 
@@ -336,6 +367,34 @@ const homeModules = () => [...document.querySelectorAll("#homeFace > [data-modul
 const homeModule = id => document.querySelector(`#homeFace > [data-module="${id}"]`);
 const moduleLabel = id => MaestroHomeLayout.MODULES.find(module => module.id === id)?.label ?? id;
 const arrangeMotion = () => !matchMedia("(prefers-reduced-motion: reduce)").matches;
+// A module's height (2.9.0), never more than it can use.
+const moduleHeightIn = (layout, id) => Math.min(layout.heights?.[id] ?? 1, MaestroHomeLayout.tallest(id));
+const moduleHeight = id => moduleHeightIn(homeLayout, id);
+
+// What a taller module shows (2.9.0): heights apply where the page is three
+// squares by three. A list has room for `one` rows in one square and
+// `perSquare` more in each square below.
+const HEIGHTS_APPLY = matchMedia("(min-width: 1701px)");
+const tallness = id => (HEIGHTS_APPLY.matches ? moduleHeight(id) : 1);
+const homeRoom = (id, one, perSquare) => one + perSquare * (tallness(id) - 1);
+
+// The modules whose content follows their height, redrawn when it changes.
+function renderHomeRooms() {
+    renderHomeNotes();
+    renderHomeContinue();
+    renderHomeNow();
+    globalThis.renderHomePinned?.();
+    globalThis.renderHomeUnlocks?.();
+    globalThis.renderHomeToday?.();
+    globalThis.renderHomeStats?.();
+    globalThis.renderAlmanacMore?.();
+}
+HEIGHTS_APPLY.addEventListener("change", renderHomeRooms);
+const sizeText = id => {
+    const width = homeLayout.widths[id];
+    const height = moduleHeight(id);
+    return `${width} square${width === 1 ? "" : "s"} wide${height > 1 ? `, ${height} tall` : ""}`;
+};
 
 function applyHomeLayout() {
     homeModules().forEach(module => {
@@ -343,14 +402,28 @@ function applyHomeLayout() {
         module.style.order = String(homeLayout.order.indexOf(id));
         module.hidden = homeLayout.hidden.includes(id);
         module.dataset.width = String(homeLayout.widths[id]);
+        module.dataset.height = String(moduleHeight(id));
     });
+    const heights = homeModules().map(module => module.dataset.height).join();
+    if (heights !== applyHomeLayout.heights) {
+        applyHomeLayout.heights = heights;
+        renderHomeRooms();
+    }
     if (arranging) renderArrangeChrome();
     globalThis.askHomeExtras?.(true);
     globalThis.syncMetronomeView?.();
 }
 
 function keepHomeLayout() {
-    try { localStorage.setItem(HOME_LAYOUT_KEY, JSON.stringify(homeLayout)); } catch { /* not kept */ }
+    homeSaved = MaestroHomeLayout.storeActive(homeSaved, homeLayout);
+    keepHomeSaved();
+}
+
+function keepHomeSaved() {
+    try {
+        localStorage.setItem(HOME_LAYOUT_KEY, JSON.stringify(homeLayout));
+        localStorage.setItem(HOME_LAYOUTS_KEY, JSON.stringify(homeSaved));
+    } catch { /* not kept */ }
 }
 
 function changeHomeLayout(layout, refocus = "") {
@@ -368,12 +441,11 @@ function arrangeFitText() {
 
 function announceArrange(id, note = "") {
     const shown = homeLayout.order.filter(other => !homeLayout.hidden.includes(other));
-    const width = homeLayout.widths[id];
-    $("arrangeLive").textContent = note || `${moduleLabel(id)}: place ${shown.indexOf(id) + 1} of ${shown.length}, ${width} square${width === 1 ? "" : "s"} wide. ${arrangeFitText()}`;
+    $("arrangeLive").textContent = note || `${moduleLabel(id)}: place ${shown.indexOf(id) + 1} of ${shown.length}, ${sizeText(id)}. ${arrangeFitText()}`;
 }
 
-// A module's tile while arranging: its bar (grip, name, Hide), its width, and a
-// handle on its right edge. Built once, and put back if the module redraws.
+// A module's tile while arranging: its bar (grip, name, Hide), its size, and a
+// handle at its corner. Built once, and put back if the module redraws.
 function arrangeOverlay(module) {
     const existing = module.querySelector(":scope > .arrange-overlay");
     if (existing) return existing;
@@ -396,27 +468,35 @@ function arrangeOverlay(module) {
     hide.dataset.pointerOnly = "";
     hide.addEventListener("click", () => hideModule(id));
     bar.append(grip, element("strong", "arrange-name", label), hide);
-    const widths = element("div", "arrange-width");
-    widths.setAttribute("role", "group");
-    widths.setAttribute("aria-label", `${label}: width in squares`);
-    for (let width = 1; width <= MaestroHomeLayout.COLUMNS; width++) {
-        const button = element("button", "", String(width));
-        button.type = "button";
-        button.dataset.arrange = `${id}-width-${width}`;
-        button.title = `${width} square${width === 1 ? "" : "s"} wide`;
-        button.tabIndex = -1;       // the mouse's; from the keyboard, the number on the grip
-        button.dataset.pointerOnly = "";
-        button.addEventListener("click", () => {
-            moveWithMotion(() => changeHomeLayout(MaestroHomeLayout.setWidth(homeLayout, id, width), `[data-arrange="${id}-width-${width}"]`), null);
-            announceArrange(id);
-        });
-        widths.append(button);
+    // 2.9.0: one picker for the size, three squares by three: the square
+    // clicked is the module's far corner. Rows past what it can use are off.
+    const sizes = element("div", "arrange-size");
+    sizes.setAttribute("role", "group");
+    sizes.setAttribute("aria-label", `${label}: size in squares`);
+    for (let height = 1; height <= MaestroHomeLayout.ROWS; height++) {
+        for (let width = 1; width <= MaestroHomeLayout.COLUMNS; width++) {
+            const button = element("button");
+            button.type = "button";
+            button.dataset.arrange = `${id}-size-${width}x${height}`;
+            button.dataset.w = String(width);
+            button.dataset.h = String(height);
+            button.title = `${width} wide, ${height} tall`;
+            button.disabled = height > MaestroHomeLayout.tallest(id);
+            button.tabIndex = -1;       // the mouse's; from the keyboard, the numbers on the grip
+            button.dataset.pointerOnly = "";
+            button.addEventListener("click", () => {
+                moveWithMotion(() => changeHomeLayout(MaestroHomeLayout.setHeight(MaestroHomeLayout.setWidth(homeLayout, id, width), id, height), `[data-arrange="${id}-size-${width}x${height}"]`), null);
+                announceArrange(id);
+            });
+            sizes.append(button);
+        }
     }
+    sizes.append(element("b", "arrange-size-label"));
     const resize = element("span", "arrange-resize");
-    resize.title = "Drag to change the width";
+    resize.title = MaestroHomeLayout.tallest(id) > 1 ? "Drag to change the size" : "Drag to change the width";
     resize.setAttribute("aria-hidden", "true");
     resize.addEventListener("pointerdown", event => startResize(event, id));
-    overlay.append(bar, widths, resize);
+    overlay.append(bar, sizes, resize);
     overlay.addEventListener("pointerdown", event => startMove(event, id));
     module.append(overlay);
     return overlay;
@@ -428,9 +508,15 @@ function renderArrangeChrome() {
         const overlay = arrangeOverlay(module);
         overlay.hidden = !arranging;
         [...module.children].forEach(child => { if (child !== overlay) child.inert = arranging; });
-        overlay.querySelectorAll(".arrange-width button").forEach(button => {
-            button.setAttribute("aria-pressed", String(button.textContent === String(homeLayout.widths[module.dataset.module])));
+        const id = module.dataset.module;
+        const width = homeLayout.widths[id];
+        const height = moduleHeight(id);
+        overlay.querySelectorAll(".arrange-size button").forEach(button => {
+            const w = Number(button.dataset.w), h = Number(button.dataset.h);
+            button.setAttribute("aria-pressed", String(w === width && h === height));
+            button.classList.toggle("is-covered", w <= width && h <= height);
         });
+        overlay.querySelector(".arrange-size-label").textContent = `${width} × ${height}`;
     });
     $("arrangeFit").textContent = arrangeFitText();
     const hidden = homeLayout.order.filter(id => homeLayout.hidden.includes(id));
@@ -473,6 +559,8 @@ function setArranging(on) {
     $("arrangeButton").textContent = on ? "Done" : "Arrange";
     $("arrangeButton").setAttribute("aria-pressed", String(on));
     $("arrangeDock").hidden = !on;
+    closeHomeLayoutMenu();
+    renderHomeLayoutChip();
     renderArrangeChrome();
     if (on) {
         homeModules().forEach(module => arrangeObserver.observe(module, { childList: true }));
@@ -494,7 +582,8 @@ function hideModule(id) {
 
 // The grips are the only Tab stops while arranging. The arrow keys move a
 // module among those showing; 1 to 3 set its width (so do Shift with Left and
-// Right); Delete hides it.
+// Right) and, with Shift, its height (so do Shift with Up and Down; 2.9.0);
+// Delete hides it.
 function arrangeKey(event, id) {
     if (event.ctrlKey || event.altKey || event.metaKey) return;
     if (event.key === "Delete" || event.key === "Backspace") {
@@ -509,11 +598,21 @@ function arrangeKey(event, id) {
         announceArrange(id);
         return;
     }
+    // Shift with a number key: read by the key's place, since Shift + 1 types "!".
+    const height = /^Digit[1-3]$/.test(event.code ?? "") ? Number(event.code.slice(5)) : 0;
+    if (event.shiftKey && height) {
+        event.preventDefault();
+        const next = MaestroHomeLayout.setHeight(homeLayout, id, height);
+        if (next !== homeLayout) moveWithMotion(() => changeHomeLayout(next, `[data-arrange="${id}-grip"]`), null);
+        announceArrange(id, next === homeLayout && height > MaestroHomeLayout.tallest(id) ? `${moduleLabel(id)} can be at most ${MaestroHomeLayout.tallest(id)} tall.` : "");
+        return;
+    }
     const step = { ArrowUp: -1, ArrowLeft: -1, ArrowDown: 1, ArrowRight: 1 }[event.key];
     if (!step) return;
     event.preventDefault();
+    const sideways = event.key === "ArrowLeft" || event.key === "ArrowRight";
     const next = event.shiftKey
-        ? (event.key === "ArrowLeft" || event.key === "ArrowRight" ? MaestroHomeLayout.setWidth(homeLayout, id, homeLayout.widths[id] + step) : homeLayout)
+        ? (sideways ? MaestroHomeLayout.setWidth(homeLayout, id, homeLayout.widths[id] + step) : MaestroHomeLayout.setHeight(homeLayout, id, moduleHeight(id) + step))
         : MaestroHomeLayout.moveShown(homeLayout, id, step);
     if (next === homeLayout) return;
     moveWithMotion(() => changeHomeLayout(next, `[data-arrange="${id}-grip"]`), null);
@@ -545,7 +644,7 @@ function moveWithMotion(change, held) {
 }
 
 function startMove(event, id) {
-    if (event.button !== 0 || arrangeDrag || event.target.closest(".arrange-hide, .arrange-width, .arrange-resize")) return;
+    if (event.button !== 0 || arrangeDrag || event.target.closest(".arrange-hide, .arrange-size, .arrange-resize")) return;
     const module = homeModule(id);
     arrangeDrag = { kind: "move", id, x: event.clientX, y: event.clientY, grabX: event.clientX - module.offsetLeft, grabY: event.clientY - module.offsetTop, started: false, before: homeLayout };
     document.addEventListener("pointermove", onArrangePointer);
@@ -568,12 +667,20 @@ function onArrangePointer(event) {
     if (!drag) return;
     const module = homeModule(drag.id);
     if (drag.kind === "resize") {
+        // The corner (2.9.0) sets both: the squares the pointer reaches across
+        // and down, down only as far as the module can use.
         const face = $("homeFace");
-        const gap = parseFloat(getComputedStyle(face).columnGap) || 20;
+        const style = getComputedStyle(face);
+        const gap = parseFloat(style.columnGap) || 20;
         const column = (face.clientWidth - 2 * gap) / MaestroHomeLayout.COLUMNS;
-        const reach = event.clientX - module.getBoundingClientRect().left;
-        const width = Math.max(1, Math.min(MaestroHomeLayout.COLUMNS, Math.round((reach + gap) / (column + gap))));
-        if (width !== homeLayout.widths[drag.id]) moveWithMotion(() => { homeLayout = MaestroHomeLayout.setWidth(homeLayout, drag.id, width); applyHomeLayout(); }, null);
+        const box = module.getBoundingClientRect();
+        const width = Math.max(1, Math.min(MaestroHomeLayout.COLUMNS, Math.round((event.clientX - box.left + gap) / (column + gap))));
+        const row = parseFloat(style.gridAutoRows) || (box.height + gap) / moduleHeight(drag.id) - gap;
+        const height = Math.max(1, Math.min(MaestroHomeLayout.tallest(drag.id), Math.round((event.clientY - box.top + gap) / (row + gap))));
+        const next = MaestroHomeLayout.setHeight(MaestroHomeLayout.setWidth(homeLayout, drag.id, width), drag.id, height);
+        if (next.widths[drag.id] !== homeLayout.widths[drag.id] || moduleHeightIn(next, drag.id) !== moduleHeight(drag.id)) {
+            moveWithMotion(() => { homeLayout = next; applyHomeLayout(); }, null);
+        }
         return;
     }
     if (!drag.started) {
@@ -648,6 +755,185 @@ document.addEventListener("keydown", event => {
     else setArranging(false);
 });
 
+// ---- Saved layouts (2.9.0): a chip beside the title names the one in use and
+// opens the Layouts menu: choose one, mark one for while a game runs, and New,
+// Rename, Duplicate and Delete. The palette lists them too.
+
+function useHomeSaved(next, { byHand = false } = {}) {
+    if (byHand) homeGameSession = MaestroHomeLayout.choseByHand(homeGameSession);
+    if (next === homeSaved) return;
+    const changed = next.active !== homeSaved.active;
+    homeSaved = next;
+    if (changed) {
+        moveWithMotion(() => {
+            homeLayout = MaestroHomeLayout.activeLayout(homeSaved);
+            applyHomeLayout();
+        }, null);
+    }
+    keepHomeSaved();
+    renderHomeLayoutChip();
+}
+
+function chooseHomeLayout(name) {
+    useHomeSaved(MaestroHomeLayout.chooseSaved(homeSaved, name), { byHand: true });
+}
+
+function homeSavedLayouts() {
+    return homeSaved.list.map(entry => ({ name: entry.name, gaming: entry.gaming, active: entry.name === homeSaved.active }));
+}
+
+// Games starting and stopping, from Now Playing's live list.
+function homeLayoutsFollowGames(playing) {
+    const followed = MaestroHomeLayout.followGames(homeSaved, homeGameSession, playing);
+    homeGameSession = followed.session;
+    useHomeSaved(followed.saved);
+}
+
+function renderHomeLayoutChip() {
+    const active = homeSaved.list.find(entry => entry.name === homeSaved.active) ?? homeSaved.list[0];
+    $("homeLayoutName").textContent = active.name;
+    $("homeLayoutAuto").hidden = !active.gaming;
+    $("homeLayoutChip").title = `Layout: ${active.name}${active.gaming ? ", used while a game runs" : ""}`;
+    $("homeLayoutChip").disabled = arranging;
+    $("arrangeLayout").textContent = `Layout: ${active.name}`;
+    if (!$("homeLayoutMenu").hidden) renderHomeLayoutMenu();
+}
+
+function renderHomeLayoutMenu() {
+    const active = homeSaved.active;
+    $("homeLayoutList").replaceChildren(...homeSaved.list.map(entry => {
+        const item = element("li");
+        const button = element("button", "layout-option");
+        button.type = "button";
+        button.setAttribute("aria-pressed", String(entry.name === active));
+        button.append(MaestroIcons.create("layout"), element("span", "layout-option-name", entry.name));
+        if (entry.gaming) {
+            const tag = element("small", "layout-option-auto");
+            tag.append(MaestroIcons.create("games"), document.createTextNode("While a game runs"));
+            button.append(tag);
+        }
+        button.addEventListener("click", () => {
+            chooseHomeLayout(entry.name);
+            closeHomeLayoutMenu();
+        });
+        item.append(button);
+        return item;
+    }));
+    const current = homeSaved.list.find(entry => entry.name === active);
+    $("homeLayoutGaming").checked = Boolean(current?.gaming);
+    $("homeLayoutDelete").disabled = homeSaved.list.length < 2;
+    $("homeLayoutNew").disabled = homeSaved.list.length >= MaestroHomeLayout.MAX_SAVED;
+    $("homeLayoutDuplicate").disabled = homeSaved.list.length >= MaestroHomeLayout.MAX_SAVED;
+}
+
+function placeHomeLayoutMenu() {
+    const box = $("homeLayoutChip").getBoundingClientRect();
+    const menu = $("homeLayoutMenu");
+    menu.style.left = `${Math.max(12, Math.min(box.left, innerWidth - menu.offsetWidth - 12))}px`;
+    menu.style.top = `${box.bottom + 8}px`;
+}
+
+function openHomeLayoutMenu() {
+    if (arranging) return;
+    renderHomeLayoutMenu();
+    closeHomeLayoutForm();
+    $("homeLayoutMenu").hidden = false;
+    $("homeLayoutChip").setAttribute("aria-expanded", "true");
+    placeHomeLayoutMenu();
+    ($("homeLayoutList").querySelector('[aria-pressed="true"]') ?? $("homeLayoutNew")).focus();
+}
+
+function closeHomeLayoutMenu(refocus = false) {
+    if ($("homeLayoutMenu").hidden) return;
+    $("homeLayoutMenu").hidden = true;
+    $("homeLayoutChip").setAttribute("aria-expanded", "false");
+    if (refocus) $("homeLayoutChip").focus();
+}
+
+// New and Rename ask for a name in the menu itself.
+let homeLayoutFormMode = "";
+
+function openHomeLayoutForm(mode) {
+    homeLayoutFormMode = mode;
+    $("homeLayoutFormLabel").textContent = mode === "rename" ? `New name for ${homeSaved.active}` : "Name of the new layout";
+    $("homeLayoutNameInput").value = mode === "rename" ? homeSaved.active : "";
+    $("homeLayoutActions").hidden = true;
+    $("homeLayoutForm").hidden = false;
+    checkHomeLayoutName();
+    $("homeLayoutNameInput").focus();
+    $("homeLayoutNameInput").select();
+}
+
+function closeHomeLayoutForm() {
+    homeLayoutFormMode = "";
+    $("homeLayoutForm").hidden = true;
+    $("homeLayoutActions").hidden = false;
+}
+
+function checkHomeLayoutName() {
+    const problem = MaestroHomeLayout.nameProblem(homeSaved, $("homeLayoutNameInput").value, homeLayoutFormMode === "rename" ? homeSaved.active : "");
+    $("homeLayoutProblem").textContent = problem;
+    $("homeLayoutSave").disabled = Boolean(problem);
+    return problem;
+}
+
+// The first free "name copy", "name copy 2", and so on.
+function copyName(name) {
+    for (let n = 1; ; n++) {
+        const candidate = `${name.slice(0, 30)} copy${n > 1 ? ` ${n}` : ""}`;
+        if (!MaestroHomeLayout.nameProblem(homeSaved, candidate)) return candidate;
+    }
+}
+
+$("homeLayoutChip").addEventListener("click", () => ($("homeLayoutMenu").hidden ? openHomeLayoutMenu() : closeHomeLayoutMenu()));
+$("homeLayoutGaming").addEventListener("change", () => useHomeSaved(MaestroHomeLayout.setGaming(homeSaved, homeSaved.active, $("homeLayoutGaming").checked)));
+$("homeLayoutNew").addEventListener("click", () => openHomeLayoutForm("new"));
+$("homeLayoutRename").addEventListener("click", () => openHomeLayoutForm("rename"));
+$("homeLayoutDuplicate").addEventListener("click", () => {
+    useHomeSaved(MaestroHomeLayout.addSaved(homeSaved, copyName(homeSaved.active), homeLayout), { byHand: true });
+    renderHomeLayoutMenu();
+});
+$("homeLayoutDelete").addEventListener("click", async () => {
+    const name = homeSaved.active;
+    closeHomeLayoutMenu();
+    const confirmed = await confirmDialog({ title: `Delete the layout ${name}?`, message: "Its modules and sizes are forgotten. The Podium shows the first layout left.", confirmLabel: "Delete", danger: true });
+    if (confirmed) useHomeSaved(MaestroHomeLayout.removeSaved(homeSaved, name), { byHand: true });
+    $("homeLayoutChip").focus();
+});
+$("homeLayoutNameInput").addEventListener("input", checkHomeLayoutName);
+$("homeLayoutCancel").addEventListener("click", () => {
+    closeHomeLayoutForm();
+    $("homeLayoutNew").focus();
+});
+$("homeLayoutForm").addEventListener("submit", event => {
+    event.preventDefault();
+    if (checkHomeLayoutName()) return;
+    const name = $("homeLayoutNameInput").value;
+    const next = homeLayoutFormMode === "rename"
+        ? MaestroHomeLayout.renameSaved(homeSaved, homeSaved.active, name)
+        : MaestroHomeLayout.addSaved(homeSaved, name, MaestroHomeLayout.defaults());
+    useHomeSaved(next, { byHand: homeLayoutFormMode !== "rename" });
+    closeHomeLayoutForm();
+    renderHomeLayoutMenu();
+    $("homeLayoutList").querySelector('[aria-pressed="true"]')?.focus();
+});
+$("homeLayoutMenu").addEventListener("keydown", event => {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (!$("homeLayoutForm").hidden) {
+        closeHomeLayoutForm();
+        $("homeLayoutNew").focus();
+    } else {
+        closeHomeLayoutMenu(true);
+    }
+});
+document.addEventListener("pointerdown", event => {
+    if ($("homeLayoutMenu").hidden || event.target.closest("#homeLayoutMenu, #homeLayoutChip, #confirmDialog")) return;
+    closeHomeLayoutMenu();
+});
+addEventListener("resize", () => { if (!$("homeLayoutMenu").hidden) placeHomeLayoutMenu(); });
+
 // ---- Today's settings: the Wikipedia almanac and the location
 
 function openTodaySettings() {
@@ -683,6 +969,7 @@ $("todaySettingsDialog").addEventListener("keydown", event => {
 });
 
 applyHomeLayout();
+renderHomeLayoutChip();
 // Before the first data arrives (2.2.0): Games draws its waiting state, and
 // the spaces left empty until then hold their shape.
 renderGames();

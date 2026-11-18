@@ -202,8 +202,24 @@
             G.filterRaAchievements(list, "all", "unlocked").map(a => a.id).join(), "4,2,5,1,3");
         equal("ra sort: unlocked first keeps the filter",
             G.filterRaAchievements(list, "locked", "unlocked").map(a => a.id).join(), "1,3");
+        // 2.9.0: hardcore and softcore together.
+        equal("ra filter: softcore only is what's left to redo in hardcore",
+            G.filterRaAchievements(list, "softcore").map(a => a.id).join(), "2,5");
+        equal("ra counts: softcore only", G.raCounts(list).softcore, 2);
+        equal("ra unlocks: hardcore, then an earlier softcore unlock",
+            JSON.stringify(G.raUnlocks(list[3])), JSON.stringify([{ mode: "hardcore", date: "2026-05-02 08:00:00" }, { mode: "softcore", date: "2026-01-01 09:00:00" }]));
+        equal("ra unlocks: softcore only", G.raUnlocks(list[1]).map(part => part.mode).join(), "softcore");
+        equal("ra unlocks: the same time in both is said once", G.raUnlocks({ earned: "2026-10-01 20:15:00", earnedHardcore: "2026-10-01 20:15:00" }).map(part => part.mode).join(), "hardcore");
+        equal("ra unlocks: hardcore with no softcore date", G.raUnlocks({ earned: "", earnedHardcore: "2026-10-01 20:15:00" }).length, 1);
+        equal("ra unlocks: locked", G.raUnlocks(list[0]).length, 0);
     }
-    equal("ra counts", JSON.stringify(G.raCounts(raGame.achievements)), JSON.stringify({ all: 4, locked: 3, earned: 1, missable: 1, progression: 2 }));
+    equal("ra game: hardcore points", raGame.pointsHardcore, 5);
+    equal("bar: hardcore, then softcore only", JSON.stringify(G.raBarParts(40, 12, 10)), JSON.stringify({ hardcore: 25, softcore: 5 }));
+    equal("bar: all hardcore", JSON.stringify(G.raBarParts(4, 4, 4)), JSON.stringify({ hardcore: 100, softcore: 0 }));
+    equal("bar: more hardcore than unlocked is held to the unlocked", JSON.stringify(G.raBarParts(10, 2, 5)), JSON.stringify({ hardcore: 20, softcore: 0 }));
+    equal("bar: more unlocked than there are is held to full", G.raBarParts(10, 15, 0).softcore, 100);
+    equal("bar: no achievements", JSON.stringify(G.raBarParts(0, 0, 0)), JSON.stringify({ hardcore: 0, softcore: 0 }));
+    equal("ra counts", JSON.stringify(G.raCounts(raGame.achievements)), JSON.stringify({ all: 4, locked: 3, earned: 1, softcore: 0, missable: 1, progression: 2 }));
     const next = G.nextUp(raGame);
     equal("next up: the next progression or win", next.achievement.title, "Boss");
     equal("next up: missable still locked", next.missableLeft, 1);

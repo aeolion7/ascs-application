@@ -31,6 +31,7 @@ function saveGameNote(note) {
     note.updated = new Date().toISOString();
     if (note.id === notesData.activeId) renderActiveNote();
     scheduleNoteSave(false);
+    sendNotesWindowState();
 }
 
 function moveCaretToEnd(area) {
@@ -57,6 +58,7 @@ function withFreshPlaying(callback) {
 
 function gameNotesLiveArrived() {
     freshPlayingWaiters.splice(0).forEach(waiter => waiter());
+    sendNotesWindowState();
 }
 
 // ---- timestamps
@@ -146,6 +148,60 @@ function refreshGameNotes() {
         if (box.root.isConnected) syncGameNotesBox(box);
         else gameNoteBoxes.delete(id);
     });
+    sendNotesWindowState();
+}
+
+// ---- The game notes window (2.9.0): Super + G shows it over a game. Maestro
+// relays between it and this page, which stays the one that changes the
+// notes. It's told the running game's note when it opens, when the game
+// changes and when the note changes; its edits come back here.
+let notesWindowOpen = false;
+let notesWindowSent = "";
+
+function notesWindowGame() {
+    const title = (gamesState.playing || []).map(item => Games.playingTitle(gamesState.items, item)).find(Boolean) || "";
+    return { title, key: title ? Games.gameNoteKey(title) : "" };
+}
+
+function sendNotesWindowState(force = false) {
+    if (!notesWindowOpen) return;
+    const { title, key } = notesWindowGame();
+    const note = key && notesLoaded ? gameNoteFor(key) : null;
+    const json = JSON.stringify({ key, title: title ? Games.displayTitle(title) : "", text: note?.content ?? "", ready: notesLoaded });
+    if (json === notesWindowSent && !force) return;
+    notesWindowSent = json;
+    send("GameNotesWindowState", json);
+}
+
+function setNotesWindowOpen(open) {
+    notesWindowOpen = open === true;
+    notesWindowSent = "";
+    sendNotesWindowState();
+}
+
+// Only for the game that's running: an edit for one that has just closed
+// waits in the window rather than going to the wrong note.
+function notesWindowEdit(key, text) {
+    const game = notesWindowGame();
+    if (!notesLoaded || typeof text !== "string" || key !== game.key || !game.key) return;
+    const note = gameNoteFor(key) ?? createGameNote(key, game.title);
+    if (note.content === text) return;
+    note.content = text;
+    saveGameNote(note);
+    gameNoteBoxes.forEach(box => { if (box.key === key && box.root.isConnected && document.activeElement !== box.text) syncGameNotesBox(box); });
+}
+
+function notesWindowStamp(key) {
+    const game = notesWindowGame();
+    if (key !== game.key || !game.key) return;
+    addGameNoteStamp(key, game.title, () => refreshGameNotes());
+}
+
+function notesWindowOpenNote(key) {
+    const note = notesLoaded ? gameNoteFor(key) : null;
+    if (!note) return;
+    openNote(note.id, "edit");
+    moveCaretToEnd($("noteText"));
 }
 
 // The page's redraws replace the box's parents, which drops the focus. Called

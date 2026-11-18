@@ -1,0 +1,21 @@
+/* 2.9.0: icon buttons, for actions everyone knows by their mark (refresh,
+   open a folder, copy, delete, clear). Each has a tooltip and a name for
+   screen readers; actions that need words keep them. */
+
+:root .icon-action {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  min-width: 0;
+  aspect-ratio: 1;
+  padding: 0;
+}
+
+:root .icon-action[hidden] {
+  display: none;
+}
+
+:root .icon-action svg.icon {
+  width: 20px;
+  height: 20px;
+}

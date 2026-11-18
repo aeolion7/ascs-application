@@ -28,7 +28,7 @@ Maestro is a keyboard-driven Windows utility suite. It uses AutoHotkey v2 for ho
 
 Maestro brings application launching, window and desktop control, notes, games, sounds, a calendar, system monitoring and a music workshop behind one dedicated key, **Super** (F24, mapped by Keychron Launcher).
 
-Its pages, in the sidebar: **Command Center**, **Quick Notes**, **Calendar**, **Workspaces**, **Games**, **System**, **Sounds**, **Commands** and **Conservatory**, with **Preferences** and **Power** at the foot. **Super + Space** opens the **Command Palette** over any of them.
+Its pages, in the sidebar: **Podium**, **Quick Notes**, **Calendar**, **Workspaces**, **Games**, **System**, **Sounds**, **Commands** and **Conservatory**, with **Preferences** and **Power** at the foot. **Super + Space** opens the **Command Palette** over any of them.
 
 ## 2. Architecture
 
@@ -100,16 +100,17 @@ What `data\` holds:
 | `chords.ini`, `charts\`, `counterpoint\`, `rhythms\`, `exports\` | The Conservatory's saved chords, songs, exercises, rhythms and MusicXML exports |
 | `startup-sounds.ini`, `sound-origins.ini`, `sound-lengths.txt` | Sign-in and shutdown sounds, where leveled copies came from, cached lengths |
 | `radicale\` | The calendar server and its store |
+| `consoles.ini`, `consoles\` | The console hub: the chosen payload, its folder, the dates each console was last updated; copies of console SD cards' config files (five of each) |
 | `secrets.ini` | Optional: the RetroAchievements key and the calendar password. Never sent to the page or logged |
 | `activity.log`, `ASCS_Log.txt` | The activity feed; the diagnostic log (rotated at 1 MiB) |
-| `almanac\`, `ra-images\`, `weather.json` | Caches: Wikipedia feeds, RetroAchievements images (capped at 20 MB), the forecast |
+| `almanac\`, `ra-images\`, `weather.json` | Caches: Wikipedia feeds, RetroAchievements images (capped at the limit set in Preferences › Storage), the forecast |
 | `WebView2\` | The WebView profile, including page-side settings in local storage |
 
 ## 5. Interfaces
 
-### Command Center
+### Podium
 
-Super shows Maestro on the last view open (the Command Center after a start) and hides it when it's in front. The Command Center is a three-by-three grid of modules sized to fit the window without scrolling: **Now Playing**, **Today** (the almanac: moon, sun, countdowns, seasons and a rotating line from history, quotes and, if turned on, Wikipedia), **Next Up** (calendar), **System**, **Quick Actions and Arrangements**, **Continue Playing** and **Quick Note**. **Arrange** moves, resizes and hides modules and adds others: Weather, Top Apps, Network, Audio, Controllers, Pinned Notes, Recent Unlocks, Metronome and Timer.
+Super shows Maestro on the last view open (the Podium after a start) and hides it when it's in front. The Podium is a three-by-three grid of modules sized to fit the window without scrolling: **Now Playing**, **Today** (the almanac: moon, sun, countdowns, seasons and a rotating line from history, quotes and, if turned on, Wikipedia), **Next Up** (calendar), **System**, **Quick Actions and Arrangements**, **Continue Playing** and **Quick Note**. **Arrange** moves, sizes (one to three squares wide, and up to three tall for a module with more to show) and hides modules, each going in the first space where it fits, and adds others: Weather, Top Apps, Network, Audio, Controllers, Pinned Notes, Recent Unlocks, Metronome and Timer. Saved **layouts**, chosen from the chip beside the title or the palette, keep different arrangements of modules; one can be used while a game runs, switching back as it closes.
 
 **Power**, at the sidebar's foot, opens a tray with Lock and the audio output, and the guarded actions (Recycle Bin, Sleep, Restart, Shut down, Sign out). A guarded action needs a 1.5 s press-and-hold, then counts down with Cancel. Restart, Shut down and Sign out wait while any window shows unsaved work.
 
@@ -133,7 +134,7 @@ Arrangements of windows: Super + S and Super + R save and restore the Default, a
 
 ### Games
 
-Play time, recent games and achievements across Steam, RetroArch, Dolphin, PCSX2 and Phantasy Star Online, read from each program's own records. **Playing** shows what's running with a session timer and the game's notes (a Quick Note per game); **Achievements** shows RetroAchievements progress, site badges and each game's achievements; **Library** lists every game played, with covers from local folders; **Controllers** lists controllers with a live input tester, rumble and renaming; **Setup** holds program paths, the PSO session and RetroAchievements.
+Play time, recent games and achievements across Steam, RetroArch, Dolphin, PCSX2 and Phantasy Star Online, read from each program's own records. **Playing** shows what's running with a session timer and the game's notes (a Quick Note per game); **Achievements** shows RetroAchievements progress, site badges and each game's achievements, with hardcore and softcore unlocks shown together and a filter for those still to earn in hardcore; **Library** lists every game played, with covers from local folders; **Controllers** lists controllers with a live input tester, rumble and renaming; **Consoles** pushes a Switch payload with TegraRcmGUI's sender (listing its favorites and a folder you choose, with hekate's version and each file's SHA-256), says when a Switch in RCM mode is plugged in and can push the chosen payload then, recognizes Switch, 3DS and Wii U SD cards as they're inserted (their free space, the versions their files record, a copy of their config files) and copies the Switch's album to Pictures\Switch, and keeps each console's last update date, release pages and notes; **Setup** holds program paths, the PSO session and RetroAchievements. **Super + G** opens a small window over the game with the running game's notes; it stays on top and doesn't take the focus until clicked.
 
 ### System
 
@@ -145,7 +146,7 @@ Every Windows sound from 3.x to 11, from a local library, plus a custom folder. 
 
 ### Commands
 
-**Key Map** draws the customized keyboard with every Super binding, where letters are reassigned; **Custom Commands** adds apps, folders and links to the palette and to free letters; **Palette** sets the web search address; **Quick Actions** chooses the Command Center's buttons.
+**Key Map** draws the customized keyboard with every Super binding, where letters are reassigned; **Custom Commands** adds apps, folders and links to the palette and to free letters; **Palette** sets the web search address; **Quick Actions** chooses the Podium's buttons.
 
 ### Conservatory
 
@@ -165,7 +166,7 @@ Each instrument is written as it usually is: a keyboard on a grand staff, guitar
 
 ### Preferences
 
-Only what belongs to the whole app: text size and the logo's swing, window snapping, the power delay, and the daily backup of `data\` to a folder you choose. Settings that belong to one page live on that page.
+Only what belongs to the whole app: text size and the logo's swing, window snapping, the power delay, the daily backup of `data\` to a folder you choose, and **Storage**: the size of each cache, the image cache's limit (100 MB to 1 GB) and clearing a cache. Settings that belong to one page live on that page.
 
 ### Other parts
 
@@ -203,6 +204,7 @@ Only what belongs to the whole app: text size and the logo's swing, window snapp
 | Super + Shift + Left / Right | Move the window to the adjacent monitor |
 | Super + L / M / V | Lock / toggle mute / Clipboard History |
 | Super + J / Y | Type a timestamp / date |
+| Super + G | Game notes window: the running game's notes over the game |
 | Ctrl + Shift + M | Start or stop the metronome |
 | Ctrl + Alt + Shift + A | Start Maestro, or save notes and reload it |
 | Inside Maestro | Ctrl + 1–9 pages, **/** search, F6 next area, Alt + Left/Right back and forward, Ctrl + N new note, Ctrl + E new event, Ctrl + F find, F1 help |
@@ -248,12 +250,16 @@ The page sends text through `window.chrome.webview.postMessage()`: the message t
 | `GetSettings` / `SaveSettings` / `SetStartScreen` | None / settings fields / `on`, `off` | Preferences and Commands |
 | `GetCommands` / `SaveCommands` / `RunCommand` / `BrowseCommandTarget` | None / up to 30 commands / an index 1–30 / `row\|app`, `row\|folder` | Custom commands |
 | `SaveBackups` / `ChooseBackupsFolder` / `BackupNow` / `OpenBackupsFolder` | `0\|HHmm`, `1\|HHmm` / None | The daily backup; the folder comes from Windows' picker |
+| `GetStorage` / `SetCacheLimit` / `ClearCache` | None / `100`, `250`, `500`, `1000` / `images`, `almanac`, `forecast` | The caches' sizes / the image cache's limit in MB / clears a cache, deleting only files named as Maestro's own |
+| `GameNotesWindowState` / `ToggleGameNotes` | The running game's note as JSON (up to 220,000 characters) / None | Passed to the game notes window, which checks it / opens or closes that window |
+| `GetConsoles` / `PushPayload` / `GetPayloadBytes` / `SetPayloadChoice` / `ChoosePayloadFolder` | None or `refresh` / a payload's place in Maestro's list / the same / its place (0 for none) and `0` or `1` / None | The console hub; Maestro keeps the payloads' paths, and the page hashes the bytes it's sent |
+| `SetConsoleUpdated` / `OpenConsoleCard`, `ImportAlbum` / `OpenAlbumFolder`, `OpenConsoleBackups` / `OpenConsoleLink` | `switch`, `3ds` or `wiiu` and a date / a drive letter Maestro recognized / None / `hekate`, `atmosphere`, `luma` or `aroma` | A console's last update / a card's folder, its album copied / the copies' folders / a fixed release page |
 | Workspaces: `GetWorkspaces`, `SaveWorkspace`, `RestoreWorkspace`, `DeleteWorkspace`, `RenameWorkspace`, `DuplicateWorkspace`, `SetWorkspaceWindow`, `RemoveWorkspaceWindow`, `AddWorkspaceWindow` | Validated names, indexes and range-checked places | Arrangements; never an app's path |
 | Launch rules: `GetLaunchRules`, `RememberWindowRule`, `RuleFromWorkspaceWindow`, `SetLaunchRuleEnabled`, `DeleteLaunchRule` | A window handle, `name\|index`, or a validated path | Launch rules |
 | `GetWindows` / `FocusWindow` | None / a window handle | Window switcher |
 | `PasteNote` / `CopyNote` | Note text (≤ 256 KB) | Paste into the previous window / copy |
 | `SearchWeb` / `SearchFiles` / `OpenNoteLink` | A query (≤ 1000) / same / an address (≤ 2048) | Web search / Everything / an http(s) link from a note |
-| `GetActivity` / `SaveQuickActions` | None / up to six validated ids | Activity feed / Command Center buttons |
+| `GetActivity` / `SaveQuickActions` | None / up to six validated ids | Activity feed / Podium buttons |
 | `GetChords` / `SaveChords` | None / saved chords (≤ 32 KB) | The Conservatory's chord library (`data\chords.ini`) |
 | `GetCharts` / `SaveChart` / `DeleteChart` | None / an id and a chart (≤ 64 KB) / an id | Songs in `data\charts`, checked line by line |
 | `GetExercises` / `SaveExercise` / `DeleteExercise` | None / an id and an exercise (≤ 64 KB) / an id | Counterpoint exercises in `data\counterpoint` |
@@ -273,6 +279,7 @@ AutoHotkey sends JSON with `PostWebMessageAsJson()`: views to show (`navigate`, 
 
 - The backend accepts bridge messages only from `https://ascs.localhost`, validates every message type and payload, cancels navigation to other origins, and blocks new windows.
 - WebView settings disable DevTools, default context menus, browser accelerator keys, zoom and host objects (WebViewToo would otherwise expose every AutoHotkey function to page script).
+- The **game notes window** is a second WebView with the same settings, origin and policy. It accepts messages only from its own page, with a short list of its own: an edit for a note named by a checked key, a timestamp, opening the note in Maestro, and closing. It writes nothing itself: the main page changes the note and saves it as every other note.
 - The Content Security Policy allows only Maestro's own scripts, styles, fonts and images (inline styles and data images too) and no connections, so the page has no network access.
 - Nothing in the bridge runs arbitrary commands. Custom commands run only validated entries from `data\commands.ini`, referred to by index. The page never sends a file path: files are named by ids Maestro checks, or chosen in Windows' own dialogs.
 - Maestro asks for no elevation and opens no network listener other than the calendar server on 127.0.0.1. Restrict write access to `C:\Maestro` to the installing account, Administrators and SYSTEM, and don't run Maestro elevated.
@@ -292,6 +299,7 @@ Every request names the client `Maestro/<version> (Aeolionware)` with no contact
 - **Calendar:** Radicale listens on 127.0.0.1 only, with a random password Maestro keeps (the page never sees it), and was installed from hash-pinned wheels. The page names an operation; Maestro builds the one request and guards edits with `If-Match` / `If-None-Match`.
 - **Files Maestro writes** (notes, settings, songs, exercises, rhythms, chords, sounds) are validated in AutoHotkey on save and on read, written through a temporary file and moved into place. Leveled sound copies go only into `ASCS Leveled`; Windows sounds change only for 19 allowlisted events, with the previous value kept for Restore; deletions go to the Recycle Bin.
 - **Notes:** Markdown never becomes HTML and images are never loaded; a link opens only on Ctrl + click and only as a checked http(s) address. Notes are pasted through the clipboard (restored afterwards), never typed as keystrokes.
+- **Consoles:** a payload is pushed only by TegraRcmGUI's own sender, with a path Maestro read from TegraRcmGUI's files or your folder and checked (a .bin, no characters the command line would read); the page names it only by its place in the list. Maestro listens for USB devices to see a Switch in RCM mode and reads SD cards without changing them: their config files are copied into `data\consoles`, and the album is copied, never moved or overwritten. Release pages open in the browser; Maestro checks nothing online.
 - **Games and controllers:** emulator and Steam files are only read; games start through Maestro's own index or `steam://rungameid/` with a checked id. Controllers are read through XInput and Raw Input only: DirectInput and the winmm joystick API corrupted Maestro's memory in testing. Every new native call is probed with guard bytes.
 - **Workspaces and launch rules** never take an app's path from the page; paths are captured by AutoHotkey from real windows and checked again at restore.
 - **Backups** hold `secrets.ini`; the folder must be on a fixed drive of this PC, outside Maestro's folder, and is checked before every backup. A test build never backs up.
@@ -365,7 +373,9 @@ The current version, and each release's contents, checks and manual results, are
 - **PSO session:** switches audio through SoundSwitch's hotkey, and Discord shows the voice channel rather than joining it.
 - **Startup history:** timed from `SignIn.ahk` starting, about a second after sign-in.
 - **Quick Notes:** quick capture copies with Ctrl+C; paste uses Ctrl+V in the previous window and falls back to the clipboard if it can't refocus it.
-- **Toasts:** a game in exclusive fullscreen can draw over one.
+- **Toasts and the game notes window:** a game in exclusive fullscreen can draw over them.
+- **Consoles:** pushing needs TegraRcmGUI in its usual folder and its USB driver; a Switch already in RCM mode when Maestro starts is found once, 30 seconds in. Versions are read only where a card's files record them (hekate's update.bin, Luma3DS's boot.firm); Atmosphère's and Aroma's show as present. Only removable drives are checked for console cards.
+- **Podium:** module heights apply in a window over 1700 pixels wide; narrower, modules stack in two columns at their own heights. A taller Now Playing shows the next achievement only once Games has loaded the game's list. Up to 12 layouts, kept on this PC with the page's other settings.
 - **Metrics:** depend on Windows APIs, WMI and drive reporting; drive probes time out after eight seconds and are cached for 30. Hardware details are read once a session.
 - **Backups:** need PowerShell 7, run only while Maestro runs, and aren't compressed or encrypted.
 - **Conservatory:**
@@ -379,15 +389,12 @@ The current version, and each release's contents, checks and manual results, are
 
 ## 14. Development Roadmap
 
-**Next, in this order:** the large manual pass; iPhone calendar sync (a second Radicale on the home network with a private certificate authority, after its setup guide is reviewed).
+**Next:** the large manual pass, then iPhone calendar sync (a second Radicale on the home network with a private certificate authority, after its setup guide is reviewed). Other features may come before the manual pass, but iPhone sync comes after it.
 
 **Planned:**
 
 - **Routines:** multi-step sequences (restore a workspace, switch desktop, set audio, launch an app, wait); never power actions.
-- **A console hub:** Luma3DS, hekate and Atmosphère (with a Switch payload command first), Aroma.
 - **Moving `C:\Scripts` into Maestro,** with a migration and rollback plan.
-- **The achievement viewer:** softcore and hardcore together, and an uncapped image cache.
-- **The Command Center:** modules in more sizes, saved layouts, and a small game-notes window over a game.
 - **Tasks on the calendar server,** media controls, and 3D printer status (which needs its own network plan).
 - **Ideas needing new access, each with its own plan first:** MIDI in and out, MusicXML import, slowing a track, and tools that use the microphone.
 - **Smaller ideas:** notes and settings export, reminders that aren't events, a per-app volume mixer, live Markdown in the editor, palette actions on results, and a scripted WebView test on the target machine.

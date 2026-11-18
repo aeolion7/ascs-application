@@ -1,7 +1,7 @@
 "use strict";
 
 // The Conservatory (2.3.0): a page for playing music. Its metronome sits in a
-// bar along the bottom of the page and in a Command Center module, and keeps
+// bar along the bottom of the page and in a Podium module, and keeps
 // playing on any page and while Maestro is hidden, until it's stopped. Its
 // rules are in metronome.js; its settings are kept on this PC.
 
@@ -228,7 +228,7 @@ function renderMetroPractice() {
     const text = MaestroMetronome.practiceText;
     $("metroPracticeTime").textContent = today || week
         ? `Played today: ${text(today)}; the last 7 days: ${text(week)}. Counted while the metronome plays.`
-        : "Time is counted while the metronome plays, and shown here and on the Command Center.";
+        : "Time is counted while the metronome plays, and shown here and on the Podium.";
     $("homeMetroPractice").textContent = today ? `Played today: ${text(today)}` : "";
     $("homeMetroPractice").hidden = !today;
 }

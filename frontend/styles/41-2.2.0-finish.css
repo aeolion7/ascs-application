@@ -1,7 +1,7 @@
 /* ==========================================================================
    2.2.0: the finish pass. One set of parts, in the Lacquer finish.
    Stage 1, sizes: the window is 10% shorter (1224 px) and small text is
-   larger, so the Command Center's squares and Games' modules hold what they
+   larger, so the Podium's squares and Games' modules hold what they
    did with tighter spacing, as in the approved mock.
    ========================================================================== */
 
@@ -310,7 +310,7 @@
   -webkit-box-orient: vertical;
 }
 
-/* ---- Command Center ---- */
+/* ---- Podium ---- */
 
 /* System in one square: Processor, Memory and the drives share two columns,
    as in wider squares, so six drives fit in whole rows. More scroll, and a
@@ -864,7 +864,7 @@ select:not([multiple]):not([size]) {
 
 /* ---- Larger text and smaller windows (stage 9) ---- */
 
-/* Now Playing on the Command Center. Above 1700 px its rows are a third of the
+/* Now Playing on the Podium. Above 1700 px its rows are a third of the
    page each, whatever they hold, and its words ran 26 px past its foot at the
    default size and window, more in a shorter window or at a larger text size,
    cutting its buttons. So there the achievements bar sits beside the session's

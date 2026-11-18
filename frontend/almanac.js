@@ -456,7 +456,7 @@
     }
 
     // ------------------------------------------------------------- rotation
-    // One line, advanced only when the Command Center opens or ↻ is pressed.
+    // One line, advanced only when the Podium opens or ↻ is pressed.
     // Kinds rotate in a fixed order; history cycles through today's events.
     function rotationItem(sources, step) {
         const kinds = [];

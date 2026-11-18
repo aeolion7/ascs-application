@@ -1,7 +1,7 @@
 ; ==========================================
-; COMMAND CENTER EXTRAS (2.0.0)
+; PODIUM EXTRAS (2.0.0)
 ; ==========================================
-; What the added Command Center modules need from Windows or the web, asked for
+; What the added Podium modules need from Windows or the web, asked for
 ; by the page only while a module shows.
 ;
 ; Weather: Open-Meteo's forecast for the almanac's location, at most every 30
@@ -223,7 +223,7 @@ ProcessUsageJson(&previous) {
         list := []
         for name, value in values
             list.Push([name, value * scale])
-        sorted := TopEntries(list, 4)
+        sorted := TopEntries(list, 11)     ; 2.9.0: room for Top Apps three squares tall
         json := "["
         for index, entry in sorted
             json .= (index > 1 ? "," : "") '{"name":' JsonQuote(SubStr(entry[1], 1, 60)) ',"value":' Round(entry[2], 1) '}'

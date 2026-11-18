@@ -1,0 +1,208 @@
+/* 2.9.0: the console hub, Games › Consoles. */
+
+.games-consoles {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--space-between);
+}
+
+.games-consoles[hidden] {
+  display: none;
+}
+
+.games-consoles > .consoles-payload {
+  grid-column: span 7;
+}
+
+.games-consoles > .consoles-cards-module {
+  grid-column: span 5;
+}
+
+.games-consoles > .consoles-console {
+  grid-column: span 4;
+}
+
+@media (max-width: 1500px) {
+  .games-consoles > .consoles-payload,
+  .games-consoles > .consoles-cards-module {
+    grid-column: 1 / -1;
+  }
+
+  .games-consoles > .consoles-console {
+    grid-column: span 6;
+  }
+}
+
+.consoles-rcm {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+.consoles-rcm::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--line-control);
+}
+
+.consoles-rcm.is-connected {
+  color: var(--text-strong);
+}
+
+.consoles-rcm.is-connected::before {
+  background: var(--brand-gold);
+}
+
+.consoles-payloads,
+.consoles-cards {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+:root .consoles-payload-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-height: 58px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-strong);
+  text-align: left;
+  cursor: pointer;
+}
+
+:root .consoles-payload-row:hover {
+  background: var(--surface-hover);
+}
+
+:root .consoles-payload-row[aria-pressed="true"] {
+  border-color: var(--brand-tint);
+  background: color-mix(in srgb, var(--brand-indigo-control) 45%, transparent);
+}
+
+.consoles-payload-words,
+.consoles-card-words {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+}
+
+.consoles-payload-words strong,
+.consoles-card-words strong {
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: var(--t-body);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.consoles-payload-words small,
+.consoles-card-words small,
+.consoles-hash,
+.consoles-note {
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+.consoles-hash {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.consoles-push-row,
+.consoles-folder-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+
+.consoles-folder-row {
+  justify-content: space-between;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.consoles-folder-row > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.consoles-folder-row strong {
+  font-family: var(--font-display);
+  font-size: var(--t-body);
+}
+
+.consoles-folder-row small {
+  overflow-wrap: anywhere;
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+.consoles-note {
+  margin: 0;
+}
+
+.consoles-note:empty {
+  display: none;
+}
+
+.consoles-note.is-failed {
+  color: var(--brand-burgundy-text);
+}
+
+.consoles-head-actions {
+  display: inline-flex;
+  gap: 16px;
+}
+
+.consoles-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 12px 0;
+}
+
+.consoles-card + .consoles-card {
+  border-top: 1px solid var(--line);
+}
+
+.consoles-card-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.consoles-card > .consoles-card-track {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.consoles-console-body {
+  display: grid;
+  gap: 16px;
+}
+
+.consoles-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+.consoles-console .game-notes-text {
+  min-height: 120px;
+}

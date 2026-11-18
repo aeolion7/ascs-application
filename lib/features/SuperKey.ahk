@@ -21,6 +21,7 @@ F24 & b::LaunchVivaldi()
 
 F24 & j::SendText(FormatTime(, "yyyy-MM-dd HH:mm:ss"))
 F24 & y::SendText(FormatTime(, "yyyy-MM-dd"))
+F24 & g::ToggleGameNotesWindow()        ; 2.9.0: the game notes window, over the game
 
 ; Macro keys (1.7.0). Without Super they belong to the keyboard macro
 ; script; with Super, M4 starts a PSO session and M5-M7 list recent games.

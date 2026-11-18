@@ -1,0 +1,375 @@
+/* 2.9.0: the Podium (the Command Center before): modules one to three
+   squares tall, each in the first space where it fits, and Arrange's size
+   picker and corner handle. */
+
+/* In order, each in the first space where it fits: a later, smaller module
+   fills a gap an earlier, larger one left (homelayout.js grid() does the same,
+   for Arrange's count of rows). */
+:root .face {
+  grid-auto-flow: row dense;
+}
+
+/* Heights apply where the page is three squares by three. In a narrower
+   window the modules stack in two columns at their own heights. */
+@media (min-width: 1701px) {
+  :root .face > [data-module][data-height="2"] {
+    grid-row: span 2;
+  }
+
+  :root .face > [data-module][data-height="3"] {
+    grid-row: span 3;
+  }
+}
+
+/* ---- Arrange: the size picker ---- */
+
+.arrange-size {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 26px) auto;
+  grid-auto-rows: 26px;
+  flex: none;
+  align-self: flex-start;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px 8px 8px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+
+:root .arrange-size button {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line-control);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+:root .arrange-size button:hover:not(:disabled) {
+  border-color: var(--brand-tint);
+  background: var(--surface-hover);
+}
+
+:root .arrange-size button.is-covered {
+  border-color: var(--brand-tint);
+  background: var(--brand-tint);
+}
+
+/* Rows past what the module can use. */
+:root .arrange-size button:disabled {
+  border-style: dashed;
+  opacity: .35;
+  cursor: not-allowed;
+}
+
+.arrange-size-label {
+  grid-column: 4;
+  grid-row: 1 / 4;
+  margin-left: 10px;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-body);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The handle moves to the corner, to drag across and down. */
+:root .arrange-resize {
+  top: auto;
+  right: -9px;
+  bottom: -9px;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  transform: none;
+  cursor: nwse-resize;
+}
+
+body.is-arrange-resizing,
+body.is-arrange-resizing * {
+  cursor: nwse-resize !important;
+}
+
+/* ---- What a taller module shows ---- */
+
+@media (min-width: 1701px) {
+  /* Continue Playing two tall: a second row of games. */
+  :root [data-module="continue"][data-height="2"] .home-continue {
+    grid-auto-rows: minmax(0, 1fr);
+  }
+
+  :root [data-module="continue"][data-width="1"][data-height="2"] .home-continue > :nth-child(-n + 6),
+  :root [data-module="continue"][data-width="2"][data-height="2"] .home-continue > :nth-child(-n + 12) {
+    display: flex;
+  }
+}
+
+/* Today two tall: the almanac's other items under its turning line. */
+.alm-more {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.alm-more li + li {
+  border-top: 1px solid var(--line);
+}
+
+.alm-more-item {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.alm-more-item {
+  cursor: pointer;
+}
+
+button.alm-more-item:hover p,
+button.alm-more-item:focus-visible p {
+  color: var(--text-strong);
+}
+
+.alm-more-item p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: var(--t-body);
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* Now Playing two tall: the next achievement, then the game's notes. */
+.home-now-next {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.home-now-next .ra-unlock-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.home-now-next-label {
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+.home-now-next strong {
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-tab);
+  font-weight: 500;
+}
+
+.home-now-next p {
+  margin: 4px 0 0;
+  color: var(--text-soft);
+  font-size: var(--t-body);
+}
+
+@media (min-width: 1701px) {
+  /* Two tall, Now Playing keeps the cover it has in one square, at the top,
+     and the room below its buttons holds the next achievement and the notes. */
+  :root .face [data-module="now"][data-height="2"] .game-cover-home {
+    align-self: flex-start;
+    height: calc((var(--page-fit) - 2 * var(--space-between)) / 3 - 2 * var(--space-module));
+  }
+
+  :root .face [data-module="now"][data-height="2"] .home-now-copy > .game-notes {
+    margin-top: 18px;
+  }
+
+  /* Two tall, Today's turning line keeps its own height, and the list follows it. */
+  :root .home-almanac:has(.alm-more) .alm-story {
+    flex: none;
+  }
+
+  :root .home-almanac .alm-more {
+    margin-top: 6px;
+    border-top: 1px solid var(--line);
+  }
+}
+
+/* ---- Saved layouts: the chip beside the title, and its menu ---- */
+
+:root .layout-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  height: var(--height-control-small);
+  padding: 0 12px 0 10px;
+  border: 1px solid var(--line-control);
+  border-radius: 999px;
+  background: var(--surface-module);
+  color: var(--text-strong);
+  font: 600 var(--t-button) var(--font-display);
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+:root .layout-chip[hidden] {
+  display: none;
+}
+
+:root .layout-chip:hover:not(:disabled),
+:root .layout-chip[aria-expanded="true"] {
+  border-color: var(--brand-tint);
+  background: var(--surface-hover);
+}
+
+:root .layout-chip:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
+:root .layout-chip > svg.icon:last-child {
+  color: var(--text-soft);
+}
+
+.layout-chip-auto {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-soft);
+  font-weight: 500;
+}
+
+.layout-chip-auto[hidden] {
+  display: none;
+}
+
+.layout-chip-auto svg.icon,
+.layout-option-auto svg.icon {
+  color: var(--brand-gold-text);
+}
+
+.layout-menu {
+  position: fixed;
+  z-index: 40;
+  display: grid;
+  gap: 14px;
+  width: min(500px, calc(100vw - 48px));
+  padding: 16px var(--space-module);
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-module);
+  background: var(--surface-module);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .55);
+}
+
+.layout-menu[hidden] {
+  display: none;
+}
+
+.layout-menu h2 {
+  margin: 0;
+  color: var(--text-strong);
+  font: 600 var(--t-tab) var(--font-display);
+}
+
+.layout-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+:root .layout-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--height-control);
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-strong);
+  font-size: var(--t-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+:root .layout-option:hover {
+  background: var(--surface-hover);
+}
+
+:root .layout-option[aria-pressed="true"] {
+  border-color: var(--brand-tint);
+  background: color-mix(in srgb, var(--brand-indigo-control) 45%, transparent);
+}
+
+.layout-option-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layout-option-auto {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: var(--text-soft);
+  font-size: var(--t-sub);
+}
+
+.layout-menu .layout-gaming {
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.layout-actions,
+.layout-form-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.layout-actions[hidden],
+.layout-form[hidden] {
+  display: none;
+}
+
+.layout-form {
+  display: grid;
+  gap: 10px;
+}
+
+.layout-form-buttons {
+  justify-content: flex-end;
+}
+
+#homeLayoutProblem:empty {
+  display: none;
+}
+
+/* The dock names the layout being arranged. */
+.arrange-layout {
+  margin: 0;
+  color: var(--text-strong);
+  font: 600 var(--t-body) var(--font-display);
+}

@@ -14,7 +14,7 @@ Suspend(true)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 2.8.0
+; Version 2.9.0
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -24,7 +24,7 @@ Suspend(true)
 ; GLOBAL VARIABLES
 ; ==========================================
 
-global ASCS_Version := "2.8.0"
+global ASCS_Version := "2.9.0"
 global ASCS_App := ""
 global ASCS_WindowIcon := 0
 global ASCS_IconPath := A_ScriptDir "\frontend\assets\ascs.ico"
@@ -53,7 +53,7 @@ global ASCS_Chords := 0                                  ; 0 = not read yet
 global ASCS_ActivityFile := ASCS_DataDir "\activity.log"
 
 ; Default window size (2.0.0; 10% shorter since 2.2.0, at the user's request):
-; the fullest Command Center fits without scrolling. Always capped to the screen.
+; the fullest Podium fits without scrolling. Always capped to the screen.
 global ASCS_WindowWidth := 2540
 global ASCS_WindowHeight := 1224
 global ASCS_AlmanacDir := ASCS_DataDir "\almanac"
@@ -135,9 +135,11 @@ global ASCS_AscsSoundFiles := Map(
 global ASCS_PsoVoiceChannel := ""
 ; Now playing's sessions: source -> Map(owner, title, since in Unix seconds).
 global ASCS_PlaySessions := Map()
-; The cache cap: past 20 MB, the least recently shown images are removed down to 16 MB.
-global ASCS_RaImageCacheLimit := 20 * 1024 * 1024
-global ASCS_RaImageCacheTarget := 16 * 1024 * 1024
+; The cache cap (2.9.0: set in Preferences › Storage, 500 MB unless changed):
+; past it, the least recently shown images are removed down to four-fifths.
+global ASCS_RaImageCacheMB := 500
+global ASCS_RaImageCacheLimit := 500 * 1024 * 1024
+global ASCS_RaImageCacheTarget := 400 * 1024 * 1024
 ; Power actions (1.7.0): the single-use ticket and any countdown in progress.
 global ASCS_PowerTicket := 0
 global ASCS_PowerPending := 0
@@ -208,6 +210,7 @@ LoadWeatherSettings()
 LoadGameSettings()
 LoadSoundSettings()
 LoadBackupSettings()
+LoadStorageSettings()   ; 2.9.0: the image cache's limit
 StartLaunchRules()      ; 1.10.0: the shell hook for launch rules
 StartBackupSchedule()   ; 2.1.0: the daily backup, never in a test build
 LoadCustomCommands()
@@ -343,7 +346,7 @@ ShowCommandLauncher(mode := "") {
 }
 
 ; Super tap: hide when ASCS is active; otherwise show it on the view that was
-; last open this session (the Command Center after a fresh start).
+; last open this session (the Podium after a fresh start).
 ToggleCommandCenter() {
     global ASCS_App
     global ASCS_PageReady
@@ -1410,6 +1413,97 @@ HandleWebMessage(sender, args) {
                 else
                     WriteLog("Rejected OpenBackupsFolder payload.")
 
+            ; The console hub (2.9.0), Games › Consoles. A payload is named by
+            ; its place in the list Maestro made; a card by its drive letter,
+            ; only if Maestro recognized it; a link by a fixed name.
+            case "GetConsoles":
+                if (content = "" || content = "refresh")
+                    SendConsoles(content = "refresh")
+                else
+                    WriteLog("Rejected GetConsoles payload.")
+
+            case "PushPayload":
+                if RegExMatch(content, "^\d{1,2}$") && Integer(content) >= 1 && Integer(content) <= ASCS_Payloads.Length
+                    PushPayload(ASCS_Payloads[Integer(content)]["path"])
+                else
+                    WriteLog("Rejected PushPayload payload.")
+
+            case "GetPayloadBytes":
+                if RegExMatch(content, "^\d{1,2}$")
+                    SendPayloadBytes(Integer(content))
+                else
+                    WriteLog("Rejected GetPayloadBytes payload.")
+
+            case "SetPayloadChoice":
+                if RegExMatch(content, "^\d{1,2}\|[01]$")
+                    SetPayloadChoice(content)
+                else
+                    WriteLog("Rejected SetPayloadChoice payload.")
+
+            case "ChoosePayloadFolder":
+                if (content = "")
+                    SetTimer(ChoosePayloadFolder, -1)
+                else
+                    WriteLog("Rejected ChoosePayloadFolder payload.")
+
+            case "SetConsoleUpdated":
+                if RegExMatch(content, "^(switch|3ds|wiiu)\|(\d{4}-\d\d-\d\d)?$")
+                    SetConsoleUpdated(content)
+                else
+                    WriteLog("Rejected SetConsoleUpdated payload.")
+
+            case "OpenConsoleCard", "ImportAlbum":
+                if RegExMatch(content, "^[A-Z]$")
+                    (messageType = "ImportAlbum" ? ImportConsoleAlbum(content) : OpenConsoleCard(content))
+                else
+                    WriteLog("Rejected " messageType " payload.")
+
+            case "OpenAlbumFolder", "OpenConsoleBackups":
+                if (content = "")
+                    (messageType = "OpenAlbumFolder" ? OpenAlbumFolder() : OpenConsoleBackups())
+                else
+                    WriteLog("Rejected " messageType " payload.")
+
+            case "OpenConsoleLink":
+                if RegExMatch(content, "^(hekate|atmosphere|luma|aroma)$")
+                    OpenConsoleLink(content)
+                else
+                    WriteLog("Rejected OpenConsoleLink payload.")
+
+            ; The game notes window (2.9.0): the running game's note for it, as
+            ; JSON the window checks; and the palette's open-or-close.
+            case "GameNotesWindowState":
+                if (StrLen(content) <= 220000 && SubStr(content, 1, 1) = "{")
+                    RelayGameNotesState(content)
+                else
+                    WriteLog("Rejected GameNotesWindowState payload.")
+
+            case "ToggleGameNotes":
+                if (content = "")
+                    SetTimer(ToggleGameNotesWindow, -1)
+                else
+                    WriteLog("Rejected ToggleGameNotes payload.")
+
+            ; Storage (2.9.0): the caches' sizes, the image cache's limit, and
+            ; clearing a cache. Only Maestro's own cache files are ever deleted.
+            case "GetStorage":
+                if (content = "")
+                    SendStorage()
+                else
+                    WriteLog("Rejected GetStorage payload.")
+
+            case "SetCacheLimit":
+                if IsRaImageCacheLimit(content)
+                    SetRaImageCacheLimit(content)
+                else
+                    WriteLog("Rejected SetCacheLimit payload.")
+
+            case "ClearCache":
+                if IsStorageCacheId(content)
+                    ClearStorageCache(content)
+                else
+                    WriteLog("Rejected ClearCache payload.")
+
             case "GetWorkspaces":
                 SendWorkspaces()
 
@@ -1613,3 +1707,6 @@ SendToFrontend(json) {
 #Include lib\features\Counterpoint.ahk
 #Include lib\features\Rhythm.ahk
 #Include lib\features\Backups.ahk
+#Include lib\features\Storage.ahk
+#Include lib\features\GameNotesWindow.ahk
+#Include lib\features\Consoles.ahk

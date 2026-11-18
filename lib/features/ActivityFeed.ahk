@@ -2,7 +2,7 @@
 ; ACTIVITY FEED (1.6.0)
 ; ==========================================
 
-; Records a user-visible event for the Command Center feed. Entries persist
+; Records a user-visible event for the Podium feed. Entries persist
 ; in data\activity.log (the newest 50 are kept in memory).
 RecordActivity(kind, text) {
     global ASCS_Activity

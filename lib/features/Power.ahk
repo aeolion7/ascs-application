@@ -1,7 +1,7 @@
 ; ==========================================
 ; POWER AND SYSTEM (1.7.0)
 ; ==========================================
-; Command Center buttons. Lock acts at once. Restart, Shut
+; Podium buttons. Lock acts at once. Restart, Shut
 ; down, Sign out, Sleep and Empty Recycle Bin are guarded:
 ;   1. the page sends PowerArm only after a completed press-and-hold;
 ;   2. ASCS answers with a single-use ticket valid for 10 seconds, plus any
