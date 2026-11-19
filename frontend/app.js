@@ -2497,6 +2497,7 @@ function commandRowTemplate(command = { name: "", kind: "app", target: "", key: 
         </span>
         <span class="hotkey-input"><kbd>Super</kbd> + <input data-field="key" type="text" maxlength="1" aria-label="Optional Super-key letter" autocomplete="off" placeholder="–"></span>
         <button class="secondary danger" type="button" data-action="remove" aria-label="Remove command">Remove</button>`;
+    makeIconOnly(row.querySelector('[data-action="remove"]'), "trash", "Remove command");
     row.querySelector('[data-field="name"]').value = command.name;
     row.querySelector('[data-field="kind"]').value = command.kind;
     row.querySelector('[data-field="target"]').value = command.target;
@@ -3854,7 +3855,7 @@ function countdownRow(item = { date: "", name: "" }) {
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "secondary danger";
-    remove.textContent = "Remove";
+    makeIconOnly(remove, "trash", "Remove this countdown");
     remove.addEventListener("click", () => {
         row.remove();
         updateCountdownsEmpty();
@@ -4217,6 +4218,35 @@ function element(tag, className, text) {
     return node;
 }
 
+// The icon rules (2.10.0). A repeated action in a row or a list is an icon
+// alone, named for screen readers and in its tooltip; a transport or sound
+// action keeps its word beside its icon; anything else (Undo, Save, a dialog's
+// buttons, a menu) is words only.
+function iconButton(icon, label, className = "secondary", title = label) {
+    const button = element("button", `${className} icon-action`);
+    button.type = "button";
+    button.setAttribute("aria-label", label);
+    button.title = title;
+    button.append(MaestroIcons.create(icon));
+    return button;
+}
+
+// An existing button made an icon alone; its tooltip, if it had none, is its name.
+function makeIconOnly(button, icon, label) {
+    button.classList.add("icon-action");
+    button.setAttribute("aria-label", label);
+    if (!button.title) button.title = label;
+    button.replaceChildren(MaestroIcons.create(icon));
+    return button;
+}
+
+// An icon beside the button's word; called again when the word changes
+// (Play to Stop), so the icon follows it.
+function setIconWord(button, icon, word) {
+    button.classList.add("icon-word");
+    button.replaceChildren(MaestroIcons.create(icon), element("span", "", word));
+}
+
 // A status that says what's happening ("Starting the calendar server…",
 // "Measuring") while it happens (2.0.0). Something on its way shows its shape
 // instead: placeholder(), below.
@@ -4403,6 +4433,7 @@ function playButton(game, className) {
     play.disabled = !game.launchable;
     play.title = !game.launchable ? "Maestro doesn't know where this game is stored"
         : installed ? `Play ${game.title}` : `Opens Steam's install prompt for ${game.title}`;
+    setIconWord(play, installed ? "play" : "download", installed ? "Play" : "Install");
     play.addEventListener("click", () => playGame(game));
     return play;
 }
@@ -4547,10 +4578,11 @@ function renderControllers(pads) {
             if (title) button.title = title;
             button.addEventListener("click", onClick);
             actions.append(button);
+            return button;
         };
         // With two identical controllers, this tells you which entry is which.
         if (pad.rumble) padButton("Identify", "Rumbles this controller so you can tell which one it is", () => send("RumbleController", pad.id));
-        padButton("Rename", "", () => { gamesState.renaming = pad.key; renderControllers(gamesState.pads); });
+        makeIconOnly(padButton("Rename", "", () => { gamesState.renaming = pad.key; renderControllers(gamesState.pads); }), "pencil", `Rename ${pad.name}`);
         if (pad.rumble || pad.testable) padButton("Test", "", () => openTester(pad));
         item.append(actions);
         card.append(item);

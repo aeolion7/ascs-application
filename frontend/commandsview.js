@@ -257,6 +257,7 @@ function renderQuickActionEditor() {
         remove.tabIndex = -1;       // for the mouse; from the keyboard, Delete on the grip
         remove.dataset.pointerOnly = "";
         remove.addEventListener("click", () => saveQuickActions(currentQuickActionIds().filter(other => other !== id)));
+        makeIconOnly(remove, "trash", `Remove ${label}`);
         row.append(grip, copy, remove);
         return row;
     }));

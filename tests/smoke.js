@@ -2788,7 +2788,8 @@
             checks.push(["with more than one, Remove still confirms", !$("confirmDialog").hidden ? [] : ["no dialog"]]);
             $("confirmDialogCancel").click();
 
-            const headAction = label => [...$("workspaceActions").children].find(node => node.textContent === label);
+            // By the word, or for an icon (2.10.0) by its name.
+            const headAction = label => [...$("workspaceActions").children].find(node => node.textContent === label || node.getAttribute("aria-label") === label);
             const nameKey = key => document.querySelector("#workspaceTitle .ws-name")?.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
             messages.length = 0;
             headAction("Duplicate").click();
@@ -3034,7 +3035,7 @@
             const padLive = () => handleWebMessage({ data: { type: "gamesLive", playing: [], apps: {}, controllers: padList } });
             gamesSections.show("controllers");
             padLive();
-            const padButton = [...$("gamesControllers").querySelectorAll("button")].find(button => button.textContent === "Rename");
+            const padButton = [...$("gamesControllers").querySelectorAll("button")].find(button => button.getAttribute("aria-label")?.startsWith("Rename"));
             padButton.focus();
             padLive();
             checks.push(["the 3-second check leaves a controller's buttons and focus alone", padButton.isConnected && document.activeElement === padButton ? [] : ["redrawn"]]);
@@ -4490,6 +4491,24 @@
                         const words = copy.textContent.trim();
                         if (/^[‹›⋯×✕♥♡◆→↗↻]|[‹›⋯×✕♥♡◆→↗↻]$/.test(words)) iconProblems.add(`${where}: a glyph for an icon in "${words.slice(0, 30)}"`);
                     });
+                    // 2.10.0: an icon and its word are 8 px apart (a margin once doubled
+                    // the gap), and an icon alone in a square button is drawn at 24 px.
+                    area.querySelectorAll(".icon-word, .icon-action:not(.link-button)").forEach(control => {
+                        const svg = control.querySelector(":scope > svg.icon");
+                        if (!svg || !control.getClientRects().length || !svg.getClientRects().length) return;
+                        const name = control.id ? "#" + control.id : `${control.tagName.toLowerCase()}.${[...control.classList].join(".")}`;
+                        const icon = svg.getBoundingClientRect();
+                        if (control.matches(".icon-action")) {
+                            if (Math.round(icon.width) !== 24) iconProblems.add(`${where}: an icon alone drawn at ${Math.round(icon.width)} px in ${name}`);
+                            return;
+                        }
+                        const range = document.createRange();
+                        range.setStartAfter(svg);
+                        range.setEndAfter(control.lastChild);
+                        const words = range.getBoundingClientRect();
+                        const gap = Math.round(words.left - icon.right);
+                        if (words.width && gap !== 8) iconProblems.add(`${where}: ${gap} px between the icon and the word in ${name}`);
+                    });
                 });
             };
             // 2.6.0: a control none of the house's styles reach falls back to
@@ -4534,7 +4553,7 @@
             checks.push(["no control's focus ring is cut off", [...new Set(clippedRings)]]);
             checks.push(["no text under 18 px, or 19 px in the display face", [...smallText]]);
             checks.push(["every text is one of the seven sizes", [...offScale]]);
-            checks.push(["every icon is from the set, drawn at 20 or 24 px", [...iconProblems]]);
+            checks.push(["every icon is from the set, drawn at 20 or 24 px (24 alone in a square button), 8 px from its word", [...iconProblems]]);
             checks.push(["every button and select has the house's style", [...unstyled]]);
             checks.push(["no errors from focusing every control", errors.splice(0)]);
 

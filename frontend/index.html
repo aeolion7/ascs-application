@@ -36,6 +36,7 @@
   <link rel="stylesheet" href="styles/52-2.9.0-podium.css">
   <link rel="stylesheet" href="styles/53-2.9.0-consoles.css">
   <link rel="stylesheet" href="styles/54-2.9.0-icons.css">
+  <link rel="stylesheet" href="styles/55-2.10.0-icons.css">
 </head>
 <body>
   <div class="app-shell">
@@ -46,7 +47,7 @@
           <span>Aeolionware</span>
           <strong>Maestro</strong>
         </span>
-        <span id="sidebarVersion" hidden>Maestro <span>2.9.0</span></span>
+        <span id="sidebarVersion" hidden>Maestro <span>2.10.0</span></span>
       </div>
 
       <nav class="primary-nav" aria-label="Pages">
@@ -173,9 +174,9 @@
         </form>
         <div class="layout-actions" id="homeLayoutActions">
           <button class="secondary" type="button" id="homeLayoutNew">New…</button>
-          <button class="secondary" type="button" id="homeLayoutRename">Rename…</button>
-          <button class="secondary" type="button" id="homeLayoutDuplicate">Duplicate</button>
-          <button class="secondary" type="button" id="homeLayoutDelete">Delete…</button>
+          <button class="secondary icon-action" type="button" id="homeLayoutRename" title="Rename this layout" aria-label="Rename this layout"><svg data-icon="pencil"></svg></button>
+          <button class="secondary icon-action" type="button" id="homeLayoutDuplicate" title="Duplicate this layout" aria-label="Duplicate this layout"><svg data-icon="duplicate"></svg></button>
+          <button class="secondary danger icon-action" type="button" id="homeLayoutDelete" title="Delete this layout" aria-label="Delete this layout"><svg data-icon="trash"></svg></button>
         </div>
       </div>
       <div class="attention-panel" id="attentionPanel" role="dialog" aria-label="Needs attention" tabindex="-1" hidden>
@@ -227,7 +228,7 @@
             <section class="module" aria-labelledby="actionsHeading">
               <div class="module-head">
                 <h2 id="actionsHeading">Quick Actions</h2>
-                <button class="link-button" type="button" id="editQuickActions">Edit</button>
+                <button class="link-button icon-action" type="button" id="editQuickActions" title="Edit quick actions" aria-label="Edit quick actions"><svg data-icon="pencil"></svg></button>
               </div>
               <div class="actions" id="quickActions" aria-live="polite"></div>
             </section>
@@ -324,7 +325,7 @@
               <button type="button" data-minutes="25">25 min</button>
             </div>
             <div class="module-foot">
-              <button class="primary" type="button" id="timerStart">Start</button>
+              <button class="primary icon-word" type="button" id="timerStart"><svg data-icon="play"></svg><span>Start</span></button>
               <button class="secondary" type="button" id="timerReset" hidden>Reset</button>
             </div>
           </section>
@@ -341,7 +342,7 @@
             <p class="home-metro-trainer" id="homeMetroTrainer" hidden></p>
             <p class="home-metro-trainer" id="homeMetroPractice" hidden></p>
             <div class="module-foot">
-              <button class="primary" type="button" id="homeMetroPlay" aria-pressed="false">Start</button>
+              <button class="primary icon-word" type="button" id="homeMetroPlay" aria-pressed="false"><svg data-icon="play"></svg><span>Start</span></button>
             </div>
           </section>
         </div>
@@ -453,7 +454,7 @@
             <section class="module" aria-labelledby="calCountdownsTitle">
               <div class="module-head">
                 <h2 id="calCountdownsTitle">Countdowns</h2>
-                <button class="link-button" type="button" id="calEditCountdowns">Edit</button>
+                <button class="link-button icon-action" type="button" id="calEditCountdowns" title="Edit countdowns" aria-label="Edit countdowns"><svg data-icon="pencil"></svg></button>
               </div>
               <ul class="cal-countdowns" id="calCountdowns"></ul>
             </section>
@@ -656,7 +657,7 @@
             <button type="button" role="tab" id="soundTabStartup" data-section-tab="startup" aria-controls="soundStartup" aria-selected="false">Startup <span id="soundStartupCount"></span></button>
           </div>
           <div class="sounds-playback">
-            <button class="secondary" type="button" id="soundStop">Stop all</button>
+            <button class="secondary icon-word" type="button" id="soundStop"><svg data-icon="stop"></svg><span>Stop all</span></button>
             <div class="sound-output">
               <button class="secondary" type="button" id="soundOutputButton" aria-haspopup="true" aria-expanded="false" title="Choose the audio output"><svg data-icon="speaker"></svg><span class="sound-output-current" id="soundOutputCurrent">Audio output</span></button>
               <div class="audio-menu" id="soundOutputMenu" role="menu" aria-label="Audio output" hidden></div>
@@ -1041,7 +1042,7 @@
                 </div>
                 <div class="cons-hear" role="group" aria-label="Hear">
                   <button class="secondary cons-toggle" type="button" id="consDrone" aria-pressed="false">Drone</button>
-                  <button class="secondary" type="button" id="consPlayScale" aria-pressed="false">Play scale</button>
+                  <button class="secondary icon-word" type="button" id="consPlayScale" aria-pressed="false"><svg data-icon="play"></svg><span>Play scale</span></button>
                   <label class="metro-field cons-drill" for="consDrill" title="How Play goes through the notes"><span class="sr-only">Drill</span><select id="consDrill"></select></label>
                 </div>
                 <p class="cons-notes"><span class="sr-only" id="consNotesWhat"></span><span class="cons-notes-list" id="consNotes"></span></p>
@@ -1084,7 +1085,7 @@
                   <div class="cons-chord-actions">
                     <button class="primary" type="button" id="consChordSave">Save chord</button>
                     <button class="link-button" type="button" id="consChordSaveNew" hidden>Save as new</button>
-                    <button class="secondary" type="button" id="consChordStrum">Strum</button>
+                    <button class="secondary icon-word" type="button" id="consChordStrum"><svg data-icon="speaker"></svg><span>Strum</span></button>
                     <button class="link-button" type="button" id="consChordClear">Clear</button>
                     <button class="link-button" type="button" id="consChordLink" title="A Markdown link to paste into a Quick Note; Ctrl + click there opens it here" hidden>Copy a link</button>
                   </div>
@@ -1221,7 +1222,7 @@
                     <div class="prog-drawer-links">
                       <button class="link-button" type="button" id="progSplit" title="Share the bar with a second chord">Add to bar</button>
                       <button class="link-button" type="button" id="progRepeatBar" title="Add a bar after this one that plays it again">Repeat bar</button>
-                      <button class="link-button prog-danger" type="button" id="progRemove" title="Take the chord out; a bar left empty goes">Remove</button>
+                      <button class="link-button prog-danger icon-action" type="button" id="progRemove" title="Take the chord out; a bar left empty goes" aria-label="Remove the chord"><svg data-icon="trash"></svg></button>
                       <button class="link-button prog-done" type="button" id="progDrawerDone">Done</button>
                     </div>
                   </div>
@@ -1587,7 +1588,7 @@
                     <label class="theory-field" for="theoryRowInput"><span class="sr-only">Row</span><input id="theoryRowInput" type="text" maxlength="80" autocomplete="off" spellcheck="false" placeholder="A row: G B♭ D F♯ …, or 0 t 3 e …"></label>
                     <div class="theory-form" id="theoryForm" hidden>
                       <span class="theory-form-name" id="theoryFormName"></span>
-                      <button class="secondary" type="button" id="theoryFormPlay">Play</button>
+                      <button class="secondary icon-word" type="button" id="theoryFormPlay"><svg data-icon="play"></svg><span>Play</span></button>
                       <button class="link-button" type="button" id="theoryFormWrite" title="This form as a melody in Counterpoint, to write against">Write in Counterpoint</button>
                     </div>
                   </div>
@@ -1600,7 +1601,7 @@
                     <div class="module-head theory-head">
                       <h2 id="theorySetTitle">Pitch-Class Set</h2>
                       <div class="cal-modes cons-labels theory-side-tabs" id="theorySideSet" role="group" aria-label="Show"><button type="button" data-theory-side="set">Pitch-Class Set</button><button type="button" data-theory-side="negative">Negative Harmony</button></div>
-                      <button class="secondary" type="button" id="theorySetPlay">Play</button>
+                      <button class="secondary icon-word" type="button" id="theorySetPlay"><svg data-icon="play"></svg><span>Play</span></button>
                     </div>
                     <div class="theory-field-row">
                       <label class="theory-field" for="theorySetInput"><span class="sr-only">Notes</span><input id="theorySetInput" type="text" maxlength="60" autocomplete="off" spellcheck="false" placeholder="Pick notes on the neck, or type: C E G"></label>
@@ -1617,7 +1618,7 @@
                       <span class="theory-form-name" id="theoryMoveName"></span>
                       <span class="cons-notes-list" id="theoryMoved"></span>
                       <span class="theory-move-actions">
-                        <button class="secondary" type="button" id="theoryMovePlay">Play</button>
+                        <button class="secondary icon-word" type="button" id="theoryMovePlay"><svg data-icon="play"></svg><span>Play</span></button>
                         <button class="link-button" type="button" id="theoryMoveTake" title="Make this the set">Take it</button>
                       </span>
                     </div>
@@ -1646,7 +1647,7 @@
                   <div class="module-head cons-finder-head">
                     <h2 id="consFoundChordsTitle">Chords</h2>
                     <p class="cons-picked"><span class="cons-choice-label">Picked</span><span class="cons-notes-list" id="consPicked"></span></p>
-                    <button class="secondary" type="button" id="consPickStrum">Strum</button>
+                    <button class="secondary icon-word" type="button" id="consPickStrum"><svg data-icon="speaker"></svg><span>Strum</span></button>
                     <button class="link-button" type="button" id="consPickClear">Clear</button>
                   </div>
                   <div class="cons-found" id="consFoundChords"></div>
@@ -1760,7 +1761,7 @@
                   </div>
                   <div class="tuning-strings" id="consStrings"></div>
                   <div class="cons-tone-row" id="consToneRow" hidden>
-                    <button class="secondary" type="button" id="consToneStop">Stop the tone</button>
+                    <button class="secondary icon-word" type="button" id="consToneStop"><svg data-icon="stop"></svg><span>Stop the tone</span></button>
                   </div>
                 </section>
                 <section class="module" id="consTuningsModule" aria-labelledby="consTuningsTitle">
@@ -1786,7 +1787,7 @@
             <button class="primary metro-play" type="button" id="metroPlay" aria-pressed="false" title="Start the metronome" aria-label="Start the metronome"><svg data-icon="play" data-size="24"></svg></button>
             <div class="prog-transport" id="progTransport" hidden>
               <div class="prog-split">
-                <button class="prog-split-main" type="button" id="progLoop" aria-pressed="true" title="Play the chords with the metronome, around and around">Loop</button>
+                <button class="prog-split-main icon-word" type="button" id="progLoop" aria-pressed="true" title="Play the chords with the metronome, around and around"><svg data-icon="loop"></svg><span>Loop</span></button>
                 <button class="prog-split-more" type="button" id="progBassButton" aria-haspopup="dialog" aria-expanded="false" aria-controls="progBassPanel" title="A bass line and drums under the loop"><span class="prog-chip-label">Backing</span><span id="progBassNow">Off</span><svg data-icon="chevron-down"></svg></button>
               </div>
               <div class="prog-pop prog-bass-panel" id="progBassPanel" role="dialog" aria-labelledby="progBassTitle" hidden>

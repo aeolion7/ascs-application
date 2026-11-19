@@ -37,6 +37,13 @@ const workspaceSections = MaestroSections.create($("workspaceSections"), {
     }
 });
 
+// A row action as an icon alone (2.10.0), named by its label.
+function wsIconButton(icon, label, className, onClick, hint = label) {
+    const node = iconButton(icon, label, className, hint);
+    node.addEventListener("click", onClick);
+    return node;
+}
+
 function wsButton(label, className, onClick, hint = "") {
     const node = element("button", className, label);
     node.type = "button";
@@ -247,15 +254,15 @@ function renderWorkspaceHead(workspace) {
             const ok = await confirmDialog({ title: `Save Over “${workspace.name}”?`, message: "It's replaced by the windows open now, on every desktop.", confirmLabel: "Save over" });
             if (ok) send("SaveWorkspace", workspace.name);
         }, "Replace it with the windows open now"),
-        ...(workspace.name === "Default" ? [] : [wsButton("Rename", "secondary", () => askWorkspaceName(workspace.name, `New name for ${workspace.name}`, name => {
+        ...(workspace.name === "Default" ? [] : [wsIconButton("pencil", "Rename", "secondary", () => askWorkspaceName(workspace.name, `New name for ${workspace.name}`, name => {
             wsView.expect = name;
             send("RenameWorkspace", `${workspace.name}|${name}`);
         }))]),
-        wsButton("Duplicate", "secondary", () => askWorkspaceName(`${workspace.name.slice(0, 35)} copy`, `Name for the copy of ${workspace.name}`, name => {
+        wsIconButton("duplicate", "Duplicate", "secondary", () => askWorkspaceName(`${workspace.name.slice(0, 35)} copy`, `Name for the copy of ${workspace.name}`, name => {
             wsView.expect = name;
             send("DuplicateWorkspace", `${workspace.name}|${name}`);
         }, true)),
-        wsButton("Delete", "secondary danger", async () => {
+        wsIconButton("trash", "Delete", "secondary danger", async () => {
             const ok = await confirmDialog({ title: `Delete Arrangement “${workspace.name}”?`, message: "The saved layout is removed. Open windows are not affected.", confirmLabel: "Delete arrangement", danger: true });
             if (ok) send("DeleteWorkspace", workspace.name);
         })
@@ -522,7 +529,7 @@ function renderWorkspaceInspector(workspace, win, tabs) {
     links.append(
         wsButton("Always open here", "secondary", () => send("RuleFromWorkspaceWindow", `${workspace.name}|${win.index}`),
             `Make a launch rule: when ${win.app} starts, its first window goes to this place`),
-        wsButton("Remove", "secondary danger", async () => {
+        wsIconButton("trash", `Remove ${win.app}`, "secondary danger", async () => {
             if (Workspaces.workspaceWindows(workspace.layout).length <= 1) {
                 showToast("It's the last window; delete the arrangement instead.");
                 return;
@@ -670,7 +677,7 @@ function renderRulesPage() {
         box.setAttribute("aria-label", `${rule.app}: rule on`);
         box.addEventListener("change", () => send("SetLaunchRuleEnabled", `${box.checked ? 1 : 0}|${rule.path}`));
         label.append(box);
-        const remove = wsButton("Delete", "secondary danger", async () => {
+        const remove = wsIconButton("trash", `Delete the rule for ${rule.app}`, "secondary danger", async () => {
             const ok = await confirmDialog({ title: `Delete the Rule for ${rule.app}?`, message: "Its windows will open wherever the app puts them.", confirmLabel: "Delete rule", danger: true });
             if (ok) send("DeleteLaunchRule", rule.path);
         });

@@ -245,7 +245,7 @@ function renderHomeTimer() {
     $("timerDisplay").textContent = formatClock(shown);
     $("timerDisplay").classList.toggle("is-done", timer && timerState.endsAt > 0 && timerState.endsAt <= now);
     $("timerPresets").hidden = !timer;
-    $("timerStart").textContent = running ? (timer ? "Cancel" : "Stop") : "Start";
+    setIconWord($("timerStart"), running ? (timer ? "close" : "stop") : "play", running ? (timer ? "Cancel" : "Stop") : "Start");
     $("timerStart").disabled = timer && !running && timerState.length <= 0;
     $("timerReset").hidden = timer || running || !timerState.watchElapsed;
     document.querySelectorAll("#timerModes [data-timer-mode]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.timerMode === timerState.mode)));

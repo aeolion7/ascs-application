@@ -3316,6 +3316,28 @@ PickFocusWindow(windows) {
     return windows.Length ? windows[1] : ""
 }
 
+; An app's main window, by its shape (2.10.0): not owned by another window, not
+; a tool or never-activated window, with a caption, and big enough to be one.
+; Browsers keep other visible windows (popups, helpers) that mustn't win.
+IsMainAppWindow(style, exStyle, owned, width, height) {
+    return !owned && !(exStyle & 0x80) && !(exStyle & 0x08000000)
+        && (style & 0xC00000) = 0xC00000 && width >= 160 && height >= 100
+}
+
+; Where a desktop gesture goes (2.10.0): the desktop beside `current` (from 0)
+; to the left (direction < 0) or right, or -1 past either end or when unknown.
+AdjacentDesktop(current, direction, count) {
+    if (current < 0 || count < 1 || current >= count)
+        return -1
+    target := current + (direction < 0 ? -1 : 1)
+    return (target >= 0 && target < count) ? target : -1
+}
+
+; A Super + arrow that came from a mouse's desktop gesture (2.10.0): Logi
+; Options+ sends Ctrl + Win + arrow, so Ctrl and Win are down with it, which
+; Super + arrow on the keyboard never has.
+IsDesktopGesture(ctrlDown, winDown) => ctrlDown && winDown
+
 ; ==========================================
 ; BACKUPS (2.1.0)
 ; ==========================================

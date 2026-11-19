@@ -67,7 +67,7 @@ function renderFinder() {
     $("consPicked").replaceChildren(...notes.map((note, at) => element("span", at === 0 ? "is-root" : "", finderName(note.midi))));
     if (!notes.length) $("consPicked").append(element("span", "is-none", "None yet"));
     $("consPickClear").disabled = $("consPickStrum").disabled = !notes.length;
-    $("consPickStrum").textContent = consChordVerb();
+    setIconWord($("consPickStrum"), "speaker", consChordVerb());
 
     const chords = MaestroMusic.findChords(picked);
     $("consFoundChords").replaceChildren(...chords.map(chord => {

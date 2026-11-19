@@ -405,6 +405,52 @@ function Find-HiddenCharacters([string]$folder) {
     return $hits
 }
 
+# A local that hides a function it calls (2.10.0). AutoHotkey's names ignore
+# case, so `desktopCount := DesktopCount()` makes a local that the call then
+# finds, unset; the parse check doesn't see it. As "file:line function: name".
+function Find-HiddenFunctions([string]$folder) {
+    $files = @(Get-ChildItem -LiteralPath $folder -Filter *.ahk -File) + @(Get-ChildItem -LiteralPath (Join-Path $folder 'lib') -Filter *.ahk -Recurse -File -ErrorAction SilentlyContinue)
+    $files = @($files | Where-Object { $_.Name -ne '_syntaxcheck.ahk' })
+    $functions = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $texts = @{}
+    foreach ($file in $files) {
+        $text = Get-AhkCode ([IO.File]::ReadAllText($file.FullName))
+        $texts[$file.FullName] = $text
+        foreach ($m in [regex]::Matches($text, '(?m)^([A-Za-z_]\w*)\((?:[^()]|\([^()]*\))*\)\s*(?:\{|=>)')) { [void]$functions.Add($m.Groups[1].Value) }
+    }
+    $found = @()
+    foreach ($file in $files) {
+        $text = $texts[$file.FullName]
+        foreach ($m in [regex]::Matches($text, '(?ms)^([A-Za-z_]\w*)\(([^\r\n]*)\)\s*\{(.*?)^\}')) {
+            $body = $m.Groups[3].Value
+            $locals = @([regex]::Matches($body, '(?m)^\s*(?:static\s+)?([A-Za-z_]\w*)\s*:=') | ForEach-Object { $_.Groups[1].Value }) +
+                @([regex]::Matches($m.Groups[2].Value, '(?:^|,)\s*&?([A-Za-z_]\w*)') | ForEach-Object { $_.Groups[1].Value })
+            $globals = @([regex]::Matches($body, '(?m)^\s*global\s+(.+)$') | ForEach-Object { $_.Groups[1].Value -split '\s*,\s*' })
+            foreach ($local in ($locals | Select-Object -Unique)) {
+                if ($globals -icontains $local -or -not $functions.Contains($local)) { continue }
+                if ([regex]::IsMatch($body, "(?i)(?<![\w.])$([regex]::Escape($local))\(")) {
+                    $line = ($text.Substring(0, $m.Index) -split "`n").Count
+                    $found += "$($file.FullName.Substring($folder.Length + 1)):$line $($m.Groups[1].Value)(): $local"
+                }
+            }
+        }
+    }
+    return $found
+}
+
+# maestro drive's hook and recorder (2.10.0) belong to tools\cli alone: in the
+# app they'd let any page script be run and read. The app's files that name them.
+function Find-DriveHookInApp([string]$folder) {
+    $found = @()
+    $app = @(Get-ChildItem -LiteralPath $folder -Filter *.ahk -File) + @(Get-ChildItem -LiteralPath (Join-Path $folder 'lib') -Filter *.ahk -Recurse -File -ErrorAction SilentlyContinue) +
+        @(Get-ChildItem -LiteralPath (Join-Path $folder 'frontend') -Include *.js, *.html -Recurse -File -ErrorAction SilentlyContinue)
+    foreach ($file in $app) {
+        if ($file.Name -eq '_syntaxcheck.ahk') { continue }
+        if ([IO.File]::ReadAllText($file.FullName) -match '__maestroDrive|Drive_BeforeNavigate|drive-hook\.ahk') { $found += $file.FullName.Substring($folder.Length + 1) }
+    }
+    return $found
+}
+
 # The runner's "suite PASS n FAIL m" lines as the CHANGELOG writes them:
 # core 771, timers 34, ...
 function Get-CheckCounts([string[]]$lines) {
@@ -472,6 +518,12 @@ function Invoke-Check([string[]]$options) {
 
     $hidden = @(Find-HiddenCharacters $folder)
     if ($hidden.Count) { $problems++; Write-Host "Hidden:     FOUND in $($hidden -join ', ')" } else { Write-Host 'Hidden:     none' }
+
+    $shadows = @(Find-HiddenFunctions $folder)
+    if ($shadows.Count) { $problems++; Write-Host "Names:      a local hides a function in $($shadows -join '; ')" } else { Write-Host 'Names:      no local hides a function' }
+
+    $leaks = @(Find-DriveHookInApp $folder)
+    if ($leaks.Count) { $problems++; Write-Host "Test hook:  FOUND in the app: $($leaks -join ', ')" } else { Write-Host 'Test hook:  not in the app' }
 
     if ($release) {
         $wrong = @(Test-Release $folder $counts)
@@ -1311,7 +1363,7 @@ function Get-IsolateRoot {
 
 # One script, rewritten for a copy. -Entry adds the hook (and the caller's
 # probes, with -Probes) to a script that runs on its own.
-function ConvertTo-IsolatedScript([string]$text, [switch]$Entry, [switch]$Probes, [switch]$Main) {
+function ConvertTo-IsolatedScript([string]$text, [switch]$Entry, [switch]$Probes, [switch]$Main, [switch]$Drive) {
     $text = [regex]::Replace($text, "(?i)(?<![\w.#`"'])($IsolateGuarded)\(", 'Isolate_$1(')
     $text = [regex]::Replace($text, "(?i)\bDllCall\(\s*`"($IsolatePowerCalls)`"", 'Isolate_Stub("$1"')
     $text = [regex]::Replace($text, '(?i)(?<![\w.])Send\((?=\s*ASCS_SoundSwitchKey)', 'Isolate_Stub("Send", ')
@@ -1323,6 +1375,12 @@ function ConvertTo-IsolatedScript([string]$text, [switch]$Entry, [switch]$Probes
         # message box that would wait for a click.
         $text = [regex]::Replace($text, '(?im)^#Warn\s*$', '#Warn All, StdOut')
         $text = [regex]::Replace($text, '(?im)^(#Warn\b.*?),\s*MsgBox\s*$', '$1, StdOut')
+    }
+    if ($Drive) {
+        # maestro drive (2.10.0): its hook instruments the page before it loads.
+        $navigate = [regex]::Match($text, '(?m)^([ \t]*)ASCS_App\.Navigate\(')
+        if (-not $navigate.Success) { throw "ASCS.ahk no longer loads its page with ASCS_App.Navigate(, so maestro drive can't instrument it." }
+        $text = $text.Insert($navigate.Index, "$($navigate.Groups[1].Value)Drive_BeforeNavigate()`r`n")
     }
     if ($Entry) {
         $include = $IsolateInclude + $(if ($Probes) { "`r`n#Include %A_ScriptDir%\isolate-probes.ahk" } else { '' })
@@ -1419,6 +1477,37 @@ function Invoke-Isolate([string[]]$options) {
         $probes = (Resolve-Path -LiteralPath $probes).ProviderPath
     }
     $source = Get-HereCheckout
+    $copy = New-IsolatedCopy $source $seconds $probes
+
+    $script = Join-Path $copy $IsolateMain
+    Write-Host "Isolated copy of $source"
+    Write-Host "  $copy"
+    Write-Host "Super is Pause there, Ctrl+Alt+Shift+A is left to your Maestro, and the calendar would use port $IsolatePort."
+    Write-Host 'Launches, registry writes, power, mute and audio switches, and file changes outside the copy are written to isolate-log.txt instead.'
+    Write-Host "It exits by itself $seconds s after it starts."
+    if (-not $run) {
+        Write-Host "To run it: `"$AhkExe`" /ErrorStdOut=UTF-8 `"$script`""
+        return
+    }
+
+    Write-Host ''
+    Write-Host "Running it for up to $seconds s..."
+    $outcome = Start-IsolatedCopy $copy $seconds
+    Write-Host ''
+    Write-Host 'isolate-log.txt:'
+    $outcome.Log | ForEach-Object { Write-Host "  $_" }
+    if ($outcome.Warnings.Count) { Write-Host 'Warnings:'; $outcome.Warnings | ForEach-Object { Write-Host "  $_" } }
+    if ($outcome.Errors.Count) { Write-Host 'Errors:'; $outcome.Errors | ForEach-Object { Write-Host "  $_" } }
+    if (-not $outcome.Ended) { Write-Host "It didn't exit within $($seconds + 30) s, so it was closed." }
+    elseif ($outcome.ExitCode -ne 0) { Write-Host "It exited with code $($outcome.ExitCode)." }
+    Write-Host ''
+    if ($outcome.Failed) { Write-Host 'Not clean: see above.'; $global:LASTEXITCODE = 1; exit 1 }
+    Write-Host 'Ran clean.'
+}
+
+# Makes a copy of $source that can't act outside itself, and returns its folder.
+# -Drive (2.10.0) adds the drive hook's call before the page loads.
+function New-IsolatedCopy([string]$source, [int]$seconds, [string]$probes, [switch]$Drive) {
     if (-not (Test-Path -LiteralPath (Join-Path $source 'ASCS.ahk'))) { Stop-WithError "$source has no ASCS.ahk to copy." }
     $hook = Join-Path $PSScriptRoot 'isolate-hook.ahk'
     $version = (Get-VersionSpots $source)['ASCS_Version']
@@ -1438,7 +1527,7 @@ function Invoke-Isolate([string[]]$options) {
             $from = Join-Path $source $file
             if (-not (Test-Path -LiteralPath $from)) { continue }
             $main = $file -eq 'ASCS.ahk'
-            $text = ConvertTo-IsolatedScript ([IO.File]::ReadAllText($from)) -Entry -Probes:($main -and [bool]$probes) -Main:$main
+            $text = ConvertTo-IsolatedScript ([IO.File]::ReadAllText($from)) -Entry -Probes:($main -and [bool]$probes) -Main:$main -Drive:($main -and $Drive)
             [IO.File]::WriteAllText((Join-Path $copy $(if ($main) { $IsolateMain } else { $file })), $text, $utf8)
         }
         foreach ($item in (Get-ChildItem -LiteralPath $copy -Recurse -File -Filter *.ahk | Where-Object { $_.DirectoryName -ne $copy })) {
@@ -1464,42 +1553,231 @@ function Invoke-Isolate([string[]]$options) {
         Stop-WithError "$($_.Exception.Message)"
     }
 
-    $script = Join-Path $copy $IsolateMain
-    Write-Host "Isolated copy of $source"
-    Write-Host "  $copy"
-    Write-Host "Super is Pause there, Ctrl+Alt+Shift+A is left to your Maestro, and the calendar would use port $IsolatePort."
-    Write-Host 'Launches, registry writes, power, mute and audio switches, and file changes outside the copy are written to isolate-log.txt instead.'
-    Write-Host "It exits by itself $seconds s after it starts."
-    if (-not $run) {
-        Write-Host "To run it: `"$AhkExe`" /ErrorStdOut=UTF-8 `"$script`""
-        return
-    }
+    return $copy
+}
 
-    Write-Host ''
-    Write-Host "Running it for up to $seconds s..."
+# Runs a copy until it exits (it ends itself after $seconds), and reads its log,
+# warnings and errors. Failed counts the errors, a run that had to be closed,
+# and a non-zero exit.
+function Start-IsolatedCopy([string]$copy, [int]$seconds, [string[]]$arguments = @()) {
+    $script = Join-Path $copy $IsolateMain
     $stdout = Join-Path $copy 'stdout.txt'
     $stderr = Join-Path $copy 'stderr.txt'
-    $process = Start-Process $AhkExe -ArgumentList @('/ErrorStdOut=UTF-8', "`"$script`"") -WorkingDirectory $copy -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+    $process = Start-Process $AhkExe -ArgumentList (@('/ErrorStdOut=UTF-8', "`"$script`"") + $arguments) -WorkingDirectory $copy -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
     $null = $process.Handle
     $ended = $process.WaitForExit(($seconds + 30) * 1000)
     if (-not $ended) { $process.Kill() }
     $read = { param($path) for ($try = 0; $try -lt 20; $try++) { try { return @([IO.File]::ReadAllLines($path) | Where-Object { $_ }) } catch { Start-Sleep -Milliseconds 250 } }; @() }
     $log = @(& $read (Join-Path $copy 'isolate-log.txt'))
-    $warnings = @(& $read $stdout)
     $errors = @(& $read $stderr)
-    Write-Host ''
-    Write-Host 'isolate-log.txt:'
-    $log | ForEach-Object { Write-Host "  $_" }
-    if ($warnings.Count) { Write-Host 'Warnings:'; $warnings | ForEach-Object { Write-Host "  $_" } }
-    if ($errors.Count) { Write-Host 'Errors:'; $errors | ForEach-Object { Write-Host "  $_" } }
     $failed = @($log | Where-Object { $_ -match '^\S+\s+\S+\s+error\b' }).Count + $errors.Count
-    if (-not $ended) { Write-Host "It didn't exit within $($seconds + 30) s, so it was closed."; $failed++ }
-    elseif ($process.ExitCode -ne 0) { Write-Host "It exited with code $($process.ExitCode)."; $failed++ }
-    Write-Host ''
-    if ($failed) { Write-Host 'Not clean: see above.'; $global:LASTEXITCODE = 1; exit 1 }
-    Write-Host 'Ran clean.'
+    if (-not $ended -or $process.ExitCode -ne 0) { $failed++ }
+    return [pscustomobject]@{ Log = $log; Warnings = @(& $read $stdout); Errors = $errors; Ended = $ended; ExitCode = $(if ($ended) { $process.ExitCode } else { $null }); Failed = $failed }
 }
 
+# ---- drive (2.10.0)
+
+# The scripted test: an isolated copy of the checkout, run with the drive hook,
+# which instruments the page, shows the window off-screen without focus, runs a
+# plan from tools\cli\drive in the page and writes what it finds inside the copy.
+$DriveFiles = @('instrument.js', 'runner.js')
+# Never copied from the data folder: the secrets, the calendar server's own
+# files, old backups, and state that belongs to the real Maestro.
+$DriveSkipFiles = @('secrets.ini', $StatusFile)
+$DriveSkipFolders = @('radicale', 'backup-before-*')
+
+function Get-DrivePlans {
+    return @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'drive') -Filter *.js | Where-Object { $DriveFiles -notcontains $_.Name } | ForEach-Object { $_.BaseName } | Sort-Object)
+}
+
+# A copy of your data for the copy: everything but the secrets and the skipped
+# folders and files, and WebView2's caches. Files Maestro keeps locked while it
+# runs are left out, which the run notes.
+function Copy-DriveData([string]$from, [string]$to) {
+    $arguments = @($from, $to, '/E', '/R:0', '/W:0', '/NFL', '/NDL', '/NJH', '/NJS', '/NP', '/XF') + $DriveSkipFiles +
+        @('/XD') + $DriveSkipFolders + $CacheFolders + @(Join-Path $from 'WebView2\EBWebView\Default\Network')
+    $output = @(& robocopy @arguments)
+    $code = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    if ($code -ge 8) { return @(Get-CopyProblems $output $from $to) }
+    return @()
+}
+
+# What a drive run measured, read back from a --to folder (result-N.json): the
+# median of each figure over the runs, leaving out run 1 when there are more,
+# since it's the cold start. Every figure is better lower. Noise is the change
+# a figure needs before a comparison calls it better or worse: CPU over a minute
+# varies a lot on a PC in use, timings a little.
+function Read-DriveResults([string]$folder) {
+    if (-not $folder -or -not (Test-Path -LiteralPath $folder -PathType Container)) { Stop-WithError "There's no folder $folder." }
+    $files = @(Get-ChildItem -LiteralPath $folder -Filter 'result-*.json' | Where-Object { $_.BaseName -match '^result-\d+$' } | Sort-Object { [int]($_.BaseName -replace '\D') })
+    if (-not $files.Count) { Stop-WithError "$folder has no drive results (result-1.json and on; maestro drive --to writes them)." }
+    $runs = foreach ($file in $files) {
+        try { Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json -AsHashtable -ErrorAction Stop }
+        catch { Stop-WithError "$($file.Name) isn't a drive result: $($_.Exception.Message)" }
+    }
+    return @($runs)
+}
+
+function Get-DriveMedian($values) {
+    $sorted = @($values | Where-Object { $null -ne $_ } | ForEach-Object { [double]$_ } | Sort-Object)
+    if (-not $sorted.Count) { return $null }
+    $middle = [Math]::Floor($sorted.Count / 2)
+    if ($sorted.Count % 2) { return $sorted[$middle] }
+    return ($sorted[$middle - 1] + $sorted[$middle]) / 2
+}
+
+function Get-DrivePlanOf($result) {
+    if ($result.ContainsKey('sizes')) { return 'walk' }
+    if ($result.ContainsKey('hidden')) { return 'idle' }
+    return 'unknown'
+}
+
+function Get-DriveMetrics([object[]]$runs) {
+    $ok = @($runs | Where-Object { $_.ok })
+    $warm = @(if ($ok.Count -gt 1) { $ok | Select-Object -Skip 1 } else { $ok })
+    $plan = if ($ok.Count) { Get-DrivePlanOf $ok[0] } else { 'unknown' }
+    $metrics = [Collections.Generic.List[object]]::new()
+    $add = { param($name, $unit, $noise, $values) $metrics.Add([pscustomobject]@{ Name = $name; Unit = $unit; Noise = $noise; Value = (Get-DriveMedian $values) }) }
+    if ($plan -eq 'walk') {
+        & $add 'Page ready, after the script starts' 'ms' 150 ($warm | ForEach-Object { $_.startup.host.pageReady })
+        & $add 'Window shown, after the script starts' 'ms' 150 ($warm | ForEach-Object { $_.startup.host.shown })
+        & $add 'Memory after the start' 'MB' 25 ($warm | ForEach-Object { $_.idleAfterStart.memory.workingMB })
+        & $add 'Memory after every page' 'MB' 25 ($warm | ForEach-Object { $_.end.memory.workingMB })
+        & $add 'Page heap after every page' 'MB' 5 ($warm | ForEach-Object { $_.end.heapMB })
+        foreach ($size in $warm[0].sizes.Keys) {
+            & $add "Opening a page at $size, median" 'ms' 5 ($warm | ForEach-Object { Get-DriveMedian ($_.sizes[$size] | ForEach-Object { $_.painted }) })
+            & $add "Opening a page at $size, slowest" 'ms' 10 ($warm | ForEach-Object { ($_.sizes[$size] | ForEach-Object { $_.painted } | Measure-Object -Maximum).Maximum })
+            & $add "Long tasks opening every page at $size" 'ms' 25 ($warm | ForEach-Object { ($_.sizes[$size] | ForEach-Object { $_.longTaskMs } | Measure-Object -Sum).Sum })
+        }
+        & $add 'Timers left running after leaving pages' '' 0 ($warm | ForEach-Object { ($_.leftBehind | ForEach-Object { $_.intervals } | Measure-Object -Sum).Sum })
+        & $add 'Frames drawn, 10 s idle on the Podium' '' 30 ($warm | ForEach-Object { $_.idleHome.frames })
+        & $add 'Timeouts, 10 s idle on the Podium' '' 5 ($warm | ForEach-Object { $_.idleHome.timeouts })
+    } elseif ($plan -eq 'idle') {
+        foreach ($part in 'podium', 'conservatory', 'hidden', 'shownAgain') {
+            $label = $warm[0][$part].label
+            & $add "CPU, $label" 'ms/min' 1000 ($warm | ForEach-Object { $_[$part].cpuMsPerMin })
+            & $add "AutoHotkey's CPU, $label" 'ms/min' 300 ($warm | ForEach-Object { $_[$part].hostCpuMsPerMin })
+            & $add "Memory, $label" 'MB' 25 ($warm | ForEach-Object { $_[$part].workingMB })
+            & $add "Frames drawn, $label" '' 30 ($warm | ForEach-Object { $_[$part].frames })
+        }
+    }
+    $errors = ($runs | ForEach-Object { @($_.errorsAll).Where({ $null -ne $_ }).Count } | Measure-Object -Sum).Sum
+    $metrics.Add([pscustomobject]@{ Name = 'Errors in the page, all runs'; Unit = ''; Noise = 0; Value = [double]$errors })
+    return [pscustomobject]@{ Plan = $plan; Runs = $runs.Count; Ok = $ok.Count; Warm = $warm.Count; Metrics = $metrics }
+}
+
+function Format-DriveValue($value, [string]$unit) {
+    if ($null -eq $value) { return '-' }
+    $text = if ([Math]::Abs($value) -ge 100 -or $value -eq [Math]::Round($value)) { '{0:N0}' -f $value } else { '{0:N1}' -f $value }
+    if ($unit) { "$text $unit" } else { $text }
+}
+
+function Get-DriveRunsLine($summary) {
+    $medians = if ($summary.Warm -lt $summary.Ok) { $(if ($summary.Ok -gt 2) { "medians of runs 2 to $($summary.Ok)" } else { "run 2 alone" }) + "; run 1 is the cold start" } elseif ($summary.Ok -gt 1) { "medians of $($summary.Ok) runs" } else { 'one run, so no medians' }
+    return "Plan $($summary.Plan): $($summary.Runs) run(s), $($summary.Ok) finished ($medians)."
+}
+
+function Show-DriveSummary([string]$folder) {
+    $summary = Get-DriveMetrics (Read-DriveResults $folder)
+    Write-Host (Get-DriveRunsLine $summary)
+    if ($summary.Plan -eq 'unknown') { Write-Host "  A plan this summary doesn't know: only its errors are counted. The figures are in the result files." }
+    foreach ($metric in $summary.Metrics) { Write-Host ('  {0,-48} {1,12}' -f $metric.Name, (Format-DriveValue $metric.Value $metric.Unit)) }
+}
+
+function Compare-DriveResults([string]$before, [string]$after) {
+    $old = Get-DriveMetrics (Read-DriveResults $before)
+    $new = Get-DriveMetrics (Read-DriveResults $after)
+    if ($old.Plan -ne $new.Plan) { Stop-WithError "These are different plans ($($old.Plan) and $($new.Plan)), so they can't be compared." }
+    Write-Host "Before: $(Get-DriveRunsLine $old)"
+    Write-Host "After:  $(Get-DriveRunsLine $new)"
+    Write-Host ('  {0,-48} {1,12} {2,12} {3,8}' -f '', 'before', 'after', 'change')
+    $worse = 0
+    foreach ($metric in $new.Metrics) {
+        $was = ($old.Metrics | Where-Object Name -eq $metric.Name | Select-Object -First 1).Value
+        $now = $metric.Value
+        $change = if ($null -ne $was -and $null -ne $now -and $was -ne 0) { '{0:+0;-0;0}%' -f (($now - $was) / $was * 100) } else { '' }
+        # Better or worse only past the figure's noise and by a tenth or more.
+        $verdict = ''
+        if ($null -ne $was -and $null -ne $now -and [Math]::Abs($now - $was) -gt $metric.Noise -and ($was -eq 0 -or [Math]::Abs($now - $was) / [Math]::Abs($was) -ge 0.1)) {
+            $verdict = if ($now -lt $was) { 'better' } else { $worse++; 'WORSE' }
+        }
+        Write-Host ('  {0,-48} {1,12} {2,12} {3,8}  {4}' -f $metric.Name, (Format-DriveValue $was $metric.Unit), (Format-DriveValue $now $metric.Unit), $change, $verdict)
+    }
+    Write-Host ''
+    Write-Host $(if ($worse) { "$worse figure(s) worse past their noise. Measure again before trusting a CPU figure: it varies most." } else { 'Nothing worse past its noise.' })
+}
+
+function Invoke-Drive([string[]]$options) {
+    if ($options.Count -and $options[0] -eq '--summary') {
+        if ($options.Count -ne 2) { Stop-WithError 'drive --summary needs one folder of results.' }
+        Show-DriveSummary $options[1]
+        return
+    }
+    if ($options.Count -and $options[0] -eq '--compare') {
+        if ($options.Count -ne 3) { Stop-WithError 'drive --compare needs two folders of results: before, then after.' }
+        Compare-DriveResults $options[1] $options[2]
+        return
+    }
+    $plan = 'walk'; $runs = 1; $data = 'real'; $seconds = 600; $out = ''
+    for ($i = 0; $i -lt $options.Count; $i++) {
+        $option = $options[$i]
+        if ($option -notin '--plan', '--runs', '--data', '--for', '--to') { Stop-WithError "drive doesn't know $option. See: maestro help" }
+        $i++
+        if ($i -ge $options.Count) { Stop-WithError "$option needs a value." }
+        $value = $options[$i]
+        switch ($option) {
+            '--plan' { $plan = $value }
+            '--runs' { if ($value -notmatch '^\d{1,2}$' -or [int]$value -lt 1) { Stop-WithError '--runs needs a number, 1 to 99.' }; $runs = [int]$value }
+            '--data' { if ($value -notin 'real', 'none') { Stop-WithError '--data is real or none.' }; $data = $value }
+            '--for' { if ($value -notmatch '^\d{1,4}$' -or [int]$value -lt 30) { Stop-WithError '--for needs a number of seconds, 30 to 9999.' }; $seconds = [int]$value }
+            '--to' { $out = $value }
+        }
+    }
+    $plans = Get-DrivePlans
+    if ($plans -notcontains $plan) { Stop-WithError "There's no plan named $plan. Plans: $($plans -join ', ')." }
+    if ($out) { $out = [IO.Path]::GetFullPath($out); [IO.Directory]::CreateDirectory($out) | Out-Null }
+
+    $source = Get-HereCheckout
+    $copy = New-IsolatedCopy $source $seconds (Join-Path $PSScriptRoot 'drive-hook.ahk') -Drive
+    $drive = Join-Path $copy 'drive'
+    try {
+        [IO.Directory]::CreateDirectory($drive) | Out-Null
+        foreach ($file in $DriveFiles) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot "drive\$file") -Destination $drive }
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot "drive\$plan.js") -Destination (Join-Path $drive 'plan.js')
+        if ($data -eq 'real') {
+            $problems = @(Copy-DriveData (Join-Path $Repo 'data') (Join-Path $copy 'data'))
+            if ($problems.Count) { Write-Host "Not copied from your data: $($problems -join '; ')" }
+        }
+        $hazards = @(Find-IsolationHazards $copy)
+        if ($hazards.Count) { throw "The copy could still act outside itself, so it was deleted:`n" + (($hazards | ForEach-Object { "  $_" }) -join "`n") }
+    } catch {
+        try { [IO.Directory]::Delete($copy, $true) } catch { }
+        Stop-WithError "$($_.Exception.Message)"
+    }
+
+    Write-Host "Driving an isolated copy of $source with plan $plan$(if ($data -eq 'real') { ', on a copy of your data without secrets.ini' })."
+    Write-Host "  $copy"
+    $failed = 0
+    for ($run = 1; $run -le $runs; $run++) {
+        [IO.File]::WriteAllText((Join-Path $drive 'phase.txt'), "$run")
+        foreach ($name in 'done.txt', 'result.json') { Remove-Item -LiteralPath (Join-Path $drive $name) -ErrorAction SilentlyContinue }
+        $outcome = Start-IsolatedCopy $copy $seconds
+        $done = if (Test-Path -LiteralPath (Join-Path $drive 'done.txt')) { [IO.File]::ReadAllText((Join-Path $drive 'done.txt')).Trim() } else { 'not finished' }
+        $state = if ($done -eq 'ok' -and -not $outcome.Failed) { 'ok' } else { $failed++; "$done$(if ($outcome.Failed) { ', with errors in isolate-log.txt' })" }
+        Write-Host "Run $run of ${runs}: $state"
+        if ($outcome.Errors.Count) { $outcome.Errors | ForEach-Object { Write-Host "  $_" } }
+        $outcome.Log | Where-Object { $_ -match '^\S+\s+\S+\s+error\b' } | ForEach-Object { Write-Host "  $_" }
+        if ($out) {
+            if (Test-Path -LiteralPath (Join-Path $drive 'result.json')) { Copy-Item -LiteralPath (Join-Path $drive 'result.json') -Destination (Join-Path $out "result-$run.json") -Force }
+            if (Test-Path -LiteralPath (Join-Path $drive 'shots')) { Copy-Item -LiteralPath (Join-Path $drive 'shots') -Destination (Join-Path $out "shots-$run") -Recurse -Force }
+            Copy-Item -LiteralPath (Join-Path $copy 'isolate-log.txt') -Destination (Join-Path $out "isolate-log-$run.txt") -Force -ErrorAction SilentlyContinue
+        }
+    }
+    Write-Host "Results are in $(if ($out) { $out } else { $drive }). maestro isolate --clean deletes the copy."
+    if ($out -and (Get-ChildItem -LiteralPath $out -Filter 'result-*.json').Count) { Write-Host ''; Show-DriveSummary $out }
+    if ($failed) { $global:LASTEXITCODE = 1; exit 1 }
+}
 # ---- preview
 
 function Invoke-Preview([string[]]$options) {
@@ -1648,6 +1926,23 @@ own copy of this command, so a release follows the rules it was made with.
   isolate --clean
       Deletes the copies isolate made, except any that are running.
 
+  drive [--plan <name>] [--runs <n>] [--data real|none] [--for <seconds>] [--to <folder>]
+      The scripted test: an isolated copy of the checkout you're standing in,
+      run for real with its window off-screen and never taking focus, while a
+      plan from tools\cli\drive works the page and records what it finds
+      (timings, memory, errors, timers, screenshots) in the copy's drive folder.
+        --plan <name>   The plan (walk)
+        --runs <n>      Run it this many times on the same copy (1)
+        --data real     A copy of your data without secrets.ini (the default);
+                        none starts with an empty data folder
+        --for <seconds> How long each run may take before it's closed (600)
+        --to <folder>   Also copy each run's results there, and sum them up
+  drive --summary <folder>
+      The medians of what the runs in a --to folder measured.
+  drive --compare <before> <after>
+      Two --to folders of the same plan side by side, with each figure called
+      better or WORSE once it moves past its noise.
+
   preview <scene,...|all> [--size WxH] [--audit] [--to <folder>]
       Screenshots of the checkout you're standing in, from the preview scenes:
       the real page with stand-in data, in headless Edge. Writes to a new
@@ -1675,6 +1970,7 @@ $Commands = @{
     'clean'       = { Invoke-Clean $Rest }
     'doctor'      = { Invoke-Doctor $Rest }
     'isolate'     = { Invoke-Isolate $Rest }
+    'drive'       = { Invoke-Drive $Rest }
     'preview'     = { Invoke-Preview $Rest }
     'help'        = { Invoke-Help }
 }

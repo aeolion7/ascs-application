@@ -62,7 +62,7 @@ AutoHotkey does everything that touches Windows. The frontend presents and asks:
 
 - **Type:** Bahnschrift SemiCondensed (titles, numbers, controls; shipped with Windows) and Lato (reading; bundled), in seven sizes (`--t-*`, 18 to 58 px), scaled by Preferences › Text size. For music, Libre Bodoni and Bravura Text (bundled). The smoke test fails on any other size.
 - **Tokens:** colors, depth (page, module, overlay) and motion live in `frontend\styles\25-2.0.0-tokens.css`. Motion uses one curve at 120, 200 and 320 ms, moves only position and opacity, and stops under Windows' reduced motion.
-- **Parts:** one set of controls on every page: primary, secondary and quiet buttons; segmented controls with a sliding marker (they also step with a sideways wheel); one icon set of 48 drawings (`icons.js`).
+- **Parts:** one set of controls on every page: primary, secondary and quiet buttons; segmented controls with a sliding marker (they also step with a sideways wheel); one icon set of 51 drawings (`icons.js`). A repeated action in a row or list (delete, rename, edit, duplicate) is its icon alone, named in its tooltip; playing and stopping keep their word beside the icon; everything else is words.
 
 ## 4. Application Structure
 
@@ -201,6 +201,7 @@ Only what belongs to the whole app: text size and the logo's swing, window snapp
 | Super + 1–9 | Switch to virtual desktop 1–9 |
 | Super + Shift + 1–9 | Move the active window to that desktop and follow it |
 | Super + Left / Right / Up / Down | Snap to a half; then an arrow within 150 ms for a quadrant / maximize / restore or minimize |
+| Super held through a mouse's desktop gesture | Carry the active window to the next desktop that way, and follow it (gestures that send Ctrl + Win + arrow, as Logi Options+ does) |
 | Super + Shift + Left / Right | Move the window to the adjacent monitor |
 | Super + L / M / V | Lock / toggle mute / Clipboard History |
 | Super + J / Y | Type a timestamp / date |
@@ -303,7 +304,7 @@ Every request names the client `Maestro/<version> (Aeolionware)` with no contact
 - **Games and controllers:** emulator and Steam files are only read; games start through Maestro's own index or `steam://rungameid/` with a checked id. Controllers are read through XInput and Raw Input only: DirectInput and the winmm joystick API corrupted Maestro's memory in testing. Every new native call is probed with guard bytes.
 - **Workspaces and launch rules** never take an app's path from the page; paths are captured by AutoHotkey from real windows and checked again at restore.
 - **Backups** hold `secrets.ini`; the folder must be on a fixed drive of this PC, outside Maestro's folder, and is checked before every backup. A test build never backs up.
-- **Upkeep commands** (`maestro doctor`, `preview`, `isolate`, `try`) use no network, listener or elevation; `isolate` copies no `data\` and runs a copy only after a scan finds nothing in it that could act outside.
+- **Upkeep commands** (`maestro doctor`, `preview`, `isolate`, `try`) use no network, listener or elevation; `isolate` copies no `data\` and runs a copy only after a scan finds nothing in it that could act outside. `drive` runs such a copy with a test hook that can run script in its page and read the results; the hook lives only in `tools\cli`, `maestro check` fails if the app's own files ever name it, and the copy of `data\` it can take leaves out `secrets.ini`.
 - Maestro exits or reloads on its own window messages, which any program running as the same user can send.
 
 ## 9. Dependencies
@@ -337,6 +338,7 @@ Maestro runs from the folder it's in, so `C:\Maestro` stays on `master` as the c
 | `maestro backup-data` / `restore-data` | Copies `data\` to the backups folder / puts a backup back (Maestro closed) |
 | `maestro doctor` | Checks what Maestro needs and the sign-in side, changing nothing |
 | `maestro isolate` | A copy of the checkout that can't act outside itself, for probes |
+| `maestro drive` | The scripted test: such a copy run for real, off-screen, while a plan works its page and records timings, memory, CPU, errors and screenshots; `--summary` and `--compare` read the results back, release against release |
 | `maestro preview <scene,...>` | Screenshots and layout audits of the page with stand-in data |
 
 ## 11. Testing
@@ -389,12 +391,13 @@ The current version, and each release's contents, checks and manual results, are
 
 ## 14. Development Roadmap
 
-**Next:** the large manual pass, then iPhone calendar sync (a second Radicale on the home network with a private certificate authority, after its setup guide is reviewed). Other features may come before the manual pass, but iPhone sync comes after it.
+**Next:** routines, with media controls and a per-app volume mixer; then the large pass, run on a test copy by `maestro drive` with what it can't check flagged for a manual look; then iPhone calendar sync (a second Radicale on the home network with a private certificate authority, after its setup guide is reviewed), which comes after the large pass.
 
 **Planned:**
 
 - **Routines:** multi-step sequences (restore a workspace, switch desktop, set audio, launch an app, wait); never power actions.
 - **Moving `C:\Scripts` into Maestro,** with a migration and rollback plan.
-- **Tasks on the calendar server,** media controls, and 3D printer status (which needs its own network plan).
+- **Tasks on the calendar server,** and 3D printer status (which needs its own network plan).
+- **Stylesheets merged:** the 29 sheets' later overrides folded into the rules they override, proven unchanged scene by scene.
 - **Ideas needing new access, each with its own plan first:** MIDI in and out, MusicXML import, slowing a track, and tools that use the microphone.
-- **Smaller ideas:** notes and settings export, reminders that aren't events, a per-app volume mixer, live Markdown in the editor, palette actions on results, and a scripted WebView test on the target machine.
+- **Smaller ideas:** notes and settings export, reminders that aren't events, live Markdown in the editor, and palette actions on results.

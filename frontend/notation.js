@@ -188,20 +188,6 @@ globalThis.MaestroNotation = (() => {
         });
     }
 
-    // What sounds at each moment a note starts in any voice: every voice's
-    // note then (or null), and whether it was struck there.
-    function slices(score) {
-        const voices = voicesOf(score).map(voice => timed(voice.notes));
-        const times = [...new Set(voices.flatMap(entries => entries.map(entry => entry.onset)))].sort((a, b) => a - b);
-        return times.map(time => ({
-            time,
-            notes: voices.map((entries, voice) => {
-                const entry = entries.find(each => each.onset <= time && time < each.onset + each.length);
-                return entry ? { voice, index: entry.index, pitch: entry.note.p ?? null, struck: entry.onset === time && !entry.held } : { voice, index: -1, pitch: null, struck: false };
-            })
-        }));
-    }
-
     // The voice as it sounds: a note per struck pitch, ties joined, in eighths.
     // A chord's pitches each sound (2.7.0); a tie holds each that the next has.
     function soundingEvents(notes) {
@@ -251,9 +237,6 @@ globalThis.MaestroNotation = (() => {
         }
         return shown;
     }
-
-    // The accidental each note's own pitch shows, as before chords.
-    const shownAccidentals = (notes, meter, fifths) => chordAccidentals(notes, meter, fifths).map(list => list[0] ?? null);
 
     // ---- A score as kept
 
@@ -817,6 +800,6 @@ globalThis.MaestroNotation = (() => {
     return Object.freeze({
         CLEFS, LETTERS, NATURAL, MODES, DURATIONS, DURATION_NAMES, BEAMS, CHORD_MAX, GLYPHS, SPACE, FONT, LIFT, HEAD_WIDTH, STAFF_BOTTOM, LOWEST_STEP, HIGHEST_STEP, NOTES_MAX, TITLE_MAX,
         pitch, isPitch, midiOf, parsePitch, pitchName, pitchLetterName, keyFifths, keyTonic, tonicLetter, keyAlter, signature, pitchFromMidi, interval,
-        lengthOf, barLength, meterGroups, pitchesOf, midisOf, bars, voicesOf, timed, slices, soundingEvents, shownAccidentals, chordAccidentals, cleanScore, engrave, musicXml
+        lengthOf, barLength, meterGroups, pitchesOf, midisOf, bars, voicesOf, timed, soundingEvents, chordAccidentals, cleanScore, engrave, musicXml
     });
 })();

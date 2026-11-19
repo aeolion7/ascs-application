@@ -303,6 +303,7 @@ function renderCalendarList() {
         const edit = element("button", "link-button", "Edit");
         edit.type = "button";
         edit.title = `Rename, recolor or delete ${calendar.name}`;
+        makeIconOnly(edit, "pencil", `Edit ${calendar.name}`);
         edit.addEventListener("click", () => openCalendarEditor(calendar));
         item.append(label, edit);
         return item;
@@ -365,6 +366,7 @@ function overlayListItem(calendar, hint, editHint) {
     const edit = element("button", "link-button", "Edit");
     edit.type = "button";
     edit.title = editHint;
+    makeIconOnly(edit, "pencil", `Edit ${calendar.name}`);
     edit.addEventListener("click", () => openCalendarEditor(calendar));
     item.append(label, edit);
     return item;

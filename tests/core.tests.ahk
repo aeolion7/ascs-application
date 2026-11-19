@@ -1460,6 +1460,25 @@ Equal("focus: else the first on a desktop known", PickFocusWindow([focusWindow(1
 Equal("focus: one pinned or unknown doesn't stop the rest", PickFocusWindow([focusWindow(1, false, -1), focusWindow(2, false, -1)])["hwnd"], 1)
 Equal("focus: no windows, nothing", PickFocusWindow([]), "")
 
+; Only an app's main window is brought forward (2.10.0).
+Equal("main window: a browser's window", IsMainAppWindow(0x16CF0000, 0x100, false, 3456, 1411), true)
+Equal("main window: a tool window isn't", IsMainAppWindow(0x16CF0000, 0x180, false, 800, 600), false)
+Equal("main window: a never-activated popup isn't", IsMainAppWindow(0x16CF0000, 0x08000000, false, 800, 600), false)
+Equal("main window: an owned window isn't", IsMainAppWindow(0x16CF0000, 0, true, 800, 600), false)
+Equal("main window: one without a caption isn't", IsMainAppWindow(0x96000000, 0, false, 800, 600), false)
+Equal("main window: a tiny helper isn't", IsMainAppWindow(0x16CF0000, 0, false, 1, 1), false)
+
+; The desktop a gesture goes to (2.10.0).
+Equal("gesture: right from the first", AdjacentDesktop(0, 1, 3), 1)
+Equal("gesture: left from the second", AdjacentDesktop(1, -1, 3), 0)
+Equal("gesture: nothing left of the first", AdjacentDesktop(0, -1, 3), -1)
+Equal("gesture: nothing right of the last", AdjacentDesktop(2, 1, 3), -1)
+Equal("gesture: unknown desktop, nothing", AdjacentDesktop(-1, 1, 3), -1)
+Equal("gesture: one desktop, nowhere to go", AdjacentDesktop(0, 1, 1), -1)
+Equal("gesture: Ctrl and Win with the arrow", IsDesktopGesture(true, true), true)
+Equal("gesture: Super + arrow on the keyboard isn't", IsDesktopGesture(false, false), false)
+Equal("gesture: Ctrl alone isn't", IsDesktopGesture(true, false), false)
+
 report := "PASS " Passed " FAIL " Failures.Length "`n"
 for failure in Failures
     report .= "FAIL: " failure "`n"

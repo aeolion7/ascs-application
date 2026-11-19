@@ -989,6 +989,25 @@ MoveActiveWindowToDesktop(number, thisHotkey := "") {
         ShowNotice("The window moved, but switching to desktop " number " failed.")
 }
 
+; Super held through a mouse's desktop gesture (2.10.0): the active window goes
+; to the desktop the gesture would have switched to, and Maestro follows it
+; there. With no window to carry, it just switches, as the gesture would.
+CarryWindowToAdjacentDesktop(direction) {
+    current := CurrentDesktop()
+    target := AdjacentDesktop(current, direction, DesktopCount())
+    if (target < 0) {
+        if (current >= 0)
+            ShowNotice(direction < 0 ? "There's no desktop to the left." : "There's no desktop to the right.")
+        else if DesktopForShortcut(1, "move windows between desktops")  ; says why when it can
+            ShowNotice("The current desktop couldn't be read.")
+        return
+    }
+    if GetActiveResizableWindow()
+        MoveActiveWindowToDesktop(target + 1)
+    else
+        SwitchVirtualDesktop(target + 1)
+}
+
 ; True when desktop `number` (from 1) can be reached by a shortcut; otherwise
 ; says why (the DLL missing, the desktops uncounted, or too few) and is false.
 DesktopForShortcut(number, doing) {
@@ -1003,13 +1022,15 @@ DesktopForShortcut(number, doing) {
         ShowNotice("Add VirtualDesktopAccessor.dll to lib to " doing ".")
         return false
     }
-    desktopCount := DesktopCount()
-    if (desktopCount < 1) {
+    ; Not named desktopCount: names ignore case, so that local would hide
+    ; DesktopCount() and the call would fail (fixed in 2.10.0).
+    count := DesktopCount()
+    if (count < 1) {
         ShowNotice("The virtual desktops couldn't be counted.")
         return false
     }
-    if (number < 1 || number > desktopCount) {
-        ShowMissingDesktopTooltip(number, desktopCount)
+    if (number < 1 || number > count) {
+        ShowMissingDesktopTooltip(number, count)
         return false
     }
     return true
@@ -1061,6 +1082,10 @@ IsHorizontalDirection(direction) {
 }
 
 HandleHorizontalWindowShortcut(direction) {
+    if IsDesktopGesture(GetKeyState("Ctrl"), GetKeyState("LWin") || GetKeyState("RWin")) {
+        CarryWindowToAdjacentDesktop(direction)
+        return
+    }
     if GetKeyState("Shift", "P")
         MoveActiveWindowToAdjacentMonitor(direction)
     else

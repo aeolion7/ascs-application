@@ -118,10 +118,9 @@ RunAndActivateExplorer(
     for hwnd in existingExplorerWindows
         existingWindows[hwnd] := true
 
-    if (existingExplorerWindows.Length && !openRequestedFolder && !forceNew) {
-        FocusExistingApplication(existingExplorerWindows, "File Explorer")
+    if (existingExplorerWindows.Length && !openRequestedFolder && !forceNew
+        && FocusExistingApplication(existingExplorerWindows, "File Explorer"))
         return true
-    }
 
     Run(target)
     deadline := A_TickCount + 8000
@@ -316,10 +315,7 @@ LaunchCommand(command, thisHotkey := "", forceNew := false, *) {
                         -100
                     )
                 } else {
-                    windows := GetTerminalWindows()
-                    if windows.Length
-                        FocusExistingApplication(windows, "Windows Terminal")
-                    else
+                    if !FocusExistingApplication(GetTerminalWindows(), "Windows Terminal")
                         RunAndActivate(
                             "wt.exe",
                             "ahk_exe WindowsTerminal.exe"
@@ -371,9 +367,9 @@ LaunchCommand(command, thisHotkey := "", forceNew := false, *) {
 
 LaunchVivaldi() {
     try {
-        windows := GetVivaldiWindows()
-        if windows.Length {
-            FocusVivaldiWindow(windows)
+        ; With no main window left (Vivaldi running in the background, say),
+        ; a new one is opened (2.10.0).
+        if FocusVivaldiWindow(GetVivaldiWindows()) {
             RecordActivity("launch", "Vivaldi")
             return true
         }

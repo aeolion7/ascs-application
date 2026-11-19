@@ -411,7 +411,7 @@ function renderMetro() {
     play.title = running ? "Stop the metronome (Space)" : "Start the metronome (Space)";
     play.setAttribute("aria-label", play.title);
     play.replaceChildren(MaestroIcons.create(running ? "stop" : "play", 24));
-    $("homeMetroPlay").textContent = running ? "Stop" : "Start";
+    setIconWord($("homeMetroPlay"), running ? "stop" : "play", running ? "Stop" : "Start");
     $("homeMetroPlay").setAttribute("aria-pressed", String(running));
 }
 

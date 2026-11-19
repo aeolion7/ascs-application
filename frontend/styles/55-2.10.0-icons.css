@@ -1,0 +1,33 @@
+/* 2.10.0: the icon rules. A repeated action in a row or a list is its icon
+   alone (.icon-action, 54-2.9.0-icons.css); a transport or sound action keeps
+   its word beside its icon (.icon-word); everything else is words only. */
+
+/* An icon and its word are 8px apart, as on every button with both (Favorites,
+   Draw again), whatever gap the button's own kind sets (a link's 4px rule
+   holds a :has(), hence the second, weightier selector). */
+:root .icon-word,
+:root .link-button.icon-word:has(> svg.icon) {
+  gap: 8px;
+}
+
+/* A text link made an icon stays a link (no box, the link's color); this
+   gives it room to be clicked. */
+:root .link-button.icon-action {
+  min-width: 28px;
+  min-height: 28px;
+}
+
+/* An icon alone in a square button (42 to 54px) is drawn at 24px, so it
+   fills the button as the sidebar's fill theirs; at 20px it looked lost. */
+:root :is(.icon-action:not(.link-button), .rh-remove, .metro-step, .cal-step, .alm-step) svg.icon {
+  width: 24px;
+  height: 24px;
+}
+
+/* Under 1701px the chord's actions have room for one line only, so Strum's
+   icon steps aside there and its word stays. */
+@media (max-width: 1700px) {
+  :root .cons-chord-actions .icon-word svg.icon {
+    display: none;
+  }
+}

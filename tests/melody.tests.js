@@ -24,8 +24,6 @@
     equal("written score: concert pitch is the score itself", L.writtenScore(melody.score, "concert"), melody.score);
     const fiveSharps = C.melodyExercise({ tonic: "B", mode: "major", instrument: "altosax", notes: [q("B4")] });
     equal("written score: past seven sharps, spelled in flats", L.writtenScore(fiveSharps.score, "altosax").key.fifths, -4);
-    equal("range: a trumpet's notes out of it", L.outOfRange(["C3", "C4", "G6"].map(q), "trumpet").join(), "0,2");
-    equal("range: none for concert pitch", L.outOfRange(["C0", "C8"].map(q), "concert").length, 0);
 
     // ---- Notes and events
     const tied = [{ p: P("C4"), d: "h", dot: false, tie: true }, { p: P("C4"), d: "q", dot: false, tie: false }, q("r")];

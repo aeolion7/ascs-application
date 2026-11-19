@@ -61,13 +61,29 @@ IsCloakedByShell(hwnd) {
 ; on another desktop as hidden, so a plain WinActivate can't find it ("Target
 ; window not found"). This goes to the window's desktop first (when the DLL
 ; can say which), waits up to a second for the shell to show it there, then
-; activates it with hidden windows detected. True once it's active.
+; activates it with hidden windows detected. True once it's active and on
+; screen (2.10.0: a window still hidden on another desktop no longer counts,
+; and a desktop the DLL can't name at first is asked for once more).
 ActivateWindow(hwnd, seconds := 2) {
     if !DllCall("IsWindow", "Ptr", hwnd, "Int")
         return false
+    switched := false
     if IsCloakedByShell(hwnd) {
         desktop := WindowDesktop(hwnd)
-        if (desktop >= 0 && desktop != CurrentDesktop() && GoToDesktop(desktop)) {
+        if (desktop < 0) {
+            Sleep(60)
+            desktop := WindowDesktop(hwnd)
+        }
+        if (desktop < 0) {
+            WriteLog("Window activation: the window is on another desktop, but which one couldn't be read.")
+            return false
+        }
+        if (desktop != CurrentDesktop()) {
+            if !GoToDesktop(desktop) {
+                WriteLog("Window activation: switching to desktop " (desktop + 1) " failed.")
+                return false
+            }
+            switched := true
             deadline := A_TickCount + 1000
             while (IsCloakedByShell(hwnd) && A_TickCount < deadline)
                 Sleep(15)
@@ -77,23 +93,60 @@ ActivateWindow(hwnd, seconds := 2) {
     DetectHiddenWindows(true)
     try {
         WinActivate("ahk_id " hwnd)
-        return WinWaitActive("ahk_id " hwnd, , seconds) != 0
+        active := WinWaitActive("ahk_id " hwnd, , seconds) != 0
     } catch as err {
         WriteLog("Window activation failed: " err.Message)
         return false
     } finally {
         DetectHiddenWindows(previous)
     }
+    if (active && IsCloakedByShell(hwnd)) {
+        WriteLog("Window activation: the window became active but stayed hidden on another desktop.")
+        return false
+    }
+    ; Windows brings forward the window last used on a desktop just after
+    ; switching to it, which can land after ours; so look once more.
+    if (active && switched)
+        SetTimer(KeepWindowInFront.Bind(hwnd), -250)
+    return active
+}
+
+KeepWindowInFront(hwnd) {
+    if !WinExist("ahk_id " hwnd) || WinActive("ahk_id " hwnd) || IsCloakedByShell(hwnd)
+        return
+    try WinActivate("ahk_id " hwnd)
+    WriteLog("Window activation: brought forward again after the desktop switch.")
+}
+
+; Only an app's main windows (2.10.0), so a popup or a helper never wins.
+MainAppWindows(windows) {
+    found := []
+    previous := A_DetectHiddenWindows
+    DetectHiddenWindows(true)                ; a window on another desktop counts as hidden
+    try {
+        for hwnd in windows {
+            try {
+                WinGetPos(, , &width, &height, "ahk_id " hwnd)
+                owned := DllCall("GetWindow", "Ptr", hwnd, "UInt", 4, "Ptr") != 0     ; GW_OWNER
+                if IsMainAppWindow(WinGetStyle("ahk_id " hwnd), WinGetExStyle("ahk_id " hwnd), owned, width, height)
+                    found.Push(hwnd)
+            }
+        }
+    } finally {
+        DetectHiddenWindows(previous)
+    }
+    return found
 }
 
 ; Brings forward one of an app's windows (2.7.1): one on this desktop, else
 ; one on another, switching to it. A window pinned to every desktop, or one
-; whose desktop can't be read, no longer stops the rest. False when there's
-; none; throws when one can't be brought forward.
+; whose desktop can't be read, no longer stops the rest. Only main windows
+; count (2.10.0). False when there's none; throws when one can't be brought
+; forward.
 FocusAppWindow(windows, applicationName) {
     global ASCS_VirtualDesktopDllPath
     entries := []
-    for hwnd in windows {
+    for hwnd in MainAppWindows(windows) {
         here := !IsCloakedByShell(hwnd)
         entries.Push(Map("hwnd", hwnd, "here", here, "desktop", here ? -1 : WindowDesktop(hwnd)))
     }

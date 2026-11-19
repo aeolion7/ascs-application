@@ -333,7 +333,7 @@ function renderConsHear() {
     const play = $("consPlayScale");
     const what = cons.chord >= 0 ? "chord" : "scale";
     play.setAttribute("aria-pressed", String(cons.scalePlay !== null));
-    play.textContent = cons.scalePlay ? "Stop" : `Play ${what}`;
+    setIconWord(play, cons.scalePlay ? "stop" : "play", cons.scalePlay ? "Stop" : `Play ${what}`);
     play.title = cons.scalePlay ? "Stop playing" : `Play the ${what} ${MaestroMusic.DRILLS[cons.settings.drill].toLowerCase()}, at the metronome's tempo and subdivision`;
     $("consDrill").value = cons.settings.drill;
 }

@@ -656,14 +656,43 @@ GameProcessName(name) {
     return file
 }
 
-RunningGameApps() {
-    running := Map()
-    for name in ["retroarch", "dolphin", "pcsx2"] {
-        exe := GameProcessName(name)
-        running[name] := exe != "" && ProcessExist(exe)
+; Every running process by its name, lowercased, to its first PID (2.10.0). One
+; snapshot, where each ProcessExist takes its own (about 5 ms apiece): the live
+; status asked for six, every 10 s and every 3 s on the Podium.
+ProcessNames() {
+    names := Map()
+    snapshot := DllCall("CreateToolhelp32Snapshot", "UInt", 0x2, "UInt", 0, "Ptr")    ; TH32CS_SNAPPROCESS
+    if (snapshot = -1 || !snapshot)
+        return names
+    ; PROCESSENTRY32W: dwSize, the PID at 8, and szExeFile (260 WCHAR) after
+    ; the pointer-sized fields.
+    size := A_PtrSize = 8 ? 568 : 556
+    entry := Buffer(size, 0)
+    NumPut("UInt", size, entry, 0)
+    try {
+        found := DllCall("Process32FirstW", "Ptr", snapshot, "Ptr", entry, "Int")
+        while found {
+            name := StrLower(StrGet(entry.Ptr + (A_PtrSize = 8 ? 44 : 36), 260, "UTF-16"))
+            if !names.Has(name)
+                names[name] := NumGet(entry, 8, "UInt")
+            found := DllCall("Process32NextW", "Ptr", snapshot, "Ptr", entry, "Int")
+        }
+    } finally {
+        DllCall("CloseHandle", "Ptr", snapshot)
     }
-    launcher := GameProcessName("pso")
-    running["pso"] := ProcessExist("PsoBB.exe") || (launcher != "" && ProcessExist(launcher))
+    return names
+}
+
+; A process's PID by name from ProcessNames(), or 0.
+ProcessIn(names, exe) => (exe != "" && names.Has(StrLower(exe))) ? names[StrLower(exe)] : 0
+
+RunningGameApps(names := 0) {
+    if !IsObject(names)
+        names := ProcessNames()
+    running := Map()
+    for name in ["retroarch", "dolphin", "pcsx2"]
+        running[name] := ProcessIn(names, GameProcessName(name)) != 0
+    running["pso"] := ProcessIn(names, "PsoBB.exe") != 0 || ProcessIn(names, GameProcessName("pso")) != 0
     return running
 }
 
@@ -1118,10 +1147,12 @@ OpenBluetoothRename() {
 ; Steam, since). Also keeps ASCS_PlaySessions current, so Now playing can
 ; show how long the session has run. Called by the Games tab's live poll and
 ; every 10 s by TrackPlaySessions (a few process checks and window titles).
-CurrentlyPlaying(running := 0) {
+CurrentlyPlaying(running := 0, names := 0) {
     global ASCS_GameIndex, ASCS_PlaySessions
+    if !IsObject(names)
+        names := ProcessNames()
     if !IsObject(running)
-        running := RunningGameApps()
+        running := RunningGameApps(names)
     now := DateDiff(A_NowUTC, "19700101000000", "Seconds")
     playing := []
     seen := Map()
@@ -1138,7 +1169,7 @@ CurrentlyPlaying(running := 0) {
         if !running[name]
             continue
         exe := GameProcessName(name)
-        pid := ProcessExist(exe)
+        pid := ProcessIn(names, exe)
         title := EmulatorWindowTitle(name, exe)
         if (name = "retroarch")
             title := RetroArchPlayingTitle(pid, title)
@@ -1147,7 +1178,7 @@ CurrentlyPlaying(running := 0) {
         since := Observe(name, pid, EmulatorGameName(name, title), () => ProcessStartUnix(pid))
         playing.Push(Map("emulator", name, "title", title, "id", "", "since", since))
     }
-    if (pid := ProcessExist("PsoBB.exe")) {
+    if (pid := ProcessIn(names, "PsoBB.exe")) {
         title := "Phantasy Star Online: Blue Burst"
         since := Observe("pso", pid, title, () => ProcessStartUnix(pid))
         playing.Push(Map("emulator", "pso", "title", title, "id", "", "since", since))
@@ -1223,9 +1254,10 @@ ProcessStartUnix(pid) {
 }
 
 SendGamesLive() {
-    running := RunningGameApps()
+    names := ProcessNames()
+    running := RunningGameApps(names)
     playing := ""
-    for item in CurrentlyPlaying(running)
+    for item in CurrentlyPlaying(running, names)
         playing .= (playing = "" ? "" : ",") '{"emulator":' JsonQuote(item["emulator"]) ',"title":' JsonQuote(item["title"])
             . (item["id"] != "" ? ',"id":' JsonQuote(item["id"]) : "") ',"since":' item["since"] '}'
     apps := ""

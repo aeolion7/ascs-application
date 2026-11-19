@@ -676,7 +676,9 @@ function renderSoundDetail() {
         actions.append(node);
         return node;
     };
-    button("Play", event => playSound(sound.id, 0, event.ctrlKey)).title = "Ctrl + click to layer it over what's playing";
+    const play = button("Play", event => playSound(sound.id, 0, event.ctrlKey));
+    play.title = "Ctrl + click to layer it over what's playing";
+    setIconWord(play, "play", "Play");
     const favorite = button("Favorite", () => toggleFavorite(sound.id));
     favorite.prepend(MaestroIcons.create(soundPrefs.favorites.has(sound.id) ? "heart-filled" : "heart"));
     favorite.classList.toggle("is-favorite", soundPrefs.favorites.has(sound.id));
@@ -693,6 +695,7 @@ function renderSoundDetail() {
             });
             if (ok) send("DeleteLeveledSound", sound.id);
         }, "secondary danger");
+        makeIconOnly(remove, "trash", "Delete this leveled copy");
         if (uses.length) {
             remove.disabled = true;
             remove.title = `Used for ${uses.join(", ")}: restore or change that first`;
@@ -1405,7 +1408,7 @@ function boardRow(row) {
     };
     const entry = soundState.inUse.get(row.key);
     const compare = inUseComparison(row.key);
-    if (row.exists && row.file) link("Play", () => (entry && !entry.error ? playInUse(row.key) : row.preview ? row.preview() : null));
+    if (row.exists && row.file) setIconWord(link("Play", () => (entry && !entry.error ? playInUse(row.key) : row.preview ? row.preview() : null)), "play", "Play");
     if (compare && !compare.matched && entry.levelable && Math.abs(compare.gainDb) >= 0.05) {
         const queued = soundState.matchQueue.some(item => item.key === row.key);
         const running = soundState.matchingKey === row.key;
@@ -1413,7 +1416,7 @@ function boardRow(row) {
         match.disabled = running || queued;
     }
     if (row.changed) link("Restore", row.restore, "Back to the sound it had before Maestro changed it");
-    if (row.remove) link("Remove", row.remove, "Take it out of the sign-in sounds; its chance goes to the first one");
+    if (row.remove) makeIconOnly(link("Remove", row.remove, "Take it out of the sign-in sounds; its chance goes to the first one"), "trash", `Remove ${row.label}`);
     const own = ownLevel(row.key);
     item.append(copy, buttons);
     // A sign-in sound's chance, in its own column at the left.

@@ -482,40 +482,6 @@ body.is-arranging-home .sidebar > * {
   background: color-mix(in srgb, var(--brand-indigo-control) 30%, transparent);
 }
 
-.arrange-width {
-  display: inline-flex;
-  flex: none;
-  align-self: flex-start;
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--line-control);
-  border-radius: var(--radius-control);
-  background: var(--surface-raised);
-}
-
-:root .arrange-width button {
-  min-width: 44px;
-  min-height: 38px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-key);
-  background: transparent;
-  color: var(--text-strong);
-  font-family: var(--font-display);
-  font-size: var(--t-body);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-:root .arrange-width button:hover {
-  background: var(--surface-hover);
-}
-
-:root .arrange-width button[aria-pressed="true"] {
-  background: var(--brand-indigo-control);
-  color: #ffffff;
-}
-
 :root #arrangeButton[aria-pressed="true"] {
   border-color: var(--brand-tint);
   background: var(--brand-indigo-control);

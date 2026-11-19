@@ -195,6 +195,49 @@ Add-Check 'check: a zero-width character is found' ($run.code -ne 0 -and $run.te
 $run = Invoke-Cli $r @('check', '--quick')
 Add-Check 'check: a byte order mark is found' ($run.code -ne 0 -and $run.text -match 'bom\.md') $run.text
 [IO.File]::Delete("$($r.work)\bom.md")
+# 2.10.0: a local hiding a function it calls, and the drive hook in the app.
+[IO.File]::WriteAllText("$($r.work)\ASCS.ahk", $fake + "Count() {`r`n    return 2`r`n}`r`nShow() {`r`n    count := Count()`r`n    return count`r`n}`r`n")
+$run = Invoke-Cli $r @('check', '--quick')
+Add-Check 'check: a local hiding the function it calls is found' ($run.code -ne 0 -and $run.text -match 'Names:.*ASCS\.ahk:\d+ Show\(\): count') $run.text
+[IO.File]::WriteAllText("$($r.work)\ASCS.ahk", $fake + "Count() {`r`n    return 2`r`n}`r`nShow() {`r`n    total := Count()`r`n    return total`r`n}`r`n")
+$run = Invoke-Cli $r @('check', '--quick')
+Add-Check 'check: another name for it passes' ($run.code -eq 0 -and $run.text -match 'Names:\s+no local') $run.text
+[IO.File]::WriteAllText("$($r.work)\ASCS.ahk", $fake)
+[IO.Directory]::CreateDirectory("$($r.work)\frontend") | Out-Null
+[IO.File]::WriteAllText("$($r.work)\frontend\app.js", 'window.__maestroDrive = {};')
+$run = Invoke-Cli $r @('check', '--quick')
+Add-Check 'check: the drive hook in the app is found' ($run.code -ne 0 -and $run.text -match 'Test hook:\s+FOUND in the app: frontend\\app\.js') $run.text
+[IO.Directory]::Delete("$($r.work)\frontend", $true)
+# drive (2.10.0): what it's asked is checked before anything is copied or run.
+$run = Invoke-Cli $r @('drive', '--plan', 'nope'); Add-Check 'drive: an unknown plan is refused, naming the plans' ($run.code -ne 0 -and $run.text -match 'no plan named nope.*walk') $run.text
+$run = Invoke-Cli $r @('drive', '--runs', '0'); Add-Check 'drive: --runs needs 1 to 99' ($run.code -ne 0 -and $run.text -match '--runs') $run.text
+$run = Invoke-Cli $r @('drive', '--data', 'mine'); Add-Check 'drive: --data is real or none' ($run.code -ne 0 -and $run.text -match 'real or none') $run.text
+$run = Invoke-Cli $r @('drive', '--for', '5'); Add-Check 'drive: --for has a floor' ($run.code -ne 0 -and $run.text -match '30 to 9999') $run.text
+$run = Invoke-Cli $r @('drive', '--fast'); Add-Check 'drive: an unknown option is refused' ($run.code -ne 0 -and $run.text -match "doesn't know --fast") $run.text
+# drive --summary and --compare read results back: medians leave out run 1 (the cold start).
+$idleRun = { param($hiddenMB, $cpu) $part = { param($label) @{ label = $label; cpuMsPerMin = $cpu; hostCpuMsPerMin = 400; workingMB = 500; frames = 0 } }
+    $result = @{ ok = $true; podium = (& $part 'Podium, shown'); conservatory = (& $part 'Conservatory, shown'); hidden = (& $part 'hidden'); shownAgain = (& $part 'Podium, shown again'); errorsAll = @() }
+    $result.hidden.workingMB = $hiddenMB; $result | ConvertTo-Json -Depth 4 }
+foreach ($set in @(@('before', 999, 500, 500), @('after', 999, 150, 160), @('later', 999, 600, 600))) {
+    [IO.Directory]::CreateDirectory("$($r.base)\drive-$($set[0])") | Out-Null
+    [IO.File]::WriteAllText("$($r.base)\drive-$($set[0])\result-1.json", (& $idleRun $set[1] 1000))
+    [IO.File]::WriteAllText("$($r.base)\drive-$($set[0])\result-2.json", (& $idleRun $set[2] 1000))
+    [IO.File]::WriteAllText("$($r.base)\drive-$($set[0])\result-3.json", (& $idleRun $set[3] 1000))
+}
+[IO.Directory]::CreateDirectory("$($r.base)\drive-walk") | Out-Null
+[IO.File]::WriteAllText("$($r.base)\drive-walk\result-1.json", '{"ok":true,"sizes":{},"startup":{"host":{}},"idleAfterStart":{"memory":{}},"end":{"memory":{}},"leftBehind":[],"idleHome":{},"errorsAll":[]}')
+$run = Invoke-Cli $r @('drive', '--summary', "$($r.base)\drive-after")
+Add-Check 'drive --summary: medians of runs 2 on' ($run.code -eq 0 -and $run.text -match 'Plan idle: 3 run\(s\), 3 finished \(medians of runs 2 to 3; run 1 is the cold start\)' -and $run.text -match 'Memory, hidden\s+155 MB') $run.text
+$run = Invoke-Cli $r @('drive', '--compare', "$($r.base)\drive-before", "$($r.base)\drive-after")
+Add-Check 'drive --compare: less memory is better' ($run.code -eq 0 -and $run.text -match 'Memory, hidden\s+500 MB\s+155 MB\s+-69%\s+better' -and $run.text -match 'Nothing worse') $run.text
+$run = Invoke-Cli $r @('drive', '--compare', "$($r.base)\drive-before", "$($r.base)\drive-later")
+Add-Check 'drive --compare: more memory is WORSE' ($run.code -eq 0 -and $run.text -match 'Memory, hidden\s+500 MB\s+600 MB\s+\+20%\s+WORSE' -and $run.text -match '1 figure\(s\) worse') $run.text
+$run = Invoke-Cli $r @('drive', '--compare', "$($r.base)\drive-before", "$($r.base)\drive-walk")
+Add-Check 'drive --compare: different plans are refused' ($run.code -ne 0 -and $run.text -match 'different plans \(idle and walk\)') $run.text
+$run = Invoke-Cli $r @('drive', '--summary', "$($r.base)\drive-none")
+Add-Check 'drive --summary: a missing folder is refused' ($run.code -ne 0 -and $run.text -match "There's no folder") $run.text
+$run = Invoke-Cli $r @('drive', '--compare', "$($r.base)\drive-before")
+Add-Check 'drive --compare: needs two folders' ($run.code -ne 0 -and $run.text -match 'two folders') $run.text
 Invoke-QuietGit -C $r.work add -A; Invoke-QuietGit -C $r.work commit -m 'ahk'
 $here = "$($r.base)\dev"
 Invoke-QuietGit -C $r.work worktree add $here -b feat/two

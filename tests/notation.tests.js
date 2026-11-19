@@ -99,18 +99,15 @@
     equal("score: nothing at all refused", N.cleanScore(null), null);
 
     // ---- Accidentals shown
+    // Each note's own (first) pitch, as the staff shows it.
+    const shown = (notes, fifths) => N.chordAccidentals(notes, meter, fifths).map(list => list[0] ?? null);
     const cMajor = [n("F#4", "q"), n("F#4", "q"), n("F4", "q"), n("F#4", "q"), n("F#4", "q"), n("F#5", "q"), n("F#4", "h")];
-    equal("accidentals: shown once in a bar, a natural to cancel, again in the next bar, and per line", N.shownAccidentals(cMajor, meter, 0).join(), "1,,0,1,1,1,");
-    equal("accidentals: none for the key's own, a natural for its absence", N.shownAccidentals([n("F#4", "h"), n("F4", "h")], meter, 1).join(), ",0");
-    equal("accidentals: a note held by a tie over the bar line shows none", N.shownAccidentals([n("C4", "h"), n("F#4", "h", { tie: true }), n("F#4", "h"), n("F#4", "h")], meter, 0).join(), ",1,,1");
+    equal("accidentals: shown once in a bar, a natural to cancel, again in the next bar, and per line", shown(cMajor, 0).join(), "1,,0,1,1,1,");
+    equal("accidentals: none for the key's own, a natural for its absence", shown([n("F#4", "h"), n("F4", "h")], 1).join(), ",0");
+    equal("accidentals: a note held by a tie over the bar line shows none", shown([n("C4", "h"), n("F#4", "h", { tie: true }), n("F#4", "h"), n("F#4", "h")], 0).join(), ",1,,1");
 
     // ---- What sounds when
     const two = N.cleanScore({ title: "", key: { fifths: 0, mode: "major" }, meter, staves: [{ clef: "treble", voices: [{ name: "", notes: [n("E4", "h"), n("G4", "h", { tie: true }), n("G4", "h"), n("F4", "h")] }] }, { clef: "bass", voices: [{ name: "", notes: [n("C3", "w"), n("B2", "w")] }] }] });
-    const cuts = N.slices(two);
-    equal("slices: a moment for each note started", cuts.map(cut => cut.time).join(), "0,4,8,12");
-    equal("slices: the held note isn't struck again", cuts[2].notes[0].struck, false);
-    equal("slices: the bass struck at the bar", cuts[2].notes[1].struck && name(cuts[2].notes[1].pitch), "B2");
-    equal("slices: the upper voice's note there", name(cuts[1].notes[0].pitch), "G4");
     const sounding = N.soundingEvents(two.staves[0].voices[0].notes);
     equal("sounding: a tie joins its notes", sounding.map(event => `${event.midi}@${event.start}+${event.length}`).join(), "64@0+4,67@4+8,65@12+4");
 

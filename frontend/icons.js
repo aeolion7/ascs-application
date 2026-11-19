@@ -47,10 +47,10 @@ const MaestroIcons = (() => {
         heart: `<path d="${heart}"/>`,
         "heart-filled": `<path class="icon-dot" d="${heart}"/>`,
         pin: '<path d="M8.5 3.5h7M9.5 3.5V9l-3 3.5V14h11v-1.5l-3-3.5V3.5M12 14v6.5"/>',
-        stop: '<rect class="icon-dot" x="6.5" y="6.5" width="11" height="11" rx="1.5"/>',
+        stop: '<rect class="icon-dot" x="6" y="6" width="12" height="12" rx="1.5"/>',
         minus: '<path d="M6 12h12"/>',
         plus: '<path d="M12 6v12M6 12h12"/>',
-        play: '<path class="icon-dot" d="M8 5.5v13l10.5-6.5Z"/>',
+        play: '<path class="icon-dot" d="M7 4.5v15l12.5-7.5Z"/>',
         more: '<circle class="icon-dot" cx="6" cy="12" r="1.5"/><circle class="icon-dot" cx="12" cy="12" r="1.5"/><circle class="icon-dot" cx="18" cy="12" r="1.5"/>',
         grip: '<circle class="icon-dot" cx="9" cy="6" r="1.5"/><circle class="icon-dot" cx="15" cy="6" r="1.5"/><circle class="icon-dot" cx="9" cy="12" r="1.5"/><circle class="icon-dot" cx="15" cy="12" r="1.5"/><circle class="icon-dot" cx="9" cy="18" r="1.5"/><circle class="icon-dot" cx="15" cy="18" r="1.5"/>',
         star: '<path d="M12 3.5 14.4 9l5.9.5-4.5 3.9 1.4 5.8L12 16.2l-5.2 3 1.4-5.8-4.5-3.9L9.6 9Z"/>',
@@ -60,6 +60,10 @@ const MaestroIcons = (() => {
         "trophy-filled": `<path class="icon-dot" d="${cup}"/>${trophyRest}`,
         players: '<circle cx="9" cy="8" r="3"/><path d="M3.5 19.5a5.5 5.5 0 0 1 11 0M15.5 5.3a3 3 0 0 1 0 5.4M17 14.3a5.5 5.5 0 0 1 3.5 5.2"/>',
         copy: '<rect x="8.5" y="8.5" width="12" height="12" rx="2"/><path d="M15.5 8.5v-3a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3"/>',
+        // 2.10.0: the icon rules' row actions (rename or edit, duplicate) and Loop.
+        pencil: '<path d="M5 19l.9-4.1L15.6 5.2a2 2 0 0 1 2.9 2.9L8.8 18.1Z"/><path d="M13.8 7l3 3"/>',
+        duplicate: '<rect x="8.5" y="8.5" width="12" height="12" rx="2"/><path d="M15.5 8.5v-3a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3M14.5 12v5M12 14.5h5"/>',
+        loop: '<path d="M17 3.5l3 3-3 3"/><path d="M4 11.5v-1a4 4 0 0 1 4-4h12"/><path d="M7 20.5l-3-3 3-3"/><path d="M20 12.5v1a4 4 0 0 1-4 4H4"/>',
         // Kinds of palette item and the apps Maestro opens
         window: '<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M3.5 9.5h17"/>',
         terminal: '<path d="m5 7 5 5-5 5m7 0h7"/>',

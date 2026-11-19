@@ -328,7 +328,7 @@ function renderChordPanel() {
     $("consChordLink").hidden = !savedOpen || !(savedOpen.name || savedOpen.label);
     $("consChordSaveNew").disabled = $("consChordSave").disabled;
     $("consChordStrum").disabled = $("consChordClear").disabled = !notes.length && chords.editing < 0;
-    $("consChordStrum").textContent = consChordVerb();
+    setIconWord($("consChordStrum"), "speaker", consChordVerb());
     document.querySelectorAll("#consChordStyle [data-chord-style]").forEach(button => {
         button.setAttribute("aria-pressed", String(button.dataset.chordStyle === cons.settings.chordStyle));
         button.replaceChildren(chordSymbol("Cmaj7", "list", button.dataset.chordStyle));

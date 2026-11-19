@@ -59,13 +59,6 @@ globalThis.MaestroMelody = (() => {
         return N.cleanScore({ ...score, key: { fifths, mode: score.key.mode }, staves });
     }
 
-    // The notes outside an instrument's range, by index.
-    function outOfRange(notes, id) {
-        const range = instrumentOf(id).range;
-        if (!range) return [];
-        return notes.flatMap((note, index) => (note.p && (midi(note.p) < range[0] || midi(note.p) > range[1]) ? [index] : []));
-    }
-
     // ---- A line as events: notes tied together are one, each { p, length }.
     const lengthOf = note => N.lengthOf(note);
     function eventsOf(notes) {
@@ -247,7 +240,7 @@ globalThis.MaestroMelody = (() => {
     }
 
     return Object.freeze({
-        INSTRUMENTS, DEVELOPMENTS, instrumentOf, transposes, writtenPitch, writtenScore, outOfRange,
+        INSTRUMENTS, DEVELOPMENTS, instrumentOf, transposes, writtenPitch, writtenScore,
         eventsOf, notesOf, moveInKey, develop, barsOfNotes, developMotif, keyChords, harmonize
     });
 })();

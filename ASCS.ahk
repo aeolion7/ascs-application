@@ -14,7 +14,7 @@ Suspend(true)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 2.9.0
+; Version 2.10.0
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -24,7 +24,7 @@ Suspend(true)
 ; GLOBAL VARIABLES
 ; ==========================================
 
-global ASCS_Version := "2.9.0"
+global ASCS_Version := "2.10.0"
 global ASCS_App := ""
 global ASCS_WindowIcon := 0
 global ASCS_IconPath := A_ScriptDir "\frontend\assets\ascs.ico"
@@ -427,6 +427,8 @@ ShowASCS(view := "") {
         ShowStartScreen()
     if (first && !IsObject(ASCS_StartScreen))
         FreeStartScreenFrames()
+    if !wasVisible
+        SetWebViewMemoryLow(false)
     ASCS_App.Show()
     if (!wasVisible && ASCS_PageReady)
         SendToFrontend(WindowShownJson())
@@ -829,8 +831,18 @@ HandleClose(*) {
 
 TellPageWindowHidden() {
     global ASCS_App
-    if !DllCall("IsWindowVisible", "Ptr", ASCS_App.Hwnd, "Int")
-        SendToFrontend('{"type":"windowHidden"}')
+    if DllCall("IsWindowVisible", "Ptr", ASCS_App.Hwnd, "Int")
+        return
+    SendToFrontend('{"type":"windowHidden"}')
+    SetWebViewMemoryLow(true)
+}
+
+; While the window is hidden, WebView2 is asked to keep less in memory (2.10.0).
+; The page keeps running (the metronome plays on); WebView2 lets caches go and
+; builds them again when shown. A runtime too old for it is left as it is.
+SetWebViewMemoryLow(low) {
+    global ASCS_App
+    try ASCS_App.MemoryUsageTargetLevel := low ? 1 : 0
 }
 
 HandleASCSSize(guiObj, minMax, width, height) {

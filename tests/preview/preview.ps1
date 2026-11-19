@@ -80,11 +80,11 @@ foreach ($job in $jobs) {
         }
         Start-Sleep -Milliseconds 100
     }
-    # A profile still in use would take the new Edge's page and drop it, so a free one.
-    $busy = @($running | ForEach-Object { $_.slot })
-    $slot = (0..($Parallel - 1) | Where-Object { $_ -notin $busy })[0]
+    # A new profile for each scene: one still in use would take the new Edge's page and drop it,
+    # and a reused one would carry over what the last scene saved (the Conservatory's tab, for example).
+    $edgeProfile = "$copy-edge$($jobs.IndexOf($job))"
     $url = 'file:///' + ($page -replace '\\', '/') + "?scene=$($job.scene)&textsize=$TextSize"
-    $arguments = @('--headless=new', '--disable-gpu', '--allow-file-access-from-files', "--user-data-dir=`"$copy-edge$slot`"", "--window-size=$($job.size.Replace('x', ','))", '--force-device-scale-factor=1', '--virtual-time-budget=3500')
+    $arguments = @('--headless=new', '--disable-gpu', '--allow-file-access-from-files', "--user-data-dir=`"$edgeProfile`"", "--window-size=$($job.size.Replace('x', ','))", '--force-device-scale-factor=1', '--virtual-time-budget=3500')
     if ($job.kind -eq 'shot') {
         $arguments += @("--screenshot=`"$($job.out)`"", "`"$url`"")
         $process = Start-Process $edge -ArgumentList $arguments -PassThru -WindowStyle Hidden
@@ -93,7 +93,7 @@ foreach ($job in $jobs) {
         $arguments += @('--dump-dom', "`"$url`"")
         $process = Start-Process $edge -ArgumentList $arguments -PassThru -WindowStyle Hidden -RedirectStandardOutput $job.temp -RedirectStandardError "$($job.out).err"
     }
-    $running.Add(@{ process = $process; job = $job; started = Get-Date; slot = $slot })
+    $running.Add(@{ process = $process; job = $job; started = Get-Date })
 }
 foreach ($item in @($running)) {
     if (-not $item.process.WaitForExit(90000)) { $item.process.Kill(); "timed out: $($item.job.scene)" } else { Complete-Job $item.job }
@@ -101,5 +101,5 @@ foreach ($item in @($running)) {
 Start-Sleep -Milliseconds 500
 Get-ChildItem -LiteralPath $OutDir -Filter '*.err' | ForEach-Object { [IO.File]::Delete($_.FullName) }
 [IO.Directory]::Delete($copy, $true)
-0..($Parallel - 1) | ForEach-Object { try { [IO.Directory]::Delete("$copy-edge$_", $true) } catch { } }
+Get-ChildItem -LiteralPath (Split-Path $copy) -Directory -Filter "$(Split-Path $copy -Leaf)-edge*" | ForEach-Object { try { [IO.Directory]::Delete($_.FullName, $true) } catch { } }
 "$($jobs.Count) outputs in $OutDir"
