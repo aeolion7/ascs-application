@@ -143,6 +143,27 @@ const PreviewScenes = (() => {
         ] });
     }
 
+    // 2.12.0: routines, with Workspaces' arrangements and the games to point at.
+    function routinesData(state = null) {
+        commandsData();
+        workspacesData();
+        gamesData();
+        say({ type: "routines", items: [
+            { name: "Evening music", steps: [
+                { kind: "workspace", arg: "Default" }, { kind: "desktop", arg: "2" }, { kind: "launch", arg: "vivaldi" },
+                { kind: "wait", arg: "5" }, { kind: "volume", arg: "30" }, { kind: "media", arg: "playpause" }] },
+            { name: "Play Zelda", steps: [
+                { kind: "desktop", arg: "3" }, { kind: "game", arg: "ra:2" }, { kind: "wait", arg: "120" }, { kind: "page", arg: "games" }] },
+            { name: "Print a model", steps: [
+                { kind: "command", arg: "Bambu Studio" }, { kind: "command", arg: "Old slicer" }, { kind: "launch", arg: "explorer" }] },
+            { name: "Later", steps: [] },
+            { name: "Quiet evening", steps: [{ kind: "appvolume", arg: "discord.exe|20" }, { kind: "appvolume", arg: "spotify.exe|60" }, { kind: "volume", arg: "35" }] }
+        ] });
+        say({ type: "appVolumes", error: "", items: [{ id: "vivaldi.exe", label: "Vivaldi", level: 80, muted: false }, { id: "discord.exe", label: "Discord", level: 100, muted: false }, { id: "system", label: "System sounds", level: 40, muted: false }] });
+        say(state ?? { type: "routineState", name: "", step: 0, count: 0 });
+        commandsSections.show("routines");
+    }
+
     function workspacesData() {
         const w = (index, app, title, desktop, x, y, width, height, extra = {}) => ({ index, app, title, desktop, monitor: 1, x, y, width, height, maximized: false, pinned: false, enabled: true, missing: false, ...extra });
         say({ type: "workspaces", monitors: 1, items: [
@@ -825,7 +846,7 @@ const PreviewScenes = (() => {
         "conservatory-tuning-keyboard": consScene({ instrument: "keyboard", tab: "tuning" }),
         "home-metronome": () => {
             PreviewScenes["home-full"]();
-            showHomeLayout({ ...MaestroHomeLayout.defaults(), hidden: ["weather", "processes", "network", "audio", "controllers", "pinned", "unlocks", "timer", "note"], order: ["now", "today", "next", "system", "stack", "continue", "metronome", "note"] });
+            showHomeLayout({ ...MaestroHomeLayout.defaults(), hidden: ["weather", "processes", "network", "audio", "controllers", "pinned", "unlocks", "timer", "note", "routines"], order: ["now", "today", "next", "system", "stack", "continue", "metronome", "note", "routines"] });
             Object.assign(metro.settings, { tempo: 96, trainer: { on: true, from: 80, to: 120, step: 4, every: 8 } });
             metro.running = true;
             metro.bars = 13;
@@ -834,13 +855,20 @@ const PreviewScenes = (() => {
             renderMetroPractice();
             lightMetroBeat(2);
         },
+        // 2.12.0: Routines in Next Up's place, one running.
+        "home-routines": () => {
+            PreviewScenes["home-full"]();
+            routinesData({ type: "routineState", name: "Play Zelda", step: 2, count: 4 });
+            navigate("home");
+            showHomeLayout({ ...MaestroHomeLayout.defaults(), order: ["now", "today", "routines", "system", "stack", "continue", "note", "next"], hidden: [...MaestroHomeLayout.defaults().hidden.filter(id => id !== "routines"), "next"], heights: { ...MaestroHomeLayout.defaults().heights, routines: 2 } });
+        },
         "home-idle": () => { baseData(); homeData(); navigate("home"); live([]); },
         "home-empty": open("home"),
         "home-arrange": () => { baseData(); homeData(); navigate("home"); homeLive(); $("arrangeButton").click(); },
         // The added modules, each with sample data.
         "home-added": () => {
             PreviewScenes["home-full"]();
-            showHomeLayout({ ...MaestroHomeLayout.defaults(), order: ["weather", "processes", "network", "audio", "controllers", "pinned", "unlocks", "timer", "metronome", "now", "today", "next", "system", "stack", "continue", "note"], hidden: ["now", "today", "next", "system", "stack", "continue", "note"] });
+            showHomeLayout({ ...MaestroHomeLayout.defaults(), order: ["weather", "processes", "network", "audio", "controllers", "pinned", "unlocks", "timer", "metronome", "now", "today", "next", "system", "stack", "continue", "note", "routines"], hidden: ["now", "today", "next", "system", "stack", "continue", "note", "routines"] });
             say({ type: "weatherSettings", enabled: true });
             handleWeather(JSON.stringify({ current: { temperature_2m: 48.3, apparent_temperature: 44.1, relative_humidity_2m: 61, weather_code: 3, wind_speed_10m: 9.4 }, daily: { time: ["2026-11-09", "2026-11-10", "2026-11-11"], temperature_2m_max: [52, 55, 49], temperature_2m_min: [40, 43, 38], weather_code: [3, 61, 0], precipitation_probability_max: [10, 80, 0] } }));
             say({ type: "homeStats", network: { name: "Wi-Fi", down: 2500000, up: 125000 }, processes: { cpu: [{ name: "vivaldi", value: 12.4 }, { name: "Code", value: 6.1 }, { name: "pcsx2-qt", value: 4.4 }, { name: "Discord", value: 1.2 }], memory: [{ name: "vivaldi", value: 3480 }, { name: "Code", value: 2048 }, { name: "Discord", value: 610 }, { name: "Maestro", value: 240 }] } });
@@ -960,6 +988,12 @@ const PreviewScenes = (() => {
         "commands-custom": () => { commandsData(); commandsSections.show("custom"); },
         "commands-palette": () => { commandsData(); commandsSections.show("palette"); },
         "commands-quick": () => { commandsData(); commandsSections.show("quick"); },
+        "commands-routines": () => routinesData(),
+        "commands-routines-running": () => routinesData({ type: "routineState", name: "Evening music", step: 3, count: 6 }),
+        "commands-routines-missing": () => { routinesData(); $("routineList").querySelectorAll(".rt-item")[2].click(); },
+        "commands-routines-apps": () => { routinesData(); $("routineList").querySelectorAll(".rt-item")[4].click(); },
+        "commands-routines-empty": () => { commandsData(); say({ type: "routines", items: [] }); commandsSections.show("routines"); },
+        "palette-routines": () => { routinesData(); navigate("home"); openLauncher("all"); $("launcherSearch").value = "routine"; $("launcherSearch").dispatchEvent(new Event("input")); },
         settings: () => { commandsData(); storageData(); say({ type: "backups", enabled: true, time: "1800", folder: "J:\\Maestro-Backups", running: false, off: false, lastTime: "20261110180004", lastResult: "ok", lastDetail: "4,190 files, 72.8 MB", goodTime: "20261110180004" }); navigate("settings"); },
         "settings-storage-full": () => { commandsData(); storageData(472); say({ type: "backups", enabled: true, time: "1800", folder: "J:\\Maestro-Backups", running: false, off: false, lastTime: "20261110180004", lastResult: "ok", lastDetail: "4,190 files, 72.8 MB", goodTime: "20261110180004" }); navigate("settings"); },
         "settings-backup-failed": () => { commandsData(); storageData(); say({ ...{ type: "backups", enabled: true, time: "1800", folder: "J:\\Maestro-Backups", running: false, off: false, lastTime: "20261110180004", lastResult: "ok", lastDetail: "4,190 files, 72.8 MB", goodTime: "20261110180004" }, lastTime: "20261110180004", lastResult: "failed", lastDetail: "Drive J: isn't available.", goodTime: "20261109180003" }); navigate("settings"); },
@@ -975,6 +1009,16 @@ const PreviewScenes = (() => {
         palette: open("home", () => openLauncher("all")),
         "calendar-edit-calendar": () => { PreviewScenes["calendar-week"](); openCalendarEditor(calState.calendars[0]); },
         "palette-math": open("home", () => { openLauncher("all"); $("launcherSearch").value = "12.5 x 1.08"; $("launcherSearch").dispatchEvent(new Event("input")); }),
+        // 2.12.0: Apps open beside the tray.
+        "power-tray-apps": open("home", () => {
+            togglePowerTray(true); say({ type: "recycleBin", items: 12, bytes: 4000000 }); say(audioSample); say({ type: "volume", level: 62, muted: false });
+            $("trayAppsButton").click();
+            say({ type: "appVolumes", error: "", items: [
+                { id: "vivaldi.exe", label: "Vivaldi", level: 80, muted: false }, { id: "spotify.exe", label: "Spotify", level: 55, muted: false },
+                { id: "discord.exe", label: "Discord", level: 100, muted: true }, { id: "maestro", label: "Maestro", level: 70, muted: false },
+                { id: "msedgewebview2.exe", label: "Edge WebView2", level: 100, muted: false }, { id: "system", label: "System sounds", level: 40, muted: false }] });
+        }),
+        "power-tray-apps-empty": open("home", () => { togglePowerTray(true); say({ type: "volume", level: 62, muted: false }); $("trayAppsButton").click(); say({ type: "appVolumes", error: "", items: [] }); }),
         "power-tray": open("home", () => { togglePowerTray(true); say({ type: "recycleBin", items: 12, bytes: 4000000 }); say(audioSample); say({ type: "volume", level: 62, muted: false }); }),
         "power-tray-muted": open("home", () => { togglePowerTray(true); say({ type: "recycleBin", items: 0, bytes: 0 }); say(audioSample); say({ type: "volume", level: 35, muted: true }); }),
         "power-audio": open("home", () => { togglePowerTray(true); say(audioSample); $("audioButton").click(); }),

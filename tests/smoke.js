@@ -2707,6 +2707,46 @@
             handleWebMessage({ data: { type: "recycleBin", items: 3, bytes: 4000 } });
             document.querySelector('#powerTray [data-power-hold="recycle"]').click();
             checks.push(["2.11.0: a plain click on Empty the Bin reminds by its own hint", $("recycleHint").classList.contains("is-flashing") && !$("powerHint").classList.contains("is-flashing") ? [] : [$("recycleHint").className, $("powerHint").className]]);
+            // 2.12.0: media keys, and each app's volume.
+            {
+                messages.length = 0;
+                document.querySelector('#powerTray [data-media-key="next"]').click();
+                checks.push(["2.12.0: a media button sends its key", messages.join(";") === "MediaKey\nnext" ? [] : [messages.join(";")]]);
+                checks.push(["2.12.0: the apps' volumes aren't read until Apps opens", $("trayApps").hidden && !messages.some(message => message.startsWith("GetAppVolumes")) ? [] : ["read"]]);
+                $("trayAppsButton").click();
+                checks.push(["2.12.0: Apps opens beside the tray and reads them", !$("trayApps").hidden && $("trayAppsButton").getAttribute("aria-expanded") === "true" && messages.some(message => message.startsWith("GetAppVolumes")) ? [] : ["closed"]]);
+                const trayBox = $("powerTray").getBoundingClientRect();
+                const appsBox = $("trayApps").getBoundingClientRect();
+                checks.push(["2.12.0: beside it, not over it", appsBox.left >= trayBox.right ? [] : [appsBox.left, trayBox.right]]);
+                handleWebMessage({ data: { type: "appVolumes", items: [
+                    { id: "vivaldi.exe", label: "Vivaldi", level: 80, muted: false },
+                    { id: "system", label: "System sounds", level: 40, muted: true },
+                    { id: "bad", label: "Bad", level: 140, muted: false }
+                ], error: "" } });
+                const appRows = () => [...$("trayAppList").querySelectorAll(".tray-app")];
+                checks.push(["2.12.0: each app with its level, by name, a level past 100 left out", appRows().map(row => row.dataset.app).join() === "system,vivaldi.exe" && appRows()[1].querySelector("output").textContent === "80" && appRows()[0].querySelector(".tray-volume").classList.contains("is-muted") ? [] : [appRows().map(row => row.dataset.app).join()]]);
+                messages.length = 0;
+                const appSlider = appRows()[1].querySelector('input[type="range"]');
+                appSlider.focus();
+                appSlider.value = "25";
+                appSlider.dispatchEvent(new Event("input", { bubbles: true }));
+                checks.push(["2.12.0: moving an app's slider sets that app", messages.join(";") === "SetAppVolume\nvivaldi.exe|25" ? [] : [messages.join(";")]]);
+                handleWebMessage({ data: { type: "appVolumes", items: [{ id: "vivaldi.exe", label: "Vivaldi", level: 80, muted: false }, { id: "system", label: "System sounds", level: 40, muted: true }], error: "" } });
+                checks.push(["2.12.0: a reading doesn't move a slider in use", appRows()[1].querySelector('input[type="range"]') === appSlider && appSlider.value === "25" ? [] : [appSlider.value]]);
+                messages.length = 0;
+                appRows()[0].querySelector(".icon-action").click();
+                checks.push(["2.12.0: Mute on a muted app unmutes it", messages.join(";") === "SetAppMute\nsystem|0" ? [] : [messages.join(";")]]);
+                messages.length = 0;
+                document.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyS", key: "s", bubbles: true, cancelable: true }));
+                checks.push(["2.12.0: with Apps open, the power letters do nothing", !messages.some(message => message.startsWith("Power")) && !document.querySelector("[data-power-hold][data-holding]") ? [] : [messages.join(";")]]);
+                document.dispatchEvent(new KeyboardEvent("keyup", { code: "KeyS", key: "s", bubbles: true, cancelable: true }));
+                handleWebMessage({ data: { type: "appVolumes", items: [], error: "Windows couldn't say which apps have sound." } });
+                checks.push(["2.12.0: a failed reading says so", $("trayAppList").textContent.includes("couldn't say") ? [] : [$("trayAppList").textContent]]);
+                togglePowerTray(false);
+                checks.push(["2.12.0: closing the tray closes Apps and stops reading", $("trayApps").hidden && mixer.timer === 0 ? [] : [mixer.timer]]);
+                togglePowerTray(true);
+                checks.push(["2.12.0: and it opens closed", $("trayApps").hidden ? [] : ["open"]]);
+            }
             togglePowerTray(false);
             navigate("dashboard");
             sent.clear();
@@ -3066,6 +3106,93 @@
             $("paletteForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
             checks.push(["the palette saves its address", messages.some(message => message.startsWith("SaveSettings") && message.includes("https://y/?q=%s")) ? [] : [messages.join()]]);
             pendingHotkeys = null;
+            // 2.12.0: Routines.
+            {
+                handleWebMessage({ data: { type: "commands", items: [{ id: 1, name: "Mail", kind: "url", target: "https://mail.example.com", key: "" }] } });
+                commandsSections.show("routines");
+                checks.push(["Routines asks AHK for the routines", sent.has("GetRoutines") ? [] : ["not asked"]]);
+                handleWebMessage({ data: { type: "routines", items: [
+                    { name: "Evening", steps: [{ kind: "launch", arg: "terminal" }, { kind: "command", arg: "Gone" }, { kind: "wait", arg: "3" }] },
+                    { name: "Later", steps: [] }
+                ] } });
+                handleWebMessage({ data: { type: "routineState", name: "", step: 0, count: 0 } });
+                const stepRows = () => [...$("routineSteps").querySelectorAll(".rt-step")];
+                checks.push(["it lists the routines and edits the first", $("routineList").querySelectorAll(".rt-item").length === 2 && $("routineName").value === "Evening" && stepRows().length === 3 ? [] : [$("routineName").value, stepRows().length]]);
+                checks.push(["a step whose command is gone says so", stepRows()[1].classList.contains("is-missing") && !stepRows()[0].classList.contains("is-missing") && stepRows()[1].querySelector(".rt-target").value === "Gone" ? [] : ["not flagged"]]);
+                checks.push(["the wait is a number of seconds", stepRows()[2].querySelector(".rt-number input")?.value === "3" ? [] : ["no field"]]);
+                messages.length = 0;
+                $("addRoutineStep").click();
+                checks.push(["Add step adds a wait, and focuses what it does", stepRows().length === 4 && document.activeElement === stepRows()[3].querySelector(".rt-kind") && stepRows()[3].querySelector(".rt-kind").value === "wait" ? [] : [stepRows().length]]);
+                const kind = stepRows()[3].querySelector(".rt-kind");
+                kind.value = "volume";
+                kind.dispatchEvent(new Event("change"));
+                checks.push(["another kind gets its own control and a value", stepRows()[3].querySelector(".rt-number input")?.value === "30" && $("routinesStatus").textContent === "Unsaved changes." ? [] : [$("routinesStatus").textContent]]);
+                checks.push(["edits wait a moment before saving", !messages.some(message => message.startsWith("SaveRoutines")) ? [] : ["saved at once"]]);
+                saveRoutinesNow();
+                const savedText = messages.find(message => message.startsWith("SaveRoutines\n"))?.slice("SaveRoutines\n".length);
+                checks.push(["and save every routine as AHK keeps them", savedText === "routine\tEvening\nstep\tlaunch\tterminal\nstep\tcommand\tGone\nstep\twait\t3\nstep\tvolume\t30\nroutine\tLater\n" ? [] : [JSON.stringify(savedText)]]);
+                stepRows()[0].querySelector(".drag-grip").focus();
+                stepRows()[0].querySelector(".drag-grip").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
+                checks.push(["the arrow keys move a step, keeping its grip focused", stepRows()[1].querySelector(".rt-kind").value === "launch" && document.activeElement === stepRows()[1].querySelector(".drag-grip") ? [] : [stepRows()[1].querySelector(".rt-kind").value]]);
+                messages.length = 0;
+                const volume = stepRows()[3].querySelector(".rt-number input");
+                volume.value = "101";
+                volume.dispatchEvent(new Event("input"));
+                saveRoutinesNow();
+                checks.push(["a level past 100 says what's wrong and isn't saved", $("routinesStatus").classList.contains("is-problem") && $("routinesStatus").textContent.includes("step 4") && !messages.some(message => message.startsWith("SaveRoutines")) ? [] : [$("routinesStatus").textContent]]);
+                volume.value = "40";
+                volume.dispatchEvent(new Event("input"));
+                handleWebMessage({ data: { type: "routines", items: [{ name: "Elsewhere", steps: [] }] } });
+                checks.push(["a list from AHK waits while there are edits", $("routineName").value === "Evening" ? [] : [$("routineName").value]]);
+                messages.length = 0;
+                $("routineActions").querySelector("button.primary").click();
+                checks.push(["Run saves first, then starts it by name", messages.length === 2 && messages[0].startsWith("SaveRoutines\n") && messages[1] === "RunRoutine\nEvening" ? [] : [messages.join(";")]]);
+                handleWebMessage({ data: { type: "routines", items: [{ name: "Evening", steps: [{ kind: "wait", arg: "3" }, { kind: "launch", arg: "terminal" }] }, { name: "Later", steps: [] }] } });
+                handleWebMessage({ data: { type: "routinesSaved" } });
+                checks.push(["once saved, AHK's list is shown", stepRows().length === 2 && $("routinesStatus").textContent === "Saved." ? [] : [stepRows().length, $("routinesStatus").textContent]]);
+                handleWebMessage({ data: { type: "routineState", name: "Evening", step: 2, count: 2 } });
+                checks.push(["while it runs, its step and Stop show", stepRows()[1].classList.contains("is-running") && $("routineActions").querySelector("button").textContent === "Stop" && $("routineMeta").textContent === "Running step 2 of 2" ? [] : [$("routineMeta").textContent]]);
+                messages.length = 0;
+                $("routineActions").querySelector("button").click();
+                checks.push(["Stop stops it", messages.length === 1 && messages[0].startsWith("StopRoutine") ? [] : [messages.join(";")]]);
+                const paletteRoutines = paletteSources("all").filter(item => item.badge === "ROUTINE");
+                checks.push(["the palette offers to stop the one running, and lists no empty routine", paletteRoutines.length === 1 && paletteRoutines[0].label === "Stop routine “Evening”" ? [] : [paletteRoutines.map(item => item.label).join()]]);
+                handleWebMessage({ data: { type: "routineState", name: "", step: 0, count: 0 } });
+                checks.push(["and to run it again when it's done", paletteSources("all").find(item => item.badge === "ROUTINE")?.description === "Wait 3 seconds, then open Windows Terminal" ? [] : [paletteSources("all").find(item => item.badge === "ROUTINE")?.description]]);
+                const podiumRows = () => [...$("homeRoutines").querySelectorAll(".module-row")];
+                checks.push(["the Podium's Routines lists those with steps", podiumRows().length === 1 && podiumRows()[0].textContent === "Evening2 steps" ? [] : [podiumRows().map(row => row.textContent).join("|")]]);
+                messages.length = 0;
+                podiumRows()[0].click();
+                checks.push(["and runs one", messages.at(-1) === "RunRoutine\nEvening" ? [] : [messages.join(";")]]);
+                handleWebMessage({ data: { type: "routineState", name: "Evening", step: 1, count: 2 } });
+                messages.length = 0;
+                podiumRows()[0].click();
+                checks.push(["or stops it while it runs, saying its step", podiumRows()[0].textContent.includes("Step 1 of 2 · Stop") && messages.length === 1 && messages[0].startsWith("StopRoutine") ? [] : [podiumRows()[0]?.textContent]]);
+                handleWebMessage({ data: { type: "routineState", name: "", step: 0, count: 0 } });
+                handleWebMessage({ data: { type: "appVolumes", items: [{ id: "vivaldi.exe", label: "Vivaldi", level: 80, muted: false }], error: "" } });
+                $("addRoutineStep").click();
+                const appKind = stepRows().at(-1).querySelector(".rt-kind");
+                appKind.value = "appvolume";
+                appKind.dispatchEvent(new Event("change"));
+                const appStep = stepRows().at(-1);
+                checks.push(["an app's volume offers the apps with sound, and a level", appStep.querySelector(".rt-target").value === "vivaldi.exe" && appStep.querySelector(".rt-number input, .rt-appvolume input").value === "50" && [...appStep.querySelectorAll(".rt-target option")].map(option => option.value).join() === "vivaldi.exe,system" ? [] : [appStep.querySelector(".rt-target")?.value]]);
+                messages.length = 0;
+                saveRoutinesNow();
+                checks.push(["and saves as app|level", messages.some(message => message.includes("step\tappvolume\tvivaldi.exe|50")) ? [] : [messages.join(";")]]);
+                handleWebMessage({ data: { type: "routinesSaved" } });
+                $("newRoutineButton").click();
+                checks.push(["New routine names itself and focuses its name", $("routineName").value === "Routine" && document.activeElement === $("routineName") && $("routineList").querySelectorAll(".rt-item").length === 3 ? [] : [$("routineName").value]]);
+                $("routineName").value = "evening";
+                $("routineName").dispatchEvent(new Event("input"));
+                checks.push(["two routines can't share a name", $("routinesStatus").textContent.includes("Two routines") ? [] : [$("routinesStatus").textContent]]);
+                rtView.items = [];
+                rtView.version = rtView.savedVersion;
+                rtView.problem = "";
+                clearTimeout(rtView.saveTimer);
+                rtView.saveTimer = null;
+                handleWebMessage({ data: { type: "routines", items: [] } });
+                checks.push(["with none, it says what a routine is", !$("routinesEmpty").hidden && $("routineEditorBody").hidden ? [] : ["not said"]]);
+            }
             commandsSections.show("quick");
             saveQuickActions(["view:notes", "view:games"]);
             const quickButton = name => [...$("quickActionEditor").querySelectorAll("button")].find(button => button.getAttribute("aria-label") === name);
@@ -3703,7 +3830,7 @@
             checks.push(["and its button becomes Done", $("arrangeButton").textContent === "Done" && $("arrangeButton").getAttribute("aria-pressed") === "true" ? [] : [$("arrangeButton").textContent]]);
             checks.push(["a module's own controls are out of reach", $("todayOpen").closest("[inert]") && $("homeNoteInput").closest("[inert]") ? [] : ["reachable"]]);
             checks.push(["the dock says how it fits", $("arrangeFit").textContent === "This fills the window." ? [] : [$("arrangeFit").textContent]]);
-            checks.push(["and holds the modules that start hidden", ["weather", "processes", "network", "audio", "controllers", "pinned", "unlocks", "timer", "metronome"].every(id => document.querySelector(`[data-arrange="${id}-show"]`)) ? [] : [$("arrangeTray").textContent]]);
+            checks.push(["and holds the modules that start hidden", ["weather", "processes", "network", "audio", "controllers", "pinned", "unlocks", "timer", "metronome", "routines"].every(id => document.querySelector(`[data-arrange="${id}-show"]`)) ? [] : [$("arrangeTray").textContent]]);
             checks.push(["focus starts on the first tile's grip", document.activeElement === arrangeGrip("now") ? [] : [document.activeElement?.dataset.arrange]]);
             // 2.0.0 manual pass: the dock takes the sidebar's place, in one shape.
             // Measured on screen, with every animation at its end: a transform the
@@ -3889,7 +4016,7 @@
             }
             // 2.0.0: the added modules.
             changeHomeLayout({ ...MaestroHomeLayout.defaults(), hidden: [] });
-            checks.push(["every added module can show", ["weather", "processes", "network", "audio", "controllers", "pinned", "unlocks", "timer", "metronome"].every(id => !document.querySelector(`#homeFace [data-module="${id}"]`).hidden) ? [] : ["hidden"]]);
+            checks.push(["every added module can show", ["weather", "processes", "network", "audio", "controllers", "pinned", "unlocks", "timer", "metronome", "routines"].every(id => !document.querySelector(`#homeFace [data-module="${id}"]`).hidden) ? [] : ["hidden"]]);
             const wasHidden = windowIsHidden;
             windowIsHidden = false;
             messages.length = 0;

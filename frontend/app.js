@@ -381,6 +381,7 @@ function paletteSources(mode) {
             run: () => send("RunCommand", String(command.id)), weight: 4
         }));
     }
+    if (mode === "all") items.push(...routinePaletteItems());
     if (mode === "all") {
         items.push({
             id: "game-notes", label: "Notes for current game", description: "Opens the running game's notes in Quick Notes",
@@ -987,6 +988,7 @@ document.querySelectorAll("[data-pref-go]").forEach(button => button.addEventLis
     navigate(view);
     if (view === "games" && part) gamesSections.show(part);
     if (view === "dashboard" && part) systemSections.show(part);
+    if (view === "commands" && part) commandsSections.show(part);
     if (part === "today") openTodaySettings();
 }));
 
@@ -1929,6 +1931,16 @@ function handleWebMessage(event) {
             renderQuickActions();
             if (!$("launcher").hidden) renderLauncherResults();
             break;
+        // 2.12.0
+        case "routines":
+            receiveRoutines(data.items);
+            break;
+        case "routinesSaved":
+            routinesSaved();
+            break;
+        case "routineState":
+            receiveRoutineState(data);
+            break;
         case "commandsSaved":
             commandsDirty = false;
             renderCommandEditor(true);
@@ -1941,6 +1953,7 @@ function handleWebMessage(event) {
             break;
         case "workspaces":
             savedWorkspaces = Array.isArray(data.items) ? data.items : [];
+            rtView.workspacesKnown = true;
             renderWorkspaceManager(data.monitors);
             renderHomeWorkspaces();
             renderQuickActions();
@@ -2087,6 +2100,9 @@ function handleWebMessage(event) {
         case "audioDevices":
             renderAudioDevices(data);
             break;
+        case "appVolumes":
+            receiveAppVolumes(data);
+            break;
         case "running":
             if (data.apps && typeof data.apps === "object") setRunningApps(data.apps);
             break;
@@ -2226,6 +2242,7 @@ function handleWebMessage(event) {
             if (data.scope === "charts") globalThis.chartsFailed?.();
             if (data.scope === "counterpoint") globalThis.exercisesFailed?.();
             if (data.scope === "rhythm") globalThis.rhythmsFailed?.();
+            if (data.scope === "routines") routinesFailed(data.message);
             if (data.scope === "settings") {
                 globalThis.drivesSaveFailed?.(data.message);
                 quietSettingsSave = "";
@@ -5618,6 +5635,7 @@ function togglePowerTray(show = $("powerTray").hidden) {
         tray.hidden = true;
         button.setAttribute("aria-expanded", "false");
         $("audioMenu").hidden = true;
+        showTrayApps(false);
         return;
     }
     const box = button.getBoundingClientRect();
@@ -5654,7 +5672,7 @@ function showPowerKeysBlocked(blocked) {
 }
 
 document.addEventListener("keydown", event => {
-    if ($("powerTray").hidden || !$("audioMenu").hidden) return;
+    if ($("powerTray").hidden || !$("audioMenu").hidden || !$("trayApps").hidden) return;
     const result = powerKeys.keydown(event);
     if (result.handled) event.preventDefault();
     if (result.blocked) {

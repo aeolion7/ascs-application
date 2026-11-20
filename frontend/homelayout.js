@@ -26,7 +26,9 @@ globalThis.MaestroHomeLayout = (() => {
         Object.freeze({ id: "unlocks", label: "Recent Unlocks", width: 1, tall: 2, hidden: true }),
         Object.freeze({ id: "timer", label: "Timer", width: 1, tall: 1, hidden: true }),
         // 2.3.0
-        Object.freeze({ id: "metronome", label: "Metronome", width: 1, tall: 1, hidden: true })
+        Object.freeze({ id: "metronome", label: "Metronome", width: 1, tall: 1, hidden: true }),
+        // 2.12.0
+        Object.freeze({ id: "routines", label: "Routines", width: 1, tall: 3, hidden: true })
     ]);
     const IDS = MODULES.map(module => module.id);
     const defaultWidths = () => Object.fromEntries(MODULES.map(module => [module.id, module.width]));

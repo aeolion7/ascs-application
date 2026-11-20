@@ -1,6 +1,7 @@
 "use strict";
 // The Podium's added modules (2.0.0): Weather, Top Apps, Network, Audio,
-// Controllers, Pinned Notes, Recent Unlocks and Timer. Each starts hidden; Arrange
+// Controllers, Pinned Notes, Recent Unlocks and Timer (and since 2.12.0
+// Routines, drawn by routinesview.js). Each starts hidden; Arrange
 // shows it. What a module needs is asked for only while it shows.
 
 const homeShowing = id => $("home").classList.contains("active") && !homeModule(id)?.hidden && !windowIsHidden;
@@ -298,6 +299,7 @@ function renderHomeModules() {
     renderHomePinned();
     renderHomeUnlocks();
     renderHomeTimer();
+    renderHomeRoutines();
 }
 
 renderHomeModules();

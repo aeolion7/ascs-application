@@ -3447,3 +3447,196 @@ TidyBackupDetail(text) {
     text := Trim(RegExReplace(String(text), "[\x00-\x1F\x7F]+", " "))
     return StrLen(text) > 200 ? SubStr(text, 1, 199) "…" : text
 }
+
+; ==========================================
+; ROUTINES (2.12.0)
+; ==========================================
+
+; A routine is a named list of steps, run one after another when the user
+; starts it. A step only uses what Maestro already knows: a saved
+; arrangement, a desktop, the volume (the output's or an app's), one of the palette's apps, a custom
+; command or a game by its name or id, a page of Maestro, a media key, or a
+; wait. Never a program path, a power action or an audio device.
+; Routines are kept as text, one line each:
+;   routine<Tab>Name
+;   step<Tab>kind<Tab>argument
+; data\routines.txt holds them, and the page sends the whole set in the
+; same form when they change.
+
+RoutineLimits() => Map("routines", 30, "steps", 40, "wait", 600, "desktops", 20)
+
+; The apps a routine may open: the palette's own, without Lock, Toggle mute
+; and Reload, which aren't things to do partway through a sequence.
+RoutineLaunchIds() => "everything,claude,explorer,vivaldi,terminal,calculator,taskmanager,settings,downloads,projects,snipping"
+
+RoutinePages() => "home,notes,calendar,workspaces,games,dashboard,sounds,commands,conservatory,settings"
+
+RoutineMediaKeys() => "playpause,next,previous,stop"
+
+ValidateRoutineName(name) {
+    name := Trim(name)
+    if (name = "" || StrLen(name) > 48)
+        throw Error("Routine names must be 1–48 characters.")
+    if RegExMatch(name, "[\x00-\x1F\x7F|]")
+        throw Error("Routine names cannot contain control characters or |.")
+    return name
+}
+
+; One step, checked and made plain: returns Map("kind", "arg"), or throws
+; with a message that names what's wrong.
+ValidateRoutineStep(kind, arg) {
+    kind := StrLower(Trim(kind))
+    arg := Trim(arg)
+    limits := RoutineLimits()
+    switch kind {
+        case "workspace":
+            arg := IsDefaultWorkspaceName(arg) ? "Default" : ValidateWorkspaceName(arg)
+        case "desktop":
+            if !RegExMatch(arg, "^\d{1,2}$") || Integer(arg) < 1 || Integer(arg) > limits["desktops"]
+                throw Error("A desktop step needs a desktop number from 1 to " limits["desktops"] ".")
+            arg := String(Integer(arg))
+        case "volume":
+            level := VolumeLevel(arg)
+            if (level = "")
+                throw Error("A volume step needs a level from 0 to 100.")
+            arg := String(level)
+        case "appvolume":
+            parsed := ParseAppVolume(arg)
+            if !IsObject(parsed)
+                throw Error("An app volume step needs an app and a level from 0 to 100.")
+            arg := parsed["app"] "|" parsed["level"]
+        case "launch":
+            arg := StrLower(arg)
+            if (arg = "" || !InStr("," RoutineLaunchIds() ",", "," arg ","))
+                throw Error("That app can't be opened by a routine.")
+        case "command":
+            if (arg = "" || StrLen(arg) > 48 || RegExMatch(arg, "[\x00-\x1F\x7F|]"))
+                throw Error("A command step needs the name of a custom command.")
+        case "game":
+            arg := ValidateGameId(arg)
+        case "page":
+            arg := StrLower(arg)
+            if (arg = "" || !InStr("," RoutinePages() ",", "," arg ","))
+                throw Error("That isn't a page of Maestro.")
+        case "media":
+            arg := StrLower(arg)
+            if (arg = "" || !InStr("," RoutineMediaKeys() ",", "," arg ","))
+                throw Error("A media step plays or pauses, or goes to the next or previous track, or stops.")
+        case "wait":
+            if !RegExMatch(arg, "^\d{1,3}$") || Integer(arg) < 1 || Integer(arg) > limits["wait"]
+                throw Error("A wait is 1 to " limits["wait"] " seconds.")
+            arg := String(Integer(arg))
+        default:
+            throw Error("A routine can't do that step.")
+    }
+    return Map("kind", kind, "arg", arg)
+}
+
+; Reads routines from their text. Strict (saving): the first problem throws,
+; so nothing half-checked is stored. Lenient (loading a file that may be
+; older or edited by hand): a bad step or routine is left out and its
+; problem listed, and the rest load. Returns Map("routines", Array of
+; Map("name", "steps"), "problems", Array of text).
+ParseRoutines(text, lenient := false) {
+    limits := RoutineLimits()
+    routines := [], problems := [], names := Map(), current := ""
+    names.CaseSense := false
+    Fail(message) {
+        if !lenient
+            throw Error(message)
+        problems.Push(message)
+    }
+    for index, line in StrSplit(text, "`n", "`r") {
+        if (Trim(line, " `t") = "")
+            continue
+        fields := StrSplit(line, "`t")
+        try {
+            if (fields[1] = "routine" && fields.Length = 2) {
+                current := 0   ; until this routine is checked: its steps go with it
+                name := ValidateRoutineName(fields[2])
+                if names.Has(name)
+                    throw Error("Two routines are named “" name "”.")
+                if (routines.Length >= limits["routines"])
+                    throw Error("At most " limits["routines"] " routines are kept.")
+                names[name] := true
+                current := Map("name", name, "steps", [])
+                routines.Push(current)
+            } else if (fields[1] = "step" && fields.Length = 3) {
+                if (current == 0)
+                    continue
+                if !IsObject(current)
+                    throw Error("Line " index ": a step comes before any routine.")
+                if (current["steps"].Length >= limits["steps"])
+                    throw Error("“" current["name"] "” has more than " limits["steps"] " steps.")
+                current["steps"].Push(ValidateRoutineStep(fields[2], fields[3]))
+            } else {
+                throw Error("Line " index " of the routines isn't a routine or a step.")
+            }
+        } catch as err {
+            Fail(err.Message)
+        }
+    }
+    return Map("routines", routines, "problems", problems)
+}
+
+FormatRoutines(routines) {
+    text := ""
+    for routine in routines {
+        text .= "routine`t" routine["name"] "`n"
+        for step in routine["steps"]
+            text .= "step`t" step["kind"] "`t" step["arg"] "`n"
+    }
+    return text
+}
+
+; The routine with this name (any case), or "".
+FindRoutine(routines, name) {
+    for routine in routines
+        if (StrLower(routine["name"]) = StrLower(Trim(name)))
+            return routine
+    return ""
+}
+
+; ---- The per-app mixer (2.12.0) ----
+
+; Which app's sound a request names: "system" (Windows' own sounds),
+; "maestro" (Maestro's own process), or a program's file name, such as
+; vivaldi.exe. Returns it in lowercase, or "" when it isn't one of those.
+AppVolumeId(text) {
+    text := StrLower(Trim(text))
+    if (text = "system" || text = "maestro")
+        return text
+    return RegExMatch(text, "^[a-z0-9][a-z0-9 ._()+-]{0,59}\.exe$") ? text : ""
+}
+
+; "app|level" (the tray's slider and a routine's step): Map("app", "level"),
+; or "" for anything else.
+ParseAppVolume(content) {
+    parts := StrSplit(content, "|")
+    if (parts.Length != 2)
+        return ""
+    app := AppVolumeId(parts[1])
+    level := VolumeLevel(parts[2])
+    return (app = "" || level = "") ? "" : Map("app", app, "level", level)
+}
+
+; What the tray calls an app: Windows' own name for a session when it has a
+; plain one, else the program's file name (as Windows has it) without .exe.
+AppVolumeLabel(name, displayName := "") {
+    if (name = "system")
+        return "System sounds"
+    if (name = "maestro")
+        return "Maestro"
+    if (displayName != "" && SubStr(displayName, 1, 1) != "@" && StrLen(displayName) <= 60)
+        return displayName
+    name := RegExReplace(name, "i)\.exe$")
+    if (name = "msedgewebview2")
+        return "Edge WebView2"
+    if RegExMatch(name, "i)^autohotkey(32|64|u32|u64|a32)?$")
+        return "AutoHotkey"
+    return StrUpper(SubStr(name, 1, 1)) SubStr(name, 2)
+}
+
+; How long to wait after a step before the next: a wait step's own time,
+; otherwise a moment, so a window that just opened or moved can settle.
+RoutineStepDelay(step) => step["kind"] = "wait" ? Integer(step["arg"]) * 1000 : 250

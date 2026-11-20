@@ -757,6 +757,9 @@ if ($copy) {
     Add-Check 'isolate this checkout: game launches are guarded' ($games.Contains('Isolate_Run("steam://') -and $games -notmatch '(?<![\w.])Run\(')
     Add-Check 'isolate this checkout: Super is Pause' ([IO.File]::ReadAllText("$copy\lib\features\SuperKey.ahk") -match 'Pause & ')
     Add-Check 'isolate this checkout: turning the display off is stubbed' ([IO.File]::ReadAllText("$copy\lib\features\Power.ahk").Contains('Isolate_Stub("PostMessage", 0x0112, 0xF170'))
+    $mixer = [IO.File]::ReadAllText("$copy\lib\features\Mixer.ahk")
+    Add-Check 'isolate this checkout: media keys are stubbed' ($mixer.Contains('Isolate_Stub("Send", "{Media_Play_Pause}")') -and $mixer -notmatch '(?<![\w.])Send\(')
+    Add-Check "isolate this checkout: an app's volume and mute are stubbed" ($mixer.Contains('Isolate_Stub("ComCall", 3, simpleVolume') -and $mixer.Contains('Isolate_Stub("ComCall", 5, simpleVolume') -and $mixer -notmatch '(?<![\w.])ComCall\(\s*[35]\s*,\s*simpleVolume')
 }
 
 # --clean removes only what isolate marked.

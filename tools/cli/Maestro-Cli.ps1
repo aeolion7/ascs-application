@@ -1356,6 +1356,11 @@ $IsolateGuarded = 'Run|RunWait|ProcessClose|FileDelete|FileRecycle|FileMove|File
 $IsolatePowerCalls = 'LockWorkStation|PowrProf\\SetSuspendState|ExitWindowsEx|InitiateSystemShutdown\w*|InitiateShutdown\w*'
 # A message that turns the display off (2.11.0): WM_SYSCOMMAND with SC_MONITORPOWER.
 $IsolateDisplayOff = '(?i)(?<![\w.])(PostMessage|SendMessage)\((?=\s*0x0*112\s*,\s*0xF170)'
+# A media key (2.12.0: a routine's step), which would reach the real player.
+$IsolateMediaKey = '(?i)(?<![\w.])Send\((?=\s*"\{Media_)'
+# Setting an app's volume or mute (2.12.0): the mixer's writes, on a variable
+# named simpleVolume. Its reads stay real.
+$IsolateAppVolume = '(?i)(?<![\w.])ComCall\((?=\s*[35]\s*,\s*simpleVolume\b)'
 $IsolateInclude = '#Include %A_ScriptDir%\isolate-hook.ahk'
 
 function Get-IsolateRoot {
@@ -1370,6 +1375,8 @@ function ConvertTo-IsolatedScript([string]$text, [switch]$Entry, [switch]$Probes
     $text = [regex]::Replace($text, "(?i)\bDllCall\(\s*`"($IsolatePowerCalls)`"", 'Isolate_Stub("$1"')
     $text = [regex]::Replace($text, '(?i)(?<![\w.])Send\((?=\s*ASCS_SoundSwitchKey)', 'Isolate_Stub("Send", ')
     $text = [regex]::Replace($text, $IsolateDisplayOff, 'Isolate_Stub("$1", ')
+    $text = [regex]::Replace($text, $IsolateMediaKey, 'Isolate_Stub("Send", ')
+    $text = [regex]::Replace($text, $IsolateAppVolume, 'Isolate_Stub("ComCall", ')
     $text = [regex]::Replace($text, '(?i)(?<!\w)F24(?!\w)', 'Pause')
     $text = [regex]::Replace($text, '(?im)^(\s*)([~$*]*\^!\+a::)', '$1; (maestro isolate) $2')
     $text = [regex]::Replace($text, '(?<!\d)5232(?!\d)', "$IsolatePort")
@@ -1423,6 +1430,8 @@ function Find-IsolationHazards([string]$folder) {
             @{ In = $text; Pattern = "(?i)DllCall\(\s*`"($IsolatePowerCalls)`""; What = 'a power call' }
             @{ In = $text; Pattern = '(?i)(?<![\w.])Send\(\s*ASCS_SoundSwitchKey'; What = 'the audio switch' }
             @{ In = $text; Pattern = $IsolateDisplayOff; What = 'turning the display off' }
+            @{ In = $text; Pattern = $IsolateMediaKey; What = 'a media key' }
+            @{ In = $text; Pattern = $IsolateAppVolume; What = "setting an app's volume" }
             @{ In = $code; Pattern = '(?i)\.(ShellExecute\w*|Exec|Run)\(|ComObject\(\s*"WScript\.Shell'; What = 'a launch through COM' }
         )
         foreach ($check in $checks) {

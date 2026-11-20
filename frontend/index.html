@@ -38,6 +38,7 @@
   <link rel="stylesheet" href="styles/54-2.9.0-icons.css">
   <link rel="stylesheet" href="styles/55-2.10.0-icons.css">
   <link rel="stylesheet" href="styles/56-2.11.0-nct.css">
+  <link rel="stylesheet" href="styles/57-2.12.0-routines.css">
 </head>
 <body>
   <div class="app-shell">
@@ -48,7 +49,7 @@
           <span>Aeolionware</span>
           <strong>Maestro</strong>
         </span>
-        <span id="sidebarVersion" hidden>Maestro <span>2.11.0</span></span>
+        <span id="sidebarVersion" hidden>Maestro <span>2.12.0</span></span>
       </div>
 
       <nav class="primary-nav" aria-label="Pages">
@@ -119,6 +120,12 @@
                 <input type="range" id="trayVolume" min="0" max="100" step="1" value="0" aria-label="Volume" disabled>
                 <output id="trayVolumeValue" for="trayVolume"></output>
               </div>
+              <div class="tray-media" role="group" aria-label="Media">
+                <button class="secondary icon-action" type="button" data-media-key="previous" aria-label="Previous track" title="Previous track"><svg data-icon="previous"></svg></button>
+                <button class="secondary icon-action" type="button" data-media-key="playpause" aria-label="Play or pause" title="Play or pause"><svg data-icon="play-pause"></svg></button>
+                <button class="secondary icon-action" type="button" data-media-key="next" aria-label="Next track" title="Next track"><svg data-icon="next"></svg></button>
+                <button class="secondary tray-apps-button" type="button" id="trayAppsButton" aria-expanded="false" aria-controls="trayApps" title="Each app's volume">Apps<svg data-icon="chevron-right"></svg></button>
+              </div>
             </div>
             <div class="system-group" role="group" aria-labelledby="trayHeadBin">
               <div class="tray-group-head"><span class="tray-group-title" id="trayHeadBin">Recycle Bin</span><span class="system-group-label tray-hold-hint" id="recycleHint" title="Press and hold the button, or hold B, for 1.5 seconds. Letting go cancels."><svg data-icon="hold"></svg><span class="tray-hint-text">Hold to empty</span></span></div>
@@ -132,6 +139,11 @@
               <button class="system-button is-guarded" type="button" data-power-hold="signout" aria-keyshortcuts="O" title="Hold O, or press and hold here, to sign out"><svg data-icon="signout" data-size="24"></svg><span class="power-label">Sign <u>o</u>ut</span><kbd class="power-key" aria-hidden="true">O</kbd></button>
             </div>
             <div class="power-confirm" id="powerConfirm" role="alert" hidden></div>
+            <!-- 2.12.0: beside the tray, last so the groups keep their lines between them -->
+            <div class="tray-apps" id="trayApps" role="group" aria-labelledby="trayAppsTitle" hidden>
+              <div class="tray-group-head"><span class="tray-group-title" id="trayAppsTitle">Apps</span></div>
+              <div class="tray-app-list" id="trayAppList"></div>
+            </div>
           </div>
 
     <main class="main">
@@ -343,6 +355,13 @@
               <button class="secondary" type="button" id="timerReset" hidden>Reset</button>
             </div>
           </section>
+          <section class="module" data-module="routines" aria-labelledby="homeRoutinesTitle">
+            <div class="module-head">
+              <h2 id="homeRoutinesTitle"><button class="module-link" type="button" data-pref-go="commands:routines" title="Open Commands › Routines">Routines</button></h2>
+            </div>
+            <ul class="module-list" id="homeRoutines"></ul>
+          </section>
+
           <section class="module" data-module="metronome" aria-labelledby="homeMetroTitle">
             <div class="module-head">
               <h2 id="homeMetroTitle"><button class="module-link" type="button" data-view="conservatory" title="Open Conservatory">Metronome</button></h2>
@@ -880,6 +899,7 @@
           <div class="section-tabs" id="commandsTabs" role="tablist" aria-label="Commands sections">
             <button type="button" role="tab" id="commandsTabKeymap" data-section-tab="keymap" aria-controls="commandsKeymap" aria-selected="true">Key Map</button>
             <button type="button" role="tab" id="commandsTabCustom" data-section-tab="custom" aria-controls="commandsCustom" aria-selected="false">Custom Commands</button>
+            <button type="button" role="tab" id="commandsTabRoutines" data-section-tab="routines" aria-controls="commandsRoutines" aria-selected="false">Routines</button>
             <button type="button" role="tab" id="commandsTabPalette" data-section-tab="palette" aria-controls="commandsPalette" aria-selected="false">Palette</button>
             <button type="button" role="tab" id="commandsTabQuick" data-section-tab="quick" aria-controls="commandsQuick" aria-selected="false">Quick Actions</button>
           </div>
@@ -945,6 +965,33 @@
             <p id="commandsEmpty" class="commands-note">No custom commands yet. They appear in the palette, and a letter puts one on the key map.</p>
             <p class="commands-note">Applications must be .exe or .lnk files and start without arguments.</p>
             <div class="commands-actions"><span id="commandsStatus" role="status">Stored in data\commands.ini.</span><span><button class="secondary" type="button" id="addCommandButton">Add command</button><button class="primary" type="button" id="saveCommandsButton">Save commands</button></span></div>
+          </section>
+        </div>
+
+        <div class="rt-layout" id="commandsRoutines" role="tabpanel" aria-labelledby="commandsTabRoutines" hidden>
+          <section class="module rt-editor" aria-labelledby="routineTitle">
+            <div class="ws-head rt-head">
+              <div class="ws-head-copy">
+                <h2 class="sr-only" id="routineTitle">Routine</h2>
+                <input class="ws-name rt-name" id="routineName" type="text" maxlength="48" autocomplete="off" aria-label="Routine name" hidden>
+                <p id="routineMeta"></p>
+              </div>
+              <div class="ws-actions rt-actions" id="routineActions"></div>
+            </div>
+            <div class="rt-body" id="routineEditorBody" hidden>
+              <ol class="rt-steps" id="routineSteps" aria-label="Steps"></ol>
+              <div class="rt-foot">
+                <button class="secondary" type="button" id="addRoutineStep">Add step</button>
+                <span id="routinesStatus" role="status"></span>
+              </div>
+            </div>
+            <p class="module-empty" id="routinesEmpty" hidden>No routines yet. A routine runs steps in order, such as restoring an arrangement, going to a desktop and opening an app.</p>
+          </section>
+          <section class="module rt-saved" aria-labelledby="rtSavedTitle">
+            <div class="module-head"><h2 id="rtSavedTitle">Your Routines</h2><span class="ws-count" id="routineCount"></span></div>
+            <ul class="ws-list rt-list" id="routineList" aria-label="Routines"></ul>
+            <p class="commands-note">Routines run from here and from the palette. A step only uses what Maestro already knows, and never a power action.</p>
+            <div class="rt-new"><button class="secondary" type="button" id="newRoutineButton">New routine</button></div>
           </section>
         </div>
 
@@ -2252,6 +2299,9 @@
   <script src="systemview.js"></script>
   <script src="gamenotes.js"></script>
   <script src="workspacesview.js"></script>
+  <script src="routines.js"></script>
+  <script src="routinesview.js"></script>
+  <script src="mixerview.js"></script>
   <script src="homeview.js"></script>
   <script src="homemodules.js"></script>
   <script src="consolesview.js"></script>

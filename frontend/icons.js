@@ -53,6 +53,10 @@ const MaestroIcons = (() => {
         minus: '<path d="M6 12h12"/>',
         plus: '<path d="M12 6v12M6 12h12"/>',
         play: '<path class="icon-dot" d="M7 4.5v15l12.5-7.5Z"/>',
+        // 2.12.0: the tray's media keys.
+        previous: '<path d="M6 5.5v13"/><path class="icon-dot" d="M19 5.5v13l-10-6.5Z"/>',
+        next: '<path class="icon-dot" d="M5 5.5v13l10-6.5Z"/><path d="M18 5.5v13"/>',
+        "play-pause": '<path class="icon-dot" d="M4 6v12l8.5-6Z"/><path d="M15.5 6.5v11M19.5 6.5v11"/>',
         more: '<circle class="icon-dot" cx="6" cy="12" r="1.5"/><circle class="icon-dot" cx="12" cy="12" r="1.5"/><circle class="icon-dot" cx="18" cy="12" r="1.5"/>',
         grip: '<circle class="icon-dot" cx="9" cy="6" r="1.5"/><circle class="icon-dot" cx="15" cy="6" r="1.5"/><circle class="icon-dot" cx="9" cy="12" r="1.5"/><circle class="icon-dot" cx="15" cy="12" r="1.5"/><circle class="icon-dot" cx="9" cy="18" r="1.5"/><circle class="icon-dot" cx="15" cy="18" r="1.5"/>',
         star: '<path d="M12 3.5 14.4 9l5.9.5-4.5 3.9 1.4 5.8L12 16.2l-5.2 3 1.4-5.8-4.5-3.9L9.6 9Z"/>',

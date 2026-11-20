@@ -5,6 +5,7 @@
 const commandsSections = MaestroSections.create($("commandsTabs"), {
     onChange(section) {
         $("commandSearch").hidden = section !== "keymap";
+        if (section === "routines") routinesShown();
         window.scrollTo(0, 0);
     }
 });

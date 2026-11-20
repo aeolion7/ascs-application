@@ -74,15 +74,15 @@ C:\Maestro\
 ├── ASCS.Launcher.ahk         Resident Ctrl+Alt+Shift+A helper: starts or reloads Maestro
 ├── frontend\
 │   ├── index.html, app.js    The shell: navigation, messaging, shared components
-│   ├── styles\               Stylesheets in cascade order, 01-foundation.css … 49-2.7.0-staff.css
+│   ├── styles\               Stylesheets in cascade order, 01-foundation.css … 57-2.12.0-routines.css
 │   ├── assets\               Icon, fonts (with licenses), start-screen pictures
 │   ├── *.js                  Pure logic (palette, notes, charts, almanac, games, sounds, calendar,
 │   │                         workspaces, logs, keymap, metronome, music, harmony, prompts, notation,
-│   │                         counterpoint, rhythm, melody) and views (*view.js, homemodules, gamenotes …)
+│   │                         counterpoint, rhythm, melody, routines) and views (*view.js, homemodules, gamenotes …)
 ├── lib\
 │   ├── ASCS.Core.ahk         Pure helpers shared with the tests
 │   ├── features\             One file per feature, included by ASCS.ahk (SuperKey, Launcher, Desktops,
-│   │                         Notes, Games, Sounds, Calendar, Power, Workspaces, Rules, Charts, …)
+│   │                         Notes, Games, Sounds, Calendar, Power, Mixer, Routines, Workspaces, …)
 │   └── VirtualDesktopAccessor.dll   Optional: desktop switching and cross-desktop focus
 ├── tests\                    The runner, the suites, the smoke test and preview scenes
 ├── tools\                    Installers and the maestro command (tools\cli)
@@ -95,7 +95,7 @@ What `data\` holds:
 | Path | Contents |
 | --- | --- |
 | `notes.json` (+ `.bak`), `notes-history\` | Quick Notes; the previous save, and one copy a day for 14 days |
-| `settings.ini`, `commands.ini` | Preferences, shortcut letters, quick actions; custom commands |
+| `settings.ini`, `commands.ini`, `routines.txt` | Preferences, shortcut letters, quick actions; custom commands; routines |
 | `workspace.ini`, `workspaces\`, `rules.ini` | Arrangements and launch rules |
 | `chords.ini`, `charts\`, `counterpoint\`, `rhythms\`, `exports\` | The Conservatory's saved chords, songs, exercises, rhythms and MusicXML exports |
 | `startup-sounds.ini`, `sound-origins.ini`, `sound-lengths.txt` | Sign-in and shutdown sounds, where leveled copies came from, cached lengths |
@@ -110,15 +110,15 @@ What `data\` holds:
 
 ### Podium
 
-Super shows Maestro on the last view open (the Podium after a start) and hides it when it's in front. The Podium is a three-by-three grid of modules sized to fit the window without scrolling: **Now Playing**, **Today** (the almanac: moon, sun, countdowns, seasons and a rotating line from history, quotes and, if turned on, Wikipedia), **Next Up** (calendar), **System**, **Quick Actions and Arrangements**, **Continue Playing** and **Quick Note**. **Arrange** moves, sizes (one to three squares wide, and up to three tall for a module with more to show) and hides modules, each going in the first space where it fits, and adds others: Weather, Top Apps, Network, Audio, Controllers, Pinned Notes, Recent Unlocks, Metronome and Timer. Saved **layouts**, chosen from the chip beside the title or the palette, keep different arrangements of modules; one can be used while a game runs, switching back as it closes.
+Super shows Maestro on the last view open (the Podium after a start) and hides it when it's in front. The Podium is a three-by-three grid of modules sized to fit the window without scrolling: **Now Playing**, **Today** (the almanac: moon, sun, countdowns, seasons and a rotating line from history, quotes and, if turned on, Wikipedia), **Next Up** (calendar), **System**, **Quick Actions and Arrangements**, **Continue Playing** and **Quick Note**. **Arrange** moves, sizes (one to three squares wide, and up to three tall for a module with more to show) and hides modules, each going in the first space where it fits, and adds others: Weather, Top Apps, Network, Audio, Controllers, Pinned Notes, Recent Unlocks, Metronome, Timer and Routines. Saved **layouts**, chosen from the chip beside the title or the palette, keep different arrangements of modules; one can be used while a game runs, switching back as it closes.
 
-**Power**, at the sidebar's foot, opens a tray in four named groups: **Session** (Lock, Turn off display), **Sound** (the audio output, its volume and Mute), **Recycle Bin** and **Power** (Sleep, Restart, Shut down, Sign out). Emptying the Recycle Bin and the four power actions need a 1.5 s press-and-hold (or holding the button's letter); the power actions then count down with Cancel. Restart, Shut down and Sign out wait while any window shows unsaved work.
+**Power**, at the sidebar's foot, opens a tray in four named groups: **Session** (Lock, Turn off display), **Sound** (the audio output, its volume and Mute, media keys, and **Apps**: each app's volume and Mute beside the tray), **Recycle Bin** and **Power** (Sleep, Restart, Shut down, Sign out). Emptying the Recycle Bin and the four power actions need a 1.5 s press-and-hold (or holding the button's letter); the power actions then count down with Cancel. Restart, Shut down and Sign out wait while any window shows unsaved work.
 
 **Maestro sounds** play when Maestro shows and hides (or starts and exits), chosen in Sounds.
 
 ### Command Palette
 
-Super + Space, or **/** inside Maestro. One search over views, apps and actions, custom commands, arrangements, notes and open windows on this desktop; math answered as you type; `?` searches the web; `+` adds a calendar event in plain words (`+Dentist tue 3pm #work`); and the last rows search files (Everything) or the web. Modes paste a note, restore or save an arrangement, or switch windows. Ranking learns from use.
+Super + Space, or **/** inside Maestro. One search over views, apps and actions, custom commands, routines, arrangements, notes and open windows on this desktop; math answered as you type; `?` searches the web; `+` adds a calendar event in plain words (`+Dentist tue 3pm #work`); and the last rows search files (Everything) or the web. Modes paste a note, restore or save an arrangement, or switch windows. Ranking learns from use.
 
 ### Quick Notes
 
@@ -146,7 +146,7 @@ Every Windows sound from 3.x to 11, from a local library, plus a custom folder. 
 
 ### Commands
 
-**Key Map** draws the customized keyboard with every Super binding, where letters are reassigned; **Custom Commands** adds apps, folders and links to the palette and to free letters; **Palette** sets the web search address; **Quick Actions** chooses the Podium's buttons.
+**Key Map** draws the customized keyboard with every Super binding, where letters are reassigned; **Custom Commands** adds apps, folders and links to the palette and to free letters; **Routines** are named lists of steps run in order from here, the palette or the Podium (restore an arrangement, go to a desktop, open an app, run a custom command, play a game, set the volume or an app's, press a media key, show a page, wait), using only what Maestro already knows; **Palette** sets the web search address; **Quick Actions** chooses the Podium's buttons.
 
 ### Conservatory
 
@@ -246,11 +246,14 @@ The page sends text through `window.chrome.webview.postMessage()`: the message t
 | `PowerArm` / `PowerRun` / `PowerCancel` / `PowerAnyway` / `PowerNow` | An action / `action\|ticket` / None / None / `lock`, `display` | Guarded power actions with a single-use ticket; Lock and Turn off display at once |
 | `GetRecycleBin` / `GetAudioDevices` / `SelectAudioDevice` | None / None / a device name | The power tray |
 | `GetVolume` / `SetVolume` / `SetMute` | None / a whole number 0–100 / `0`, `1` | The default output's volume and mute, in the power tray |
+| `GetAppVolumes` / `SetAppVolume` / `SetAppMute` | None / `app\|level` / `app\|0`, `app\|1` | Each app's volume in the power tray; an app is a program's file name, `system` or `maestro` |
+| `MediaKey` | `playpause`, `next`, `previous`, `stop` | The tray's media keys |
 | Sounds: `DeleteLeveledSound(s)`, `RestoreAllSounds`, `SetCustomSounds`, `GetInUseOrigin` | Sound ids (≤ 10 a request) / None / a folder (≤ 400) / an in-use key | Leveled copies, restoring, the custom folder |
 | Startup: `GetSignInHistory`, `GetStartupSounds`, `SetStartupSound`, `RemoveStartupSound`, `RestoreStartupSound`, `SaveStartupOdds` | Slots, sound ids and whole-number chances | Sign-in timings and sounds |
 | `GetLog` / `OpenLogFile` | `ascs`, `activity`, `codebutton` | Log tail / open in Notepad |
 | `GetSettings` / `SaveSettings` / `SetStartScreen` | None / settings fields / `on`, `off` | Preferences and Commands |
 | `GetCommands` / `SaveCommands` / `RunCommand` / `BrowseCommandTarget` | None / up to 30 commands / an index 1–30 / `row\|app`, `row\|folder` | Custom commands |
+| `GetRoutines` / `SaveRoutines` / `RunRoutine` / `StopRoutine` | None / up to 30 routines as text / a name / None | Routines |
 | `SaveBackups` / `ChooseBackupsFolder` / `BackupNow` / `OpenBackupsFolder` | `0\|HHmm`, `1\|HHmm` / None | The daily backup; the folder comes from Windows' picker |
 | `GetStorage` / `SetCacheLimit` / `ClearCache` | None / `100`, `250`, `500`, `1000` / `images`, `almanac`, `forecast` | The caches' sizes / the image cache's limit in MB / clears a cache, deleting only files named as Maestro's own |
 | `GameNotesWindowState` / `ToggleGameNotes` | The running game's note as JSON (up to 220,000 characters) / None | Passed to the game notes window, which checks it / opens or closes that window |
@@ -303,6 +306,8 @@ Every request names the client `Maestro/<version> (Aeolionware)` with no contact
 - **Notes:** Markdown never becomes HTML and images are never loaded; a link opens only on Ctrl + click and only as a checked http(s) address. Notes are pasted through the clipboard (restored afterwards), never typed as keystrokes.
 - **Consoles:** a payload is pushed only by TegraRcmGUI's own sender, with a path Maestro read from TegraRcmGUI's files or your folder and checked (a .bin, no characters the command line would read); the page names it only by its place in the list. Maestro listens for USB devices to see a Switch in RCM mode and reads SD cards without changing them: their config files are copied into `data\consoles`, and the album is copied, never moved or overwritten. Release pages open in the browser; Maestro checks nothing online.
 - **Games and controllers:** emulator and Steam files are only read; games start through Maestro's own index or `steam://rungameid/` with a checked id. Controllers are read through XInput and Raw Input only: DirectInput and the winmm joystick API corrupted Maestro's memory in testing. Every new native call is probed with guard bytes.
+- **Routines** take their steps from a fixed list checked in AutoHotkey on save, on read and before each step: arrangements, desktops, apps and games by Maestro's own names and ids, never a path, a power action or an audio device. They run only when started.
+- **Each app's volume** is set through Windows' audio sessions (COM), probed with guard bytes in a separate process before use; Maestro reads them only while the tray's Apps panel is open or a routine step runs, and names apps by program name, never by a path from the page.
 - **Workspaces and launch rules** never take an app's path from the page; paths are captured by AutoHotkey from real windows and checked again at restore.
 - **Backups** hold `secrets.ini`; the folder must be on a fixed drive of this PC, outside Maestro's folder, and is checked before every backup. A test build never backs up.
 - **Upkeep commands** (`maestro doctor`, `preview`, `isolate`, `try`) use no network, listener or elevation; `isolate` copies no `data\` and runs a copy only after a scan finds nothing in it that could act outside. `drive` runs such a copy with a test hook that can run script in its page and read the results; the hook lives only in `tools\cli`, `maestro check` fails if the app's own files ever name it, and the copy of `data\` it can take leaves out `secrets.ini`.
@@ -368,6 +373,7 @@ The current version, and each release's contents, checks and manual results, are
 
 - **Virtual desktops:** cross-desktop focus, workspaces across desktops and desktop switching need `VirtualDesktopAccessor.dll`. The window switcher and **Add an open window…** list the current desktop only.
 - **Windows and workspaces:** restore launches apps without arguments (except Explorer folders and Terminal) and captures up to 24 windows (48 across desktops). Launch rules act only on an app's own new process. A window that fills the usable screen counts as maximized. Dragging keeps a window on its monitor.
+- **Routines:** one runs at a time, and a step only starts once the one before it has been done, not once its app has finished opening: a Wait step gives an app time. An app's volume applies to an app that has made a sound since it started, on the default output; media keys go to whichever player Windows chooses.
 - **Power:** actions count down inside Maestro, so they don't happen if Maestro closes first; unsaved work is recognized only by a mark in a window's title (and VS Code's backups).
 - **Steam:** uninstalled games appear only if Steam's app cache names them; Steam achievements aren't shown.
 - **Controllers:** identical controllers share a name; battery isn't reported through a 2.4 GHz receiver or in D-input and Switch modes; the Bluetooth name needs administrator rights.
@@ -392,11 +398,10 @@ The current version, and each release's contents, checks and manual results, are
 
 ## 14. Development Roadmap
 
-**Next:** routines, with media controls and a per-app volume mixer; then the large pass, run on a test copy by `maestro drive` with what it can't check flagged for a manual look; then iPhone calendar sync (a second Radicale on the home network with a private certificate authority, after its setup guide is reviewed), which comes after the large pass.
+**Next:** the large pass, run on a test copy by `maestro drive` with what it can't check flagged for a manual look; then iPhone calendar sync (a second Radicale on the home network with a private certificate authority, after its setup guide is reviewed), which comes after the large pass.
 
 **Planned:**
 
-- **Routines:** multi-step sequences (restore a workspace, switch desktop, set audio, launch an app, wait); never power actions.
 - **Moving `C:\Scripts` into Maestro,** with a migration and rollback plan.
 - **Tasks on the calendar server,** and 3D printer status (which needs its own network plan).
 - **A tonal style for species counterpoint:** species in major and minor keys, each bar's implied chord worked out and its other notes treated as dissonances, as nineteenth-century courses teach it.

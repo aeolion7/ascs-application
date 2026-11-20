@@ -14,7 +14,7 @@ Suspend(true)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 2.11.0
+; Version 2.12.0
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -24,7 +24,7 @@ Suspend(true)
 ; GLOBAL VARIABLES
 ; ==========================================
 
-global ASCS_Version := "2.11.0"
+global ASCS_Version := "2.12.0"
 global ASCS_App := ""
 global ASCS_WindowIcon := 0
 global ASCS_IconPath := A_ScriptDir "\frontend\assets\ascs.ico"
@@ -44,6 +44,7 @@ global ASCS_Notices := []          ; 1.11.0: toasts at the top of the screen
 global ASCS_NoticeWindow := 0
 global ASCS_StartedAt := A_TickCount   ; 2.0.0: Super waits for the page until 30 s after this; 2.3.0: the daily backup, 5 min
 global ASCS_CommandsFile := ASCS_DataDir "\commands.ini"
+global ASCS_RoutinesFile := ASCS_DataDir "\routines.txt"   ; 2.12.0: routines, as text
 global ASCS_ChordsFile := ASCS_DataDir "\chords.ini"     ; 2.3.0: the Conservatory's saved chords
 global ASCS_ChartsDir := ASCS_DataDir "\charts"          ; 2.4.0: the Conservatory's songs, a file each
 global ASCS_ExercisesDir := ASCS_DataDir "\counterpoint" ; 2.5.0: counterpoint exercises, a file each
@@ -188,6 +189,8 @@ global ASCS_PreviousWindow := 0
 global ASCS_Activity := []
 global ASCS_ActivityAppends := 0
 global ASCS_CustomCommands := []
+global ASCS_Routines := []             ; 2.12.0
+global ASCS_RoutineRun := ""           ; the routine running: name, steps, index
 global ASCS_RegisteredKeys := []
 global ASCS_SearchTemplate := "https://duckduckgo.com/?q=%s"
 ; Claude desktop app: its quick-entry shortcut (set in Preferences) and the
@@ -214,6 +217,7 @@ LoadStorageSettings()   ; 2.9.0: the image cache's limit
 StartLaunchRules()      ; 1.10.0: the shell hook for launch rules
 StartBackupSchedule()   ; 2.1.0: the daily backup, never in a test build
 LoadCustomCommands()
+LoadRoutines()
 LoadActivity()
 
 ASCS_EverythingPath := FindEverything()
@@ -941,6 +945,7 @@ HandleWebMessage(sender, args) {
                 GetNotes()
                 SendSettings()
                 SendCustomCommands()
+                SendRoutines()
                 SendWorkspaces()
                 SendActivity()
                 SendQuickActions()
@@ -1123,6 +1128,22 @@ HandleWebMessage(sender, args) {
             case "SetMute":
                 if (content = "0" || content = "1")
                     SetOutputMute(content = "1")
+
+            ; 2.12.0: each app's volume, and media keys, in the power tray.
+            case "GetAppVolumes":
+                SendAppVolumes()
+
+            case "SetAppVolume":
+                if (StrLen(content) <= 80)
+                    SetAppVolumeMessage(content)
+
+            case "SetAppMute":
+                if (StrLen(content) <= 80)
+                    SetAppMuteMessage(content)
+
+            case "MediaKey":
+                if (StrLen(content) <= 16)
+                    SendMediaKey(content)
 
             case "GetRecycleBin":
                 SendRecycleBin()
@@ -1405,6 +1426,27 @@ HandleWebMessage(sender, args) {
                     SetTimer(RunCustomCommand.Bind(Integer(content), "palette"), -1)
                 else
                     WriteLog("Rejected invalid custom command index.")
+
+            ; 2.12.0: routines. Starting one hides Maestro, as restoring an
+            ; arrangement does; a page step shows it again.
+            case "GetRoutines":
+                SendRoutines()
+
+            case "SaveRoutines":
+                if (StrLen(content) <= 65536)
+                    SaveRoutines(content)
+                else
+                    WriteLog("Rejected oversized routines payload.")
+
+            case "RunRoutine":
+                if (content != "" && StrLen(content) <= 48) {
+                    HandleClose()
+                    SetTimer(RunRoutine.Bind(content), -150)
+                } else
+                    WriteLog("Rejected invalid routine name.")
+
+            case "StopRoutine":
+                StopRoutine()
 
             case "BrowseCommandTarget":
                 if RegExMatch(content, "^\d{1,3}\|(app|folder)$")
@@ -1719,11 +1761,13 @@ SendToFrontend(json) {
 #Include lib\features\Sounds.ahk
 #Include lib\features\Calendar.ahk
 #Include lib\features\Power.ahk
+#Include lib\features\Mixer.ahk
 #Include lib\features\Workspaces.ahk
 #Include lib\features\Desktops.ahk
 #Include lib\features\Rules.ahk
 #Include lib\features\Notices.ahk
 #Include lib\features\Commands.ahk
+#Include lib\features\Routines.ahk
 #Include lib\features\QuickCapture.ahk
 #Include lib\features\PaletteWindows.ahk
 #Include lib\features\QuickActions.ahk
