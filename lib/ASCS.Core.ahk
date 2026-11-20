@@ -416,7 +416,7 @@ ValidateExerciseId(id) {
 ; are separated by tabs. Returns the text with plain line breaks.
 ValidateExerciseText(text) {
     lines := StrSplit(Trim(StrReplace(text, "`r`n", "`n"), "`n"), "`n")
-    if (lines.Length < 5 || lines.Length > 9 || lines[1] !== "Maestro exercise 1")
+    if (lines.Length < 5 || lines.Length > 10 || lines[1] !== "Maestro exercise 1")
         throw Error("An exercise is malformed.")
     title := lines[2]
     if (title = "" || Trim(title) !== title || StrLen(title) > 60 || RegExMatch(title, '[\x00-\x1F\x7F"]'))
@@ -442,6 +442,14 @@ ValidateExerciseText(text) {
     }
     if !RegExMatch(lines[4], "^key\t-?[0-7]\t(major|minor|ionian|dorian|phrygian|lydian|mixolydian|aeolian)$")
         throw Error("An exercise's key isn't one Maestro knows.")
+    ; A style other than the kind's first (2.11.0): the Renaissance style for
+    ; species, Bach's chorales for four parts. The lines after it move down one.
+    styleLine := ""
+    if (lines.Length >= 5 && SubStr(lines[5], 1, 6) == "style`t") {
+        if !((kind[2] == "species" && lines[5] == "style`trenaissance") || (kind[2] == "fourpart" && lines[5] == "style`tbach"))
+            throw Error("An exercise's style isn't one Maestro knows.")
+        styleLine := lines.RemoveAt(5)
+    }
     if (voices = 4) {
         fields := StrSplit(lines[5], "`t")
         if (fields.Length != 2 || fields[1] !== "numerals")
@@ -473,6 +481,8 @@ ValidateExerciseText(text) {
                 throw Error("An exercise's note is malformed.")
         }
     }
+    if (styleLine != "")
+        lines.InsertAt(5, styleLine)
     return JoinArray(lines, "`n")
 }
 
@@ -3337,6 +3347,17 @@ AdjacentDesktop(current, direction, count) {
 ; Options+ sends Ctrl + Win + arrow, so Ctrl and Win are down with it, which
 ; Super + arrow on the keyboard never has.
 IsDesktopGesture(ctrlDown, winDown) => ctrlDown && winDown
+
+; ---- The power tray's volume (2.11.0) ----
+
+; A volume the page asked for, as a whole number from 0 to 100, or "" for
+; anything else: one to three digits only, no sign, space or decimal point.
+VolumeLevel(content) {
+    if !RegExMatch(content, "^\d{1,3}$")
+        return ""
+    level := Integer(content)
+    return level <= 100 ? level : ""
+}
 
 ; ==========================================
 ; BACKUPS (2.1.0)

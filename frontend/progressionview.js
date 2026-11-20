@@ -735,7 +735,7 @@ function bookProgressionBeat(at, bars, beat) {
 function progLoopOutput(context) {
     if (!prog.out) {
         prog.out = context.createGain();
-        prog.out.connect(consToneOutput(context));
+        prog.out.connect(consPluckOutput(context));
     }
     return prog.out;
 }

@@ -587,31 +587,83 @@ globalThis.MaestroMusic = (() => {
         return { length, playbackRate: hz * (length + 0.5) / rate };
     }
 
-    function pluckSamples(hz, rate, seconds = 2.5, random = Math.random) {
+    // 2.11.0: picked a little way from the bridge (a comb on the noise), and
+    // softer or harder by `velocity` (0 to 1): a softer note starts darker and
+    // keeps less of its brightness. Low strings ring longer.
+    const PLUCK_VELOCITIES = Object.freeze([0.8, 0.88, 0.96]);
+    function pluckSamples(hz, rate, { seconds = hz < 164 ? 3.5 : 2.8, velocity = 0.88, random = Math.random } = {}) {
         const { length } = pluckPeriod(hz, rate);
-        const line = new Float32Array(length);
+        const noise = new Float32Array(length);
+        const soften = 0.25 + 0.5 * (1 - velocity);
         let last = 0;
         for (let i = 0; i < length; i++) {
-            // Noise, softened a little so the attack isn't harsh.
-            last = 0.6 * (random() * 2 - 1) + 0.4 * last;
-            line[i] = last;
+            last = (1 - soften) * (random() * 2 - 1) + soften * last;
+            noise[i] = last;
         }
+        const pick = Math.max(1, Math.round(length * 0.13));
+        const line = new Float32Array(length);
+        let mean = 0;
+        for (let i = 0; i < length; i++) {
+            line[i] = noise[i] - noise[(i + pick) % length];
+            mean += line[i];
+        }
+        mean /= length;
+        for (let i = 0; i < length; i++) line[i] -= mean;
         const total = Math.round(rate * seconds);
         const out = new Float32Array(total);
         // Higher strings fade faster, as real ones do.
-        const decay = Math.min(0.9995, 1 - hz / 60000);
-        const fade = Math.round(rate * 0.08);
+        const decay = Math.min(0.9996, 1 - hz / 75000);
+        const keep = 0.5 + 0.08 * velocity;
+        const fade = Math.round(rate * 0.12);
         let peak = 0;
         for (let i = 0; i < total; i++) {
             const at = i % length;
             const value = line[at];
             out[i] = value;
-            line[at] = decay * 0.5 * (value + line[(at + 1) % length]);
+            line[at] = decay * (keep * value + (1 - keep) * line[(at + 1) % length]);
             peak = Math.max(peak, Math.abs(value));
         }
-        const scale = peak ? 0.6 / peak : 0;
+        const scale = peak ? (0.45 + 0.2 * velocity) / peak : 0;
         for (let i = 0; i < total; i++) out[i] *= scale * (i > total - fade ? (total - 1 - i) / fade : 1);
         return out;
+    }
+
+    // ---- A room (2.11.0): a stereo tail of softened noise that dies away in
+    // `rt60` seconds, after a short gap; the plucks are heard in it.
+    function roomSamples(rate, { seconds = 1.6, rt60 = 1.1, random = Math.random } = {}) {
+        const length = Math.round(rate * seconds);
+        const gap = Math.round(rate * 0.012);
+        return [0, 1].map(() => {
+            const data = new Float32Array(length);
+            let last = 0;
+            for (let i = gap; i < length; i++) {
+                last = 0.55 * last + 0.45 * (random() * 2 - 1);
+                data[i] = last * Math.exp((-6.9 * (i - gap)) / rate / rt60);
+            }
+            return data;
+        });
+    }
+
+    // ---- An organ (2.11.0), for the staff's voices: flue pipes, each voice
+    // its own registration and place from left to right, the bass a little
+    // stronger. `imag` is each harmonic's level, from the fundamental.
+    const ORGAN_STOPS = Object.freeze({
+        soprano: { imag: [1, 0.55, 0.12, 0.3, 0.05, 0.06, 0, 0.04], level: 0.85 },  // flute and octave
+        alto: { imag: [1, 0.35, 0.2, 0.15, 0.1, 0.06, 0.04, 0.03], level: 0.85 },    // principal
+        tenor: { imag: [1, 0.5, 0.35, 0.25, 0.2, 0.12, 0.1, 0.06], level: 0.85 },    // a touch of reed
+        bass: { imag: [1, 0.45, 0.3, 0.12, 0.08, 0.04, 0.02, 0.01], level: 1.15 },   // a deep principal
+        single: { imag: [1, 0.4, 0.2, 0.15, 0.08, 0.05, 0.03, 0.02], level: 1 }
+    });
+    const ORGAN_PLACES = Object.freeze({
+        1: [["single", 0]],
+        2: [["soprano", -0.3], ["bass", 0.3]],
+        3: [["soprano", -0.4], ["tenor", 0], ["bass", 0.4]],
+        4: [["soprano", -0.45], ["alto", -0.15], ["tenor", 0.15], ["bass", 0.45]]
+    });
+    // The stops for `count` voices, top down: { id, imag, level, pan }.
+    function organVoices(count) {
+        const places = ORGAN_PLACES[Math.max(1, Math.min(4, count))];
+        return places.map(([id, pan]) => ({ id, ...ORGAN_STOPS[id], pan }));
     }
 
     // ---- Your own tunings and the page's kept settings.
@@ -913,7 +965,7 @@ globalThis.MaestroMusic = (() => {
     return {
         ROOTS, SCALES, FAMILIES, SHOWS, LABELS, DEGREE_STYLES, INSTRUMENTS, STRINGED, LOWEST, HIGHEST, OWN_MAX, CAPO_MAX, POSITION_SPAN, TABS, NECK_NEEDED, NECK_UNUSED, QUIZ_NECK_NEEDED, DRILLS, drillNotes, PLAIN_NAMES, CHORD_KINDS, QUIZ_INTERVALS, QUIZ_KINDS, QUIZ_DIRECTIONS, QUIZ_QUALITIES, QUIZ_CHORD_SETS, QUIZ_PROGRESSIONS, QUIZ_KEYS, QUIZ_WRITES, QUIZ_RHYTHMS, QUIZ_RHYTHMIC, QUIZ_MELODY_LENGTHS, quizMelody, DEFAULTS, CHORD_STYLES, STAFF_BOTTOM, STAFF_WRITING, staffWriting, CHORDS_MAX, KEY_LOW, KEY_HIGH, FRET_MAX, CHORD_LABEL_MAX, isChordName, cleanChordLabel,
         parseName, pitchClass, spell, degreeLabel, intervalLabel, scaleNotes, triadName, seventhName, chordsInKey, capoShape, findChords, alteredDominant, findScales, positionsFor, quizNote, quizInterval, quizQuality, quizProgression, everyNote, pitchName, spelledPitch, frequency, tuningNotes,
-        pluckPeriod, pluckSamples, cleanName, cleanOwnTuning, tuningsFor, parseSettings, currentTuning,
+        pluckPeriod, pluckSamples, PLUCK_VELOCITIES, roomSamples, ORGAN_STOPS, organVoices, cleanName, cleanOwnTuning, tuningsFor, parseSettings, currentTuning,
         chordSymbolParts, cleanChordName, staffStep, staffChord, cleanSavedChord, savedChordLine, savedChordNotes, shapeStart
     };
 })();

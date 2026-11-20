@@ -1314,9 +1314,17 @@ new ResizeObserver(() => {
 }).observe($("consQuizPanel"));
 // Keys on the Quiz tab (2.7.0), outside a field: Space or H hears the
 // question again, N asks the next, Ctrl+Enter checks, and 1 to 7 name a
-// progression's chord by its degree. Space works where it would otherwise
-// start the metronome; a control reached with the keyboard still takes it.
+// progression's chord by its degree. Since 2.11.0 Space hears it wherever the
+// focus is (Enter still presses a focused button), and Enter, away from a
+// button, checks what's written and once answered asks the next; on the
+// progression's staff Enter keeps playing the chord until it's answered.
 const QUIZ_KEY_BUTTONS = Object.freeze({ h: "consQuizHear", " ": "consQuizHear", n: "consQuizNext" });
+const QUIZ_ENTER_CONTROLS = "button, a[href], summary, [role='tab'], [role='button'], [role='menuitem'], [role='option']";
+function quizEnterButton(target) {
+    if (target?.closest(QUIZ_ENTER_CONTROLS)) return null;
+    if (quiz.answered !== null) return $("consQuizNext");
+    return target?.closest("#consQuizDictStaff") ? null : $("consQuizCheck");
+}
 document.addEventListener("keydown", event => {
     if (event.defaultPrevented || event.altKey || event.metaKey || !$("conservatory").classList.contains("active") || consSections.current() !== "quiz") return;
     const target = event.target instanceof Element ? event.target : null;
@@ -1326,8 +1334,9 @@ document.addEventListener("keydown", event => {
         if (event.key === "Enter" && !event.shiftKey) button = $("consQuizCheck");
     } else if (!event.shiftKey) {
         const key = event.key.toLowerCase();
-        if (key === " " && !spaceStartsMetronome(document.activeElement)) return;
-        if (Object.hasOwn(QUIZ_KEY_BUTTONS, key)) button = $(QUIZ_KEY_BUTTONS[key]);
+        if (key === " " && target?.closest("[role='listbox'], [role='menu'], [role='dialog']")) return;
+        if (key === "enter") button = quizEnterButton(target);
+        else if (Object.hasOwn(QUIZ_KEY_BUTTONS, key)) button = $(QUIZ_KEY_BUTTONS[key]);
         else if (/^[1-7]$/.test(key) && quizPicked()) button = $("consQuizAnswers").querySelector(`[data-answer="${Number(key) - 1}"]`);
     }
     if (!button) return;

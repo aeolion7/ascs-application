@@ -112,7 +112,7 @@ What `data\` holds:
 
 Super shows Maestro on the last view open (the Podium after a start) and hides it when it's in front. The Podium is a three-by-three grid of modules sized to fit the window without scrolling: **Now Playing**, **Today** (the almanac: moon, sun, countdowns, seasons and a rotating line from history, quotes and, if turned on, Wikipedia), **Next Up** (calendar), **System**, **Quick Actions and Arrangements**, **Continue Playing** and **Quick Note**. **Arrange** moves, sizes (one to three squares wide, and up to three tall for a module with more to show) and hides modules, each going in the first space where it fits, and adds others: Weather, Top Apps, Network, Audio, Controllers, Pinned Notes, Recent Unlocks, Metronome and Timer. Saved **layouts**, chosen from the chip beside the title or the palette, keep different arrangements of modules; one can be used while a game runs, switching back as it closes.
 
-**Power**, at the sidebar's foot, opens a tray with Lock and the audio output, and the guarded actions (Recycle Bin, Sleep, Restart, Shut down, Sign out). A guarded action needs a 1.5 s press-and-hold, then counts down with Cancel. Restart, Shut down and Sign out wait while any window shows unsaved work.
+**Power**, at the sidebar's foot, opens a tray in four named groups: **Session** (Lock, Turn off display), **Sound** (the audio output, its volume and Mute), **Recycle Bin** and **Power** (Sleep, Restart, Shut down, Sign out). Emptying the Recycle Bin and the four power actions need a 1.5 s press-and-hold (or holding the button's letter); the power actions then count down with Cancel. Restart, Shut down and Sign out wait while any window shows unsaved work.
 
 **Maestro sounds** play when Maestro shows and hides (or starts and exits), chosen in Sounds.
 
@@ -155,14 +155,14 @@ A music workshop for guitar, bass, mandolin, ukulele and keyboard, with a neck o
 - **Scales:** 49 scales on the neck, spelled by key, with their chords, positions, a drone and drills.
 - **Chords:** build a chord on the neck, name it, see it on a staff, and keep a library of chords.
 - **Progressions:** a song as a chord chart in sections, looped with the metronome, with bass and drums; chord suggestions, voicings, the circle of fifths, cadences, forms and writing prompts; a **Staff** view where each chord's voicing is written and edited note by note, and a **Tab** view with its frets under the staff on a stringed instrument; the whole song in negative harmony; songs saved, printed and linked from Quick Notes.
-- **Counterpoint:** species and four-part exercises and melodies, written on a staff and checked as they're written, with model answers, playback, clefs chosen per staff, the checker's rules switched on and off, printing and MusicXML export.
+- **Counterpoint:** species and four-part exercises and melodies, written on a staff and checked as they're written, with model answers, playback, clefs chosen per staff, printing and MusicXML export. Each problem names the rule it breaks, which opens that rule in Rules; each rule can be switched off there except the fundamentals (parallel and hidden fifths and octaves, dissonance treatment, crossing voices, the leading tone and sevenths), and an exercise is checked in a style: species as Fux has it or in the Renaissance style, four parts in common practice or as Bach's chorales have it. Four-part voices can move in quarters and eighths and hold notes over, and their non-chord tones are named by their notes as Kostka and Payne's *Tonal Harmony* names them; Embellish adds some to a finished answer, and a new exercise's given bass or soprano can come with them.
 - **Rhythm:** a step sequencer on a synthesized kit, rhythms written on percussion staves, and a polyrhythm trainer that scores taps.
 - **Theory:** a twelve-tone row's matrix, its forms played or sent to Counterpoint; a pitch-class set's Forte name, prime form, interval vector and transformations; and negative harmony in a key.
 - **Finder:** names the chord from notes picked on the neck, and the scales that hold them.
 - **Quiz:** notes on the neck, and intervals, chords, progressions, melodies and rhythms by ear and by reading; progressions can be written on the staff and graded note by note.
 - **Tuning:** reference tones for each string, at a chosen concert pitch, and your own tunings.
 
-Each instrument is written as it usually is: a keyboard on a grand staff, guitar and bass an octave above where they sound under a clef with an 8, mandolin and ukulele on a treble clef. Sounds are synthesized in the page (no sample files). The **metronome** keeps playing on every page and while Maestro is hidden; Ctrl + Shift + M starts or stops it anywhere.
+Each instrument is written as it usually is: a keyboard on a grand staff, guitar and bass an octave above where they sound under a clef with an 8, mandolin and ukulele on a treble clef. Sounds are synthesized in the page (no sample files): plucked strings heard in a small room, and an organ for Counterpoint's staff, each voice in its own stop and place from left to right. The **metronome** keeps playing on every page and while Maestro is hidden; Ctrl + Shift + M starts or stops it anywhere.
 
 ### Preferences
 
@@ -243,8 +243,9 @@ The page sends text through `window.chrome.webview.postMessage()`: the message t
 | `StartPsoSession` | None | The Super + M4 session |
 | `CalDav` / `SetReminders` | `id\|operation\|calendar\|event\|version` and a body / reminder lines | One CalDAV request Maestro builds / the next three days' reminders |
 | `ExportCalendarFile` / `ImportCalendarFile` | Calendar name and `.ics` text / None | Through Windows' Save and Open dialogs |
-| `PowerArm` / `PowerRun` / `PowerCancel` / `PowerAnyway` / `PowerNow` | An action / `action\|ticket` / None / None / `lock` | Guarded power actions with a single-use ticket |
+| `PowerArm` / `PowerRun` / `PowerCancel` / `PowerAnyway` / `PowerNow` | An action / `action\|ticket` / None / None / `lock`, `display` | Guarded power actions with a single-use ticket; Lock and Turn off display at once |
 | `GetRecycleBin` / `GetAudioDevices` / `SelectAudioDevice` | None / None / a device name | The power tray |
+| `GetVolume` / `SetVolume` / `SetMute` | None / a whole number 0–100 / `0`, `1` | The default output's volume and mute, in the power tray |
 | Sounds: `DeleteLeveledSound(s)`, `RestoreAllSounds`, `SetCustomSounds`, `GetInUseOrigin` | Sound ids (≤ 10 a request) / None / a folder (≤ 400) / an in-use key | Leveled copies, restoring, the custom folder |
 | Startup: `GetSignInHistory`, `GetStartupSounds`, `SetStartupSound`, `RemoveStartupSound`, `RestoreStartupSound`, `SaveStartupOdds` | Slots, sound ids and whole-number chances | Sign-in timings and sounds |
 | `GetLog` / `OpenLogFile` | `ascs`, `activity`, `codebutton` | Log tail / open in Notepad |
@@ -382,7 +383,7 @@ The current version, and each release's contents, checks and manual results, are
 - **Backups:** need PowerShell 7, run only while Maestro runs, and aren't compressed or encrypted.
 - **Conservatory:**
   - **Progressions:** a song has one key and time signature, up to 12 sections of 64 bars (256 in all) and four chords a bar. A chord's voicing has up to ten notes, eight on a stringed instrument's single staff. Print writes the chart, not the staff.
-  - **Counterpoint:** species are in 4/4 against whole notes and four-part writing in half notes, checked by one strict reading of the rules, which can be switched off by group but not changed. Clefs are treble, alto, tenor and bass.
+  - **Counterpoint:** species are in 4/4 against whole notes, and four-part writing has a chord every half note, its voices moving in notes from a whole to an eighth. Both are checked by the rules of their style (four parts' non-chord tones by Kostka and Payne's classification), each of which can be switched off, the fundamentals excepted, but not changed. The styles are two each: species counterpoint in the tonal, harmony-based tradition of the nineteenth century isn't one of them. Clefs are treble, alto, tenor and bass.
   - **Theory:** prime forms are Rahn's; matrix forms are numbered from the row's first note. Negative harmony mirrors across the tonic and its dominant only, and a written voicing is let go. In a window narrower than 2100 px, the set and negative harmony take turns.
   - **Melodies and rhythms:** melodies are in 4/4 up to 32 bars; a rhythm has one time signature, up to eight rows and four bars.
   - **Library and timing:** saved chords ignore the capo, and the library holds 200. The metronome and tones play through Windows' default output.
@@ -398,6 +399,7 @@ The current version, and each release's contents, checks and manual results, are
 - **Routines:** multi-step sequences (restore a workspace, switch desktop, set audio, launch an app, wait); never power actions.
 - **Moving `C:\Scripts` into Maestro,** with a migration and rollback plan.
 - **Tasks on the calendar server,** and 3D printer status (which needs its own network plan).
-- **Stylesheets merged:** the 29 sheets' later overrides folded into the rules they override, proven unchanged scene by scene.
+- **A tonal style for species counterpoint:** species in major and minor keys, each bar's implied chord worked out and its other notes treated as dissonances, as nineteenth-century courses teach it.
+- **Stylesheets merged:** the stylesheets' later overrides folded into the rules they override, proven unchanged scene by scene.
 - **Ideas needing new access, each with its own plan first:** MIDI in and out, MusicXML import, slowing a track, and tools that use the microphone.
 - **Smaller ideas:** notes and settings export, reminders that aren't events, live Markdown in the editor, and palette actions on results.

@@ -1,0 +1,212 @@
+/* 2.11.0: non-chord tones in four parts. */
+
+/* A label by its note: the analysis serif, italic, in the brand tint. */
+.cp-score .cp-nct-label {
+  fill: var(--brand-tint-text);
+  font-family: "Libre Bodoni", serif;
+  font-size: 15px;
+  font-style: italic;
+}
+
+/* New Exercise opens over the page, like Rules, so its module never cuts it off. */
+:root .cp-new-panel {
+  position: fixed;
+  right: auto;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+@media print {
+  .print-exercise .cp-nct-label {
+    fill: #000000;
+  }
+}
+
+/* Preferences (2.11.0): the cards in columns, each under the one before,
+   so a short card leaves no hole beside a tall one. As many columns fit as
+   the old grid had. */
+.pref-grid {
+  display: block;
+  columns: calc(440px * var(--text-scale));
+  column-gap: var(--space-between);
+}
+
+.pref-stack {
+  display: contents;
+}
+
+.pref-grid .module {
+  break-inside: avoid;
+  margin-bottom: var(--space-between);
+}
+
+/* A button's words aren't text to select: a quick second click selected
+   them (2.11.0). */
+button {
+  user-select: none;
+}
+
+/* The power tray in named groups (2.11.0): Session, Sound, Recycle Bin and
+   Power, each under a rule, its name on the left and, where a hold is needed,
+   the hint on the right. */
+.power-tray .system-group + .system-group {
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.power-tray .system-group.is-guarded {
+  padding-top: 16px;
+}
+
+.tray-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 28px;
+  margin-bottom: 4px;
+}
+
+.tray-group-title {
+  color: var(--text-strong);
+  font: 600 var(--t-tab)/1.2 var(--font-display);
+}
+
+.power-tray .tray-group-head .system-group-label {
+  min-height: 0;
+  margin: 0;
+  font: 500 var(--t-floor)/1.2 var(--font-body);
+}
+
+.power-tray .tray-group-head .system-group-label svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* The volume: Mute, the slider and its number, as tall as a button. */
+.tray-volume {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+}
+
+.tray-volume input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--brand-tint);
+}
+
+.tray-volume output {
+  flex: none;
+  min-width: 3ch;
+  color: var(--text-soft);
+  font: 500 var(--t-tab) var(--font-display);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.tray-volume.is-muted input[type="range"],
+.tray-volume.is-muted output {
+  opacity: .5;
+}
+
+/* ---- Counterpoint's rules, each its own switch (2.11.0): a group of several
+   with its rules under its words, locked fundamentals with a lock, the rule a
+   problem's chip opens marked a moment; and that chip under the problem ---- */
+
+.cp-rule-groupbox,
+.cp-rule-children {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Under the group's words: past its box (20 px) and the gap after it (10 px). */
+.cp-rule-children {
+  padding-left: 30px;
+}
+
+:root .cp-rule.is-locked {
+  cursor: default;
+}
+
+.cp-rule.is-locked .icon {
+  flex: none;
+  color: var(--text-muted);
+}
+
+:root .cp-rule.is-found {
+  border-radius: 6px;
+  background: var(--surface-hover);
+  outline: 2px solid var(--brand-tint);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root .cp-rule.is-found {
+    animation: cp-rule-found 2.4s ease-out forwards;
+  }
+}
+
+@keyframes cp-rule-found {
+  0%, 60% {
+    outline-color: var(--brand-tint);
+  }
+  100% {
+    outline-color: transparent;
+  }
+}
+
+#cpRuleStyleRow[hidden] {
+  display: none;
+}
+
+/* The style on its own row, under the heading: apart from Strict and Essentials. */
+.cp-rule-style {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.cp-rule-style #cpRuleStyles {
+  justify-self: start;
+}
+
+/* What the chosen style checks, under the buttons and lined up with them. */
+.cp-rule-style .cp-rule-style-note {
+  grid-column: 2;
+  margin: 0;
+}
+
+.cp-problem {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* The rule's name, under the problem's words: past the padding (10 px), and
+   the bar (56 px) and its gap (12 px) when there is one. */
+:root .cp-problem-rule {
+  height: auto;
+  min-height: 0;
+  margin: -4px 0 6px 10px;
+  padding: 2px 12px;
+  border: 1px solid var(--line-control);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-soft);
+  font: 400 var(--t-floor) var(--font-body);
+  text-align: left;
+  user-select: none;
+}
+
+:root .cp-problem.has-bar .cp-problem-rule {
+  margin-left: 78px;
+}
+
+:root .cp-problem-rule:hover {
+  background: var(--surface-hover);
+  color: var(--text-strong);
+}

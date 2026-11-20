@@ -243,6 +243,13 @@ const PreviewScenes = (() => {
     // 2.5.0: the Counterpoint tab with an exercise written partway (each
     // voice's notes in order, null left unwritten), a note selected.
     const cpWrite = (exercise, voices) => voices.reduce((done, names, voice) => names.reduce((each, name, index) => (name ? MaestroCounterpoint.setNote(each, voice, index, MaestroNotation.parsePitch(name)) : each), done), exercise);
+    // 2.11.0: four parts with non-chord tones, from a seeded model answer.
+    const nctSeeded = seed => () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const nctAnswer = () => {
+        const random = nctSeeded(9);
+        const plain = MaestroCounterpoint.fourPartExercise({ form: "numerals", tonic: "C", mode: "major", progression: ["I", "vi", "IV", "ii6", "V7", "I", "IV", "V", "I"], random, title: "From numerals in C major" });
+        return MaestroCounterpoint.modelAnswer(plain, { random, embellish: true });
+    };
     const cpScene = (make, at, then) => () => {
         baseData();
         navigate("conservatory");
@@ -669,7 +676,15 @@ const PreviewScenes = (() => {
         "counterpoint-rules": cpScene(() => {
             const fux = MaestroCounterpoint.speciesExercise({ species: 1, cantus: MaestroCounterpoint.fuxNotes(MaestroCounterpoint.FUX[0]), cantusBelow: true, mode: "dorian", final: "D", title: "First species, Fux's Dorian" });
             return cpWrite(fux, [["A3", "D4", "C4", "D4", "D4", "A3", "C4"]]);
-        }, { voice: 0, index: 7 }, () => { cp.rulesOff = ["repeat", "leap", "shape"]; renderCpProblems(); drawCpStaff(); toggleConsPopover("cpRules", true); }),
+        }, { voice: 0, index: 7 }, () => { cp.rulesOff = ["repeat", "leap", "sixth", "augmented"]; renderCpProblems(); drawCpStaff(); toggleConsPopover("cpRules", true); }),
+        // 2.11.0: each rule its own switch, in the Renaissance style; one found from a problem's chip.
+        "counterpoint-rules-third": cpScene(() => {
+            const third = MaestroCounterpoint.speciesExercise({ species: 3, cantus: MaestroCounterpoint.fuxNotes(MaestroCounterpoint.FUX[0]), cantusBelow: true, mode: "dorian", final: "D", title: "Third species, Fux's Dorian", style: "renaissance" });
+            return cpWrite(third, [["D4", "E4", "C4", "D4", "F4", "G4", "A4", "B4", "C5", "D5", "B4", "G4"]]);
+        }, { voice: 0, index: 12 }, () => { cp.rulesOff = ["recover", "run"]; renderCpProblems(); drawCpStaff(); showCpRule("weakBeat"); }),
+        // Four parts in Bach's style: the rules for four parts, the chip naming the style.
+        "counterpoint-rules-fourpart": cpScene(() => MaestroCounterpoint.withStyle(cpWrite(MaestroCounterpoint.fourPartExercise({ form: "numerals", tonic: "C", mode: "major", progression: ["I", "IV", "V", "I"], title: "From numerals in C major" }),
+            [["C5", "C5", "B4", "C5"], ["E4", "F4", "D4", "E4"], ["G3", "A3", "G3", "G3"], ["C3", "F3", "G2", "C3"]]), "bach"), { voice: 0, index: 2 }, () => { cp.rulesOff = ["overlap"]; renderCpProblems(); drawCpStaff(); toggleConsPopover("cpRules", true); }),
         // The neck hidden on this tab.
         "counterpoint-noneck": cpScene(() => {
             const fux = MaestroCounterpoint.speciesExercise({ species: 1, cantus: MaestroCounterpoint.fuxNotes(MaestroCounterpoint.FUX[0]), cantusBelow: true, mode: "dorian", final: "D", title: "First species, Fux's Dorian" });
@@ -692,6 +707,27 @@ const PreviewScenes = (() => {
         "counterpoint-soprano": cpScene(() => MaestroCounterpoint.fourPartExercise({ form: "soprano", tonic: "G", mode: "major", progression: ["I", "IV", "ii6", "V7", "I", "vi", "ii65", "V", "I"], random: () => 0.6, title: "Harmonizing a soprano in G major" }), { voice: 1, index: 0 }),
         "counterpoint-numerals": cpScene(() => cpWrite(MaestroCounterpoint.fourPartExercise({ form: "numerals", tonic: "C", mode: "major", progression: ["I", "IV", "V", "I"], title: "From numerals in C major" }),
             [["C5", "C5", "B4", "G4"], ["E4", "F4", "D4", "E4"], ["G3", "C4", "B3", "C4"], ["C3", "F3", "G3", "C3"]]), { voice: 0, index: 2 }),
+        // 2.11.0: non-chord tones labeled by their notes; a voice's Length; the
+        // checker's problems with them; a given line with them; New Exercise and Rules.
+        "counterpoint-nct": cpScene(nctAnswer, { voice: 0, index: 2 }),
+        "counterpoint-nct-length": cpScene(nctAnswer, { voice: 1, index: 3 }),
+        "counterpoint-nct-problems": cpScene(() => {
+            let made = cpWrite(MaestroCounterpoint.fourPartExercise({ form: "numerals", tonic: "C", mode: "major", progression: ["I", "IV", "V", "I"], title: "From numerals in C major" }),
+                [["C5", "C5", "C5", "G4"], ["E4", "F4", "D4", "E4"], ["G3", "A3", "D4", "C4"], ["C3", "F3", "G3", "C3"]]);
+            made = MaestroCounterpoint.toggleTie(made, 1, 0);
+            made = MaestroCounterpoint.setChordRhythm(made, 1, 0, ["q", "q"]);
+            return MaestroCounterpoint.setNote(made, 1, 1, MaestroNotation.parsePitch("A4"));
+        }, { voice: 1, index: 1 }),
+        "counterpoint-nct-given": cpScene(() => MaestroCounterpoint.fourPartExercise({ form: "figured", tonic: "F", mode: "major", progression: ["I", "vi", "ii6", "V7", "I", "IV", "V", "I"], random: nctSeeded(5), embellished: true, title: "Figured bass in F major" }), { voice: 0, index: 0 }),
+        "counterpoint-nct-new": cpScene(nctAnswer, null, () => { cpNew.kind = "fourpart"; cpNew.form = "figured"; cpNew.embellished = true; renderCpNewPanel(); toggleConsPopover("cpNew", true); }),
+        "counterpoint-nct-rules": cpScene(nctAnswer, null, () => toggleConsPopover("cpRules", true)),
+        // A note held through two chords, drawn as one whole note; its second half selected.
+        "counterpoint-nct-held": cpScene(() => {
+            let made = cpWrite(MaestroCounterpoint.fourPartExercise({ form: "numerals", tonic: "C", mode: "major", progression: ["I", "IV", "V", "I"], title: "From numerals in C major" }),
+                [["C5", "C5", "G4", "G4"], ["E4", "F4", "D4", "E4"], ["G3", "A3", "B3", "C4"], ["C3", "F3", "G3", "C3"]]);
+            made = MaestroCounterpoint.setNoteLength(made, 0, "w", 0);
+            return MaestroCounterpoint.setNoteLength(made, 2, "h.", 0);
+        }, { voice: 0, index: 1 }),
         "counterpoint-new": cpScene(() => null, null, () => toggleConsPopover("cpNew", true)),
         // A cantus firmus of one's own, written partway, with the checker's
         // suggestions; and New exercise choosing one, with a saved cantus listed.
@@ -939,7 +975,8 @@ const PreviewScenes = (() => {
         palette: open("home", () => openLauncher("all")),
         "calendar-edit-calendar": () => { PreviewScenes["calendar-week"](); openCalendarEditor(calState.calendars[0]); },
         "palette-math": open("home", () => { openLauncher("all"); $("launcherSearch").value = "12.5 x 1.08"; $("launcherSearch").dispatchEvent(new Event("input")); }),
-        "power-tray": open("home", () => { togglePowerTray(true); say({ type: "recycleBin", items: 12, bytes: 4000000 }); say(audioSample); }),
+        "power-tray": open("home", () => { togglePowerTray(true); say({ type: "recycleBin", items: 12, bytes: 4000000 }); say(audioSample); say({ type: "volume", level: 62, muted: false }); }),
+        "power-tray-muted": open("home", () => { togglePowerTray(true); say({ type: "recycleBin", items: 0, bytes: 0 }); say(audioSample); say({ type: "volume", level: 35, muted: true }); }),
         "power-audio": open("home", () => { togglePowerTray(true); say(audioSample); $("audioButton").click(); }),
         "sounds-output": open("sounds", () => { say(audioSample); $("soundOutputButton").click(); }),
         logs: open("dashboard", () => { showLogs(); logData(); }),

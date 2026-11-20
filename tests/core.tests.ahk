@@ -1366,8 +1366,19 @@ speciesGood := StrReplace(speciesGood, "r.w", "rw")
 Equal("exercise kept, line breaks made plain", ValidateExerciseText(StrReplace(speciesGood, "`n", "`r`n") "`r`n"), speciesGood)
 fourGood := "Maestro exercise 1`nFigured bass in A minor`nkind`tfourpart`tfigured`t-`nkey`t0`tminor`nnumerals`ti iv V7 i viio7/V V65`nvoice`t1`ttreble`twritten`tSoprano`trh rh`nvoice`t1`ttreble`twritten`tAlto`trh rh`nvoice`t2`tbass`twritten`tTenor`trh rh`nvoice`t2`tbass`tgiven`tBass`t19h 21+1q~ 21+1q 33-1h."
 Equal("four-part exercise kept", ValidateExerciseText(fourGood), fourGood)
+; 2.11.0: a style other than the kind's first, on the line after the key.
+speciesStyled := StrReplace(speciesGood, "`tdorian`n", "`tdorian`nstyle`trenaissance`n", true)
+Equal("species exercise in the Renaissance style kept, its style too", ValidateExerciseText(speciesStyled), speciesStyled)
+fourStyled := StrReplace(fourGood, "`tminor`n", "`tminor`nstyle`tbach`n", true)
+Equal("four-part exercise in Bach's style kept, at the most lines", ValidateExerciseText(fourStyled), fourStyled)
+Throws("species in Bach's style rejected", () => ValidateExerciseText(StrReplace(speciesStyled, "renaissance", "bach")), "style")
+Throws("four parts in the Renaissance style rejected", () => ValidateExerciseText(StrReplace(fourStyled, "bach", "renaissance")), "style")
+Throws("the first style written out rejected", () => ValidateExerciseText(StrReplace(speciesStyled, "renaissance", "fux")), "style")
+Throws("a style with more after it rejected", () => ValidateExerciseText(StrReplace(speciesStyled, "renaissance", "renaissance`textra")), "style")
+Throws("a style line too many rejected", () => ValidateExerciseText(StrReplace(fourStyled, "`nnumerals", "`nstyle`tbach`nnumerals")), "malformed")
 cantusGood := "Maestro exercise 1`nA cantus in D dorian`nkind`tcantus`t-`t-`nkey`t0`tdorian`nvoice`t1`ttreble`twritten`tCantus firmus`t29w 31w 30w rw 29w"
 Equal("cantus firmus exercise kept", ValidateExerciseText(cantusGood), cantusGood)
+Throws("a cantus firmus with a style rejected", () => ValidateExerciseText(StrReplace(cantusGood, "`nvoice", "`nstyle`trenaissance`nvoice")), "style")
 Throws("cantus firmus with a species rejected", () => ValidateExerciseText(StrReplace(cantusGood, "cantus`t-", "cantus`t1")), "kind")
 Throws("cantus firmus with a place rejected", () => ValidateExerciseText(StrReplace(cantusGood, "-`t-", "-`tbelow")), "kind")
 melodyGood := StrReplace(cantusGood, "kind`tcantus`t-`t-", "kind`tmelody`ttrumpet`t-")
@@ -1478,6 +1489,19 @@ Equal("gesture: one desktop, nowhere to go", AdjacentDesktop(0, 1, 1), -1)
 Equal("gesture: Ctrl and Win with the arrow", IsDesktopGesture(true, true), true)
 Equal("gesture: Super + arrow on the keyboard isn't", IsDesktopGesture(false, false), false)
 Equal("gesture: Ctrl alone isn't", IsDesktopGesture(true, false), false)
+
+; The tray's volume, as the page asks for it (2.11.0).
+Equal("volume: 0", VolumeLevel("0"), 0)
+Equal("volume: 62", VolumeLevel("62"), 62)
+Equal("volume: 100", VolumeLevel("100"), 100)
+Equal("volume: leading zeros", VolumeLevel("007"), 7)
+Equal("volume: past 100", VolumeLevel("101"), "")
+Equal("volume: negative", VolumeLevel("-5"), "")
+Equal("volume: a decimal", VolumeLevel("50.5"), "")
+Equal("volume: a space", VolumeLevel(" 50"), "")
+Equal("volume: empty", VolumeLevel(""), "")
+Equal("volume: four digits", VolumeLevel("0100"), "")
+Equal("volume: hex", VolumeLevel("0x10"), "")
 
 report := "PASS " Passed " FAIL " Failures.Length "`n"
 for failure in Failures

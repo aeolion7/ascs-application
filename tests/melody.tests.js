@@ -74,7 +74,7 @@
     equal("melody: the empty one says so", C.check(fresh).map(each => each.rule).join(), "empty");
     const wide = C.withMelodyNotes(fresh, ["D4", "F5", "C4", `G${sharp}4`, "A3"].map(q));
     const rules = C.check(wide).map(each => `${each.rule}${each.bar}`);
-    check("melody: out of the flute's range, a leap past the octave, an augmented one, and the close", ["range2", "leap1", "awkward1", "close2"].every(rule => rules.includes(rule)) && C.check(wide).every(each => each.level !== "error"));
+    check("melody: out of the flute's range, a leap past the octave, an augmented one, and the close", ["voiceRange2", "leap1", "augmented1", "close2"].every(rule => rules.includes(rule)) && C.check(wide).every(each => each.level !== "error"));
     equal("melody: ending on the tonic, in range, nothing to say", C.check(C.withMelodyNotes(fresh, ["D5", "E5", "F5", "D5"].map(q))).length, 0);
     const kept = C.readExercise(C.exerciseText(C.withMelodyNotes(fresh, ["D5", "E5", "F5", "D5"].map(q))));
     check("melody: kept and read back, its instrument too", kept?.kind === "melody" && kept.instrument === "flute" && C.exerciseText(kept).includes("kind\tmelody\tflute\t-"));

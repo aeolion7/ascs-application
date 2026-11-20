@@ -37,6 +37,7 @@
   <link rel="stylesheet" href="styles/53-2.9.0-consoles.css">
   <link rel="stylesheet" href="styles/54-2.9.0-icons.css">
   <link rel="stylesheet" href="styles/55-2.10.0-icons.css">
+  <link rel="stylesheet" href="styles/56-2.11.0-nct.css">
 </head>
 <body>
   <div class="app-shell">
@@ -47,7 +48,7 @@
           <span>Aeolionware</span>
           <strong>Maestro</strong>
         </span>
-        <span id="sidebarVersion" hidden>Maestro <span>2.10.0</span></span>
+        <span id="sidebarVersion" hidden>Maestro <span>2.11.0</span></span>
       </div>
 
       <nav class="primary-nav" aria-label="Pages">
@@ -94,7 +95,7 @@
           <svg data-icon="settings" data-size="24"></svg>
           <span>Preferences</span>
         </button>
-        <button class="nav sidebar-power" type="button" id="powerTrayButton" aria-haspopup="dialog" aria-expanded="false" title="Power and audio">
+        <button class="nav sidebar-power" type="button" id="powerTrayButton" aria-haspopup="dialog" aria-expanded="false" title="Power and sound">
           <svg data-icon="power" data-size="24"></svg>
           <span>Power</span>
         </button>
@@ -103,19 +104,32 @@
         <svg data-icon="chevron-left"></svg>
       </button>
     </aside>
-          <div class="system-bar power-tray" id="powerTray" tabindex="-1" role="dialog" aria-label="Power and audio" hidden>
-            <div class="system-group" role="group" aria-label="Instant">
+          <div class="system-bar power-tray" id="powerTray" tabindex="-1" role="dialog" aria-label="Power and sound" hidden>
+            <div class="system-group" role="group" aria-labelledby="trayHeadSession">
+              <div class="tray-group-head"><span class="tray-group-title" id="trayHeadSession">Session</span></div>
               <button class="system-button" type="button" data-power-now="lock" title="Lock"><svg data-icon="lock" data-size="24"></svg><span class="power-label">Lock</span></button>
+              <button class="system-button" type="button" data-power-now="display" title="Turn off the display; moving the mouse or pressing a key wakes it"><svg data-icon="display" data-size="24"></svg><span class="power-label">Turn off display</span></button>
+            </div>
+            <div class="system-group" role="group" aria-labelledby="trayHeadSound">
+              <div class="tray-group-head"><span class="tray-group-title" id="trayHeadSound">Sound</span></div>
               <button class="system-button" type="button" id="audioButton" aria-haspopup="true" aria-expanded="false" title="Choose the audio output"><svg data-icon="speaker" data-size="24"></svg><span class="power-label" id="audioCurrent">Audio</span></button>
               <div class="audio-menu" id="audioMenu" role="menu" aria-label="Audio output" hidden></div>
+              <div class="tray-volume">
+                <button class="secondary icon-action" type="button" id="trayMute" aria-pressed="false" aria-label="Mute" title="Mute" disabled><svg data-icon="speaker"></svg></button>
+                <input type="range" id="trayVolume" min="0" max="100" step="1" value="0" aria-label="Volume" disabled>
+                <output id="trayVolumeValue" for="trayVolume"></output>
+              </div>
             </div>
-            <div class="system-group is-guarded" role="group" aria-label="Press and hold to confirm">
-              <span class="system-group-label" id="powerHint" title="Press and hold a button, or hold its letter, for 1.5 seconds. Letting go cancels."><svg data-icon="hold"></svg><span id="powerHintText">Hold to confirm</span></span>
+            <div class="system-group" role="group" aria-labelledby="trayHeadBin">
+              <div class="tray-group-head"><span class="tray-group-title" id="trayHeadBin">Recycle Bin</span><span class="system-group-label tray-hold-hint" id="recycleHint" title="Press and hold the button, or hold B, for 1.5 seconds. Letting go cancels."><svg data-icon="hold"></svg><span class="tray-hint-text">Hold to empty</span></span></div>
+              <button class="system-button is-guarded" type="button" data-power-hold="recycle" aria-keyshortcuts="B" title="Hold B, or press and hold here, to empty the Recycle Bin"><svg data-icon="trash" data-size="24"></svg><span class="power-label">Empty the <u>B</u>in</span><small id="recycleSize"></small><kbd class="power-key" aria-hidden="true">B</kbd></button>
+            </div>
+            <div class="system-group is-guarded" role="group" aria-labelledby="trayHeadPower">
+              <div class="tray-group-head"><span class="tray-group-title" id="trayHeadPower">Power</span><span class="system-group-label tray-hold-hint" id="powerHint" title="Press and hold a button, or hold its letter, for 1.5 seconds. Letting go cancels."><svg data-icon="hold"></svg><span class="tray-hint-text" id="powerHintText">Hold to confirm</span></span></div>
               <button class="system-button is-guarded" type="button" data-power-hold="sleep" aria-keyshortcuts="Z" title="Hold Z, or press and hold here, to sleep"><svg data-icon="sleep" data-size="24"></svg><span class="power-label">Sleep</span><kbd class="power-key" aria-hidden="true">Z</kbd></button>
               <button class="system-button is-guarded" type="button" data-power-hold="restart" aria-keyshortcuts="R" title="Hold R, or press and hold here, to restart"><svg data-icon="restart" data-size="24"></svg><span class="power-label"><u>R</u>estart</span><kbd class="power-key" aria-hidden="true">R</kbd></button>
               <button class="system-button is-guarded" type="button" data-power-hold="shutdown" aria-keyshortcuts="S" title="Hold S, or press and hold here, to shut down"><svg data-icon="power" data-size="24"></svg><span class="power-label"><u>S</u>hut down</span><kbd class="power-key" aria-hidden="true">S</kbd></button>
               <button class="system-button is-guarded" type="button" data-power-hold="signout" aria-keyshortcuts="O" title="Hold O, or press and hold here, to sign out"><svg data-icon="signout" data-size="24"></svg><span class="power-label">Sign <u>o</u>ut</span><kbd class="power-key" aria-hidden="true">O</kbd></button>
-              <button class="system-button is-guarded" type="button" data-power-hold="recycle" aria-keyshortcuts="B" title="Hold B, or press and hold here, to empty the Recycle Bin"><svg data-icon="trash" data-size="24"></svg><span class="power-label">Recycle <u>B</u>in</span><small id="recycleSize"></small><kbd class="power-key" aria-hidden="true">B</kbd></button>
             </div>
             <div class="power-confirm" id="powerConfirm" role="alert" hidden></div>
           </div>
@@ -1353,6 +1367,13 @@
                             <button type="button" data-form="soprano" title="Harmonize a soprano: choose the chords, write the lower voices">Soprano</button>
                           </div>
                           <label class="metro-field" for="cpNewKey"><span>Key</span><select id="cpNewKey"></select></label>
+                          <div class="cons-choice" id="cpNewTonesField">
+                            <span class="cons-choice-label" id="cpNewTonesLabel">Non-chord tones</span>
+                            <div class="cal-modes" id="cpNewTones" role="group" aria-labelledby="cpNewTonesLabel">
+                              <button type="button" data-tones="none" title="The given line moves chord to chord">None</button>
+                              <button type="button" data-tones="given" title="The given line has passing tones, neighbors, suspensions or an anticipation">In the given line</button>
+                            </div>
+                          </div>
                         </div>
                         <div class="cp-new-fields" id="cpNewCantusFields" hidden>
                           <label class="metro-field" for="cpNewMode"><span>Mode</span><select id="cpNewMode"></select></label>
@@ -1373,6 +1394,7 @@
                     </div>
                     <button class="secondary prog-save" type="button" id="cpSave" title="Keep this exercise in Maestro's data folder">Save exercise</button>
                     <button class="secondary" type="button" id="cpModel" title="Write the exercise as a model answer, one the checker finds no error in (Undo or Ctrl+Z brings back what was written)">Model answer</button>
+                    <button class="secondary" type="button" id="cpEmbellish" title="Add non-chord tones to a finished answer with no errors: passing tones, neighbors, suspensions and an anticipation, each kept only if the checker finds nothing new (Undo or Ctrl+Z takes them back)" hidden>Embellish</button>
                     <span class="cons-note-inline cp-facts" id="cpFacts"></span>
                     <div class="cons-choice cp-hear">
                       <span class="cons-choice-label" id="cpHearLabel" title="The voices Play sounds (double-click one to hear it alone)">Hear</span>
@@ -1468,8 +1490,14 @@
                             <button type="button" data-rules="essentials" title="Parallel fifths and octaves, crossing voices, dissonances and the chords: the rest are off">Essentials</button>
                           </div>
                         </div>
+                        <div class="cp-rule-style" id="cpRuleStyleRow">
+                          <span class="cons-choice-label" id="cpRuleStyleLabel">Style</span>
+                          <div class="cal-modes cons-labels" id="cpRuleStyles" role="group" aria-labelledby="cpRuleStyleLabel" aria-describedby="cpRuleStyleNote"></div>
+                          <p class="cons-note cp-rule-style-note" id="cpRuleStyleNote"></p>
+                        </div>
                         <div class="cp-rule-list" id="cpRuleList"></div>
-                        <p class="cons-note">A rule switched off isn't reported or marked on the staff. What's still to write, and suggestions for what comes next, always show.</p>
+                        <label class="metro-check cp-rule" id="cpNctField"><input type="checkbox" id="cpNctLabels"><span>Label non-chord tones by their notes</span></label>
+                        <p class="cons-note">A rule switched off isn't reported or marked on the staff. A locked rule is a fundamental and is always checked. The style is kept with the exercise, and new exercises of its kind take it. What's still to write, and suggestions for what comes next, always show.</p>
                       </div>
                     </div>
                   </div>
@@ -1716,7 +1744,7 @@
                     <button class="secondary" type="button" id="consQuizCheck" title="Check the bar as written" hidden>Check</button>
                     <button class="secondary" type="button" id="consQuizTap" title="A bar's count at the metronome's tempo, then tap the bar" hidden>Tap it</button>
                     <button class="secondary" type="button" id="consQuizHear" title="Hear it again (Space or H)">Hear it</button>
-                    <button class="secondary" type="button" id="consQuizNext" title="The next question (N)">Next</button>
+                    <button class="secondary" type="button" id="consQuizNext" title="The next question (N, or Enter once answered)">Next</button>
                   </div>
                 </div>
                 <p class="cons-quiz-prompt" id="consQuizPrompt">Which note is marked?</p>

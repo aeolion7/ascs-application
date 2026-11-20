@@ -355,7 +355,7 @@ globalThis.MaestroNotation = (() => {
     // barPadding(bar), [before, after] in spaces, widens a bar at its edges,
     // for repeat signs; hideRest(voice, index) leaves a rest undrawn, for a
     // bar drawn with another sign.
-    function engrave(score, { maxWidth = Infinity, room = 0, justify = false, headroom = 0, barPadding = null, hideRest = null } = {}) {
+    function engrave(score, { maxWidth = Infinity, room = 0, justify = false, headroom = 0, between = 0, barPadding = null, hideRest = null, times = [] } = {}) {
         const voices = voicesOf(score);
         const size = barLength(score.meter);
         const entries = voices.map(voice => timed(voice.notes));
@@ -408,6 +408,9 @@ globalThis.MaestroNotation = (() => {
             moments.set(entry.onset, moment);
         }));
         for (let bar = 0; bar < barCount; bar++) if (!moments.has(bar * size)) moments.set(bar * size, { time: bar * size, shortest: size, lead: 0, trail: 0 });
+        // Moments asked for with nothing starting there (2.11.0: each chord's
+        // start, under a note held through it) keep a column.
+        times.filter(time => time >= 0 && time < end && !moments.has(time)).forEach(time => moments.set(time, { time, shortest: Infinity, lead: 0, trail: 0 }));
         const ordered = [...moments.values()].sort((a, b) => a.time - b.time);
 
         // Bars as widths, then systems.
@@ -477,10 +480,14 @@ globalThis.MaestroNotation = (() => {
             };
             const above = Math.max(11, reach(0).high + 2);
             const below = Math.min(-5, reach(staffCount - 1).low - 2);
-            const gap = staffCount > 1 ? Math.max(STAFF_GAP, (reach(1).high - reach(0).low + 3) * SPACE / 2) : 0;
+            // between (2.11.0): more room in units between two staves, for words there.
+            const upperReach = staffCount > 1 ? reach(0) : null, lowerReach = staffCount > 1 ? reach(1) : null;
+            const gap = staffCount > 1 ? Math.max(STAFF_GAP, (lowerReach.high - upperReach.low + 3) * SPACE / 2) + between : 0;
             const firstBottom = top + headroom + above * SPACE / 2;
             const bottoms = score.staves.map((_, staff) => firstBottom + staff * gap);
             system.staffY = bottoms;
+            // What's clear between the first two staves: from the upper's lowest note or stem to the lower's highest.
+            system.inner = staffCount > 1 ? { from: bottoms[0] - upperReach.low * SPACE / 2, to: bottoms[1] - lowerReach.high * SPACE / 2 } : null;
             system.top = top;
             const left = braceRoom;
             system.left = left;
@@ -692,7 +699,7 @@ globalThis.MaestroNotation = (() => {
             });
         });
 
-        return { width, height: top - 2 * SPACE + SPACE, room, items, heads, rests, columns, barSpans, systems: systems.map(system => ({ top: system.top, bottom: system.bottom, staffY: system.staffY, left: system.left, right: system.right, bars: system.bars })), space: SPACE, font: FONT };
+        return { width, height: top - 2 * SPACE + SPACE, room, items, heads, rests, columns, barSpans, systems: systems.map(system => ({ top: system.top, bottom: system.bottom, staffY: system.staffY, inner: system.inner, left: system.left, right: system.right, bars: system.bars })), space: SPACE, font: FONT };
     }
 
     // A tie as a filled crescent from x1 to x2 at y, bowing by bow.

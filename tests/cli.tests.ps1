@@ -704,6 +704,7 @@ Act() {
 Never() {
     DllCall("PowrProf\SetSuspendState", "Int", 0, "Int", 0, "Int", 0)
     SoundSetMute(1)
+    PostMessage(0x0112, 0xF170, 2, , "Program Manager")
 }
 "@
 $r = New-TestRepo isolate
@@ -720,6 +721,7 @@ Add-Check 'isolate: Super becomes Pause' ($text.Contains('Pause & l::Isolate_Stu
 Add-Check 'isolate: the reload hotkey is left out' ($text.Contains('; (maestro isolate) $^!+a::')) $text
 Add-Check 'isolate: the calendar port moves' ($text.Contains('5233') -and -not $text.Contains('5232')) $text
 Add-Check 'isolate: sleep is stubbed' ($text.Contains('Isolate_Stub("PowrProf\SetSuspendState"')) $text
+Add-Check 'isolate: turning the display off is stubbed' ($text.Contains('Isolate_Stub("PostMessage", 0x0112, 0xF170') -and $text -notmatch '(?<![\w.])PostMessage\(') $text
 Add-Check 'isolate: warnings go to standard output' ($text -match '(?m)^#Warn All, StdOut') $text
 Add-Check 'isolate: inside the copy still works' (Test-Path "$copy\data\inside.txt")
 Add-Check 'isolate: no launch outside' (-not (Test-Path "$outside\ran.txt")) $run.text
@@ -754,6 +756,7 @@ if ($copy) {
     $games = [IO.File]::ReadAllText("$copy\lib\features\Games.ahk")
     Add-Check 'isolate this checkout: game launches are guarded' ($games.Contains('Isolate_Run("steam://') -and $games -notmatch '(?<![\w.])Run\(')
     Add-Check 'isolate this checkout: Super is Pause' ([IO.File]::ReadAllText("$copy\lib\features\SuperKey.ahk") -match 'Pause & ')
+    Add-Check 'isolate this checkout: turning the display off is stubbed' ([IO.File]::ReadAllText("$copy\lib\features\Power.ahk").Contains('Isolate_Stub("PostMessage", 0x0112, 0xF170'))
 }
 
 # --clean removes only what isolate marked.

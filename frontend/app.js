@@ -2081,6 +2081,9 @@ function handleWebMessage(event) {
         case "recycleBin":
             renderRecycleBin(data);
             break;
+        case "volume":
+            renderVolume(data);
+            break;
         case "audioDevices":
             renderAudioDevices(data);
             break;
@@ -5500,6 +5503,34 @@ function renderRecycleBin(data) {
     button.disabled = items === 0;
 }
 
+// The output's volume and mute in the power tray (2.11.0), read as the tray
+// opens and after another output is chosen. The slider sets the volume as it
+// moves, at most every 50 ms, and its last place as it's let go; as in Windows'
+// own, moving it unmutes. A reading never moves the slider while it's in use.
+const trayVolume = { sentAt: 0, timer: 0 };
+
+function renderVolume(data) {
+    const known = Number.isInteger(data.level) && data.level >= 0 && data.level <= 100;
+    const muted = known && data.muted === true;
+    const slider = $("trayVolume");
+    const mute = $("trayMute");
+    slider.disabled = !known;
+    mute.disabled = !known;
+    if (known && document.activeElement !== slider) slider.value = String(data.level);
+    $("trayVolumeValue").textContent = known ? slider.value : "";
+    slider.closest(".tray-volume").classList.toggle("is-muted", muted);
+    mute.setAttribute("aria-pressed", String(muted));
+    mute.title = muted ? "Unmute" : "Mute";
+    mute.replaceChildren(MaestroIcons.create(muted ? "mute" : "speaker"));
+}
+
+function sendTrayVolume() {
+    clearTimeout(trayVolume.timer);
+    trayVolume.timer = 0;
+    trayVolume.sentAt = performance.now();
+    send("SetVolume", $("trayVolume").value);
+}
+
 // The output is chosen from the power tray and from Sounds, with one list.
 const AUDIO_MENUS = [
     { button: "audioButton", menu: "audioMenu", current: "audioCurrent", empty: "Audio" },
@@ -5559,11 +5590,11 @@ document.querySelectorAll("[data-power-hold]").forEach(button => {
         if (event.key === " " || event.key === "Enter") endHold(button);
     });
     button.addEventListener("blur", () => endHold(button));
-    // A plain click does nothing but remind how these work.
+    // A plain click does nothing but remind how these work, by its own group's hint.
     button.addEventListener("click", event => {
         event.preventDefault();
         if (!powerState.confirm) {
-            const hint = $("powerHint");
+            const hint = button.closest(".system-group").querySelector(".tray-hold-hint");
             hint.classList.remove("is-flashing");
             void hint.offsetWidth;
             hint.classList.add("is-flashing");
@@ -5577,6 +5608,7 @@ $("powerAnyway").addEventListener("click", () => send("PowerAnyway"));
 function refreshPowerTray() {
     send("GetRecycleBin");
     send("GetAudioDevices");
+    send("GetVolume");
 }
 function togglePowerTray(show = $("powerTray").hidden) {
     const tray = $("powerTray");
@@ -5611,9 +5643,14 @@ function clearPowerKeys() {
     showPowerKeysBlocked(false);
 }
 
+// Both hints (2.11.0: Recycle Bin's and Power's) say so, since B counts too.
 function showPowerKeysBlocked(blocked) {
-    $("powerHintText").textContent = blocked ? "More than one key: nothing happens" : "Hold to confirm";
-    $("powerHint").classList.toggle("is-blocked", blocked);
+    document.querySelectorAll("#powerTray .tray-hold-hint").forEach(hint => {
+        const text = hint.querySelector(".tray-hint-text");
+        text.dataset.idle ??= text.textContent;
+        text.textContent = blocked ? "More than one key: nothing happens" : text.dataset.idle;
+        hint.classList.toggle("is-blocked", blocked);
+    });
 }
 
 document.addEventListener("keydown", event => {
@@ -5642,6 +5679,15 @@ document.addEventListener("keyup", event => {
 window.addEventListener("blur", clearPowerKeys);
 
 $("powerTrayButton").addEventListener("click", () => togglePowerTray());
+$("trayVolume").addEventListener("input", () => {
+    const level = Number($("trayVolume").value);
+    renderVolume({ level, muted: false });
+    const wait = 50 - (performance.now() - trayVolume.sentAt);
+    if (wait <= 0) sendTrayVolume();
+    else if (!trayVolume.timer) trayVolume.timer = setTimeout(sendTrayVolume, wait);
+});
+$("trayVolume").addEventListener("change", sendTrayVolume);
+$("trayMute").addEventListener("click", () => send("SetMute", $("trayMute").getAttribute("aria-pressed") === "true" ? "0" : "1"));
 $("powerTray").addEventListener("keydown", event => {
     if (event.key !== "Escape") return;
     event.preventDefault();
@@ -5861,6 +5907,7 @@ const HELP_INSIDE = [
     [["Space"], "Start or stop the metronome, on the Conservatory (on its Quiz, hear the question again)"],
     [["H"], "On the Quiz: hear the question again"],
     [["N"], "On the Quiz: the next question"],
+    [["Enter"], "On the Quiz: Check, then the next question"],
     [["Ctrl", "Enter"], "On the Quiz: Check"],
     [["1–7"], "On the Quiz, Progressions by ear: name a chord by its degree"],
     [["Enter"], "In Quick Notes' filter: the next match in the open note (Shift + Enter, the one before)"],

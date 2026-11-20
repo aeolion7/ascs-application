@@ -135,7 +135,7 @@
             // 2.3.0: the Conservatory and its metronome, with a stand-in for the
             // audio, so nothing sounds. Clicks are counted as they're booked.
             {
-                const heard = { clicks: 0, suspended: 0, resumed: 0, sources: [] };
+                const heard = { clicks: 0, suspended: 0, resumed: 0, sources: [], rooms: 0, places: [] };
                 class FakeParam { setValueAtTime() {} exponentialRampToValueAtTime() {} linearRampToValueAtTime() {} setTargetAtTime(value) { this.target = value; } cancelScheduledValues() {} }
                 class FakeNode {
                     constructor() { this.gain = new FakeParam(); this.frequency = new FakeParam(); this.frequency.value = 0; this.Q = new FakeParam(); this.playbackRate = { value: 1 }; }
@@ -156,6 +156,8 @@
                     createBiquadFilter() { return new FakeNode(); }
                     createBuffer(channels, length) { return { getChannelData: () => new Float32Array(length), copyToChannel() {} }; }
                     createPeriodicWave() { return {}; }
+                    createConvolver() { heard.rooms += 1; return new FakeNode(); }
+                    createStereoPanner() { const node = new FakeNode(); node.pan = new FakeParam(); heard.places.push(node); return node; }
                     resume() { heard.resumed += 1; return Promise.resolve(); }
                     suspend() { heard.suspended += 1; return Promise.resolve(); }
                 }
@@ -417,6 +419,9 @@
                         await pluckConsNotes(Array.from({ length: 30 }, (_, index) => 40 + index));
                         checks.push(["no more than 24 notes ring at once", cons.voices.size === 24 ? [] : [cons.voices.size]]);
                         checks.push(["the tones go through a limiter", cons.tonesOut !== null && heard.sources.length > 0 ? [] : ["no output"]]);
+                        checks.push(["the plucks through a guitar's body and a room, made once", cons.plucksOut !== null && heard.rooms === 1 ? [] : [heard.rooms]]);
+                        const versions = [0, 1, 2, 3].map(() => pluckBuffer(metro.context, 61));
+                        checks.push(["a note plucked again is another version of it, three in turn", versions[0] !== versions[1] && versions[1] !== versions[2] && versions[0] !== versions[2] && versions[3] === versions[0] ? [] : ["the same"]]);
                         cons.voices.clear();
                         // Chromatic.
                         document.querySelector('#consShow [data-show="all"]').click();
@@ -541,16 +546,48 @@
                         writeTheoryForm();
                         checks.push(["Theory: a form goes to Counterpoint as a melody", consSections.current() === "counterpoint" && cp.exercise.kind === "melody" && cp.exercise.score.staves[0].voices[0].notes.filter(note => note.p).length === 12 ? [] : [consSections.current(), cp.exercise.kind]]);
                         setCpExercise(cpBefore28);
-                        // 2.8.0: the checker's rules.
-                        const rulesBefore = [...cp.rulesOff];
+                        // 2.8.0: the checker's rules; 2.11.0: each its own switch, the fundamentals locked, the styles.
+                        const rulesBefore = [...cp.rulesOff], stylesBefore = { ...cp.styles }, exerciseBefore211 = cp.exercise;
+                        const dot211 = String.fromCodePoint(0xB7);
+                        setCpExercise(MaestroCounterpoint.speciesExercise({ species: 3, cantus: MaestroCounterpoint.fuxNotes(MaestroCounterpoint.FUX[0]), cantusBelow: true, mode: "dorian", final: "D", title: "Rules" }));
+                        setCpRulesOff([]);
                         $("cpRulesButton").click();
+                        const shownRules = MaestroCounterpoint.rulesFor(cp.exercise);
                         const ruleBoxes = [...$("cpRuleList").querySelectorAll("[data-rule]")];
-                        checks.push(["Counterpoint: Rules lists every group, by section", !$("cpRulesPanel").hidden && ruleBoxes.length === MaestroCounterpoint.RULE_GROUPS.length && $("cpRuleList").querySelectorAll("fieldset").length === 4 ? [] : [ruleBoxes.length]]);
+                        checks.push(["Counterpoint: Rules lists each rule for the exercise, by section", !$("cpRulesPanel").hidden && ruleBoxes.length === shownRules.length && $("cpRuleList").querySelectorAll("fieldset").length === 3 ? [] : [ruleBoxes.length, shownRules.length]]);
+                        const lockedBoxes = ruleBoxes.filter(box => box.disabled);
+                        checks.push(["Counterpoint: the fundamentals are locked on, with a lock", lockedBoxes.map(box => box.dataset.rule).join() === shownRules.filter(rule => rule.locked).map(rule => rule.id).join() && lockedBoxes.every(box => box.checked) && $("cpRuleList").querySelector('[data-rule-row="parallel"] svg.icon') ? [] : [lockedBoxes.map(box => box.dataset.rule).join()]]);
+                        checks.push(["Counterpoint: the chip names the style", $("cpRulesName").textContent === "Fux, strict" && !$("cpRuleStyleRow").hidden && $("cpRuleStyles").querySelector('[aria-pressed="true"]')?.dataset.style === "fux" ? [] : [$("cpRulesName").textContent]]);
                         document.querySelector('#cpRulePresets [data-rules="essentials"]').click();
-                        checks.push(["Counterpoint: Essentials turns the rest off, kept, and the chip says how many are on", cp.rulesOff.join() === MaestroCounterpoint.RULE_PRESETS.essentials.join() && JSON.parse(localStorage.getItem(CP_KEY)).rulesOff.length === cp.rulesOff.length && $("cpRulesName").textContent === `5 of ${MaestroCounterpoint.RULE_GROUPS.length}` ? [] : [cp.rulesOff.length, $("cpRulesName").textContent]]);
+                        const quietShown = shownRules.filter(rule => cp.rulesOff.includes(rule.id)).length;
+                        checks.push(["Counterpoint: Essentials turns the rest off, kept, and the chip says how many are off", cp.rulesOff.join() === MaestroCounterpoint.RULE_PRESETS.essentials.join() && JSON.parse(localStorage.getItem(CP_KEY)).ruleIdsOff.length === cp.rulesOff.length && quietShown > 0 && $("cpRulesName").textContent === `Fux, strict ${dot211} ${quietShown} off` ? [] : [cp.rulesOff.length, $("cpRulesName").textContent]]);
                         $("cpRuleList").querySelector('[data-rule="range"]').click();
                         checks.push(["Counterpoint: a rule switched back on", !cp.rulesOff.includes("range") ? [] : ["still off"]]);
+                        setCpRulesOff([]);
+                        $("cpRuleList").querySelector('[data-group="leap"]').click();
+                        checks.push(["Counterpoint: a group's switch turns its rules off", ["leap", "sixth", "augmented"].every(id => cp.rulesOff.includes(id)) ? [] : [cp.rulesOff.join()]]);
+                        $("cpRuleList").querySelector('[data-rule="sixth"]').click();
+                        checks.push(["Counterpoint: one back on, and the group's switch shows some are", !cp.rulesOff.includes("sixth") && $("cpRuleList").querySelector('[data-group="leap"]').indeterminate ? [] : [cp.rulesOff.join()]]);
+                        checks.push(["Counterpoint: a group of fundamentals alone can't be switched", $("cpRuleList").querySelector('[data-group="parallel"]')?.disabled === true ? [] : ["switchable"]]);
+                        const styleNotes = Object.fromEntries(MaestroCounterpoint.STYLES.species.map(style => [style.id, style.note]));
+                        checks.push(["Counterpoint: the style's explanation is under its buttons, not in a tooltip", $("cpRuleStyleNote").textContent === styleNotes.fux && ![...$("cpRuleStyles").children].some(button => button.title) ? [] : [$("cpRuleStyleNote").textContent]]);
+                        document.querySelector('#cpRuleStyles [data-style="renaissance"]').click();
+                        checks.push(["Counterpoint: choosing a style shows its explanation", $("cpRuleStyleNote").textContent === styleNotes.renaissance && $("cpRuleStyles").querySelector('[data-style="renaissance"]')?.textContent === "Renaissance" ? [] : [$("cpRuleStyleNote").textContent]]);
+                        checks.push(["Counterpoint: a style chosen is the exercise's, kept, and new exercises of its kind take it", MaestroCounterpoint.styleOf(cp.exercise) === "renaissance" && cp.styles.species === "renaissance" && JSON.parse(localStorage.getItem(CP_KEY)).styles.species === "renaissance" && $("cpRuleList").querySelector('[data-rule="run"]') && !$("cpRuleList").querySelector('[data-rule="ninthEighth"]') ? [] : [MaestroCounterpoint.styleOf(cp.exercise), cp.styles.species]]);
+                        undoCp();
+                        checks.push(["Counterpoint: and Ctrl+Z takes the exercise's style back", MaestroCounterpoint.styleOf(cp.exercise) === "fux" ? [] : [MaestroCounterpoint.styleOf(cp.exercise)]]);
+                        changeCp(MaestroCounterpoint.setNote(cp.exercise, 0, 0, MaestroNotation.parsePitch("E4")));
+                        const ruleChip = $("cpProblems").querySelector('.cp-problem-rule[data-rule="strongBeat"]');
+                        checks.push(["Counterpoint: a problem names its rule", ruleChip?.textContent === MaestroCounterpoint.ruleById("strongBeat").label && !$("cpProblems").querySelector('.cp-problem-rule[data-rule="unfinished"]') ? [] : [ruleChip?.textContent ?? "no chip"]]);
+                        $("cpRulesPanel").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+                        ruleChip?.click();
+                        checks.push(["Counterpoint: and the name opens Rules", !$("cpRulesPanel").hidden ? [] : ["closed"]]);
+                        setCpExercise(MaestroCounterpoint.cantusExercise({ mode: "dorian", final: "D" }));
+                        checks.push(["Counterpoint: a cantus firmus has no styles, and lists its own rules", $("cpRuleStyleRow").hidden && $("cpRuleList").querySelector('[data-rule="tritone"]') && !$("cpRuleList").querySelector('[data-rule="parallel"]') ? [] : ["styles shown"]]);
                         setCpRulesOff(rulesBefore);
+                        cp.styles = stylesBefore;
+                        setCpExercise(exerciseBefore211);
+                        saveCounterpoint();
                         $("cpRulesPanel").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
                         // 2.8.0: Progressions' Tab view and negative harmony.
                         consSections.show("progressions");
@@ -859,8 +896,24 @@
                         quizPress("h");
                         await pause(40);
                         checks.push(["Space and H hear it again, on the Quiz, not the metronome", heard.clicks - spaceBefore === 4 && !metro.running ? [] : [heard.clicks - spaceBefore, metro.running]]);
+                        // 2.11.0: Space hears it with a button focused too (Enter is still the button's), and Enter with nothing to check does nothing.
+                        const focusedAnswer = $("consQuizAnswers").querySelector(`[data-answer="${(quiz.question.semis % 12) + 1}"]`);
+                        focusedAnswer.focus();
+                        const spaceOnButton = heard.clicks;
+                        const spaceFocused = quizPress(" ", {}, focusedAnswer);
+                        await pause(40);
+                        checks.push(["2.11.0: Space on a focused answer hears the question, and doesn't answer", spaceFocused.defaultPrevented && heard.clicks - spaceOnButton === 2 && quiz.answered === null ? [] : [spaceFocused.defaultPrevented, heard.clicks - spaceOnButton, quiz.answered]]);
+                        checks.push(["2.11.0: Enter on a focused answer is left to the button", !quizPress("Enter", {}, focusedAnswer).defaultPrevented && quiz.answered === null ? [] : [quiz.answered]]);
+                        focusedAnswer.blur();
+                        const intervalAsked = quiz.question;
+                        quizPress("Enter");
+                        checks.push(["2.11.0: Enter before an interval's answer changes nothing", quiz.answered === null && quiz.question === intervalAsked ? [] : [quiz.answered]]);
                         $("consQuizAnswers").querySelector(`[data-answer="${quiz.question.semis}"]`).click();
                         checks.push(["once answered, both notes are shown on the neck", pcs(dots()).size === (quiz.question.semis === 12 ? 1 : 2) && /^Right/.test($("consQuizResult").textContent) ? [] : [pcs(dots()).size]]);
+                        document.activeElement?.blur();
+                        quizPress("Enter");
+                        checks.push(["2.11.0: Enter once answered asks the next", quiz.answered === null && quiz.question !== intervalAsked ? [] : [quiz.answered]]);
+                        $("consQuizAnswers").querySelector(`[data-answer="${quiz.question.semis}"]`).click();
                         // 2.4.0: chords and progressions by ear.
                         document.querySelector('#consQuizKind [data-quiz="quality"]').click();
                         const answerLabels = () => [...$("consQuizAnswers").children].map(button => button.textContent).join();
@@ -1005,6 +1058,8 @@
                         });
                         dictStaff.focus();
                         checks.push(["Every note: Check on once each chord has a note", !$("consQuizCheck").disabled && quiz.written.slice(1).every((midis, at) => midis.join() === dictEvery.voicings[at + 1].join()) ? [] : [dictWritten()]]);
+                        quizPress("Enter", {}, dictStaff);
+                        checks.push(["2.11.0: Enter on the progression's staff still plays the chord, not Check", quiz.answered === null ? [] : [quiz.answered]]);
                         quizPress("Enter", { ctrlKey: true }, dictStaff);
                         checks.push(["Ctrl+Enter checks it, written right: named in its key, scored, it stays, focus on Next", /^Right: .+ in .+ \(.+\)\.$/.test($("consQuizResult").textContent) && quiz.right === 1 && quiz.answered !== null && document.activeElement === $("consQuizNext") && dictStaff.querySelectorAll(".cp-ring.is-wrong").length === 0 ? [] : [$("consQuizResult").textContent, document.activeElement?.id]]);
                         setConsQuiz({ quizWrite: "numerals" });
@@ -1072,13 +1127,15 @@
                         tune.midis.slice(3).forEach((midi, at) => consNeckModes.quiz.click(at === tune.midis.length - 4 ? midi + 12 : midi));
                         checks.push(["once all are written, Check is on", quiz.notes.every(Boolean) && !$("consQuizCheck").disabled ? [] : [written()]]);
                         const octaveRight = quiz.right;
-                        $("consQuizCheck").click();
+                        quizStaff.focus();
+                        quizPress("Enter", {}, quizStaff);
                         checks.push(["an octave off is wrong: ringed, the melody as played shown, the score kept", quiz.answered !== null && quiz.right === octaveRight && quizStaff.querySelectorAll(".cp-ring.is-wrong").length === 1 && quizStaff.querySelectorAll(".cp-ring.is-right").length === tune.midis.length - 2 && !$("consQuizMelodyPlayed").hidden && $("consQuizMelodyPlayedStaff").querySelector("svg") && new RegExp(`^${tune.midis.length - 2} of ${tune.midis.length - 1} notes right: it's .+ in .+ major\\. Click Next`).test($("consQuizResult").textContent) && $("consQuizCheck").disabled && quiz.answered !== null ? [] : [$("consQuizResult").textContent, quizStaff.querySelectorAll(".cp-ring.is-wrong").length]]);
                         const kept = written();
                         quizStaff.dispatchEvent(new MouseEvent("click", quizPoint(1, tune.pitches[2])));
                         checks.push(["once checked, the staff doesn't change", written() === kept ? [] : [written()]]);
-                        // Another, written right.
-                        $("consQuizNext").click();
+                        // Another, written right (2.11.0: Enter on the melody's staff checked it; once answered, Enter asks the next).
+                        quizPress("Enter", {}, quizStaff);
+                        checks.push(["2.11.0: Enter once the melody's checked asks the next", quiz.answered === null && quiz.question !== tune ? [] : [quiz.answered]]);
                         const tune2 = quiz.question;
                         tune2.midis.slice(1).forEach(midi => consNeckModes.quiz.click(midi));
                         $("consQuizCheck").click();
@@ -1825,8 +1882,13 @@
                             checks.push(["a double-click hears one voice alone", cp.hear.join() === "true,false,false,false" ? [] : [cp.hear.join()]]);
                             await pause(0);
                             checks.push(["and one voice alone has the marker", $("cpVoices").classList.contains("has-marker") && $("cpVoices").style.getPropertyValue("--marker-x") === `${$("cpVoices").querySelector('[data-hear="0"]').offsetLeft}px` ? [] : ["no marker"]]);
+                            const placesBefore = heard.places.length;
+                            const plucksBefore = heard.sources.length;
                             await playCpExercise();
                             checks.push(["Play plays, and turns into Stop", cp.playing !== null && $("cpPlay").textContent.includes("Stop") ? [] : [cp.playing]]);
+                            await pause(20);
+                            const organPlaces = heard.places.slice(placesBefore).map(node => node.pan.value);
+                            checks.push(["it plays on the organ, the soprano heard alone at its place on the left", organPlaces.length > 0 && organPlaces.every(pan => pan === cpOrganStops()[0].pan && pan < 0) && heard.sources.length === plucksBefore ? [] : [organPlaces.join(), heard.sources.length - plucksBefore]]);
                             stopCpPlaying();
                             checks.push(["Stop stops", cp.playing === null && $("cpPlay").textContent.includes("Play") ? [] : ["playing"]]);
                             cp.hear = [true, true, true, true];
@@ -1854,6 +1916,81 @@
                             const sopranoRing = ringY();
                             key("A", true);
                             checks.push(["the ring moves to the voice chosen, around its rest when it's still to write", cp.at.voice === 1 && sopranoRing && ringY() && ringY() !== sopranoRing && $("cpWriting").querySelector('[aria-pressed="true"]')?.dataset.writing === "1" ? [] : [sopranoRing, ringY(), cp.at.voice]]);
+                            // 2.11.0: non-chord tones in four parts.
+                            toggleConsPopover("cpMenu", true);
+                            $("cpMenuNew").click();
+                            $("cpNewKind").querySelector('[data-kind="fourpart"]').click();
+                            $("cpNewForm").querySelector('[data-form="numerals"]').click();
+                            const tonesHidden = $("cpNewTonesField").hidden;
+                            $("cpNewForm").querySelector('[data-form="soprano"]').click();
+                            $("cpNewTones").querySelector('[data-tones="given"]').click();
+                            // Where it's placed, not where it's drawn: the page's entrance may still be moving the module.
+                            const newTop = parseFloat($("cpNewPanel").style.top), newHeight = $("cpNewPanel").offsetHeight;
+                            checks.push(["New exercise offers non-chord tones in a given line, not for numerals, and opens over the page, all on screen", tonesHidden && !$("cpNewTonesField").hidden && cpNew.embellished && getComputedStyle($("cpNewPanel")).position === "fixed" && newTop >= 0 && newTop + newHeight <= innerHeight ? [] : [tonesHidden, cpNew.embellished, newTop, newHeight, innerHeight]]);
+                            $("cpNewStart").click();
+                            checks.push(["Start makes a soprano exercise, its line read as written", cp.exercise.kind === "fourpart" && cp.exercise.form === "soprano" && MaestroCounterpoint.readExercise(cpText()) !== null ? [] : [cp.exercise.form]]);
+                            $("cpNewTones").querySelector('[data-tones="none"]').click();
+                            // An answer with non-chord tones, from a seeded model answer.
+                            let nctSeed = 9;
+                            const nctRandom = () => ((nctSeed = (nctSeed * 16807) % 2147483647) / 2147483647);
+                            const nctPlain = MaestroCounterpoint.fourPartExercise({ form: "numerals", tonic: "C", mode: "major", progression: ["I", "vi", "IV", "ii6", "V7", "I", "IV", "V", "I"], random: nctRandom });
+                            setCpExercise(MaestroCounterpoint.modelAnswer(nctPlain, { random: nctRandom, embellish: true }));
+                            renderCounterpoint();
+                            const nctTones = MaestroCounterpoint.nonChordTones(cp.exercise);
+                            const nctLabels = () => [...$("cpStaff").querySelectorAll(".cp-nct-label")];
+                            checks.push(["each non-chord tone labeled by its note", nctTones.length > 0 && nctLabels().length === nctTones.length && nctLabels().every(label => label.textContent && label.querySelector("title")?.textContent) ? [] : [nctTones.length, nctLabels().length]]);
+                            const spans = MaestroCounterpoint.chordSpans(cp.exercise.numerals.length);
+                            const numeralX = [...$("cpStaff").querySelectorAll(".cp-beneath:not(.cp-row-label):not(.cp-figure-small)")].map(node => Number(node.getAttribute("x")));
+                            const chordX = spans.map(span => cp.drawn.columns.find(column => column.time === span.onset)?.x + 0.8 * cp.drawn.space);
+                            checks.push(["the numerals under each chord's start, not under the soprano's notes", chordX.every(x => numeralX.some(each => Math.abs(each - x) < 0.01)) ? [] : [chordX.join(), numeralX.join()]]);
+                            toggleConsPopover("cpRules", true);
+                            const nctSwitchShown = !$("cpNctField").hidden && $("cpNctLabels").checked;
+                            $("cpNctLabels").checked = false;
+                            $("cpNctLabels").dispatchEvent(new Event("change"));
+                            checks.push(["Rules switches the labels off, and it's kept", nctSwitchShown && nctLabels().length === 0 && JSON.parse(localStorage.getItem(CP_KEY)).nctLabels === false ? [] : [nctSwitchShown, nctLabels().length]]);
+                            $("cpNctLabels").checked = true;
+                            $("cpNctLabels").dispatchEvent(new Event("change"));
+                            toggleConsPopover("cpRules", false);
+                            checks.push(["and on again", nctLabels().length === nctTones.length && cp.nctLabels ? [] : [nctLabels().length]]);
+                            // A voice's rhythm: Length and Tie for the voice being written; another voice chosen at the same moment.
+                            cp.at = { voice: 1, index: 0 };
+                            renderCounterpoint();
+                            const altoBefore = cpVoices()[1].notes.length;
+                            key("4");
+                            checks.push(["four parts: Length shows for the voice written, and 4 halves its note in its chord", !$("cpLengthField").hidden && cpVoices()[1].notes.length === altoBefore + 1 && cpVoices()[1].notes[0].d === "q" && !cpVoices()[1].notes[1].p ? [] : [cpVoices()[1].notes.length, cpVoices()[1].notes[0].d]]);
+                            const altoPitch = MaestroNotation.midiOf(cpVoices()[1].notes[0].p);
+                            key("1");
+                            const heldAlto = cpVoices()[1].notes;
+                            const wholeHead = cp.drawn.heads.find(head => head.voice === 1 && head.index === 0);
+                            checks.push(["four parts: 1 holds the note through the next chord, tied halves drawn as one whole note, Whole pressed", heldAlto[0].d === "h" && heldAlto[0].tie && heldAlto[1].d === "h" && MaestroNotation.midiOf(heldAlto[1].p) === altoPitch && wholeHead?.indices?.join() === "0,1" && $("cpLengths").querySelector('[data-length="w"]').getAttribute("aria-pressed") === "true" ? [] : [heldAlto.slice(0, 2).map(note => note.d + (note.tie ? "~" : "")).join(" "), wholeHead?.indices]]);
+                            cp.at = { voice: 1, index: 1 };
+                            renderCounterpoint();
+                            checks.push(["its second half selected rings the whole note", $("cpStaff").querySelector('.cp-ring.is-selected')?.dataset.ring === "1:0" ? [] : [$("cpStaff").querySelector('.cp-ring.is-selected')?.dataset.ring]]);
+                            key("4");
+                            checks.push(["and 4 makes it a quarter again, letting go of the chord after", cpVoices()[1].notes[0].d === "q" && !cpVoices()[1].notes[0].tie && cp.at.index === 0 ? [] : [cpVoices()[1].notes[0].d, cpVoices()[1].notes[0].tie, cp.at.index]]);
+                            cp.at = { voice: 1, index: 1 };
+                            key("T", true);
+                            const tenorAt = MaestroNotation.timed(cpVoices()[2].notes)[cp.at.index];
+                            checks.push(["another voice chosen keeps the moment", cp.at.voice === 2 && tenorAt.onset <= 2 && 2 < tenorAt.onset + tenorAt.length ? [] : [cp.at.voice, tenorAt?.onset]]);
+                            cp.at = { voice: 1, index: 0 };
+                            renderCounterpoint();
+                            $("cpLengths").querySelector("[data-tie]").click();
+                            checks.push(["Tie ties the note to the next, which takes its pitch", cpVoices()[1].notes[0].tie && MaestroNotation.midiOf(cpVoices()[1].notes[1].p) === MaestroNotation.midiOf(cpVoices()[1].notes[0].p) ? [] : ["untied"]]);
+                            // Embellish: refused while notes are to write; on a faultless answer, adds and Undo takes back.
+                            cp.at = { voice: 1, index: 1 };
+                            setCpNote(null);
+                            const unfinishedText = cpText();
+                            $("cpEmbellish").click();
+                            checks.push(["Embellish shows for four parts and waits for every note", !$("cpEmbellish").hidden && cpText() === unfinishedText ? [] : ["changed"]]);
+                            setCpExercise(MaestroCounterpoint.modelAnswer(nctPlain, { random: nctRandom }));
+                            renderCounterpoint();
+                            const plainText = cpText();
+                            $("cpEmbellish").click();
+                            const embellishedErrors = MaestroCounterpoint.check(cp.exercise).filter(each => each.level === "error").length;
+                            const embellishedTones = MaestroCounterpoint.nonChordTones(cp.exercise).length;
+                            undoCp();
+                            // Its choices are random, so this answer of nine chords almost always gains some; none would leave it as it was.
+                            checks.push(["Embellish adds non-chord tones with no error, and Undo takes them back", embellishedTones >= 0 && embellishedErrors === 0 && cpText() === plainText ? [] : [embellishedTones, embellishedErrors]]);
                             // A cantus firmus of one's own: made, written, checked, kept, and then sung against.
                             toggleConsPopover("cpMenu", true);
                             $("cpMenuNew").click();
@@ -1952,7 +2089,9 @@
                             $("cpMotifHow").dispatchEvent(new Event("change"));
                             $("cpMotifWrite").click();
                             checks.push(["Write it after: the motif a step higher in bar 2, with Undo", cpNotes().split(" ").slice(4, 8).join(" ") === "D5 E5 F5 D5" && $("toast").textContent.includes("from bar 2") ? [] : [cpNotes()]]);
+                            const showOff = $("cpShowName").textContent;
                             $("cpChords").querySelector('[data-chords="1"]').click();
+                            checks.push(["Show reads as a phrase: Melody only, then Chords; its words can't be selected by a double-click", showOff === "Melody only" && $("cpShowName").textContent === "Chords" && getComputedStyle($("cpShowButton")).userSelect === "none" ? [] : [showOff, $("cpShowName").textContent, getComputedStyle($("cpShowButton")).userSelect]]);
                             const chordTexts = [...$("cpStaff").querySelectorAll(".cp-chord")].map(text => text.textContent);
                             checks.push(["Chords: one a bar under the notes, C then a chord holding D, E and F's strong notes", chordTexts[0] === "C" && chordTexts.length === 2 && ["Dm", "G", "B°"].includes(chordTexts[1]) && !$("cpChordsOpen").hidden ? [] : [chordTexts.join(" ")]]);
                             $("cpView").querySelector('[data-shown="written"]').click();
@@ -2173,8 +2312,11 @@
                         cons.settings = MaestroMusic.parseSettings(savedCons);
                         cons.chord = -1;
                         cons.tonesOut = null;
+                        cons.plucksOut = null;
                         cons.wave = null;
+                        cons.organWaves.clear();
                         cons.plucks.clear();
+                        cons.pluckTurns.clear();
                         closeConsTuningForm();
                         consSections.show(cons.settings.tab);
                         renderConservatory();
@@ -2540,6 +2682,31 @@
             togglePowerTray(true);
             checks.push(["the power tray opens from any view, and only then reads", !$("powerTray").hidden && sent.has("GetRecycleBin") && sent.has("GetAudioDevices") ? [] : ["not opened or no reading"]]);
             checks.push(["its hold buttons are all there", document.querySelectorAll("#powerTray [data-power-hold]").length === 5 ? [] : ["wrong count"]]);
+            // 2.11.0: named groups, Recycle Bin out of Power, and the volume.
+            const trayGroups = [...$("powerTray").querySelectorAll(":scope > .system-group")];
+            const groupOf = selector => $("powerTray").querySelector(selector).closest(".system-group");
+            checks.push(["2.11.0: the tray's groups are named Session, Sound, Recycle Bin and Power", trayGroups.map(group => group.querySelector(".tray-group-title")?.textContent).join() === "Session,Sound,Recycle Bin,Power" && trayGroups.every(group => $(group.getAttribute("aria-labelledby"))?.closest(".system-group") === group) ? [] : [trayGroups.map(group => group.querySelector(".tray-group-title")?.textContent).join()]]);
+            checks.push(["2.11.0: Recycle Bin has its own group, still held, before Power's four", groupOf('[data-power-hold="recycle"]') === trayGroups[2] && groupOf('[data-power-hold="sleep"]') === trayGroups[3] && trayGroups[3].querySelectorAll("[data-power-hold]").length === 4 && groupOf('[data-power-now="display"]') === trayGroups[0] ? [] : ["misplaced"]]);
+            checks.push(["2.11.0: the volume is read as the tray opens, and waits for it", sent.has("GetVolume") && $("trayVolume").disabled && $("trayMute").disabled && $("trayVolumeValue").textContent === "" ? [] : [sent.has("GetVolume"), $("trayVolume").disabled]]);
+            handleWebMessage({ data: { type: "volume", level: 40, muted: false } });
+            checks.push(["2.11.0: a reading sets the slider, its number and Mute", !$("trayVolume").disabled && $("trayVolume").value === "40" && $("trayVolumeValue").textContent === "40" && $("trayMute").getAttribute("aria-pressed") === "false" && $("trayMute").title === "Mute" ? [] : [$("trayVolume").value, $("trayVolumeValue").textContent]]);
+            handleWebMessage({ data: { type: "volume", level: 40, muted: true } });
+            checks.push(["2.11.0: muted, Mute is pressed and offers Unmute, the slider dimmed", $("trayMute").getAttribute("aria-pressed") === "true" && $("trayMute").title === "Unmute" && $("trayVolume").closest(".tray-volume").classList.contains("is-muted") ? [] : [$("trayMute").getAttribute("aria-pressed")]]);
+            sent.clear();
+            $("trayMute").click();
+            checks.push(["2.11.0: Mute asks AutoHotkey", sent.has("SetMute") ? [] : ["not sent"]]);
+            sent.clear();
+            $("trayVolume").value = "55";
+            $("trayVolume").dispatchEvent(new Event("input", { bubbles: true }));
+            checks.push(["2.11.0: moving the slider sets the volume and shows it unmuted", sent.has("SetVolume") && $("trayVolumeValue").textContent === "55" && $("trayMute").getAttribute("aria-pressed") === "false" ? [] : [sent.has("SetVolume"), $("trayVolumeValue").textContent]]);
+            handleWebMessage({ data: { type: "volume", level: 101, muted: false } });
+            checks.push(["2.11.0: a level past 100 isn't believed", $("trayVolume").disabled && $("trayVolumeValue").textContent === "" ? [] : [$("trayVolume").disabled]]);
+            sent.clear();
+            document.querySelector('#powerTray [data-power-now="display"]').click();
+            checks.push(["2.11.0: Turn off display asks AutoHotkey at once", sent.has("PowerNow") ? [] : ["not sent"]]);
+            handleWebMessage({ data: { type: "recycleBin", items: 3, bytes: 4000 } });
+            document.querySelector('#powerTray [data-power-hold="recycle"]').click();
+            checks.push(["2.11.0: a plain click on Empty the Bin reminds by its own hint", $("recycleHint").classList.contains("is-flashing") && !$("powerHint").classList.contains("is-flashing") ? [] : [$("recycleHint").className, $("powerHint").className]]);
             togglePowerTray(false);
             navigate("dashboard");
             sent.clear();
@@ -3243,12 +3410,14 @@
             key("keydown", "KeyR");
             checks.push(["two keys stop the hold", holding("shutdown") || holding("restart") ? ["holding"] : []]);
             checks.push(["and the tray says why", $("powerHint").classList.contains("is-blocked") ? [] : ["no message"]]);
+            checks.push(["2.11.0: Recycle Bin's hint says so too, and comes back after", $("recycleHint").classList.contains("is-blocked") && /More than one key/.test($("recycleHint").textContent) ? [] : [$("recycleHint").textContent]]);
             key("keyup", "KeyR");
             key("keydown", "KeyZ");
             checks.push(["nothing is taken until every key is up", holding("sleep") ? ["holding"] : []]);
             key("keyup", "KeyZ");
             key("keyup", "KeyS");
             checks.push(["and then the message clears", $("powerHint").classList.contains("is-blocked") ? ["still blocked"] : []]);
+            checks.push(["2.11.0: both hints read as before", $("recycleHint").textContent === "Hold to empty" && $("powerHintText").textContent === "Hold to confirm" ? [] : [$("recycleHint").textContent, $("powerHintText").textContent]]);
             key("keydown", "KeyR");
             checks.push(["and a single key works again", holding("restart") ? [] : ["no hold"]]);
             window.dispatchEvent(new Event("blur"));

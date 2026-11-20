@@ -1,7 +1,15 @@
 // Counterpoint (2.5.0): cantus firmi, the species checker, four-part chords,
 // figures, analysis and checker, and exercises as kept.
 (() => {
-    const C = globalThis.MaestroCounterpoint;
+    // 2.11.0: the checkers wrapped, so the last test can tell that every rule
+    // in the catalogue was reported by some test here, and by no other name.
+    const reported = new Set();
+    const seen = list => {
+        list.forEach(each => reported.add(each.rule));
+        return list;
+    };
+    const M = globalThis.MaestroCounterpoint;
+    const C = { ...M, check: e => seen(M.check(e)), checkSpecies: e => seen(M.checkSpecies(e)), checkCantus: e => seen(M.checkCantus(e)), checkFourPart: e => seen(M.checkFourPart(e)) };
     const N = globalThis.MaestroNotation;
     const { check, equal } = globalThis.TestHarness;
     const sharp = String.fromCodePoint(0x266F), flat = String.fromCodePoint(0x266D);
@@ -24,8 +32,8 @@
         const key = { fifths: N.keyFifths(cantus.final, cantus.mode), mode: cantus.mode };
         check(`cantus: ${cantus.label} is read`, notes.every(Boolean));
         const problems = C.cantusProblems(notes, key);
-        check(`cantus: ${cantus.label} begins and ends on its final, the second degree before`, !["opening", "close", "cadence", "leading"].some(rule => problems.includes(rule)));
-        check(`cantus: ${cantus.label} has no forbidden leap or repeat`, !problems.includes("leap") && !problems.includes("repeat"));
+        check(`cantus: ${cantus.label} begins and ends on its final, the second degree before`, !["opening", "close", "approach", "penult", "leading"].some(rule => problems.includes(rule)));
+        check(`cantus: ${cantus.label} has no forbidden leap or repeat`, !["leap", "sixth", "augmented", "repeat"].some(rule => problems.includes(rule)));
         const own = C.cantusExercise({ mode: cantus.mode, final: cantus.final, pitches: notes });
         equal(`cantus: ${cantus.label}, written as one's own, has no errors`, rules(C.checkCantus(own), "error").join(), "");
     }
@@ -59,10 +67,10 @@
     equal("own cantus: a sound one breaks no rule", C.checkCantus(writeCantus(sound)).filter(each => each.level !== "info").map(each => each.text).join(" | "), "");
     check("own cantus: beginning off the final", has(C.checkCantus(writeCantus(["E4", ...sound.slice(1)])), "opening", 1));
     check("own cantus: ending off the final", cantusRules([...sound.slice(0, -1), "F4"]).includes("close"));
-    check("own cantus: a leap into the final", cantusRules([...sound.slice(0, -2), "A4", "D4"]).includes("cadence"));
+    check("own cantus: a leap into the final", cantusRules([...sound.slice(0, -2), "A4", "D4"]).includes("approach"));
     check("own cantus: the leading tone left low in dorian", cantusRules([...sound.slice(0, -2), "C4", "D4"]).includes("leading"));
-    equal("own cantus: the leading tone raised in dorian", cantusRules([...sound.slice(0, -2), "C#4", "D4"]).filter(rule => ["leading", "cadence", "mode", "inflection"].includes(rule)).join(), "");
-    check("own cantus: phrygian reached from below", cantusRules(["E4", "G4", "F4", "A4", "G4", "C5", "B4", "A4", "G4", "D4", "E4"], "phrygian", "E").includes("cadence"));
+    equal("own cantus: the leading tone raised in dorian", cantusRules([...sound.slice(0, -2), "C#4", "D4"]).filter(rule => ["leading", "approach", "penult", "mode", "inflection"].includes(rule)).join(), "");
+    check("own cantus: phrygian reached from below", cantusRules(["E4", "G4", "F4", "A4", "G4", "C5", "B4", "A4", "G4", "D4", "E4"], "phrygian", "E").includes("penult"));
     check("own cantus: a repeated note", cantusRules(["D4", "F4", "F4", "G4", "A4", "G4", "F4", "E4", "D4"]).includes("repeat"));
     check("own cantus: a tritone outlined, F up to B", has(C.checkCantus(writeCantus(["D4", "A4", "G4", "F4", "G4", "A4", "B4", "A4", "G4", "F4", "E4", "D4"])), "tritone", 7));
     check("own cantus: a run from D to B outlines a sixth, not a tritone", !cantusRules(["D4", "F4", "G4", "A4", "B4", "A4", "G4", "F4", "E4", "D4"]).includes("tritone"));
@@ -114,11 +122,11 @@
     equal("species: a good first species has no problems", C.checkSpecies(firstGood).map(each => each.text).join(" | "), "");
     const variant = changes => fill(first, good.map((text, index) => changes[index] ?? text));
     check("species: parallel fifths", has(C.checkSpecies(variant({ 1: "C4" })), "parallel", 2));
-    check("species: a seventh against the cantus", has(C.checkSpecies(variant({ 2: "D4" })), "dissonance", 3));
+    check("species: a seventh against the cantus", has(C.checkSpecies(variant({ 2: "D4" })), "consonant", 3));
     check("species: beginning on a tenth", has(C.checkSpecies(variant({ 0: "F4" })), "opening", 1));
     check("species: the leading tone left unraised", has(C.checkSpecies(variant({ 9: "C4" })), "leading", 10));
     check("species: hidden fifths, the upper voice leaping", has(C.checkSpecies(variant({ 3: "B3", 4: "D4" })), "hidden", 5));
-    check("species: a leap of a major sixth", has(C.checkSpecies(variant({ 2: "B4" })), "leap", 3));
+    check("species: a leap of a major sixth", has(C.checkSpecies(variant({ 2: "B4" })), "sixth", 3));
     check("species: G sharp is outside D dorian here", has(C.checkSpecies(variant({ 4: "G#3" })), "mode", 5));
     check("species: ending on a third", has(C.checkSpecies(variant({ 10: "F4" })), "close", 11));
     const below = fill(C.speciesExercise({ species: 1, cantus: fux, cantusBelow: false, mode: "dorian", final: "D" }), ["G3"]);
@@ -129,10 +137,10 @@
     const second = C.speciesExercise({ species: 2, cantus: short, cantusBelow: true, mode: "dorian", final: "D" });
     equal("second species: a rest, then halves, then a whole note", N.voicesOf(second.score)[0].notes.map(note => note.d).join(""), "hhhhhhw");
     const passing = fill(second, [null, "D4", "A3", "B3", "C4", "C#4", "D4"]);
-    check("second species: B against F passes from A to C", !has(C.checkSpecies(passing), "dissonance", 2));
+    check("second species: B against F passes from A to C", !has(C.checkSpecies(passing), "weakBeat", 2));
     const turning = fill(second, [null, "D4", "A3", "B3", "A3", "C#4", "D4"]);
-    check("second species: but turning back to A is a fault", has(C.checkSpecies(turning), "dissonance", 2));
-    check("second species: a dissonance on the downbeat", has(C.checkSpecies(fill(second, [null, "D4", "B3", "A3", "C4", "C#4", "D4"])), "dissonance", 2));
+    check("second species: but turning back to A is a fault", has(C.checkSpecies(turning), "weakBeat", 2));
+    check("second species: a dissonance on the downbeat", has(C.checkSpecies(fill(second, [null, "D4", "B3", "A3", "C4", "C#4", "D4"])), "strongBeat", 2));
 
     // Fourth species: a 7-6 suspension, then one that rises.
     const fourth = C.speciesExercise({ species: 4, cantus: short, cantusBelow: true, mode: "dorian", final: "D" });
@@ -140,6 +148,11 @@
     equal("fourth species: notes carried over the bar line are tied", N.voicesOf(suspended.score)[0].notes.map(note => (note.tie ? "~" : "-")).join(""), "-~-~---");
     equal("fourth species: a resolved 7-6 has no errors", C.checkSpecies(suspended).filter(each => each.level === "error").map(each => each.text).join(" | "), "");
     check("fourth species: a suspension that rises", has(C.checkSpecies(fill(fourth, [null, "A3", "A3", "D4", "D4", "E4", "D4"])), "suspension", 3));
+    // 2.11.0: a note not tied on breaks the syncopation; its bar is second species.
+    const unsyncopated = C.checkSpecies(fill(fourth, [null, "A3", "A3", "B3", "C4", "C#4", "D4"]));
+    check("fourth species: untied, a dissonance passing by step is no fault", !has(unsyncopated, "weakBeat", 2));
+    const brokenLeap = C.checkSpecies(fill(fourth, [null, "A3", "A3", "B3", "G3", "C#4", "D4"])).filter(each => each.rule === "weakBeat" && each.bar === 2);
+    check("fourth species: untied, one that leaps away is a fault, and no tie is named", brokenLeap.length === 1 && !brokenLeap[0].text.includes("tie") && brokenLeap[0].text.includes("pass by step"));
 
     // Fifth species: bar rhythms, and eighths in pairs by step.
     let fifth = C.speciesExercise({ species: 5, cantus: short, cantusBelow: true, mode: "dorian", final: "D" });
@@ -204,10 +217,10 @@
     const changed = changes => write(satb, goodParts.map((line, voice) => line.map((text, index) => changes[`${voice}:${index}`] ?? text)));
     check("four parts: parallel fifths, tenor and bass", C.checkFourPart(changed({ "2:1": "C4" })).some(each => each.rule === "parallel" && each.text.includes("tenor and bass")));
     check("four parts: a doubled leading tone", has(C.checkFourPart(changed({ "0:2": "B4" })), "doubled", 2));
-    check("four parts: the leading tone in the soprano falls", has(C.checkFourPart(changed({ "0:2": "B4" })), "leading", 2));
+    check("four parts: the leading tone in the soprano falls", has(C.checkFourPart(changed({ "0:2": "B4" })), "leadingTone", 2));
     check("four parts: not the chord asked for", has(C.checkFourPart(changed({ "1:1": "D4" })), "chord", 1));
     check("four parts: the alto above the soprano", has(C.checkFourPart(changed({ "1:0": "D5" })), "crossing", 1));
-    check("four parts: the tenor out of its range", has(C.checkFourPart(changed({ "2:3": "C5" })), "range", 2));
+    check("four parts: the tenor out of its range", has(C.checkFourPart(changed({ "2:3": "C5" })), "voiceRange", 2));
     check("four parts: soprano and alto more than an octave apart", has(C.checkFourPart(changed({ "1:0": "B3" })), "spacing", 1));
     check("four parts: the wrong inversion", has(C.checkFourPart(changed({ "3:2": "B2" })), "inversion", 2));
     const sevenths = write(C.fourPartExercise({ form: "numerals", tonic: "C", mode: "major", progression: ["V7", "I"] }), [["F4", "E4"], ["D4", "C4"], ["B3", "C4"], ["G2", "C3"]]);
@@ -250,7 +263,8 @@
     equal("kept: a sixth species is refused", broken("kind\tspecies\t4", "kind\tspecies\t6"), null);
     equal("kept: two given voices are refused", broken("written", "given"), null);
     equal("kept: a numeral that isn't one is refused", C.readExercise(C.exerciseText(written).replace("numerals\tI IV V I", "numerals\tI IV X I")), null);
-    equal("kept: numerals and chords must agree", C.readExercise(C.exerciseText(written).replace("numerals\tI IV V I", "numerals\tI IV V")), null);
+    // Two chords last a bar, the voices two: since 2.11.0 three chords would fit (the last a whole note split in two).
+    equal("kept: numerals and chords must agree", C.readExercise(C.exerciseText(written).replace("numerals\tI IV V I", "numerals\tI IV")), null);
     equal("kept: nothing at all", C.readExercise(""), null);
     const titled = C.readExercise(text.replace(/^(.*)\n(.*)\n/, `$1\nA ${String.fromCharCode(1)}title\n`));
     equal("kept: a title's control characters become spaces", titled?.title, "A title");
@@ -283,20 +297,243 @@
     equal("model: a cantus firmus of one's own has none", C.modelAnswer(C.cantusExercise({ mode: "dorian", final: "D" })), null);
     const deceptive = C.fourPartExercise({ form: "numerals", tonic: "C", mode: "major", progression: ["I", "V6", "vi", "IV", "V7", "I"], random: seeded(1) });
     const fromV6 = C.setNote(C.setNote(C.setNote(C.setNote(deceptive, 3, 1, P("B2")), 3, 2, P("A2")), 0, 1, P("D5")), 0, 2, P("C5"));
-    check("four parts: the leading tone in the bass may fall from V6 to vi (2.6.0)", !has(C.checkFourPart(fromV6), "leading", 2));
+    check("four parts: the leading tone in the bass may fall from V6 to vi (2.6.0)", !has(C.checkFourPart(fromV6), "leadingTone", 2));
     const intoTonic = C.fourPartExercise({ form: "numerals", tonic: "C", mode: "major", progression: ["I", "V6", "I"], random: seeded(1) });
-    check("four parts: but rises from V6 into I", has(C.checkFourPart(C.setNote(C.setNote(intoTonic, 3, 1, P("B2")), 3, 2, P("A2"))), "leading", 2) || has(C.checkFourPart(C.setNote(C.setNote(intoTonic, 3, 1, P("B2")), 3, 2, P("G2"))), "leading", 2));
+    check("four parts: but rises from V6 into I", has(C.checkFourPart(C.setNote(C.setNote(intoTonic, 3, 1, P("B2")), 3, 2, P("A2"))), "leadingTone", 2) || has(C.checkFourPart(C.setNote(C.setNote(intoTonic, 3, 1, P("B2")), 3, 2, P("G2"))), "leadingTone", 2));
 
-    // 2.8.0: the rules as switches.
+    // 2.8.0: the rules as switches; since 2.11.0 one rule at a time, the fundamentals locked.
     {
-        const all = C.RULE_GROUPS.flatMap(group => group.rules);
-        check("rules: each problem's rule is in one group only", all.filter((rule, at) => all.indexOf(rule) !== at));
-        equal("rules: what's off is cleaned, in order", C.cleanRulesOff(["range", "nope", "parallel", "range"]).join(), "parallel,range");
-        equal("rules: off isn't a list", C.cleanRulesOff("parallel").length, 0);
+        const all = C.RULES.map(rule => rule.id);
+        check("rules: each rule has one id", all.filter((rule, at) => all.indexOf(rule) !== at));
+        check("rules: each rule is in a group, each group has a rule", C.RULES.filter(rule => !C.RULE_GROUPS.some(group => group.id === rule.group)).map(rule => rule.id)
+            .concat(C.RULE_GROUPS.filter(group => !C.RULES.some(rule => rule.group === group.id)).map(group => group.id)));
+        check("rules: each judges some kind, each section is known", C.RULES.filter(rule => !rule.kinds.length || rule.kinds.some(kind => !kind)).map(rule => rule.id)
+            .concat(C.RULE_GROUPS.filter(group => !C.RULE_SECTIONS[group.section]).map(group => group.id)));
+        equal("rules: what's off is cleaned, in order", C.cleanRulesOff(["range", "nope", "overlap", "range"]).join(), "overlap,range");
+        equal("rules: off isn't a list", C.cleanRulesOff("overlap").length, 0);
+        equal("rules: a locked rule can't be switched off", C.cleanRulesOff(["parallel", "hidden", "crossing", "weakBeat", "doubled", "leadingTone", "seventh", "nonchord", "suspend", "leap"]).join(), "leap");
+        equal("rules: the locked ones", C.RULES.filter(rule => rule.locked).map(rule => rule.id).join(),
+            "parallel,downbeats,hidden,crossing,consonant,strongBeat,weakBeat,preparation,suspension,doubled,leadingTone,seventh,nonchord,suspend");
         const sample = [{ rule: "parallel" }, { rule: "overlap" }, { rule: "unfinished" }, { rule: "range" }];
-        equal("rules: a group off silences each of its rules", C.withRules(sample, ["crossing"]).map(each => each.rule).join(), "parallel,unfinished,range");
+        equal("rules: one rule off silences it alone", C.withRules(sample, ["overlap"]).map(each => each.rule).join(), "parallel,unfinished,range");
+        equal("rules: a locked rule still reports, even when the list names it", C.withRules(sample, ["parallel", "range"]).map(each => each.rule).join(), "parallel,overlap,unfinished");
         equal("rules: Essentials keeps parallels and crossing voices, drops range, keeps what's still to write", C.withRules(sample, C.RULE_PRESETS.essentials).map(each => each.rule).join(), "parallel,overlap,unfinished");
+        check("rules: Essentials names no locked rule", C.RULE_PRESETS.essentials.filter(id => C.ruleById(id).locked));
         check("rules: Strict is every rule on", C.RULE_PRESETS.strict.length === 0 ? [] : ["not empty"]);
-        check("rules: what always shows is in no group", C.RULES_ALWAYS.filter(rule => all.includes(rule)));
+        check("rules: what always shows is no rule of the catalogue", C.RULES_ALWAYS.filter(rule => all.includes(rule)));
+        equal("rules: groups switched off before 2.11.0 become their rules", C.rulesOfGroups(["leap", "parallel", "nope"]).join(), "leap,sixth,augmented");
+        equal("rules: stored groups that aren't a list", C.rulesOfGroups("leap").length, 0);
+    }
+
+    // ---- 2.11.0: non-chord tones in four parts.
+    {
+        const dash = String.fromCodePoint(0x2013);
+        equal("chords: four, a half note each", C.chordSpans(4).map(span => `${span.onset}+${span.length}`).join(), "0+4,4+4,8+4,12+4");
+        equal("chords: three, the last a whole note", C.chordSpans(3).map(span => `${span.onset}+${span.length}`).join(), "0+4,4+4,8+8");
+        check("chords: each rhythm on offer fills its chord", C.CHORD_RHYTHMS.h.every(list => list.reduce((sum, code) => sum + N.DURATIONS[code[0]] * (code.endsWith(".") ? 1.5 : 1), 0) === 4)
+            && C.CHORD_RHYTHMS.w.every(list => list.reduce((sum, code) => sum + N.DURATIONS[code[0]] * (code.endsWith(".") ? 1.5 : 1), 0) === 8));
+        // Voices written as text, read back as a kept exercise: "C5q", "C5h~" (tied), "D5q.".
+        const token = text => {
+            const [, pitch, length, dot, tie] = /^([A-G]#?\d)([whqe])(\.?)(~?)$/.exec(text);
+            const p = P(pitch);
+            return `${p.step}${p.alter ? `+${p.alter}` : ""}${length}${dot}${tie}`;
+        };
+        const voiced = (exercise, lines, { form = null } = {}) => {
+            let text = C.exerciseText(exercise).split("\n").map(row => {
+                const fields = row.split("\t");
+                const voice = ["Soprano", "Alto", "Tenor", "Bass"].indexOf(fields[4]);
+                if (fields[0] !== "voice" || !lines[voice]) return row;
+                return [...fields.slice(0, 3), form === "soprano" && voice === 0 ? "given" : fields[3], fields[4], lines[voice].split(" ").map(token).join(" ")].join("\t");
+            }).join("\n");
+            if (form) text = text.replace("kind\tfourpart\tnumerals", `kind\tfourpart\t${form}`);
+            return C.readExercise(text);
+        };
+        const block = ["C5h C5h G4h G4h", "E4h F4h D4h E4h", "G3h A3h B3h C4h", "C3h F3h G3h C3h"];
+        const parts = changes => voiced(satb, block.map((line, voice) => changes[voice] ?? line));
+        const tones = exercise => C.nonChordTones(exercise).map(each => `${each.voice}:${each.index}:${each.kind}:${each.label}`).join(" ");
+        const errors = exercise => C.checkFourPart(exercise).filter(each => each.level === "error").map(each => each.text).join(" | ");
+
+        const passing = parts({ 0: "C5h C5q B4e A4e G4h G4h" });
+        check("non-chord: a voice in quarters and eighths is read", passing !== null);
+        equal("non-chord: a passing tone, no problem", errors(passing), "");
+        equal("non-chord: the passing tone named", tones(passing), "0:2:passing:P");
+        const neighbor = parts({ 0: "C5h C5h G4q A4q G4h" });
+        equal("non-chord: a neighbor tone", `${errors(neighbor)}${tones(neighbor)}`, "0:3:neighbor:N");
+        const suspensionParts = { 0: "C5h C5h~ C5q B4q C5h", 2: "G3h A3h D4h C4h" };
+        const suspension = parts(suspensionParts);
+        equal("non-chord: a 4-3 suspension, prepared and resolved", `${errors(suspension)}${tones(suspension)}`, `0:2:suspension:4${dash}3`);
+        equal("non-chord: the analysis reads a suspension at its resolution", C.analysisLine(suspension).map(each => each.text).join(" "), "I IV V I");
+        const struckAgain = parts({ ...suspensionParts, 0: "C5h C5h C5q B4q C5h" });
+        equal("non-chord: a suspension struck again", tones(struckAgain), `0:2:suspension:4${dash}3`);
+        const sopranoForm = voiced(satb, block.map((line, voice) => suspensionParts[voice] ?? line), { form: "soprano" });
+        check("non-chord: in the soprano form the chords are analyzed through the suspension", sopranoForm && C.analysisLine(sopranoForm).map(each => each.text).join(" ") === "I IV V I" && !has(C.checkFourPart(sopranoForm), "chord"));
+        check("non-chord: a suspension that doesn't resolve (held on into the tonic it would be a pedal point)", has(C.checkFourPart(parts({ ...suspensionParts, 0: "C5h C5h~ C5h G4h" })), "suspend", 2));
+        check("non-chord: a suspension not prepared", has(C.checkFourPart(parts({ 0: "C5q D5q~ D5q C5q G4h G4h" })), "suspend", 1));
+        check("non-chord: the note it resolves to doubled meanwhile", has(C.checkFourPart(parts({ 0: "C5h C5h~ C5q B4q C5h" })), "doubledres", 2));
+        const appoggiatura = parts({ ...suspensionParts, 0: "C5h C5q A4q C5q B4q C5h" });
+        equal("non-chord: an appoggiatura, leapt to and left by step", `${errors(appoggiatura)}${tones(appoggiatura)}`, "0:3:appoggiatura:App");
+        const escape = parts({ 0: "C5h C5h G4q A4q E4h" });
+        equal("non-chord: an escape tone, stepped to and left by leap (Kostka and Payne's names and labels)", `${errors(escape)}${tones(escape)}`, "0:3:escape:ET");
+        const anticipation = parts({ 2: "G3h A3h B3q C4q C4h" });
+        equal("non-chord: an anticipation", `${errors(anticipation)}${tones(anticipation)}`, "2:3:anticipation:A");
+        const group = parts({ 0: "C5h C5h G4q A4e F4e G4h" });
+        equal("non-chord: a neighbor group, both neighbors and back", `${errors(group)}${tones(group)}`, "0:3:neighborGroup:NG 0:4:neighborGroup:NG");
+        const pedal = parts({ 0: "C5h A4h G4h E4h", 1: "E4h F4h B3h C4h", 2: "G3h~ G3h~ G3h G3h" });
+        equal("non-chord: a pedal point, the IV over it complete without it", `${errors(pedal)}${tones(pedal)}`, "2:1:pedal:Ped");
+        const struckPedal = parts({ 0: "C5h A4h G4h E4h", 1: "E4h F4h B3h C4h", 2: "G3h G3q G3q G3h G3h" });
+        equal("non-chord: a pedal struck again, each stroke the pedal", `${errors(struckPedal)}${tones(struckPedal)}`, "2:1:pedal:Ped 2:2:pedal:Ped");
+        check("non-chord: a held note that never becomes a chord tone again isn't a pedal", has(C.checkFourPart(parts({ 0: "C5h A4h G4h E4h", 1: "E4h F4h B3h C4h", 2: "G3h~ G3h A3h G3h" })), "suspend", 1));
+        const ornamented = parts({ ...suspensionParts, 0: "C5h C5h~ C5q A4e B4e C5h" });
+        equal("non-chord: a suspension's decorated resolution", `${errors(ornamented)}${tones(ornamented)}`, `0:2:suspension:4${dash}3 0:3:appoggiatura:App`);
+        check("non-chord: a note that's none of them", has(C.checkFourPart(parts({ 1: "E4q A4q F4h D4h E4h" })), "nonchord", 1));
+        const bassRun = parts({ 3: "C3q D3e E3e F3h G3h C3h" });
+        equal("non-chord: a passing tone in the bass, then a note of the chord", tones(bassRun), "3:1:passing:P");
+        check("non-chord: parallels a passing tone makes are found", C.checkFourPart(bassRun).some(each => each.rule === "parallel" && each.text.includes("alto and bass")));
+        equal("non-chord: a note across a chord's start isn't read", parts({ 0: "C5h C5q C5h C5q G4h" }), null);
+        check("non-chord: a sixteenth isn't read", C.exerciseText(passing).includes(" 34e 33e ") && C.readExercise(C.exerciseText(passing).replace(" 34e 33e ", " 34s 34s 33e ")) === null);
+        equal("non-chord: kept and read back the same", C.exerciseText(C.readExercise(C.exerciseText(suspension))), C.exerciseText(suspension));
+        equal("non-chord: none in a species exercise", C.nonChordTones(suspended).length, 0);
+        equal("non-chord: the rules group, its fundamentals locked", C.withRules([{ rule: "nonchord" }, { rule: "suspend" }, { rule: "doubledres" }], ["nonchord", "suspend", "doubledres"]).map(each => each.rule).join(), "nonchord,suspend");
+        check("non-chord: on in Essentials", !C.RULE_PRESETS.essentials.includes("doubledres"));
+
+        // Writing the rhythm, voice by voice.
+        const whole = voiced(satb, block);
+        check("rhythm: four parts' is written", C.rhythmEditable(whole) && C.rhythmVoice(whole, 2) === 2 && C.rhythmVoice(figured, 3) === 0);
+        const shorter = C.setNoteLength(whole, 1, "q", 0);
+        equal("rhythm: a note made shorter leaves the rest of its chord to write", N.voicesOf(shorter.score)[0].notes.map(note => `${note.d}${note.p ? "" : "?"}`).join(" "), "h q q? h h");
+        // A note held through the next chord: tied notes, a chord each, drawn as one within a bar.
+        const lengths = (exercise, voice) => N.voicesOf(exercise.score)[voice].notes.map(note => `${N.pitchName(note.p)}${note.d}${note.dot ? "." : ""}${note.tie ? "~" : ""}`).join(" ");
+        const drawnLengths = (exercise, voice) => { const shown = C.drawnFourPart(exercise); return `${lengths(shown, voice)} ${JSON.stringify(shown.indices[voice])}`; };
+        const held = C.setNoteLength(whole, 0, "w", 0);
+        equal("rhythm: a whole note at a bar's start, held through the next chord as tied halves", lengths(held, 0), "C5h~ C5h G4h G4h");
+        equal("rhythm: and drawn as one whole note, standing for both", drawnLengths(held, 0), "C5w G4h G4h [[0,1],[2],[3]]");
+        equal("rhythm: chosen again, nothing changes", C.setNoteLength(held, 0, "w", 0), held);
+        const dottedHeld = C.setNoteLength(whole, 0, "h.", 0);
+        equal("rhythm: a dotted half held into a quarter, the rest of the chord keeping its pitch", lengths(dottedHeld, 0), "C5h~ C5q C5q G4h G4h");
+        equal("rhythm: drawn as a dotted half", drawnLengths(dottedHeld, 0), "C5h. C5q G4h G4h [[0,1],[2],[3],[4]]");
+        equal("rhythm: from the third beat, held over the bar line as tied halves, drawn tied", lengths(C.setNoteLength(whole, 1, "w", 0), 0), "C5h C5h~ C5h G4h");
+        equal("rhythm: not past the last chord", C.setNoteLength(whole, 3, "w", 0), null);
+        check("rhythm: a tied note in the next chord that's a non-chord tone keeps its own head", ((retarded) => retarded !== null && tones(retarded).includes("2:1:retardation") && JSON.stringify(C.drawnFourPart(retarded).indices[2][0]) === "[0]")(parts({ 2: "G3h~ G3q A3q B3h C4h" })));
+        equal("rhythm: drawn as written but for four parts", C.drawnFourPart(C.melodyExercise({ tonic: "C" })), null);
+        const split = C.setChordRhythm(whole, 2, 1, ["q", "e", "e"]);
+        equal("rhythm: a chord's rhythm chosen, the first note's pitch kept", C.chordRhythmOf(split, 2, 1).join(" ") + " " + N.pitchName(N.voicesOf(split.score)[2].notes[1].p), `q e e ${N.pitchName(P("A3"))}`);
+        equal("rhythm: not for the given voice", C.setChordRhythm(figured, 3, 0, ["q", "q"]), figured);
+        const tied = C.toggleTie(whole, 1, 0);
+        check("rhythm: a tie across a chord's start, the next note taking its pitch", N.voicesOf(tied.score)[0].notes[1].tie && N.midiOf(N.voicesOf(tied.score)[0].notes[2].p) === N.midiOf(P("C5")));
+        equal("clear: four parts back to a half note a chord", C.exerciseText(C.clearWritten(suspension)), C.exerciseText(satb));
+
+        // Generated: embellished answers, and given lines with non-chord tones.
+        let embellished = 0, decorated = 0, tried = 0, givenTones = 0, givenTried = 0, givenAnswered = 0;
+        for (const mode of ["major", "minor"]) for (const progression of C.PROGRESSIONS[mode]) for (const form of C.FORMS) {
+            const tonic = C.FOURPART_KEYS[mode][tried % C.FOURPART_KEYS[mode].length];
+            const exercise = C.fourPartExercise({ form, tonic, mode, progression, random: seeded(tried + 11) });
+            const model = C.modelAnswer(exercise, { random: seeded(tried + 5), embellish: true });
+            tried += 1;
+            if (model && !errorsIn(model).length && !unwrittenIn(model)) embellished += 1;
+            else check(`embellished model: ${mode} ${progression.join(" ")} (${form})`, false);
+            if (model && C.nonChordTones(model).length) decorated += 1;
+            if (form === "numerals") continue;
+            const given = C.fourPartExercise({ form, tonic, mode, progression, random: seeded(tried + 23), embellished: true });
+            givenTried += 1;
+            // Its chords may be the student's (the soprano form), so count the notes: more than the chords.
+            if (given && N.voicesOf(given.score)[given.given].notes.length > given.numerals.length) givenTones += 1;
+            const answer = given && C.modelAnswer(given, { random: seeded(tried + 7) });
+            if (answer && !errorsIn(answer).length && !unwrittenIn(answer)) givenAnswered += 1;
+            else check(`given line with non-chord tones answered: ${mode} ${progression.join(" ")} (${form})`, false);
+        }
+        equal("embellished model: every progression in each form, answered without an error", embellished, tried);
+        check(`embellished model: nearly all have non-chord tones (${decorated} of ${tried})`, decorated >= tried * 0.9);
+        check(`given line: nearly all have non-chord tones (${givenTones} of ${givenTried})`, givenTones >= givenTried * 0.9);
+        equal("given line with non-chord tones: every one answered without an error", givenAnswered, givenTried);
+    }
+
+    // ---- 2.11.0: each rule named, the styles, and the rules they differ in.
+    {
+        const R = exercise => C.withStyle(exercise, "renaissance");
+        const levelOf = (list, rule, bar) => list.find(each => each.rule === rule && each.bar === bar)?.level ?? null;
+        // Styles: each kind's own first, kept with the exercise.
+        equal("styles: species, Fux strict first", C.STYLES.species.map(style => style.id).join(), "fux,renaissance");
+        equal("styles: four parts, common practice first", C.STYLES.fourpart.map(style => style.id).join(), "common,bach");
+        equal("styles: an exercise without one is in its kind's first", `${C.styleOf(first)} ${C.styleOf(satb)} ${C.styleOf(C.cantusExercise({ mode: "dorian", final: "D" }))}`, "fux common null");
+        check("styles: another kind's style, or none known, changes nothing", C.withStyle(first, "bach") === first && C.withStyle(first, "fux") === first && C.withStyle(C.cantusExercise({ mode: "dorian", final: "D" }), "fux").style === undefined);
+        equal("styles: a new exercise takes the style asked for", C.styleOf(C.speciesExercise({ species: 2, cantus: short, cantusBelow: true, mode: "dorian", final: "D", style: "renaissance" })), "renaissance");
+        const keptStyle = C.exerciseText(R(first));
+        equal("styles: kept on the line after the key", keptStyle.split("\n")[4], "style\trenaissance");
+        equal("styles: and read back", C.styleOf(C.readExercise(keptStyle)), "renaissance");
+        check("styles: the first style isn't written, so 2.10.0 still opens it", !C.exerciseText(first).includes("style") && !C.exerciseText(C.withStyle(R(first), "fux")).includes("style"));
+        equal("styles: four parts keep Bach's", C.styleOf(C.readExercise(C.exerciseText(C.withStyle(written, "bach")))), "bach");
+        equal("styles: another kind's style isn't read", C.readExercise(keptStyle.replace("style\trenaissance", "style\tbach")), null);
+        equal("styles: the first style written out isn't read", C.readExercise(keptStyle.replace("style\trenaissance", "style\tfux")), null);
+        equal("styles: an unknown one isn't read", C.readExercise(keptStyle.replace("style\trenaissance", "style\tbaroque")), null);
+        check("styles: which rules each judges", C.rulesFor(first).some(rule => rule.id === "ninthEighth") && !C.rulesFor(first).some(rule => rule.id === "run")
+            && C.rulesFor(R(first)).some(rule => rule.id === "run") && !C.rulesFor(R(first)).some(rule => rule.id === "ninthEighth")
+            && !C.rulesFor(written).some(rule => rule.id === "bassSpacing") && C.rulesFor(C.withStyle(written, "bach")).some(rule => rule.id === "bassSpacing")
+            && C.rulesFor(C.cantusExercise({ mode: "dorian", final: "D" })).some(rule => rule.id === "climax"));
+
+        // Hidden fifths and octaves in two voices: Fux minds any similar motion into them.
+        const byStep = variant({ 3: "F4", 4: "G4" });
+        check("hidden, Fux: similar motion into an octave, the upper voice by step", has(C.checkSpecies(byStep), "hidden", 5));
+        check("hidden, Renaissance: by step, no fault", !has(C.checkSpecies(R(byStep)), "hidden", 5));
+        check("hidden, Renaissance: the upper voice leaping still is", has(C.checkSpecies(R(variant({ 3: "B3", 4: "D4" }))), "hidden", 5));
+        // Fifths on successive downbeats in third species.
+        const third = C.speciesExercise({ species: 3, cantus: short, cantusBelow: true, mode: "dorian", final: "D" });
+        const downbeatFifths = fill(third, ["A3", "B3", "C4", "D4", "C4", "D4", "E4", "C4", "B3", "C4", "D4", "C#4", "D4"]);
+        equal("downbeats, Fux: fifths on successive downbeats in third species are an error", levelOf(C.checkSpecies(downbeatFifths), "downbeats", 2), "error");
+        equal("downbeats, Renaissance: a warning", levelOf(C.checkSpecies(R(downbeatFifths)), "downbeats", 2), "warning");
+        // 9-8 above the cantus.
+        const ninth = fill(fourth, [null, "A3", "A3", "F4", "F4", "E4", "D4"]);
+        equal("9-8, Fux: a weaker suspension, a warning", levelOf(C.checkSpecies(ninth), "ninthEighth", 3), "warning");
+        check("9-8, Renaissance: no fault", !has(C.checkSpecies(R(ninth)), "ninthEighth"));
+        check("9-8: a 7-6 isn't one", !has(C.checkSpecies(suspended), "ninthEighth"));
+        // The line's guidelines: Renaissance only.
+        const thirds = variant({ 5: "A3", 6: "C4", 7: "B3", 8: "A3" });
+        check("runs: four thirds in a row, Renaissance", has(C.checkSpecies(R(thirds)), "run"));
+        check("runs: not in Fux strict", !has(C.checkSpecies(thirds), "run"));
+        const twice = variant({ 2: "E4" });
+        check("high point: twice, Renaissance", has(C.checkSpecies(R(twice)), "climax"));
+        check("high point: not in Fux strict", !has(C.checkSpecies(twice), "climax"));
+        // The double neighbor, in either style.
+        const doubleNeighbor = fill(third, ["D4", "E4", "C4", "D4", "F4", "E4", "D4", "C4"]);
+        check("double neighbor: D E C D, then on up", !has(C.checkSpecies(doubleNeighbor), "weakBeat", 1) && !has(C.checkSpecies(R(doubleNeighbor)), "weakBeat", 1));
+        check("double neighbor: before the next downbeat is written", !has(C.checkSpecies(fill(third, ["D4", "E4", "C4", "D4"])), "weakBeat", 1));
+        check("double neighbor: D C E D", !has(C.checkSpecies(fill(third, ["D4", "C4", "E4", "D4", "C4"])), "weakBeat", 1));
+        check("double neighbor: turning back into the downbeat is a fault", has(C.checkSpecies(fill(third, ["D4", "E4", "C4", "D4", "C4"])), "weakBeat", 1));
+        check("double neighbor: the last note not the first is a fault", has(C.checkSpecies(fill(third, ["D4", "E4", "C4", "B3"])), "weakBeat", 1));
+        // Leaps by the rule they break.
+        check("leaps: an augmented one", has(C.checkSpecies(variant({ 1: "G#4" })), "augmented", 2) || has(C.checkSpecies(variant({ 1: "G#4" })), "mode", 2));
+        check("leaps: a seventh", has(C.checkSpecies(variant({ 1: "G4", 2: "F4" })), "leap", 2) || has(C.checkSpecies(variant({ 1: "G4" })), "leap", 2));
+
+        // Four parts: the styles, and the rules new in 2.11.0.
+        const wide = changed({ "2:0": "C4", "3:0": "C2" });
+        check("tenor and bass apart, common practice: no limit", !has(C.checkFourPart(wide), "bassSpacing"));
+        check("tenor and bass apart, Bach's chorales: within a twelfth", has(C.checkFourPart(C.withStyle(wide, "bach")), "bassSpacing", 1));
+        const progression = (numerals, lines) => write(C.fourPartExercise({ form: "numerals", tonic: "C", mode: "major", progression: numerals }), lines);
+        const close = progression(["V", "I"], [["G4", "C5"], ["D4", "E4"], ["B3", "C4"], ["G3", "C3"]]);
+        check("contrary octaves at the close, common practice: a warning", has(C.checkFourPart(close), "contrary", 1));
+        check("contrary octaves at the close, Bach's chorales: none", !has(C.checkFourPart(C.withStyle(close, "bach")), "contrary"));
+        const unequal = progression(["viio", "I"], [["D5", "C5"], ["F4", "G4"], ["D4", "E4"], ["B2", "C3"]]);
+        equal("unequal fifths: a diminished fifth to a perfect one, with the bass", levelOf(C.checkFourPart(unequal), "unequal", 1), "warning");
+        check("unequal fifths: a perfect fifth to a diminished one is fine", !has(C.checkFourPart(progression(["I", "viio6"], [["G4", "F4"], ["E4", "D4"], ["C4", "B3"], ["C3", "D3"]])), "unequal"));
+        const hiddenAgainst = progression(["IV", "I"], [["A4", "C5"], ["F4", "E4"], ["C4", "G3"], ["F2", "C3"]]);
+        equal("hidden, four parts: an inner voice moving against them makes it a warning", levelOf(C.checkFourPart(hiddenAgainst), "hidden", 1), "warning");
+        const hiddenAlone = progression(["IV", "I"], [["A4", "C5"], ["F4", "G4"], ["C4", "E4"], ["F2", "C3"]]);
+        equal("hidden, four parts: with none, an error", levelOf(C.checkFourPart(hiddenAlone), "hidden", 1), "error");
+        const rising = progression(["V43", "I6"], [["F4", "G4"], ["B3", "C4"], ["G3", "G3"], ["D3", "E3"]]);
+        check("V4/3 to I6: the seventh may rise in tenths with the bass", !has(C.checkFourPart(rising), "seventh") && !has(C.checkFourPart(C.withStyle(rising, "bach")), "seventh"));
+        check("V4/3: rising into I in root position is still a fault", has(C.checkFourPart(progression(["V43", "I"], [["F4", "G4"], ["B3", "C4"], ["G3", "E3"], ["D3", "C3"]])), "seventh"));
+        // Rules no other test reports.
+        check("fourth species: a dissonance tied over is no preparation", has(C.checkSpecies(fill(fourth, [null, "A3", "A3", "E4", "E4", "C#4", "D4"])), "preparation", 2));
+        check("own cantus: a raised note in the middle", cantusRules(["D4", "E4", "C#4", "D4", "F4", "E4", "D4"]).includes("inflection"));
+        check("own cantus: a range of a third", cantusRules(["D4", "E4", "F4", "E4", "D4", "E4", "F4", "E4", "D4"]).includes("narrow"));
+        const sopranoGiven = C.readExercise(C.exerciseText(written).replace("kind\tfourpart\tnumerals", "kind\tfourpart\tsoprano").replace(/(voice\t1\ttreble\t)written(\tSoprano)/, "$1given$2"));
+        check("four parts: a chord of one's own with no third", sopranoGiven !== null && has(C.checkFourPart(C.setNote(sopranoGiven, 1, 0, P("G4"))), "third", 1));
+    }
+
+    // Last: every rule in the catalogue was reported by some test above, and
+    // nothing was reported under a name the catalogue doesn't know.
+    {
+        const ids = C.RULES.map(rule => rule.id);
+        equal("rules: every rule in the catalogue is reported by a test", ids.filter(id => !reported.has(id)).join(), "");
+        equal("rules: nothing reported outside the catalogue", [...reported].filter(id => !ids.includes(id) && !C.RULES_ALWAYS.includes(id)).join(), "");
     }
 })();

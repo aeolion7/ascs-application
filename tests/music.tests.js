@@ -216,11 +216,24 @@
     check("a plucked string's pitch is exact", worst < 0.01);
     let seed = 1;
     const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    const samples = M.pluckSamples(110, rate, 1, random);
+    const samples = M.pluckSamples(110, rate, { seconds: 1, random });
     equal("a pluck lasts as long as asked", samples.length, rate);
-    const level = (from, to) => Math.max(...[...samples.slice(from, to)].map(Math.abs));
+    const levelOf = (made, from, to) => Math.max(...[...made.slice(from, to)].map(Math.abs));
+    const level = (from, to) => levelOf(samples, from, to);
     check("it starts loud and dies away", level(0, 2000) > 0.4 && level(30000, 40000) < level(0, 2000) && samples.at(-1) === 0);
-    check("and never clips", level(0, samples.length) <= 0.6 + 1e-6);
+    check("and never clips", level(0, samples.length) <= 0.65 + 1e-6);
+    // 2.11.0: harder is louder; low strings ring longer; a few versions a pitch.
+    const soft = M.pluckSamples(220, rate, { seconds: 0.5, velocity: 0.8, random });
+    const hard = M.pluckSamples(220, rate, { seconds: 0.5, velocity: 0.96, random });
+    check("a harder pluck is louder", levelOf(hard, 0, 2000) > levelOf(soft, 0, 2000));
+    check("a low string rings longer than a high one", M.pluckSamples(82.4, rate, { random }).length > M.pluckSamples(330, rate, { random }).length);
+    check("three versions a pitch, softer to harder", M.PLUCK_VELOCITIES.length === 3 && M.PLUCK_VELOCITIES.every((each, at) => each > 0 && each <= 1 && (at === 0 || each > M.PLUCK_VELOCITIES[at - 1])));
+    const [left, right] = M.roomSamples(rate, { random });
+    check("the room: two sides that differ, silent for its gap, dying away", left.length === Math.round(rate * 1.6) && left[0] === 0 && left.some((value, at) => value !== right[at]) && levelOf(left, left.length - 2000, left.length) < levelOf(left, 1000, 3000) / 100);
+    check("the organ: a stop for each voice, one to four", [1, 2, 3, 4].every(count => M.organVoices(count).length === count));
+    const organ = M.organVoices(4);
+    check("soprano to bass, left to right, the bass the strongest", organ.map(each => each.id).join() === "soprano,alto,tenor,bass" && organ.every((each, at) => at === 0 || each.pan > organ[at - 1].pan) && organ[3].level === Math.max(...organ.map(each => each.level)));
+    check("one voice alone in the middle", M.organVoices(1)[0].pan === 0 && M.organVoices(1)[0].imag[0] === 1);
 
     equal("own tuning: kept", JSON.stringify(M.cleanOwnTuning({ id: "own-abc1", name: " Open C ", instrument: "guitar", pitches: [36, 43, 48, 55, 60, 64] })), JSON.stringify({ id: "own-abc1", name: "Open C", instrument: "guitar", pitches: [36, 43, 48, 55, 60, 64], own: true }));
     equal("own tuning: no name", M.cleanOwnTuning({ id: "own-a", name: "  ", instrument: "guitar", pitches: [40, 45, 50, 55, 59, 64] }), null);

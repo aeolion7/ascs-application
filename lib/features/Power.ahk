@@ -252,6 +252,56 @@ EmptyRecycleBin() {
     SendRecycleBin()
 }
 
+; ---- the display and the volume (2.11.0)
+
+; Turn off display: the screens sleep until the mouse moves or a key is
+; pressed. Half a second first, so the click that asked doesn't wake them.
+; Posted, so nothing waits on the desktop window.
+TurnOffDisplay() {
+    SetTimer(PostDisplayOff, -500)
+    WriteLog("Display turned off.")
+}
+
+PostDisplayOff() {
+    try PostMessage(0x0112, 0xF170, 2, , "Program Manager")   ; WM_SYSCOMMAND, SC_MONITORPOWER, off
+    catch as err
+        WriteLog("Power: turning off the display failed: " err.Message)
+}
+
+; The default output's volume (0 to 100) and mute, for the tray's slider;
+; a level of -1 when Windows can't say.
+SendOutputVolume() {
+    level := -1, muted := false
+    try {
+        level := Round(SoundGetVolume())
+        muted := SoundGetMute()
+    }
+    SendToFrontend('{"type":"volume","level":' level ',"muted":' (muted ? "true" : "false") '}')
+}
+
+; As in Windows' own slider, moving the volume unmutes. Nothing is sent back
+; while the volume moves (the slider is the reading), only when mute changes.
+SetOutputVolume(content) {
+    level := VolumeLevel(content)
+    if (level = "")
+        return
+    try {
+        SoundSetVolume(level)
+        if SoundGetMute() {
+            SoundSetMute(false)
+            SendOutputVolume()
+        }
+    } catch as err
+        WriteLog("Volume: couldn't set it: " err.Message)
+}
+
+SetOutputMute(muted) {
+    try SoundSetMute(muted)
+    catch as err
+        WriteLog("Volume: couldn't " (muted ? "mute" : "unmute") ": " err.Message)
+    SendOutputVolume()
+}
+
 ; ---- audio output picker (through SoundSwitch)
 
 ; Each active output: { name: what Windows calls it, label: what Maestro shows }.
@@ -317,6 +367,7 @@ SelectAudioDevice(name) {
         return
     if SwitchAudioTo(name) {
         RecordActivity("system", "Audio output: " SubStr(label, 1, 60))
+        SendOutputVolume()
     } else {
         SendToFrontend('{"type":"notice","message":' JsonQuote(ProcessExist("SoundSwitch.exe")
             ? "SoundSwitch didn't reach that device. Add it to SoundSwitch's playback list."

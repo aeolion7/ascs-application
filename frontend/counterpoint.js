@@ -130,7 +130,7 @@ globalThis.MaestroCounterpoint = (() => {
 
     // A species exercise: the cantus (pitches, one a bar) below or above, in
     // its mode; the counterpoint's bars to write.
-    function speciesExercise({ species = 1, cantus, cantusBelow = true, mode = "dorian", final = "D", title = "" }) {
+    function speciesExercise({ species = 1, cantus, cantusBelow = true, mode = "dorian", final = "D", title = "", style = null }) {
         const fifths = N.keyFifths(final, mode);
         if (!Number.isInteger(species) || species < 1 || species > 5 || fifths === null || !Array.isArray(cantus) || cantus.length < 4) return null;
         const cf = placeByOctaves(cantus, cantusBelow ? 50 : 67);
@@ -140,7 +140,7 @@ globalThis.MaestroCounterpoint = (() => {
             ? [{ clef: "treble", voices: [cpVoice] }, { clef: "bass", voices: [cfVoice] }]
             : [{ clef: "treble", voices: [cfVoice] }, { clef: "bass", voices: [cpVoice] }];
         const score = N.cleanScore({ title, key: { fifths, mode }, meter: METER, staves });
-        return score && Object.freeze({ kind: "species", species, cantusBelow, title: score.title, given: cantusBelow ? 1 : 0, numerals: Object.freeze([]), score });
+        return score && withStyle(Object.freeze({ kind: "species", species, cantusBelow, title: score.title, given: cantusBelow ? 1 : 0, numerals: Object.freeze([]), score }), style);
     }
 
     // ---- Cantus firmi of one's own (2.5.0): a line of whole notes in a mode,
@@ -206,14 +206,14 @@ globalThis.MaestroCounterpoint = (() => {
             const [low, high] = played.range;
             for (const entry of sounding) {
                 const m = midi(entry.note.p);
-                if (m < low || m > high) problem(list, "warning", "range", `${name(entry.note.p)} is ${m < low ? "below" : "above"} the range of the ${played.label[0].toLowerCase()}${played.label.slice(1)} (${name(N.pitchFromMidi(low, 0))}${DASH}${name(N.pitchFromMidi(high, 0))}, as it sounds).`, entry.onset, at(entry));
+                if (m < low || m > high) problem(list, "warning", "voiceRange", `${name(entry.note.p)} is ${m < low ? "below" : "above"} the range of the ${played.label[0].toLowerCase()}${played.label.slice(1)} (${name(N.pitchFromMidi(low, 0))}${DASH}${name(N.pitchFromMidi(high, 0))}, as it sounds).`, entry.onset, at(entry));
             }
         }
         for (let n = 1; n < sounding.length; n++) {
             const a = sounding[n - 1], b = sounding[n];
             const leap = N.interval(a.note.p, b.note.p);
             if (leap.number > 8) problem(list, "warning", "leap", `A leap of ${leap.name}, wider than an octave.`, b.onset, [...at(a), ...at(b)]);
-            else if (/^[Ad]/.test(leap.quality) && leap.number > 1) problem(list, "info", "awkward", `A leap of ${leap.name}, an augmented or diminished interval: harder to sing or hear.`, b.onset, [...at(a), ...at(b)]);
+            else if (/^[Ad]/.test(leap.quality) && leap.number > 1) problem(list, "info", "augmented", `A leap of ${leap.name}, an augmented or diminished interval: harder to sing or hear.`, b.onset, [...at(a), ...at(b)]);
         }
         const last = sounding.at(-1);
         const tonic = tonicOf(exercise.score.key);
@@ -263,11 +263,11 @@ globalThis.MaestroCounterpoint = (() => {
             const lastIsFinal = last.note.p && degreeOf(key, last.note.p) === 0;
             const step = lastIsFinal ? last.note.p.step - before.note.p.step : (degree === 1 ? -1 : degree === 6 ? 1 : 0);
             if (lastIsFinal && Math.abs(step) !== 1) {
-                problem(list, "error", "cadence", "Reach the final by step.", last.onset, at(last));
+                problem(list, "error", "approach", "Reach the final by step.", last.onset, at(last));
             } else if (degree !== 1 && degree !== 6) {
-                problem(list, "error", "cadence", fromBelow ? `Before the last note, the second degree, ${secondName}, or the leading tone, ${leadingName}.` : `Before the last note, the second degree, ${secondName}.`, before.onset, at({ index: before.index }));
+                problem(list, "error", "penult", fromBelow ? `Before the last note, the second degree, ${secondName}, or the leading tone, ${leadingName}.` : `Before the last note, the second degree, ${secondName}.`, before.onset, at({ index: before.index }));
             } else if (step === 1 && !fromBelow) {
-                problem(list, "error", "cadence", `In Phrygian, reach the final from above: ${secondName} to ${finalName}.`, before.onset, at({ index: before.index }));
+                problem(list, "error", "penult", `In Phrygian, reach the final from above: ${secondName} to ${finalName}.`, before.onset, at({ index: before.index }));
             } else if (step === 1) {
                 const target = N.pitch(before.note.p.step + 1, N.keyAlter(modulo(before.note.p.step + 1, 7), key.fifths));
                 if (midi(target) - midi(before.note.p) !== 1) problem(list, "error", "leading", `Raise the leading tone: ${leadingName}, a half step below the final.`, before.onset, at({ index: before.index }));
@@ -283,10 +283,7 @@ globalThis.MaestroCounterpoint = (() => {
             steps.push({ step, at: b });
             const melodic = N.interval(a.p, b.p);
             if (midi(a.p) === midi(b.p)) problem(list, "error", "repeat", "A repeated note.", b.onset, at(b));
-            else if (!MELODIC.has(melodic.name) && !(melodic.name === "m6" && step > 0)) {
-                const odd = /^[Ad]/.test(melodic.quality);
-                problem(list, "error", "leap", melodic.name === "m6" ? "A leap of a minor sixth down; a sixth leaps only up." : `A leap of ${melodic.name}${odd ? ", an augmented or diminished interval" : ""}.`, b.onset, [...at(a), ...at(b)]);
-            }
+            else forbiddenLeap(list, melodic, step, b.onset, [...at(a), ...at(b)]);
             const c = written[n + 1];
             if (!c || c.index !== b.index + 1) continue;
             const after = c.p.step - b.p.step;
@@ -380,6 +377,15 @@ globalThis.MaestroCounterpoint = (() => {
         return "dissonant";
     }
     const MELODIC = new Set(["m2", "M2", "m3", "M3", "P4", "P5", "P8"]);
+    // A leap a cantus or a species line can't take, under the rule it breaks:
+    // augmented or diminished, a sixth other than a minor sixth up, or a
+    // seventh or past an octave. Hoisted: the checkers above use it.
+    function forbiddenLeap(list, melodic, step, onset, at) {
+        if (MELODIC.has(melodic.name) || (melodic.name === "m6" && step > 0)) return;
+        if (/^[Ad]/.test(melodic.quality)) problem(list, "error", "augmented", `A leap of ${melodic.name}, an augmented or diminished interval.`, onset, at);
+        else if (melodic.number === 6) problem(list, "error", "sixth", melodic.name === "m6" ? "A leap of a minor sixth down; a sixth leaps only up." : `A leap of ${melodic.name}; of the sixths, only a minor sixth up.`, onset, at);
+        else problem(list, "error", "leap", `A leap of ${melodic.name}.`, onset, at);
+    }
     const beatOf = onset => modulo(onset, BAR);
     const barOf = onset => Math.floor(onset / BAR) + 1;
     const motion = (a1, a2, b1, b2) => {
@@ -392,53 +398,148 @@ globalThis.MaestroCounterpoint = (() => {
     const perfectKind = i => (i.simple === 1 ? "octaves" : "fifths");
     const VOICE_WORDS = ["soprano", "alto", "tenor", "bass"];
 
-    // The checker's rules as switches (2.8.0): each group a plain name for
-    // the problems it covers, by section. What's written so far, and a
-    // suggestion for what comes next, are always shown.
-    const RULE_GROUPS = Object.freeze([
-        ["voices", "parallel", "Parallel fifths and octaves", ["parallel"]],
-        ["voices", "hidden", "Hidden fifths and octaves", ["hidden"]],
-        ["voices", "contrary", "Fifths and octaves by contrary motion", ["contrary"]],
-        ["voices", "crossing", "Voices crossing and overlapping", ["crossing", "overlap"]],
-        ["voices", "spacing", "Space between the voices", ["spacing", "apart"]],
-        ["voices", "unison", "Unisons inside the exercise", ["unison"]],
-        ["voices", "dissonance", "Dissonances and suspensions", ["dissonance", "suspension"]],
-        ["voices", "eighths", "Eighths in fifth species", ["eighths"]],
-        ["voices", "run", "Long runs of thirds or sixths", ["run"]],
-        ["line", "leap", "Leaps: how wide, and which intervals", ["leap", "augmented", "awkward"]],
-        ["line", "recover", "Turning back after a leap", ["recover"]],
-        ["line", "leaps", "Two leaps the same way", ["leaps"]],
-        ["line", "repeat", "Repeated notes", ["repeat"]],
-        ["line", "tritone", "Outlined tritones", ["tritone"]],
-        ["line", "climax", "One high point", ["climax"]],
-        ["line", "range", "Range", ["range"]],
-        ["line", "mode", "Notes outside the mode", ["mode", "inflection"]],
-        ["line", "shape", "Notes on the line's shape", ["circling", "leapy", "narrow", "stepwise", "sequence"]],
-        ["ends", "opening", "How it begins", ["opening"]],
-        ["ends", "cadence", "The cadence and the leading tone", ["cadence", "leading", "close"]],
-        ["parts", "chords", "Chords of the key, and their bass", ["chord", "inversion", "third"]],
-        ["parts", "doubling", "Doubling the leading tone", ["doubled"]],
-        ["parts", "seventh", "Sevenths falling by step", ["seventh"]]
-    ].map(([section, id, label, rules]) => Object.freeze({ section, id, label, rules: Object.freeze(rules) })));
+    // ---- The checker's rules (2.11.0), each one named: the id every problem
+    // carries, a name, the groups of 2.8.0 they sit in, and the kinds of
+    // exercise each judges (s species, c cantus, f four parts, m melody).
+    // A locked rule is a fundamental and is never switched off. A rule kept
+    // to some styles is checked only in those (a kind without styles, the
+    // cantus, always checks it). What's written so far, and a suggestion for
+    // what comes next, are always shown.
     const RULE_SECTIONS = Object.freeze({ voices: "Between the voices", line: "Each line", ends: "Beginning and end", parts: "Four parts" });
+    const RULE_GROUPS = Object.freeze([
+        ["voices", "parallel", "Parallel fifths and octaves"],
+        ["voices", "hidden", "Hidden fifths and octaves"],
+        ["voices", "contrary", "Other fifths and octaves"],
+        ["voices", "crossing", "Voices crossing and overlapping"],
+        ["voices", "spacing", "Space between the voices"],
+        ["voices", "unison", "Unisons inside the exercise"],
+        ["voices", "dissonance", "Dissonances and suspensions"],
+        ["voices", "eighths", "Eighths in fifth species"],
+        ["voices", "run", "Long runs of thirds or sixths"],
+        ["line", "leap", "Leaps: how wide, and which intervals"],
+        ["line", "recover", "Turning back after a leap"],
+        ["line", "leaps", "Two leaps the same way"],
+        ["line", "repeat", "Repeated notes"],
+        ["line", "tritone", "Outlined tritones"],
+        ["line", "climax", "One high point"],
+        ["line", "range", "Range"],
+        ["line", "mode", "Notes outside the mode"],
+        ["line", "shape", "Notes on the line's shape"],
+        ["ends", "opening", "How it begins"],
+        ["ends", "cadence", "The cadence"],
+        ["parts", "chords", "Chords of the key, and their bass"],
+        ["parts", "doubling", "Doubling the leading tone"],
+        ["parts", "seventh", "The leading tone and sevenths"],
+        ["parts", "nonchord", "Non-chord tones and suspensions"]
+    ].map(([section, id, label]) => Object.freeze({ section, id, label })));
+    const KIND_CODES = { s: "species", c: "cantus", f: "fourpart", m: "melody" };
+    const RULES = Object.freeze([
+        ["parallel", "parallel", "Parallel fifths and octaves, note to note", "sf", { locked: true }],
+        ["parallel", "downbeats", "Fifths and octaves on successive downbeats", "s", { locked: true }],
+        ["hidden", "hidden", "Hidden fifths and octaves", "sf", { locked: true }],
+        ["contrary", "contrary", "Fifths and octaves by contrary motion", "f"],
+        ["contrary", "unequal", "A diminished fifth to a perfect fifth, with the bass", "f"],
+        ["crossing", "crossing", "Voices crossing", "sf", { locked: true }],
+        ["crossing", "overlap", "Voices overlapping", "f"],
+        ["spacing", "spacing", "Upper voices within an octave", "f"],
+        ["spacing", "bassSpacing", "Tenor and bass within a twelfth", "f", { styles: ["bach"] }],
+        ["spacing", "apart", "Voices within a twelfth", "s"],
+        ["unison", "unison", "No unison inside the exercise", "s"],
+        ["dissonance", "consonant", "Only consonances in first species", "s", { locked: true }],
+        ["dissonance", "strongBeat", "A consonance on the downbeat", "s", { locked: true }],
+        ["dissonance", "weakBeat", "Dissonances pass, or turn back, by step", "s", { locked: true }],
+        ["dissonance", "preparation", "A suspension prepared by a consonance", "s", { locked: true }],
+        ["dissonance", "suspension", "A suspension resolves down by step", "s", { locked: true }],
+        ["dissonance", "ninthEighth", `The 9${DASH}8 suspension above`, "s", { styles: ["fux"] }],
+        ["eighths", "eighths", "Eighths in pairs, by step", "s"],
+        ["run", "run", "No more than three thirds or sixths in a row", "s", { styles: ["renaissance"] }],
+        ["leap", "leap", "No leap of a seventh, or past an octave", "scfm"],
+        ["leap", "sixth", "A sixth only as a minor sixth up", "sc"],
+        ["leap", "augmented", "Augmented and diminished leaps", "scfm"],
+        ["recover", "recover", "Back by step after a leap", "sc"],
+        ["leaps", "leaps", "Two leaps the same way", "sc"],
+        ["repeat", "repeat", "Repeated notes", "sc"],
+        ["tritone", "tritone", "An outlined tritone", "c"],
+        ["climax", "climax", "One high point", "sc", { styles: ["renaissance"] }],
+        ["range", "range", "Within a tenth", "sc"],
+        ["range", "voiceRange", "Each voice in its range", "fm"],
+        ["mode", "mode", "Notes of the mode", "sc"],
+        ["mode", "inflection", "A note raised only at the close", "c"],
+        ["shape", "circling", "No note too often", "c"],
+        ["shape", "leapy", "Mostly steps", "c"],
+        ["shape", "narrow", "Room enough: a fifth or more", "c"],
+        ["shape", "stepwise", "A leap or two", "c"],
+        ["shape", "sequence", "No figure repeated at once", "c"],
+        ["opening", "opening", "How it begins", "sc"],
+        ["cadence", "close", "How it ends", "scm"],
+        ["cadence", "approach", "The last note reached by step", "sc"],
+        ["cadence", "penult", "The note before the last", "c"],
+        ["cadence", "leading", "The leading tone raised at the close", "sc"],
+        ["chords", "chord", "The chord asked for, or one of the key", "f"],
+        ["chords", "inversion", "The bass asked for", "f"],
+        ["chords", "third", "Each chord with its third", "f"],
+        ["doubling", "doubled", "No doubled leading tone", "f", { locked: true }],
+        ["seventh", "leadingTone", "The leading tone rises to the tonic", "f", { locked: true }],
+        ["seventh", "seventh", "A seventh falls by step", "f", { locked: true }],
+        ["nonchord", "nonchord", "Non-chord tones approached and left as one", "f", { locked: true }],
+        ["nonchord", "suspend", "A suspension prepared and resolved", "f", { locked: true }],
+        ["nonchord", "doubledres", "A suspension's resolution not doubled", "f"]
+    ].map(([group, id, label, kinds, { locked = false, styles = null } = {}]) => Object.freeze({
+        group, id, label, locked, styles: styles && Object.freeze(styles),
+        kinds: Object.freeze([...kinds].map(code => KIND_CODES[code]))
+    })));
+    const ruleById = id => RULES.find(rule => rule.id === id) ?? null;
     const RULES_ALWAYS = Object.freeze(["empty", "unfinished", "suggest"]);
+
+    // The styles (2.11.0): where the sources differ, each kind's rules as one
+    // tradition has them. The first is the kind's own; an exercise keeps its
+    // style, and one without a style is in the first.
+    const STYLES = Object.freeze({
+        species: Object.freeze([
+            Object.freeze({ id: "fux", label: "Fux, strict", note: "Fux's Gradus ad Parnassum (1725): hidden fifths and octaves by any similar motion, fifths on successive downbeats an error, 9-8 above a weaker suspension" }),
+            Object.freeze({ id: "renaissance", label: "Renaissance", note: "As Jeppesen and Open Music Theory teach it: hidden fifths and octaves only when the upper voice leaps, a warning for fifths on successive downbeats in third species, and their guidelines for runs of thirds and the high point" })
+        ]),
+        fourpart: Object.freeze([
+            Object.freeze({ id: "common", label: "Common practice", note: "As Kostka and Payne's Tonal Harmony has it: tenor and bass as far apart as needed" }),
+            Object.freeze({ id: "bach", label: "Bach chorales", note: "As Bach's chorales are written: tenor and bass within a twelfth, octaves by contrary motion in the outer voices at the close" })
+        ])
+    });
+    const stylesOf = kind => STYLES[kind] ?? null;
+    const styleOf = exercise => {
+        const list = stylesOf(exercise?.kind);
+        if (!list) return null;
+        return list.some(style => style.id === exercise.style) ? exercise.style : list[0].id;
+    };
+    // An exercise in another style: unknown styles, and kinds without them, unchanged.
+    function withStyle(exercise, style) {
+        const list = stylesOf(exercise?.kind);
+        if (!list?.some(each => each.id === style) || styleOf(exercise) === style) return exercise;
+        return Object.freeze({ ...exercise, style });
+    }
+    // Whether a rule judges an exercise of this kind, in its style.
+    const ruleApplies = (rule, exercise) => rule.kinds.includes(exercise.kind) && (!rule.styles || !stylesOf(exercise.kind) || rule.styles.includes(styleOf(exercise)));
+    const rulesFor = exercise => RULES.filter(rule => ruleApplies(rule, exercise));
+
     // Essentials: only what breaks the voices' independence, the dissonance
     // treatment, and the chords themselves; Strict, every rule.
-    const RULE_ESSENTIALS = Object.freeze(["parallel", "crossing", "dissonance", "chords", "doubling"]);
+    const RULE_ESSENTIALS = Object.freeze(["parallel", "hidden", "crossing", "dissonance", "chords", "doubling", "seventh", "nonchord"]);
     const RULE_PRESETS = Object.freeze({
         strict: Object.freeze([]),
-        essentials: Object.freeze(RULE_GROUPS.map(group => group.id).filter(id => !RULE_ESSENTIALS.includes(id)))
+        essentials: Object.freeze(RULES.filter(rule => !rule.locked && !RULE_ESSENTIALS.includes(rule.group)).map(rule => rule.id))
     });
 
-    // The groups switched off, as stored: known ids, once each, in order.
+    // The rules switched off, as stored: known ids that may be switched off,
+    // once each, in order.
     function cleanRulesOff(list) {
         if (!Array.isArray(list)) return [];
-        return RULE_GROUPS.map(group => group.id).filter(id => list.includes(id));
+        return RULES.filter(rule => !rule.locked && list.includes(rule.id)).map(rule => rule.id);
     }
+    // Before 2.11.0 whole groups were switched off: their rules, now.
+    const rulesOfGroups = groups => (Array.isArray(groups) ? cleanRulesOff(RULES.filter(rule => groups.includes(rule.group)).map(rule => rule.id)) : []);
 
-    // The problems the rules still on report.
+    // The problems the rules still on report. A locked rule always reports.
     function withRules(problems, off) {
-        const quiet = new Set(cleanRulesOff(off).flatMap(id => RULE_GROUPS.find(group => group.id === id).rules));
+        const quiet = new Set(cleanRulesOff(off));
         return problems.filter(each => !quiet.has(each.rule));
     }
 
@@ -468,6 +569,22 @@ globalThis.MaestroCounterpoint = (() => {
         if (unwritten) problem(list, "info", "unfinished", `${unwritten} ${unwritten === 1 ? "note" : "notes"} still to write.`, null, []);
         const at = entry => [{ voice: cpIndex, index: entry.index }];
         const struck = notes.filter(note => !note.held);
+        const strict = styleOf(exercise) === "fux";
+        // The double neighbor (2.11.0), as Open Music Theory has it: in a bar
+        // of quarters the first and last notes the same, the two between a
+        // step above and below it (either order), and the line going on the
+        // same way into the next downbeat (once that's written).
+        const doubleNeighbor = n => {
+            const beat = beatOf(notes[n].onset);
+            const start = beat === 2 ? n - 1 : beat === 4 ? n - 2 : -1;
+            const figure = start >= 0 ? notes.slice(start, start + 4) : [];
+            if (figure.length !== 4 || figure.some((note, k) => N.lengthOf(note.note) !== 2 || beatOf(note.onset) !== 2 * k || barOf(note.onset) !== barOf(figure[0].onset))) return false;
+            const [first, second, third, last] = figure;
+            if (midi(first.p) !== midi(last.p)) return false;
+            if ([second.p.step - first.p.step, third.p.step - first.p.step].sort((a, b) => a - b).join() !== "-1,1") return false;
+            const after = notes[start + 4];
+            return !after || Math.sign(after.p.step - last.p.step) === Math.sign(last.p.step - third.p.step);
+        };
 
         notes.forEach((note, n) => {
             const beat = beatOf(note.onset);
@@ -486,14 +603,22 @@ globalThis.MaestroCounterpoint = (() => {
                     // A suspension: resolved down by step onto a consonance.
                     const resolves = next && !next.held && next.p.step === note.p.step - 1 && consonance(next.vertical) !== "dissonant";
                     if (!resolves) problem(list, "error", "suspension", `A suspension, ${word}, should resolve down by step to a consonance.`, note.onset, at(note));
+                    // 9-8 (or 2-1) above the cantus: in the strict style a weaker suspension than 7-6 and 4-3.
+                    else if (strict && cpAbove && note.vertical.simple === 2) problem(list, "warning", "ninthEighth", `A 9${DASH}8 suspension: in the strict style, 7${DASH}6 and 4${DASH}3 are the suspensions above the cantus.`, note.onset, at(note));
                 } else if (species === 1) {
-                    problem(list, "error", "dissonance", `A dissonance: ${word}. First species uses only consonances.`, note.onset, at(note));
-                } else if (strong || species === 4) {
-                    problem(list, "error", "dissonance", species === 4 ? `The note before a tie must be consonant, not ${word}.` : `A dissonance on the downbeat: ${word}.`, note.onset, at(note));
+                    problem(list, "error", "consonant", `A dissonance: ${word}. First species uses only consonances.`, note.onset, at(note));
+                } else if (species === 4 && note.note.tie) {
+                    // The fourth species' preparation: a note tied over the bar line.
+                    problem(list, "error", "preparation", `The note before a tie must be consonant, not ${word}.`, note.onset, at(note));
+                } else if (strong) {
+                    problem(list, "error", "strongBeat", `A dissonance on the downbeat: ${word}.`, note.onset, at(note));
                 } else {
-                    const cambiata = species >= 3 && stepIn && previous.p.step > note.p.step && next && next.p.step === note.p.step - 2 && notes[n + 2] && notes[n + 2].p.step === next.p.step + 1;
-                    const allowed = passing || (species >= 3 && (neighbor || cambiata));
-                    if (!allowed) problem(list, "error", "dissonance", species === 2 ? `A dissonance on the weak beat must pass by step: ${word}.` : `A dissonance must pass, or turn back, by step: ${word}.`, note.onset, at(note));
+                    // Untied in the fourth species (2.11.0), the syncopation is broken and the
+                    // bar is written as in the second: a weak-beat dissonance passes by step.
+                    const freer = species === 3 || species === 5;
+                    const cambiata = freer && stepIn && previous.p.step > note.p.step && next && next.p.step === note.p.step - 2 && notes[n + 2] && notes[n + 2].p.step === next.p.step + 1;
+                    const allowed = passing || (freer && (neighbor || cambiata || doubleNeighbor(n)));
+                    if (!allowed) problem(list, "error", "weakBeat", freer ? `A dissonance must pass, or turn back, by step: ${word}.` : `A dissonance on the weak beat must pass by step: ${word}.`, note.onset, at(note));
                 }
             }
             if (note.vertical.simple === 1 && note.vertical.number === 1 && n > 0 && n < notes.length - 1 && beat === 0 && !note.held) {
@@ -514,7 +639,7 @@ globalThis.MaestroCounterpoint = (() => {
             const before = struck.at(-2);
             if (before) {
                 const step = last.p.step - before.p.step;
-                if (Math.abs(step) !== 1) problem(list, "error", "cadence", "Reach the last note by step.", last.onset, at(last));
+                if (Math.abs(step) !== 1) problem(list, "error", "approach", "Reach the last note by step.", last.onset, at(last));
                 else if (step === 1 && midi(last.p) - midi(before.p) !== 1 && key.mode !== "phrygian") {
                     const raised = N.pitch(before.p.step, before.p.alter + 1);
                     problem(list, "error", "leading", `Raise the leading tone: ${N.pitchLetterName(raised)}, a half step below the final.`, before.onset, at(before));
@@ -536,11 +661,15 @@ globalThis.MaestroCounterpoint = (() => {
             if (consonance(b.vertical) !== "perfect" || move === "oblique" || move === "none") continue;
             const same = consonance(a.vertical) === "perfect" && a.vertical.simple === b.vertical.simple;
             if (same && move === "similar") {
-                const text = how === "downbeats" ? `Parallel ${perfectKind(b.vertical)} on successive downbeats.` : `Parallel ${perfectKind(b.vertical)}.`;
-                problem(list, how === "downbeats" && species === 3 ? "warning" : "error", "parallel", text, b.onset, [...at(a), ...at(b)]);
+                // On successive downbeats in third species: an error in the strict style, a warning in the Renaissance style.
+                if (how === "downbeats") problem(list, species === 3 && !strict ? "warning" : "error", "downbeats", `Parallel ${perfectKind(b.vertical)} on successive downbeats.`, b.onset, [...at(a), ...at(b)]);
+                else problem(list, "error", "parallel", `Parallel ${perfectKind(b.vertical)}.`, b.onset, [...at(a), ...at(b)]);
             } else if (move === "similar" && how === "next") {
+                // Fux reaches a perfect consonance only by contrary or oblique motion;
+                // The Renaissance style minds similar motion only when the upper voice leaps.
                 const upperA = cpAbove ? cpA : cfA, upperB = cpAbove ? cpB : cfB;
-                if (Math.abs(upperB.step - upperA.step) > 1) problem(list, "error", "hidden", `Hidden ${perfectKind(b.vertical)}: both voices move the same way into a perfect interval, the upper by leap.`, b.onset, at(b));
+                if (strict) problem(list, "error", "hidden", `Hidden ${perfectKind(b.vertical)}: both voices move the same way into a perfect interval.`, b.onset, at(b));
+                else if (Math.abs(upperB.step - upperA.step) > 1) problem(list, "error", "hidden", `Hidden ${perfectKind(b.vertical)}: both voices move the same way into a perfect interval, the upper by leap.`, b.onset, at(b));
             }
         }
 
@@ -552,10 +681,7 @@ globalThis.MaestroCounterpoint = (() => {
             const step = b.p.step - a.p.step;
             if (midi(a.p) === midi(b.p)) {
                 problem(list, species === 2 || species === 3 ? "error" : "warning", "repeat", "A repeated note.", b.onset, at(b));
-            } else if (!MELODIC.has(melodic.name) && !(melodic.name === "m6" && step > 0)) {
-                const odd = /^[Ad]/.test(melodic.quality);
-                problem(list, "error", "leap", melodic.name === "m6" ? "A leap of a minor sixth down; a sixth leaps only up." : `A leap of ${melodic.name}${odd ? ", an augmented or diminished interval" : ""}.`, b.onset, [...at(a), ...at(b)]);
-            }
+            } else forbiddenLeap(list, melodic, step, b.onset, [...at(a), ...at(b)]);
             const c = struck[n + 1];
             if (Math.abs(step) >= 3 && c) {
                 const after = c.p.step - b.p.step;
@@ -577,7 +703,7 @@ globalThis.MaestroCounterpoint = (() => {
             if (span.number > 10) problem(list, "warning", "range", `The counterpoint spans ${span.name}; keep it within a tenth.`, null, []);
             const top = Math.max(...pitches);
             const tops = struck.filter(note => midi(note.p) === top);
-            if (tops.length > 1 && !unwritten) problem(list, "warning", "climax", `The highest note, ${N.pitchLetterName(tops[0].p)}, comes ${tops.length} times; one high point is stronger.`, tops[1].onset, at(tops[1]));
+            if (!strict && tops.length > 1 && !unwritten) problem(list, "warning", "climax", `The highest note, ${N.pitchLetterName(tops[0].p)}, comes ${tops.length} times; one high point is stronger.`, tops[1].onset, at(tops[1]));
         }
         for (const note of struck) {
             if (note.vertical.number > 12) problem(list, "warning", "apart", "The voices are more than a twelfth apart.", note.onset, at(note));
@@ -589,7 +715,7 @@ globalThis.MaestroCounterpoint = (() => {
         for (let n = 1; n < downs.length; n++) {
             const same = consonance(downs[n].vertical) === "imperfect" && downs[n].vertical.simple === downs[n - 1].vertical.simple;
             run = same ? run + 1 : 1;
-            if (run === 4) problem(list, "warning", "run", `Four ${downs[n].vertical.simple === 3 ? "thirds" : "sixths"} in a row; vary the intervals.`, downs[n].onset, at(downs[n]));
+            if (!strict && run === 4) problem(list, "warning", "run", `Four ${downs[n].vertical.simple === 3 ? "thirds" : "sixths"} in a row; vary the intervals.`, downs[n].onset, at(downs[n]));
         }
         // Fifth species: eighths come in pairs on a weak beat, by step.
         if (species === 5) {
@@ -706,12 +832,12 @@ globalThis.MaestroCounterpoint = (() => {
     // Four notes as a numeral with its figures, or null: the key's chord whose
     // notes these are, its root and third present (its seventh, for a seventh
     // chord), the bass naming the inversion.
-    function analyze(pitches, key) {
+    function analyze(pitches, key, known = keyChords(key)) {
         const sounding = pitches.filter(Boolean);
         if (sounding.length < 3) return null;
         const pcs = new Set(sounding.map(p => modulo(midi(p), 12)));
         const bassPc = modulo(midi(sounding.reduce((low, p) => (midi(p) < midi(low) ? p : low))), 12);
-        const fits = keyChords(key).filter(chord => [...pcs].every(pc => chord.pcs.includes(pc)) && pcs.has(chord.pcs[0]) && pcs.has(chord.pcs[1]) && (!chord.seventh || pcs.has(chord.pcs[3])) && chord.pcs.includes(bassPc));
+        const fits = known.filter(chord => [...pcs].every(pc => chord.pcs.includes(pc)) && pcs.has(chord.pcs[0]) && pcs.has(chord.pcs[1]) && (!chord.seventh || pcs.has(chord.pcs[3])) && chord.pcs.includes(bassPc));
         if (!fits.length) return null;
         const chord = fits.sort((a, b) => Number(a.seventh) - Number(b.seventh) || a.numeral.length - b.numeral.length)[0];
         const inversion = chord.pcs.indexOf(bassPc);
@@ -770,7 +896,10 @@ globalThis.MaestroCounterpoint = (() => {
         return N.pitch(tone.letter + 7 * octave, tone.alter);
     }
 
-    function fourPartExercise({ form = "numerals", tonic = "C", mode = "major", progression = null, random = Math.random, title = "" }) {
+    // Embellished (2.11.0), the given bass or soprano has non-chord tones: it's
+    // taken from a model answer given them in that voice alone, so the other
+    // voices can always be written under or over it.
+    function fourPartExercise({ form = "numerals", tonic = "C", mode = "major", progression = null, random = Math.random, title = "", embellished = false, style = null }) {
         if (!FORMS.includes(form) || !["major", "minor"].includes(mode)) return null;
         const fifths = N.keyFifths(tonic, mode);
         if (fifths === null) return null;
@@ -782,7 +911,16 @@ globalThis.MaestroCounterpoint = (() => {
         const blank = () => rhythm.map(d => ({ p: null, d, dot: false, tie: false }));
         const voices = [blank(), blank(), blank(), blank()];
         let given = -1;
-        if (form === "figured") {
+        const decorated = (model, voice) => N.voicesOf(embellishFourPart(model, { voices: [voice], random }).score)[voice].notes.map(note => ({ ...note }));
+        if (form === "figured" && embellished) {
+            const free = fourPartExercise({ form: "numerals", tonic, mode, progression: numerals, title, style });
+            const model = free && modelAnswer(free, { random });
+            if (model) {
+                voices[3] = decorated(model, 3);
+                given = 3;
+            }
+        }
+        if (form === "figured" && given < 0) {
             const line = smoothLine(chords.map(chord => inRange([chord.bassPc], RANGES[3])), (from, to, k) => (from === null ? Math.abs(to - 48) / 4 : Math.abs(to - from) + (Math.abs(to - from) > 7 ? 6 : 0)) + (k === chords.length - 1 && to > 52 ? 4 : 0), random);
             voices[3] = line.map((value, k) => ({ p: spellAs(value, chords[k]), d: rhythm[k], dot: false, tie: false }));
             given = 3;
@@ -791,7 +929,7 @@ globalThis.MaestroCounterpoint = (() => {
             // can always be written under it: of a few, best one ending on the
             // last chord's root and moving no more than a fourth at a time, else
             // the smoothest. With none, one drawn as before.
-            const free = fourPartExercise({ form: "numerals", tonic, mode, progression: numerals, title });
+            const free = fourPartExercise({ form: "numerals", tonic, mode, progression: numerals, title, style });
             const rootPc = chords.at(-1).pcs[0];
             let smoothest = null;
             for (let tries = 0; tries < 6 && free; tries++) {
@@ -800,11 +938,11 @@ globalThis.MaestroCounterpoint = (() => {
                 if (!line) continue;
                 const widest = Math.max(...line.map((note, at) => (at ? Math.abs(midi(note.p) - midi(line[at - 1].p)) : 0)));
                 const cost = widest + (modulo(midi(line.at(-1).p), 12) === rootPc ? 0 : 10);
-                if (!smoothest || cost < smoothest.cost) smoothest = { line, cost };
+                if (!smoothest || cost < smoothest.cost) smoothest = { line, cost, model };
                 if (cost <= 5) break;
             }
             if (smoothest) {
-                voices[0] = smoothest.line.map(note => ({ ...note }));
+                voices[0] = embellished ? decorated(smoothest.model, 0) : smoothest.line.map(note => ({ ...note }));
                 given = 0;
             }
         }
@@ -828,7 +966,7 @@ globalThis.MaestroCounterpoint = (() => {
         }
         const named = ["Soprano", "Alto", "Tenor", "Bass"].map((voiceName, index) => ({ name: voiceName, notes: voices[index] }));
         const score = N.cleanScore({ title, key, meter: METER, staves: [{ clef: "treble", voices: [named[0], named[1]] }, { clef: "bass", voices: [named[2], named[3]] }] });
-        return score && Object.freeze({ kind: "fourpart", form, title: score.title, given, numerals: Object.freeze([...numerals]), score });
+        return score && withStyle(Object.freeze({ kind: "fourpart", form, title: score.title, given, numerals: Object.freeze([...numerals]), score }), style);
     }
 
     // What the figured bass shows under each bass note.
@@ -852,103 +990,475 @@ globalThis.MaestroCounterpoint = (() => {
         };
     }
 
+    // ---- Non-chord tones in four parts (2.11.0). A chord still lasts a half
+    // note (the last a whole note when it begins a bar); inside it a voice may
+    // move in shorter notes, or hold a note over from the chord before.
+
+    // The chords' places in time, in eighths: { onset, length } each.
+    function chordSpans(count) {
+        let at = 0;
+        return chordRhythm(count).map(code => {
+            const span = Object.freeze({ onset: at, length: N.DURATIONS[code] });
+            at += span.length;
+            return span;
+        });
+    }
+    const spanEnd = span => span.onset + span.length;
+
+    // A four-part voice's rhythm: as long as its chords, each note inside one
+    // chord, whole note to eighth (a note held into the next chord is tied).
+    function fitsChords(notes, count) {
+        if (!notes.every(note => SPECIES_CODES.includes(codeOf(note)))) return false;
+        const spans = chordSpans(count);
+        const timed = N.timed(notes);
+        if (timed.reduce((sum, entry) => sum + entry.length, 0) !== spanEnd(spans.at(-1))) return false;
+        return timed.every(entry => spans.some(span => entry.onset >= span.onset && entry.onset + entry.length <= spanEnd(span)));
+    }
+
+    // A voice's notes as heard: a note and those tied to it are one,
+    // { p, onset, end, parts: [{ index, onset }] }.
+    function soundedNotes(notes) {
+        const sounded = [];
+        for (const entry of N.timed(notes)) {
+            const last = sounded.at(-1);
+            if (entry.held && last) {
+                last.end = entry.onset + entry.length;
+                last.parts.push({ index: entry.index, onset: entry.onset });
+            } else {
+                sounded.push({ p: entry.note.p, onset: entry.onset, end: entry.onset + entry.length, parts: [{ index: entry.index, onset: entry.onset }] });
+            }
+        }
+        return sounded;
+    }
+    // The note (by index) of a sounded note's part sounding at a moment.
+    const partAt = (sounded, time) => sounded.parts.filter(part => part.onset <= time).at(-1).index;
+    const pcOf = p => modulo(midi(p), 12);
+
+    // Non-chord tones as Kostka and Payne's Tonal Harmony classifies them, by
+    // how each is approached and left: passing tone (step, step on the same
+    // way), neighboring tone (step, step back), suspension and retardation
+    // (the same note, then a step down or up, perhaps after a note between:
+    // a decorated resolution), appoggiatura (leap, step), escape tone (step,
+    // leap), neighbor group (both neighbors in turn, then the note they
+    // surround), anticipation (step or leap, then the same note) and pedal
+    // point (the same note in and out, a chord tone where it begins and
+    // ends). Labeled over their notes: P, N (AP and AN on the chord's
+    // start), App, ET, NG, A, Ped; a suspension or retardation by its figures.
+    const NCT_LABELS = Object.freeze({ passing: "P", neighbor: "N", suspension: "S", retardation: "R", appoggiatura: "App", escape: "ET", neighborGroup: "NG", anticipation: "A", pedal: "Ped" });
+    const NCT_KINDS = Object.freeze(Object.keys(NCT_LABELS));
+    // An interval over the bass as figured bass writes it: a ninth stays 9, an octave is 8.
+    const figureOf = (low, high) => {
+        const i = N.interval(low, high);
+        if (i.simple === 1) return i.number === 1 ? "1" : "8";
+        return i.simple === 2 && i.number > 2 ? "9" : String(i.simple);
+    };
+
+    // Four parts read chord by chord: which notes are each chord's and which
+    // decorate it. A note at a chord's start that isn't in the chord is taken
+    // at the note it resolves to by step inside the chord (a suspension, an
+    // appoggiatura or an accented passing tone), or, held over, left out of
+    // the chord (a pedal point). The chords are the numerals', or in the
+    // soprano form (unless `asked`) the analysis's.
+    // Returns { spans, chords, voices, tones, problems }: for each chord its
+    // notes (`reps`, by voice; null for a pedal), where they are (`repAt`),
+    // which voices hold a pedal (`pedal`), and each voice's last chord note
+    // in it (`exits`); `tones` lists the non-chord tones
+    // { voice, index, kind, label, accented, chord, onset }.
+    function readFourPart(exercise, { asked: askAlways = false } = {}) {
+        const key = exercise.score.key;
+        const known = keyChords(key);
+        const spans = chordSpans(exercise.numerals.length);
+        const asked = exercise.form !== "soprano" || askAlways ? exercise.numerals.map(text => chordFromNumeral(text, key)) : null;
+        const voices = N.voicesOf(exercise.score).map(voice => soundedNotes(voice.notes));
+        const soundingAt = (v, time) => voices[v].find(each => each.onset <= time && time < each.end) ?? null;
+        const around = (v, sounded) => {
+            const at = voices[v].indexOf(sounded);
+            const before = voices[v][at - 1], after = voices[v][at + 1];
+            return [before?.p ? before : null, after?.p ? after : null];
+        };
+        const spanOf = time => spans.findIndex(span => span.onset <= time && time < spanEnd(span));
+        // The note a voice's note resolves to by step inside its chord: the
+        // next, or the one after a note between; a note of the chord when one is given.
+        const resolutionOf = (v, sounded, span, chord = null) => {
+            const at = voices[v].indexOf(sounded);
+            for (const next of voices[v].slice(at + 1, at + 3)) {
+                if (!next?.p || next.onset >= spanEnd(span)) return null;
+                if (Math.abs(next.p.step - sounded.p.step) === 1 && (!chord || chord.pcs.includes(pcOf(next.p)))) return next;
+            }
+            return null;
+        };
+        // Held into a chord: tied over, or struck again at its start.
+        const heldInto = (v, sounded, span) => {
+            if (!sounded?.p) return false;
+            const before = around(v, sounded)[0];
+            return sounded.onset < span.onset || (sounded.onset === span.onset && Boolean(before) && before.end === span.onset && midi(before.p) === midi(sounded.p));
+        };
+        const chords = spans.map((span, k) => {
+            const first = [0, 1, 2, 3].map(v => soundingAt(v, span.onset));
+            const held = first.map((sounded, v) => heldInto(v, sounded, span));
+            let chosen = first;
+            let chord = asked ? asked[k] : null;
+            if (chord) {
+                chosen = first.map((sounded, v) => {
+                    if (!sounded?.p || chord.pcs.includes(pcOf(sounded.p))) return sounded;
+                    return resolutionOf(v, sounded, span, chord) ?? (held[v] ? null : sounded);
+                });
+            } else if (!asked) {
+                // The fewest notes taken at their resolution, or left out as a
+                // pedal, that make a chord of the key.
+                const options = first.map((sounded, v) => {
+                    const list = [sounded];
+                    if (!sounded?.p) return list;
+                    const resolved = resolutionOf(v, sounded, span);
+                    if (resolved) list.push(resolved);
+                    if (held[v]) list.push(null);
+                    return list;
+                });
+                let best = null;
+                const pick = (v, made, cost) => {
+                    if (v === 4) {
+                        const found = analyze(made.map(each => each?.p ?? null), key, known);
+                        if (found && (!best || cost < best.cost)) best = { cost, made, chord: found.chord };
+                        return;
+                    }
+                    options[v].forEach((option, at) => pick(v + 1, [...made, option], cost + (at ? 1 : 0)));
+                };
+                pick(0, [], 0);
+                if (best) {
+                    chosen = best.made;
+                    chord = best.chord;
+                }
+            }
+            const reps = chosen.map(each => each?.p ?? null);
+            const pedal = chosen.map((each, v) => !each && Boolean(first[v]?.p));
+            const repAt = chosen.map(each => (each ? partAt(each, Math.max(each.onset, span.onset)) : -1));
+            const exits = [0, 1, 2, 3].map(v => {
+                const inside = voices[v].filter(each => each.p && each.onset < spanEnd(span) && each.end > span.onset);
+                const last = (chord ? inside.filter(each => chord.pcs.includes(pcOf(each.p))) : inside).at(-1) ?? chosen[v];
+                return last?.p ? { p: last.p, index: partAt(last, Math.min(spanEnd(span), last.end) - 0.5) } : null;
+            });
+            const analysis = analyze(reps, key, known);
+            return { span, chord, asked: asked?.[k] ?? null, reps, repAt, pedal, exits, analysis, numeral: analysis?.numeral ?? "" };
+        });
+
+        // A pedal point: the same note held or struck again from a chord it's
+        // in, through this one, to a later chord it's in.
+        const pedalPoint = (v, sounded, k) => {
+            const line = voices[v];
+            let from = line.indexOf(sounded), to = from;
+            while (from > 0 && line[from - 1].p && midi(line[from - 1].p) === midi(sounded.p)) from -= 1;
+            while (to < line.length - 1 && line[to + 1].p && midi(line[to + 1].p) === midi(sounded.p)) to += 1;
+            const begins = spanOf(line[from].onset), ends = spanOf(line[to].end - 0.5);
+            return begins < k && ends > k && Boolean(chords[begins].chord?.pcs.includes(pcOf(sounded.p))) && Boolean(chords[ends].chord?.pcs.includes(pcOf(sounded.p)));
+        };
+
+        const found = [], problems = [];
+        voices.forEach((line, v) => line.forEach(sounded => {
+            if (!sounded.p) return;
+            const [before, after] = around(v, sounded);
+            spans.forEach((span, k) => {
+                if (sounded.end <= span.onset || sounded.onset >= spanEnd(span)) return;
+                const chord = chords[k].chord;
+                if (!chord || chord.pcs.includes(pcOf(sounded.p))) return;
+                const onset = Math.max(sounded.onset, span.onset);
+                const index = partAt(sounded, onset);
+                const here = [{ voice: v, index }];
+                const inside = Boolean(after && after.onset < spanEnd(span));
+                const stepIn = Boolean(before && Math.abs(sounded.p.step - before.p.step) === 1);
+                const stepOut = Boolean(after && Math.abs(after.p.step - sounded.p.step) === 1);
+                const leapIn = Boolean(before && Math.abs(sounded.p.step - before.p.step) >= 2);
+                const leapOut = Boolean(after && Math.abs(after.p.step - sounded.p.step) >= 2);
+                const wayIn = before ? Math.sign(sounded.p.step - before.p.step) : 0;
+                const wayOut = after ? Math.sign(after.p.step - sounded.p.step) : 0;
+                const returns = Boolean(before && after && midi(after.p) === midi(before.p));
+                const nextChord = chords[k + 1]?.chord;
+                let kind = null, resolved = null;
+                if (heldInto(v, sounded, span)) {
+                    // Held over: a suspension prepared in the chord before and
+                    // resolved by step to a note of this one, or a pedal point.
+                    const prepared = Boolean(chords[k - 1]?.chord?.pcs.includes(pcOf(sounded.p)));
+                    resolved = resolutionOf(v, sounded, span, chord);
+                    if (prepared && resolved) kind = resolved.p.step < sounded.p.step ? "suspension" : "retardation";
+                    else if (pedalPoint(v, sounded, k)) kind = "pedal";
+                    else {
+                        problems.push(prepared
+                            ? { level: "error", rule: "suspend", text: `The suspension in the ${VOICE_WORDS[v]} (${name(sounded.p)}) should resolve by step to a note of its chord.`, onset, at: here }
+                            : { level: "error", rule: "suspend", text: `${name(sounded.p)} in the ${VOICE_WORDS[v]} is held into a chord it isn't in; a suspension is first a note of the chord before.`, onset, at: here });
+                        return;
+                    }
+                } else if (before && midi(before.p) === midi(sounded.p) && pedalPoint(v, sounded, k)) {
+                    // Struck again inside a chord, the same note as before it: still the pedal.
+                    kind = "pedal";
+                } else if (sounded.onset === span.onset) {
+                    // On the chord's start: resolved by step to a note of the chord, inside it.
+                    if (inside && stepOut && chord.pcs.includes(pcOf(after.p))) kind = stepIn && wayIn === wayOut ? "passing" : stepIn && returns ? "neighbor" : leapIn ? "appoggiatura" : null;
+                } else if (after && midi(after.p) === midi(sounded.p) && after.onset === spanEnd(span) && nextChord?.pcs.includes(pcOf(sounded.p))) {
+                    kind = "anticipation";
+                } else if (sounded.end > spanEnd(span) && nextChord?.pcs.includes(pcOf(sounded.p))) {
+                    kind = "anticipation";
+                } else if (stepIn && stepOut) {
+                    kind = wayIn === wayOut ? "passing" : returns ? "neighbor" : null;
+                } else if (stepIn && leapOut) {
+                    kind = "escape";
+                } else if (leapIn && stepOut) {
+                    kind = "appoggiatura";
+                }
+                if (!kind) {
+                    problems.push({ level: "error", rule: "nonchord", text: `${name(sounded.p)} in the ${VOICE_WORDS[v]} isn't in the chord, and isn't approached and left as a non-chord tone is.`, onset, at: here });
+                    return;
+                }
+                const accented = sounded.onset <= span.onset;
+                let label = NCT_LABELS[kind];
+                if ((kind === "passing" || kind === "neighbor") && accented) label = `A${label}`;
+                if (kind === "suspension" || kind === "retardation") {
+                    // Its figures over the bass as it sounds at each moment (the bass may move meanwhile).
+                    const bassThen = soundingAt(3, onset)?.p, bassNow = soundingAt(3, resolved.onset)?.p;
+                    if (v < 3 && bassThen && bassNow) label = `${figureOf(bassThen, sounded.p)}${DASH}${figureOf(bassNow, resolved.p)}`;
+                    else if (v === 3) {
+                        // Against the voice it's dissonant with: a second (2-3) before a fourth or seventh.
+                        const uppers = [0, 1, 2].filter(u => soundingAt(u, onset)?.p);
+                        const upper = [2, 4, 7].map(simple => uppers.find(u => N.interval(sounded.p, soundingAt(u, onset).p).simple === simple)).find(u => u !== undefined);
+                        const later = upper === undefined ? null : soundingAt(upper, resolved.onset)?.p;
+                        if (later) label = `${N.interval(sounded.p, soundingAt(upper, onset).p).simple}${DASH}${N.interval(resolved.p, later).simple}`;
+                    }
+                    // The note it resolves to isn't doubled above the bass meanwhile.
+                    if (kind === "suspension" && v < 3) {
+                        const doubled = [0, 1, 2].find(u => u !== v && soundingAt(u, span.onset)?.p && pcOf(soundingAt(u, span.onset).p) === pcOf(resolved.p));
+                        if (doubled !== undefined) {
+                            problems.push({ level: "warning", rule: "doubledres", text: `${N.pitchLetterName(resolved.p)}, where the suspension in the ${VOICE_WORDS[v]} resolves, already sounds in the ${VOICE_WORDS[doubled]}.`, onset, at: [...here, { voice: doubled, index: partAt(soundingAt(doubled, span.onset), span.onset) }] });
+                        }
+                    }
+                }
+                found.push({ voice: v, index, kind, label, accented, chord: k, onset, sounded });
+            });
+        }));
+        // A neighbor group: an escape tone and an appoggiatura in turn, a
+        // third apart on either side of the note before them, which follows.
+        found.forEach((each, at) => {
+            const next = found[at + 1];
+            if (each.kind !== "escape" || next?.kind !== "appoggiatura" || next.voice !== each.voice) return;
+            const line = voices[each.voice];
+            const n = line.indexOf(each.sounded);
+            if (line[n + 1] !== next.sounded) return;
+            const before = line[n - 1], after = line[n + 2];
+            if (!before?.p || !after?.p || midi(before.p) !== midi(after.p) || Math.abs(next.sounded.p.step - each.sounded.p.step) !== 2) return;
+            if (Math.sign(each.sounded.p.step - before.p.step) === Math.sign(next.sounded.p.step - before.p.step)) return;
+            for (const tone of [each, next]) {
+                tone.kind = "neighborGroup";
+                tone.label = NCT_LABELS.neighborGroup;
+            }
+        });
+        const tones = Object.freeze(found.map(({ sounded, ...tone }) => Object.freeze(tone)));
+        return { spans, chords, voices, tones, problems };
+    }
+
+    // The non-chord tones of a four-part exercise, for labels over the staff.
+    const nonChordTones = exercise => (exercise?.kind === "fourpart" ? readFourPart(exercise).tones : Object.freeze([]));
+
+    // Four parts as drawn (2.11.0): a half note at a bar's start, tied to its
+    // pitch for the next chord, is drawn as one note, a whole note (a dotted
+    // half when it's held into a quarter); unless the note held into is a
+    // non-chord tone, which keeps its own head for its label. `indices` lists,
+    // by voice, the notes each drawn note stands for. Null but for four parts.
+    function drawnFourPart(exercise) {
+        if (exercise?.kind !== "fourpart") return null;
+        const labeled = new Set(nonChordTones(exercise).map(tone => `${tone.voice}:${tone.index}`));
+        const indices = [];
+        let voice = 0;
+        const staves = exercise.score.staves.map(staff => ({
+            clef: staff.clef,
+            voices: staff.voices.map(each => {
+                const v = voice++;
+                const notes = [];
+                const map = [];
+                const timed = N.timed(each.notes);
+                for (let at = 0; at < timed.length; at++) {
+                    const { note, onset } = timed[at];
+                    const next = timed[at + 1]?.note;
+                    const holds = note.p && note.tie && codeOf(note) === "h" && onset % BAR === 0 && next?.p && midi(next.p) === midi(note.p)
+                        && (codeOf(next) === "h" || codeOf(next) === "q") && !labeled.has(`${v}:${at + 1}`);
+                    if (holds) {
+                        notes.push({ ...note, d: codeOf(next) === "h" ? "w" : "h", dot: codeOf(next) === "q", tie: next.tie });
+                        map.push([at, at + 1]);
+                        at++;
+                    } else {
+                        notes.push(note);
+                        map.push([at]);
+                    }
+                }
+                indices.push(map);
+                return { name: each.name, notes };
+            })
+        }));
+        return { score: { ...exercise.score, staves }, indices };
+    }
+
     function checkFourPart(exercise) {
         const { score } = exercise;
         const key = score.key;
         const list = [];
-        const voices = N.voicesOf(score).map(voice => N.timed(voice.notes));
-        const onsets = voices[0].map(entry => entry.onset);
-        const slots = onsets.map((onset, k) => voices.map(entries => entries.find(entry => entry.onset === onset)?.note.p ?? null));
-        const unwritten = slots.reduce((sum, slot) => sum + slot.filter(p => !p).length, 0);
+        const reading = readFourPart(exercise);
+        const timed = N.voicesOf(score).map(voice => N.timed(voice.notes));
+        const unwritten = timed.reduce((sum, entries) => sum + entries.filter(entry => !entry.note.p).length, 0);
         if (unwritten) problem(list, "info", "unfinished", `${unwritten} ${unwritten === 1 ? "note" : "notes"} still to write.`, null, []);
-        const at = (voice, k) => ({ voice, index: k });
+        const at = (voice, index) => ({ voice, index });
         const { leadingPc, rootDegree, dominant, resolving } = keyRoles(key);
-        const asked = exercise.form === "soprano" ? [] : exercise.numerals.map(text => chordFromNumeral(text, key));
-        const analysis = slots.map(slot => analyze(slot, key));
+        const bach = styleOf(exercise) === "bach";
+        const entryAt = (v, time) => timed[v].find(entry => entry.onset <= time && time < entry.onset + entry.length) ?? null;
 
-        slots.forEach((slot, k) => {
-            const onset = onsets[k];
-            slot.forEach((p, v) => {
-                if (!p) return;
-                const [low, high] = RANGES[v];
-                if (midi(p) < low || midi(p) > high) problem(list, "error", "range", `The ${VOICE_WORDS[v]} is out of its range (${name(N.pitchFromMidi(low, 0))}${DASH}${name(N.pitchFromMidi(high, 0))}).`, onset, [at(v, k)]);
-            });
+        // Every note in its voice's range.
+        timed.forEach((entries, v) => entries.forEach(entry => {
+            if (!entry.note.p || entry.held) return;
+            const [low, high] = RANGES[v];
+            if (midi(entry.note.p) < low || midi(entry.note.p) > high) problem(list, "error", "voiceRange", `The ${VOICE_WORDS[v]} is out of its range (${name(N.pitchFromMidi(low, 0))}${DASH}${name(N.pitchFromMidi(high, 0))}).`, entry.onset, [at(v, entry.index)]);
+        }));
+
+        // No voice above the one over it, at any moment (once a chord).
+        const moments = [...new Set(timed.flatMap(entries => entries.map(entry => entry.onset)))].sort((a, b) => a - b);
+        const crossed = new Set();
+        for (const time of moments) {
+            const k = reading.spans.findIndex(span => span.onset <= time && time < spanEnd(span));
+            for (let v = 0; v < 3; v++) {
+                const upper = entryAt(v, time), lower = entryAt(v + 1, time);
+                if (!upper?.note.p || !lower?.note.p || crossed.has(`${v}:${k}`) || midi(upper.note.p) >= midi(lower.note.p)) continue;
+                crossed.add(`${v}:${k}`);
+                problem(list, "error", "crossing", `The ${VOICE_WORDS[v + 1]} is above the ${VOICE_WORDS[v]}.`, time, [at(v, upper.index), at(v + 1, lower.index)]);
+            }
+        }
+
+        // Each chord: its spacing, the chord asked for (or a chord of the key), its bass.
+        reading.chords.forEach(({ span, asked, reps: slot, repAt, pedal, analysis }) => {
+            const onset = span.onset;
+            const here = v => at(v, repAt[v]);
             for (let v = 0; v < 3; v++) {
                 const upper = slot[v], lower = slot[v + 1];
                 if (!upper || !lower) continue;
-                if (midi(upper) < midi(lower)) problem(list, "error", "crossing", `The ${VOICE_WORDS[v + 1]} is above the ${VOICE_WORDS[v]}.`, onset, [at(v, k), at(v + 1, k)]);
                 const apart = midi(upper) - midi(lower);
-                if (v < 2 && apart > 12) problem(list, "error", "spacing", `The ${VOICE_WORDS[v]} and ${VOICE_WORDS[v + 1]} are more than an octave apart.`, onset, [at(v, k), at(v + 1, k)]);
-                if (v === 2 && apart > 19) problem(list, "warning", "spacing", "The tenor and bass are more than a twelfth apart.", onset, [at(2, k), at(3, k)]);
+                if (v < 2 && apart > 12) problem(list, "error", "spacing", `The ${VOICE_WORDS[v]} and ${VOICE_WORDS[v + 1]} are more than an octave apart.`, onset, [here(v), here(v + 1)]);
+                // Kostka and Payne set no limit between tenor and bass; Bach's chorales keep them within a twelfth.
+                if (v === 2 && apart > 19 && bach) problem(list, "warning", "bassSpacing", "The tenor and bass are more than a twelfth apart.", onset, [here(2), here(3)]);
             }
-            if (slot.every(Boolean)) {
-                const pcs = slot.map(p => modulo(midi(p), 12));
-                const want = asked[k];
-                if (dominant(want ?? analysis[k]?.chord) && pcs.filter(pc => pc === leadingPc).length > 1) problem(list, "error", "doubled", "The leading tone is doubled.", onset, slot.map((_, v) => at(v, k)).filter((_, v) => pcs[v] === leadingPc));
-                if (want) {
-                    const fits = pcs.every(pc => want.pcs.includes(pc)) && pcs.includes(want.pcs[0]) && pcs.includes(want.pcs[1]) && (!want.seventh || pcs.includes(want.pcs[3]));
-                    const tones = want.tones.map(tone => N.pitchLetterName(N.pitch(tone.letter, tone.alter))).join(" ");
-                    if (!fits) problem(list, "error", "chord", `Asked for ${numeralText(want.numeral)} (${tones}).`, onset, slot.map((_, v) => at(v, k)));
-                    else if (modulo(midi(slot[3]), 12) !== want.bassPc) problem(list, "error", "inversion", `${numeralText(want.numeral)} needs ${N.pitchLetterName(N.pitch(want.bass.letter, want.bass.alter))} in the bass.`, onset, [at(3, k)]);
-                } else if (!analysis[k]) {
-                    problem(list, "error", "chord", "These notes aren't a chord of the key.", onset, slot.map((_, v) => at(v, k)));
-                } else if (!pcs.includes(analysis[k].chord.pcs[1])) {
-                    problem(list, "error", "third", "The chord has no third.", onset, slot.map((_, v) => at(v, k)));
-                }
+            // A pedal point is left out of the chord over it (and so is the bass's figure).
+            if (!slot.every((p, v) => p || pedal[v])) return;
+            const pcs = slot.map(p => (p ? pcOf(p) : null));
+            const present = pcs.filter(pc => pc !== null);
+            const all = slot.map((_, v) => here(v)).filter((_, v) => slot[v]);
+            if (dominant(asked ?? analysis?.chord) && present.filter(pc => pc === leadingPc).length > 1) problem(list, "error", "doubled", "The leading tone is doubled.", onset, slot.map((_, v) => here(v)).filter((_, v) => pcs[v] === leadingPc));
+            if (asked) {
+                const fits = present.every(pc => asked.pcs.includes(pc)) && present.includes(asked.pcs[0]) && present.includes(asked.pcs[1]) && (!asked.seventh || present.includes(asked.pcs[3]));
+                const tones = asked.tones.map(tone => N.pitchLetterName(N.pitch(tone.letter, tone.alter))).join(" ");
+                if (!fits) problem(list, "error", "chord", `Asked for ${numeralText(asked.numeral)} (${tones}).`, onset, all);
+                else if (slot[3] && pcs[3] !== asked.bassPc) problem(list, "error", "inversion", `${numeralText(asked.numeral)} needs ${N.pitchLetterName(N.pitch(asked.bass.letter, asked.bass.alter))} in the bass.`, onset, [here(3)]);
+            } else if (!analysis) {
+                // A root and fifth alone (2.11.0): named for the missing third. The
+                // analysis finds no chord without its third, so this was never reached.
+                const open = slot[3] && keyChords(key).some(chord => !chord.seventh && present.every(pc => chord.pcs.includes(pc)) && present.includes(chord.pcs[0]) && !present.includes(chord.pcs[1]) && pcs[3] === chord.pcs[0]);
+                if (open) problem(list, "error", "third", "The chord has no third.", onset, all);
+                else problem(list, "error", "chord", "These notes aren't a chord of the key.", onset, all);
             }
         });
 
-        // From each chord to the next.
-        for (let k = 1; k < slots.length; k++) {
-            const a = slots[k - 1], b = slots[k], onset = onsets[k];
-            for (let v = 0; v < 4; v++) {
-                if (!a[v] || !b[v]) continue;
-                const melodic = N.interval(a[v], b[v]);
-                if (melodic.quality === "A" || melodic.quality === "AA") problem(list, "error", "augmented", `An augmented ${intervalWord(melodic)} in the ${VOICE_WORDS[v]}.`, onset, [at(v, k - 1), at(v, k)]);
-                else if (melodic.number > 8 || melodic.simple === 7) problem(list, "error", "leap", `A leap of ${melodic.name} in the ${VOICE_WORDS[v]}.`, onset, [at(v, k - 1), at(v, k)]);
-                if (v < 3 && a[v + 1] && b[v + 1]) {
-                    if (midi(b[v + 1]) > midi(a[v])) problem(list, "warning", "overlap", `The ${VOICE_WORDS[v + 1]} moves above where the ${VOICE_WORDS[v]} was.`, onset, [at(v + 1, k)]);
-                    if (midi(b[v]) < midi(a[v + 1])) problem(list, "warning", "overlap", `The ${VOICE_WORDS[v]} moves below where the ${VOICE_WORDS[v + 1]} was.`, onset, [at(v, k)]);
-                }
+        // Each line, note to note: no augmented interval, nothing wider than an octave, no seventh.
+        reading.voices.forEach((line, v) => line.forEach((sounded, n) => {
+            const before = line[n - 1];
+            if (!sounded.p || !before?.p) return;
+            const melodic = N.interval(before.p, sounded.p);
+            const pair = [at(v, before.parts.at(-1).index), at(v, sounded.parts[0].index)];
+            if (melodic.quality === "A" || melodic.quality === "AA") problem(list, "error", "augmented", `An augmented ${intervalWord(melodic)} in the ${VOICE_WORDS[v]}.`, sounded.onset, pair);
+            else if (melodic.number > 8 || melodic.simple === 7) problem(list, "error", "leap", `A leap of ${melodic.name} in the ${VOICE_WORDS[v]}.`, sounded.onset, pair);
+        }));
+
+        // From each chord to the next, chord note to chord note.
+        for (let k = 1; k < reading.chords.length; k++) {
+            const before = reading.chords[k - 1], after = reading.chords[k];
+            const a = before.reps, b = after.reps, onset = after.span.onset;
+            const from = v => at(v, before.repAt[v]), to = v => at(v, after.repAt[v]);
+            for (let v = 0; v < 3; v++) {
+                if (!a[v] || !b[v] || !a[v + 1] || !b[v + 1]) continue;
+                if (midi(b[v + 1]) > midi(a[v])) problem(list, "warning", "overlap", `The ${VOICE_WORDS[v + 1]} moves above where the ${VOICE_WORDS[v]} was.`, onset, [to(v + 1)]);
+                if (midi(b[v]) < midi(a[v + 1])) problem(list, "warning", "overlap", `The ${VOICE_WORDS[v]} moves below where the ${VOICE_WORDS[v + 1]} was.`, onset, [to(v)]);
             }
+            const closing = k === reading.chords.length - 1;
             for (let u = 0; u < 4; u++) for (let w = u + 1; w < 4; w++) {
                 if (!a[u] || !a[w] || !b[u] || !b[w]) continue;
-                const before = N.interval(a[w], a[u]), after = N.interval(b[w], b[u]);
-                if (consonance(after) !== "perfect" || consonance(before) !== "perfect" || before.simple !== after.simple) continue;
+                const first = N.interval(a[w], a[u]), then = N.interval(b[w], b[u]);
                 const move = motion(a[u], b[u], a[w], b[w]);
                 const pair = `${VOICE_WORDS[u]} and ${VOICE_WORDS[w]}`;
-                if (move === "similar") problem(list, "error", "parallel", `Parallel ${perfectKind(after)}: ${pair}.`, onset, [at(u, k - 1), at(u, k), at(w, k - 1), at(w, k)]);
-                else if (move === "contrary") problem(list, "warning", "contrary", `${after.simple === 1 ? "Octaves" : "Fifths"} by contrary motion: ${pair}.`, onset, [at(u, k), at(w, k)]);
+                // Unequal fifths (2.11.0): a diminished fifth to a perfect one, with the bass.
+                if (w === 3 && first.simple === 5 && first.quality === "d" && then.simpleName === "P5" && (move === "similar" || move === "contrary")) {
+                    problem(list, "warning", "unequal", `A diminished fifth to a perfect fifth: ${pair}.`, onset, [from(u), to(u), from(w), to(w)]);
+                }
+                if (consonance(then) !== "perfect" || consonance(first) !== "perfect" || first.simple !== then.simple) continue;
+                // Bach's chorales close with octaves by contrary motion in the outer voices.
+                const bachClose = bach && closing && u === 0 && w === 3 && then.simple === 1;
+                if (move === "similar") problem(list, "error", "parallel", `Parallel ${perfectKind(then)}: ${pair}.`, onset, [from(u), to(u), from(w), to(w)]);
+                else if (move === "contrary" && !bachClose) problem(list, "warning", "contrary", `${then.simple === 1 ? "Octaves" : "Fifths"} by contrary motion: ${pair}.`, onset, [to(u), to(w)]);
             }
+            // Hidden fifths and octaves in the outer voices, the soprano leaping:
+            // an error, but a warning when an inner voice moves against them.
             if (a[0] && a[3] && b[0] && b[3]) {
-                const after = N.interval(b[3], b[0]);
-                if (consonance(after) === "perfect" && motion(a[0], b[0], a[3], b[3]) === "similar" && Math.abs(b[0].step - a[0].step) > 1) {
-                    const before = N.interval(a[3], a[0]);
-                    if (!(consonance(before) === "perfect" && before.simple === after.simple)) problem(list, "error", "hidden", `Hidden ${perfectKind(after)} in the outer voices: the soprano leaps into them.`, onset, [at(0, k), at(3, k)]);
+                const outer = N.interval(b[3], b[0]);
+                if (consonance(outer) === "perfect" && motion(a[0], b[0], a[3], b[3]) === "similar" && Math.abs(b[0].step - a[0].step) > 1) {
+                    const first = N.interval(a[3], a[0]);
+                    const way = Math.sign(midi(b[0]) - midi(a[0]));
+                    const against = [1, 2].some(v => a[v] && b[v] && Math.sign(midi(b[v]) - midi(a[v])) === -way);
+                    if (!(consonance(first) === "perfect" && first.simple === outer.simple)) {
+                        problem(list, against ? "warning" : "error", "hidden", against
+                            ? `Hidden ${perfectKind(outer)} in the outer voices, the soprano leaping into them; an inner voice moving the other way softens them.`
+                            : `Hidden ${perfectKind(outer)} in the outer voices: the soprano leaps into them.`, onset, [to(0), to(3)]);
+                    }
                 }
             }
-            // The leading tone in an outer voice rises to the tonic; a seventh falls by step.
-            // In the bass only into the tonic chord (2.6.0): a bass falling from V6 to vi
-            // (C B A) is a line, and vi has no tonic to rise to there.
-            const chordA = asked[k - 1] ?? analysis[k - 1]?.chord;
-            const chordB = asked[k] ?? analysis[k]?.chord;
+            // The leading tone in an outer voice rises to the tonic; a seventh
+            // falls by step. In the bass only into the tonic chord (2.6.0): a
+            // bass falling from V6 to vi (C B A) is a line. Each from the
+            // voice's last chord note, so a decorated one resolves too.
+            const chordA = before.chord, chordB = after.chord;
             if (dominant(chordA) && resolving(chordB)) {
                 for (const v of rootDegree(chordB) === 0 ? [0, 3] : [0]) {
-                    if (a[v] && b[v] && modulo(midi(a[v]), 12) === leadingPc && midi(b[v]) - midi(a[v]) !== 1) {
-                        problem(list, "error", "leading", `The leading tone in the ${VOICE_WORDS[v]} should rise to the tonic.`, onset, [at(v, k - 1), at(v, k)]);
+                    const exit = before.exits[v];
+                    if (exit && b[v] && pcOf(exit.p) === leadingPc && midi(b[v]) - midi(exit.p) !== 1) {
+                        problem(list, "error", "leadingTone", `The leading tone in the ${VOICE_WORDS[v]} should rise to the tonic.`, onset, [at(v, exit.index), to(v)]);
                     }
                 }
             }
             if (chordA?.seventh) {
+                // V4/3 to I6 (2.11.0): the seventh may rise a step to the fifth of
+                // I6 when it moves in parallel tenths with the bass, as both styles allow.
+                const risingInV43 = (v, exit) => a[3] && b[3] && dominant(chordA) && pcOf(a[3]) === chordA.pcs[2]
+                    && chordB && rootDegree(chordB) === 0 && pcOf(b[3]) === chordB.pcs[1]
+                    && b[v].step - exit.p.step === 1 && b[3].step - a[3].step === 1
+                    && N.interval(a[3], exit.p).simple === 3 && N.interval(b[3], b[v]).simple === 3;
                 for (let v = 0; v < 4; v++) {
-                    if (!a[v] || !b[v] || modulo(midi(a[v]), 12) !== chordA.pcs[3]) continue;
-                    const fall = a[v].step - b[v].step;
-                    const held = midi(a[v]) === midi(b[v]);
-                    if (!(fall === 1 && midi(a[v]) - midi(b[v]) <= 2) && !held) problem(list, "error", "seventh", `The seventh (${N.pitchLetterName(a[v])}) in the ${VOICE_WORDS[v]} should fall by step.`, onset, [at(v, k - 1), at(v, k)]);
+                    const exit = before.exits[v];
+                    if (!exit || !b[v] || pcOf(exit.p) !== chordA.pcs[3]) continue;
+                    const fall = exit.p.step - b[v].step;
+                    const kept = midi(exit.p) === midi(b[v]);
+                    if (!(fall === 1 && midi(exit.p) - midi(b[v]) <= 2) && !kept && !risingInV43(v, exit)) problem(list, "error", "seventh", `The seventh (${N.pitchLetterName(exit.p)}) in the ${VOICE_WORDS[v]} should fall by step.`, onset, [at(v, exit.index), to(v)]);
                 }
             }
         }
-        return sortProblems(list);
+
+        // Parallels as heard, moment to moment: a passing tone can make them too.
+        for (let m = 1; m < moments.length; m++) {
+            const a = [0, 1, 2, 3].map(v => entryAt(v, moments[m - 1])), b = [0, 1, 2, 3].map(v => entryAt(v, moments[m]));
+            for (let u = 0; u < 4; u++) for (let w = u + 1; w < 4; w++) {
+                if (![a[u], a[w], b[u], b[w]].every(entry => entry?.note.p)) continue;
+                const first = N.interval(a[w].note.p, a[u].note.p), then = N.interval(b[w].note.p, b[u].note.p);
+                if (consonance(then) !== "perfect" || consonance(first) !== "perfect" || first.simple !== then.simple) continue;
+                if (motion(a[u].note.p, b[u].note.p, a[w].note.p, b[w].note.p) !== "similar") continue;
+                problem(list, "error", "parallel", `Parallel ${perfectKind(then)}: ${VOICE_WORDS[u]} and ${VOICE_WORDS[w]}.`, moments[m], [at(u, a[u].index), at(u, b[u].index), at(w, a[w].index), at(w, b[w].index)]);
+            }
+        }
+
+        // The non-chord tones.
+        for (const each of reading.problems) problem(list, each.level, each.rule, each.text, each.onset, each.at);
+        // Once each: chord to chord and moment to moment can find the same parallels.
+        const seen = new Set();
+        return sortProblems(list.filter(each => {
+            const id = `${each.rule}|${each.text}|${each.bar}|${JSON.stringify(each.at)}`;
+            return !seen.has(id) && seen.add(id);
+        }));
     }
 
     const check = exercise => (exercise.kind === "species" ? checkSpecies(exercise) : exercise.kind === "cantus" ? checkCantus(exercise)
@@ -978,12 +1488,8 @@ globalThis.MaestroCounterpoint = (() => {
                 return { onset: entry.onset, text: String(i.number > 9 ? i.simple + (i.simple === 1 ? 7 : 0) : i.number) };
             });
         }
-        const voices = N.voicesOf(score).map(voice => N.timed(voice.notes));
-        return voices[0].map(entry => {
-            const slot = voices.map(entries => entries.find(each => each.onset === entry.onset)?.note.p ?? null);
-            const found = analyze(slot, score.key);
-            return { onset: entry.onset, text: found ? found.numeral : "", parts: found ? numeralParts(found.numeral) : null };
-        });
+        // Each chord's own notes (2.11.0): a suspension read at its resolution.
+        return readFourPart(exercise).chords.map(each => ({ onset: each.span.onset, text: each.numeral, parts: each.numeral ? numeralParts(each.numeral) : null }));
     }
 
     // ---- Exercises as kept (data\counterpoint, a file each):
@@ -991,6 +1497,7 @@ globalThis.MaestroCounterpoint = (() => {
     //   <title>
     //   kind <species|fourpart|cantus> <1-5 | numerals|figured|soprano | -> <below|above|->
     //   key <fifths> <mode>
+    //   style <renaissance|bach>        (2.11.0; only when not the kind's first style)
     //   numerals <I IV V7 I>            (four-part only)
     //   voice <staff 1|2> <clef> <given|written> <name> <notes>   (one for a cantus firmus)
     // Fields are separated by tabs. A note is its step, an alteration (+1, -2),
@@ -1022,6 +1529,9 @@ globalThis.MaestroCounterpoint = (() => {
         const kindOf = { species: String(exercise.species), fourpart: exercise.form, cantus: "-", melody: exercise.instrument }[exercise.kind];
         lines.push(["kind", exercise.kind, kindOf, exercise.kind === "species" ? (exercise.cantusBelow ? "below" : "above") : "-"].join("\t"));
         lines.push(["key", String(score.key.fifths), score.key.mode].join("\t"));
+        // An exercise in its kind's first style says nothing, so 2.10.0 still opens it.
+        const style = styleOf(exercise);
+        if (style && style !== stylesOf(exercise.kind)[0].id) lines.push(["style", style].join("\t"));
         if (exercise.kind === "fourpart") lines.push(["numerals", exercise.numerals.join(" ")].join("\t"));
         let index = 0;
         score.staves.forEach((staff, staffIndex) => staff.voices.forEach(voice => {
@@ -1034,7 +1544,7 @@ globalThis.MaestroCounterpoint = (() => {
     // An exercise read back, or null if anything in it is out of place.
     function readExercise(text) {
         const lines = String(text ?? "").replace(/\r\n/g, "\n").replace(/\n$/, "").split("\n");
-        if (lines[0] !== HEADER || lines.length < 5 || lines.length > 9) return null;
+        if (lines[0] !== HEADER || lines.length < 5 || lines.length > 10) return null;
         const title = cleanTitle(lines[1]);
         const kind = lines[2].split("\t");
         const keyLine = lines[3].split("\t");
@@ -1043,6 +1553,13 @@ globalThis.MaestroCounterpoint = (() => {
         const key = { fifths, mode: keyLine[2] };
         let numerals = [];
         let at = 4;
+        let style = null;
+        if (lines[at]?.startsWith("style\t")) {
+            const line = lines[at++].split("\t");
+            const list = stylesOf(kind[1]);
+            if (line.length !== 2 || !list || !list.slice(1).some(each => each.id === line[1])) return null;
+            style = line[1];
+        }
         if (kind[1] === "fourpart") {
             const line = lines[at++]?.split("\t");
             if (!line || line[0] !== "numerals" || line.length !== 2) return null;
@@ -1076,14 +1593,14 @@ globalThis.MaestroCounterpoint = (() => {
         if (kind[1] === "species") {
             const species = Number(kind[2]);
             if (!Number.isInteger(species) || species < 1 || species > 5 || !["below", "above"].includes(kind[3]) || count !== 2 || given !== (kind[3] === "below" ? 1 : 0)) return null;
-            return Object.freeze({ kind: "species", species, cantusBelow: kind[3] === "below", title, given, numerals: Object.freeze([]), score });
+            return withStyle(Object.freeze({ kind: "species", species, cantusBelow: kind[3] === "below", title, given, numerals: Object.freeze([]), score }), style);
         }
         if (kind[1] === "fourpart") {
             if (!FORMS.includes(kind[2]) || count !== 4 || !["major", "minor"].includes(key.mode)) return null;
             const wantGiven = { numerals: -1, figured: 3, soprano: 0 }[kind[2]];
             if (given !== wantGiven || numerals.some(text => !chordFromNumeral(text, key))) return null;
-            if (N.voicesOf(score).some(voice => voice.notes.length !== numerals.length)) return null;
-            return Object.freeze({ kind: "fourpart", form: kind[2], title, given, numerals: Object.freeze(numerals), score });
+            if (!N.voicesOf(score).every(voice => fitsChords(voice.notes, numerals.length))) return null;
+            return withStyle(Object.freeze({ kind: "fourpart", form: kind[2], title, given, numerals: Object.freeze(numerals), score }), style);
         }
         if (kind[1] === "melody") {
             if (!melodyInstrument(kind[2]) || kind[3] !== "-" || count !== 1 || given !== -1 || !CANTUS_MODES.includes(key.mode)) return null;
@@ -1108,7 +1625,7 @@ globalThis.MaestroCounterpoint = (() => {
         const notes = voices[voice]?.notes;
         if (!notes || index < 0 || index >= notes.length) return exercise;
         let changed = notes.map((note, at) => (at === index ? { ...note, p: p ?? null, tie: false } : note));
-        if (exercise.kind === "species" || exercise.kind === "melody") changed = mendTies(exercise, changed);
+        if (exercise.kind !== "cantus") changed = mendTies(exercise, changed);
         return withVoiceNotes(exercise, voice, changed);
     }
 
@@ -1132,13 +1649,19 @@ globalThis.MaestroCounterpoint = (() => {
     const ALIGN = Object.freeze({ "w": 8, "h.": 2, "h": 2, "q.": 2, "q": 2, "e.": 1, "e": 1, "s.": 0.5, "s": 0.5, "t.": 0.25, "t": 0.25, "f": 0.125 });
     const codeOf = note => note.d + (note.dot ? "." : "");
 
-    // Whether an exercise's rhythm is written, not given, and in which voice.
-    const rhythmEditable = exercise => exercise?.kind === "melody" || (exercise?.kind === "species" && exercise.species === 5);
-    const rhythmVoice = exercise => (exercise.kind === "melody" ? 0 : 1 - exercise.given);
+    // Whether an exercise's rhythm is written, not given, and in which voice:
+    // in four parts (2.11.0), the voice being written, never the given one.
+    const rhythmEditable = exercise => exercise?.kind === "melody" || exercise?.kind === "fourpart" || (exercise?.kind === "species" && exercise.species === 5);
+    function rhythmVoice(exercise, voice = null) {
+        if (exercise.kind === "melody") return 0;
+        if (exercise.kind !== "fourpart") return 1 - exercise.given;
+        if (Number.isInteger(voice) && voice >= 0 && voice < 4 && voice !== exercise.given) return voice;
+        return [0, 1, 2, 3].find(each => each !== exercise.given);
+    }
     // The bars whose rhythm may change: all of a melody's; the fifth
-    // species' but its last, a whole note.
+    // species' but its last, a whole note. Four parts change chord by chord.
     function rhythmBars(exercise) {
-        if (!rhythmEditable(exercise)) return 0;
+        if (!rhythmEditable(exercise) || exercise.kind === "fourpart") return 0;
         const bars = Math.ceil(N.timed(N.voicesOf(exercise.score)[rhythmVoice(exercise)].notes).reduce((sum, entry) => sum + entry.length, 0) / BAR);
         return exercise.kind === "melody" ? bars : bars - 1;
     }
@@ -1158,8 +1681,8 @@ globalThis.MaestroCounterpoint = (() => {
         return codes;
     }
 
-    // A melody's ties hold only to the same pitch; the fifth species' are its
-    // suspensions.
+    // A melody's ties, and four parts' (2.11.0), hold only to the same pitch;
+    // the fifth species' are its suspensions.
     function mendTies(exercise, notes) {
         if (exercise.kind === "species") return tieSuspensions(notes, exercise.species);
         return notes.map((note, index) => {
@@ -1225,20 +1748,37 @@ globalThis.MaestroCounterpoint = (() => {
         return withVoiceNotes(exercise, voice, mendTies(exercise, [...before, ...emptied, ...after]));
     }
 
-    // One note's length changed, within its bar. Longer, it takes the time of
-    // the notes after it (one cut short keeps its pitch for what's left);
-    // shorter, it leaves the time to write. Null when it doesn't fit.
-    function setNoteLength(exercise, index, code) {
+    // One note's length changed, within its bar (in four parts, in the voice
+    // named, held as tied notes into the chords it reaches). Longer, it takes
+    // the time of the notes after it (one cut short keeps its pitch for what's
+    // left); shorter, it leaves the time to write. Null when it doesn't fit.
+    function setNoteLength(exercise, index, code, voice = null) {
         if (!rhythmEditable(exercise) || !codesFor(exercise).includes(code)) return null;
-        const voice = rhythmVoice(exercise);
+        voice = rhythmVoice(exercise, voice);
         const timed = N.timed(N.voicesOf(exercise.score)[voice].notes);
         const entry = timed[index];
         if (!entry) return null;
-        const bar = Math.floor(entry.onset / BAR);
-        if (bar >= rhythmBars(exercise)) return null;
-        const start = entry.onset, end = start + codeLength(code), barEnd = (bar + 1) * BAR;
-        if (end > barEnd || (start % BAR) % ALIGN[code] !== 0) return null;
-        if (codeOf(entry.note) === code) return exercise;
+        let from;
+        let barEnd;
+        const start = entry.onset, end = start + codeLength(code);
+        // Four parts: a note longer than what's left of its chord is held
+        // into the next (2.11.0), as tied notes, one a chord.
+        let held = null;
+        if (exercise.kind === "fourpart") {
+            const spans = chordSpans(exercise.numerals.length);
+            const span = spans.find(each => start >= each.onset && start < spanEnd(each));
+            if (!span) return null;
+            const last = spans.find(each => end > each.onset && end <= spanEnd(each));
+            if (!last) return null;
+            [from, barEnd] = [span.onset, spanEnd(last)];
+            if (last !== span) held = spans.filter(each => each.onset < end && spanEnd(each) > start).flatMap(each => fillCodes(Math.max(start, each.onset), Math.min(end, spanEnd(each)) - Math.max(start, each.onset)));
+        } else {
+            const bar = Math.floor(entry.onset / BAR);
+            if (bar >= rhythmBars(exercise)) return null;
+            [from, barEnd] = [bar * BAR, (bar + 1) * BAR];
+        }
+        if (end > barEnd || (start - from) % ALIGN[code] !== 0) return null;
+        if (!held && codeOf(entry.note) === code) return exercise;
         const inBar = timed.filter(each => each.onset >= start && each.onset < barEnd && each.index > index);
         const kept = inBar.filter(each => each.onset >= end);
         const cut = inBar.find(each => each.onset < end && each.onset + each.length > end);
@@ -1246,22 +1786,65 @@ globalThis.MaestroCounterpoint = (() => {
         const gap = fillCodes(end, nextOnset - end).map((each, at) => ({ p: at === 0 && cut ? cut.note.p : null, d: each[0], dot: each.endsWith("."), tie: false }));
         const notes = [
             ...timed.filter(each => each.index < index).map(each => each.note),
-            { ...entry.note, d: code[0], dot: code.endsWith(".") },
+            ...(held
+                ? held.map((each, at) => ({ ...entry.note, d: each[0], dot: each.endsWith("."), tie: at < held.length - 1 ? Boolean(entry.note.p) : entry.note.tie }))
+                : [{ ...entry.note, d: code[0], dot: code.endsWith(".") }]),
             ...gap,
             ...kept.map(each => each.note),
             ...timed.filter(each => each.onset >= barEnd).map(each => each.note)
         ];
-        return withVoiceNotes(exercise, voice, mendTies(exercise, notes));
+        const changed = withVoiceNotes(exercise, voice, mendTies(exercise, notes));
+        return exerciseText(changed) === exerciseText(exercise) ? exercise : changed;
     }
 
     // A melody's note tied to the next, which takes its pitch; again, untied.
-    function toggleTie(exercise, index) {
-        if (exercise?.kind !== "melody") return null;
-        const notes = N.voicesOf(exercise.score)[0].notes;
+    // In four parts (2.11.0), in the voice named, and across a chord's start
+    // too: that's how a suspension is written.
+    function toggleTie(exercise, index, voice = null) {
+        if (exercise?.kind !== "melody" && exercise?.kind !== "fourpart") return null;
+        voice = rhythmVoice(exercise, voice);
+        const notes = N.voicesOf(exercise.score)[voice].notes;
         const note = notes[index], next = notes[index + 1];
         if (!note?.p || !next) return null;
         const changed = notes.map((each, at) => (at === index ? { ...each, tie: !each.tie } : at === index + 1 && !note.tie ? { ...each, p: note.p } : each));
-        return withVoiceNotes(exercise, 0, mendTies(exercise, changed));
+        return withVoiceNotes(exercise, voice, mendTies(exercise, changed));
+    }
+
+    // Four parts' rhythms a chord (2.11.0), offered to choose from: a half
+    // note's chord, then the last chord's whole note.
+    const CHORD_RHYTHMS = Object.freeze({
+        h: Object.freeze(["h", "q q", "q. e", "q e e", "e e q"].map(text => Object.freeze(text.split(" ")))),
+        w: Object.freeze(["w", "h h", "h. q", "h q q", "q q h"].map(text => Object.freeze(text.split(" "))))
+    });
+
+    // A chord's notes in one voice given a rhythm: each new note keeps the
+    // pitch of the note that began at the same moment; the rest are to write.
+    function setChordRhythm(exercise, voice, chord, pattern) {
+        if (exercise?.kind !== "fourpart" || voice === exercise.given || !Array.isArray(pattern)) return exercise;
+        const span = chordSpans(exercise.numerals.length)[chord];
+        if (!span || !Number.isInteger(voice) || voice < 0 || voice > 3) return exercise;
+        if (!pattern.length || !pattern.every(code => SPECIES_CODES.includes(code)) || pattern.reduce((sum, code) => sum + codeLength(code), 0) !== span.length) return exercise;
+        const timed = N.timed(N.voicesOf(exercise.score)[voice].notes);
+        let at = span.onset;
+        const notes = pattern.map(code => {
+            const began = timed.find(entry => entry.onset === at);
+            at += codeLength(code);
+            return { p: began?.note.p ?? null, d: code[0], dot: code.endsWith("."), tie: false };
+        });
+        // A note held into the chord stays held into its first note.
+        const before = timed.filter(entry => entry.onset < span.onset).map(entry => entry.note);
+        const after = timed.filter(entry => entry.onset >= spanEnd(span)).map(entry => entry.note);
+        const lastTie = timed.filter(entry => entry.onset >= span.onset && entry.onset < spanEnd(span)).at(-1)?.note.tie;
+        if (lastTie) notes[notes.length - 1].tie = true;
+        const changed = withVoiceNotes(exercise, voice, mendTies(exercise, [...before, ...notes, ...after]));
+        return exerciseText(changed) === exerciseText(exercise) ? exercise : changed;
+    }
+
+    // A chord's rhythm in one voice, as its lengths.
+    function chordRhythmOf(exercise, voice, chord) {
+        const span = exercise?.kind === "fourpart" ? chordSpans(exercise.numerals.length)[chord] : null;
+        if (!span) return null;
+        return N.timed(N.voicesOf(exercise.score)[voice].notes).filter(entry => entry.onset >= span.onset && entry.onset < spanEnd(span)).map(entry => codeOf(entry.note));
     }
 
     // Taps, in eighths from the first bar's start, as bars' rhythms: each tap
@@ -1296,13 +1879,14 @@ globalThis.MaestroCounterpoint = (() => {
 
     // The exercise begun again: every written voice emptied, the given one
     // kept; a species' own rhythm back (the fifth species' bars as they
-    // began), four parts' chords unwritten. The same exercise when there's
-    // nothing to clear.
+    // began), four parts' chords unwritten, a half note each again. The same
+    // exercise when there's nothing to clear.
     function clearWritten(exercise) {
         const voices = N.voicesOf(exercise.score);
+        const blank = exercise.kind === "fourpart" ? chordRhythm(exercise.numerals.length).map(d => ({ p: null, d, dot: false, tie: false })) : null;
         const fresh = exercise.kind === "species"
             ? withVoiceNotes(exercise, 1 - exercise.given, speciesTemplate(exercise.species, voices[exercise.given].notes.length))
-            : voices.reduce((done, voice, index) => (index === exercise.given ? done : withVoiceNotes(done, index, voice.notes.map(note => ({ ...note, p: null, tie: false })))), exercise);
+            : voices.reduce((done, voice, index) => (index === exercise.given ? done : withVoiceNotes(done, index, blank ?? voice.notes.map(note => ({ ...note, p: null, tie: false })))), exercise);
         return exerciseText(fresh) === exerciseText(exercise) ? exercise : fresh;
     }
 
@@ -1343,7 +1927,7 @@ globalThis.MaestroCounterpoint = (() => {
     }
     const countOf = (problems, level) => problems.filter(each => each.level === level).length;
     // Problems the next note can still mend: a dissonance resolved, a pair of eighths finished.
-    const MENDED_NEXT = new Set(["dissonance", "suspension", "eighths"]);
+    const MENDED_NEXT = new Set(["consonant", "strongBeat", "weakBeat", "preparation", "suspension", "eighths"]);
     // Fresh starts, each with its share of the budget: a line that's boxed
     // itself in near the cadence is begun again rather than searched to the end.
     const MODEL_RUNS = 6;
@@ -1481,26 +2065,48 @@ globalThis.MaestroCounterpoint = (() => {
         return warnings;
     }
 
-    function modelFourPart(exercise, random, budget) {
+    // Four parts' model answer: each chord's voicings, then the cheapest path
+    // through them by the checker's rules for moves. A given voice may have
+    // non-chord tones (2.11.0): its chord note in each chord is fixed, the
+    // others keep clear of every note it sounds there, and its notes heard
+    // across each chord's start make no parallels. A few tries, each with
+    // other ties broken, while the budget lasts; embellished, the answer is
+    // then given non-chord tones of its own.
+    const MODEL_FOURPART_RUNS = 4;
+    function modelFourPart(exercise, random, budget, embellish = false) {
         const key = exercise.score.key;
-        const voices = N.voicesOf(exercise.score);
-        const rhythm = voices[0].notes.map(note => note.d);
         const chords = exercise.numerals.map(text => chordFromNumeral(text, key));
-        if (chords.length !== rhythm.length || chords.some(chord => !chord)) return null;
+        if (chords.some(chord => !chord)) return null;
+        const spans = chordSpans(chords.length);
+        const rhythm = chordRhythm(chords.length);
         const given = exercise.given;
-        const fixed = given >= 0 ? voices[given].notes.map(note => note.p) : null;
-        if (fixed?.some(p => !p)) return null;
+        let fixed = null, bounds = null, heard = null;
+        if (given >= 0) {
+            const reading = readFourPart(exercise, { asked: true });
+            const line = reading.voices[given];
+            fixed = reading.chords.map(each => each.reps[given]);
+            if (fixed.some(p => !p) || line.some(each => !each.p)) return null;
+            const at = time => line.find(each => each.onset <= time && time < each.end).p;
+            bounds = spans.map(span => {
+                const inside = line.filter(each => each.onset < spanEnd(span) && each.end > span.onset).map(each => midi(each.p));
+                return [Math.min(...inside), Math.max(...inside)];
+            });
+            heard = spans.map((span, k) => (k ? { from: at(span.onset - 0.5), to: at(span.onset) } : null));
+        }
         const tonicPc = chords.at(-1).pcs[0];
         const leadingPc = modulo(tonicPc - 1, 12);
         // Each chord's voicings: complete, in range, spaced, the bass on its bass note;
         // a doubled root is best, a missing fifth or a doubled third a little worse.
         const VOICINGS_KEPT = 36;
-        const voicings = chords.map((chord, k) => {
+        const voicingsOf = () => chords.map((chord, k) => {
             const pick = v => (v === given ? [midi(fixed[k])] : inRange(v === 3 ? [chord.bassPc] : chord.pcs, RANGES[v]));
             const list = [];
             for (const b of pick(3)) for (const t of pick(2)) for (const a of pick(1)) for (const s of pick(0)) {
                 if (!(b <= t && t <= a && a <= s) || s - a > 12 || a - t > 12 || t - b > 19) continue;
-                const pcs = [s, a, t, b].map(value => modulo(value, 12));
+                const values = [s, a, t, b];
+                if (given > 0 && values[given - 1] < bounds[k][1]) continue;
+                if (given >= 0 && given < 3 && values[given + 1] > bounds[k][0]) continue;
+                const pcs = values.map(value => modulo(value, 12));
                 if (!pcs.includes(chord.pcs[0]) || !pcs.includes(chord.pcs[1]) || (chord.seventh && !pcs.includes(chord.pcs[3]))) continue;
                 if (pcs.filter(pc => pc === leadingPc).length > 1) continue;
                 let cost = random() * 0.5;
@@ -1508,14 +2114,20 @@ globalThis.MaestroCounterpoint = (() => {
                 if (pcs.filter(pc => pc === chord.pcs[1]).length > 1) cost += 2;
                 cost += Math.abs(s - 70) / 4 + Math.abs(a - 64) / 6 + Math.abs(t - 57) / 6;
                 if (k === chords.length - 1 && pcs[0] !== tonicPc) cost += 8;
-                list.push({ values: [s, a, t, b], cost });
+                list.push({ values, cost });
             }
             return list.sort((x, y) => x.cost - y.cost).slice(0, VOICINGS_KEPT).map(each => ({
                 ...each,
                 pitches: each.values.map((value, v) => (v === given ? fixed[k] : spellAs(value, chord)))
             }));
         });
-        if (voicings.some(list => !list.length)) return null;
+        // The given voice's notes across a chord's start against another voice's move.
+        const heardClear = (a, b, { from, to }) => [0, 1, 2, 3].every(v => {
+            if (v === given) return true;
+            const [upperA, lowerA, upperB, lowerB] = v < given ? [a[v], from, b[v], to] : [from, a[v], to, b[v]];
+            const first = N.interval(lowerA, upperA), then = N.interval(lowerB, upperB);
+            return !(consonance(then) === "perfect" && consonance(first) === "perfect" && first.simple === then.simple && motion(upperA, upperB, lowerA, lowerB) === "similar");
+        });
         // From one chord to the next, by the checker's rules for moves: an error
         // rules the move out, a warning costs, and the upper voices move as
         // little as they can. The answer is checked whole at the end.
@@ -1524,45 +2136,155 @@ globalThis.MaestroCounterpoint = (() => {
         const pair = (from, to, k) => {
             checks += 1;
             const warnings = fourPartMove(from.pitches, to.pitches, chords[k - 1], chords[k], roles);
-            if (warnings === null) return Infinity;
+            if (warnings === null || (heard?.[k] && !heardClear(from.pitches, to.pitches, heard[k]))) return Infinity;
             const moves = [0, 1, 2].reduce((sum, v) => sum + Math.abs(to.values[v] - from.values[v]), 0);
             // A soprano that leaps past a fourth costs more: it's the line that's heard.
             const leap = Math.abs(to.values[0] - from.values[0]);
             return warnings * 8 + moves + (leap > 5 ? 6 : 0) + Math.abs(to.values[3] - from.values[3]) / 4;
         };
-        let best = voicings[0].map(voicing => ({ total: voicing.cost, path: [voicing] }));
-        for (let k = 1; k < chords.length; k++) {
+        for (let run = 0; run < MODEL_FOURPART_RUNS && checks <= budget; run++) {
+            const voicings = voicingsOf();
+            if (voicings.some(list => !list.length)) return null;
+            let best = voicings[0].map(voicing => ({ total: voicing.cost, path: [voicing] }));
+            for (let k = 1; k < chords.length && checks <= budget; k++) {
+                best = voicings[k].map(voicing => {
+                    let choice = null;
+                    for (const each of best) {
+                        if (each.total === Infinity) continue;
+                        const total = each.total + pair(each.path.at(-1), voicing, k) + voicing.cost;
+                        if (!choice || total < choice.total) choice = { total, path: [...each.path, voicing] };
+                    }
+                    return choice ?? { total: Infinity, path: [] };
+                });
+            }
             if (checks > budget) return null;
-            best = voicings[k].map(voicing => {
-                let choice = null;
-                for (const each of best) {
-                    if (each.total === Infinity) continue;
-                    const total = each.total + pair(each.path.at(-1), voicing, k) + voicing.cost;
-                    if (!choice || total < choice.total) choice = { total, path: [...each.path, voicing] };
-                }
-                return choice ?? { total: Infinity, path: [] };
-            });
+            const winner = best.filter(each => each.total < Infinity).sort((a, b) => a.total - b.total)[0];
+            if (!winner) return null;
+            const answer = [0, 1, 2, 3].reduce((done, v) => (v === given ? done : withVoiceNotes(done, v, winner.path.map((voicing, k) => ({ p: voicing.pitches[v], d: rhythm[k], dot: false, tie: false })))), exercise);
+            if (checkFourPart(answer).some(each => each.level === "error")) continue;
+            return embellish ? embellishFourPart(answer, { voices: [0, 1, 2, 3].filter(v => v !== given), random }) : answer;
         }
-        const winner = best.filter(each => each.total < Infinity).sort((a, b) => a.total - b.total)[0];
-        if (!winner) return null;
-        const answer = [0, 1, 2, 3].reduce((done, v) => (v === given ? done : withVoiceNotes(done, v, winner.path.map((voicing, k) => ({ p: voicing.pitches[v], d: rhythm[k], dot: false, tie: false })))), exercise);
-        return checkFourPart(answer).some(each => each.level === "error") ? null : answer;
+        return null;
+    }
+
+    // A step from a pitch, up or down: the key's note on that letter, or one
+    // inflected when the key's would make an augmented or diminished second
+    // with the note before or after (in minor, the raised sixth on the way
+    // to the raised seventh).
+    function stepPitch(key, from, way, to) {
+        const step = from.step + way;
+        const plain = N.keyAlter(modulo(step, 7), key.fifths);
+        for (const alter of [plain, plain + 1, plain - 1]) {
+            const p = N.pitch(step, alter);
+            const seconds = [from, to].filter(Boolean).every(other => {
+                const i = N.interval(p, other);
+                return i.number === 2 && (i.quality === "M" || i.quality === "m");
+            });
+            if (seconds) return p;
+        }
+        return null;
+    }
+
+    // One non-chord tone added at a chord change (k to k + 1) in one voice,
+    // or null where it can't go: a passing tone through a third and a
+    // neighbor around a held note take the second half of the note before
+    // the change, a run through a fourth its last two eighths; a suspension holds the note before into the next chord
+    // when it falls by step to a note of that chord; an anticipation sounds
+    // the last chord's note early.
+    function embellishOnce(exercise, { voice, k, kind }, spans, chords) {
+        const key = exercise.score.key;
+        const notes = N.voicesOf(exercise.score)[voice].notes;
+        const timed = N.timed(notes);
+        const last = timed.find(entry => entry.onset + entry.length === spanEnd(spans[k]));
+        const into = timed.find(entry => entry.onset === spans[k + 1].onset);
+        if (!last || !into || !last.note.p || !into.note.p || last.held || into.held || last.note.tie || into.note.tie) return null;
+        const a = last.note.p, b = into.note.p;
+        const halves = { 4: ["q", "q"], 2: ["e", "e"] }[last.length];
+        const note = (p, d) => ({ p, d, dot: false, tie: false });
+        const replace = (list, entry, made) => [...list.slice(0, entry.index), ...made, ...list.slice(entry.index + 1)];
+        let changed = null;
+        if (kind === "passing" && halves && Math.abs(b.step - a.step) === 2) {
+            const p = stepPitch(key, a, Math.sign(b.step - a.step), b);
+            if (p) changed = replace(notes, last, [note(a, halves[0]), note(p, halves[1])]);
+        } else if (kind === "run" && last.length === 4 && Math.abs(b.step - a.step) === 3) {
+            // Through a fourth by step: a quarter, then two eighths.
+            const way = Math.sign(b.step - a.step);
+            const p = stepPitch(key, a, way, null);
+            const q = p && stepPitch(key, p, way, b);
+            if (q) changed = replace(notes, last, [note(a, "q"), note(p, "e"), note(q, "e")]);
+        } else if (kind === "neighbor" && halves && midi(a) === midi(b)) {
+            for (const way of (k + voice) % 2 ? [1, -1] : [-1, 1]) {
+                const p = stepPitch(key, a, way, b);
+                if (p) {
+                    changed = replace(notes, last, [note(a, halves[0]), note(p, halves[1])]);
+                    break;
+                }
+            }
+        } else if (kind === "anticipation" && halves && k === spans.length - 2 && midi(a) !== midi(b) && Math.abs(b.step - a.step) <= 2) {
+            changed = replace(notes, last, [note(a, halves[0]), note(b, halves[1])]);
+        } else if (kind === "suspension" && a.step - b.step === 1 && !chords[k + 1].pcs.includes(pcOf(a)) && (into.length === 4 || into.length === 8)) {
+            const half = into.length === 4 ? ["q", "q"] : ["h", "h"];
+            const tied = notes.map((each, at) => (at === last.index ? { ...each, tie: true } : each));
+            changed = replace(tied, into, [note(a, half[0]), note(b, half[1])]);
+        }
+        if (!changed) return null;
+        const made = withVoiceNotes(exercise, voice, changed);
+        return made === exercise ? null : made;
+    }
+
+    // An answer given non-chord tones (2.11.0), in the voices named, each kept
+    // only if the checker then finds no error and no more warnings than
+    // before: about one every two chord changes, never two at one change.
+    // Passing tones are tried most often.
+    const EMBELLISHMENTS = Object.freeze({ passing: 3, run: 2, neighbor: 1, suspension: 2, anticipation: 1 });
+    function embellishFourPart(exercise, { voices = [0, 1, 2, 3], random = Math.random, share = 0.5 } = {}) {
+        if (exercise?.kind !== "fourpart") return exercise;
+        const first = checkFourPart(exercise);
+        if (first.some(each => each.level === "error" || each.rule === "unfinished")) return exercise;
+        const warnings = countOf(first, "warning");
+        const spans = chordSpans(exercise.numerals.length);
+        const chords = exercise.numerals.map(text => chordFromNumeral(text, exercise.score.key));
+        if (chords.some(chord => !chord)) return exercise;
+        const wanted = Math.max(1, Math.round((spans.length - 1) * share));
+        const tries = [];
+        for (const voice of voices) {
+            if (voice === exercise.given) continue;
+            for (let k = 0; k < spans.length - 1; k++) for (const [kind, weight] of Object.entries(EMBELLISHMENTS)) tries.push({ voice, k, kind, order: random() / weight });
+        }
+        tries.sort((a, b) => a.order - b.order);
+        let current = exercise, added = 0;
+        const used = new Set();
+        for (const each of tries) {
+            if (added >= wanted) break;
+            if (used.has(each.k)) continue;
+            const next = embellishOnce(current, each, spans, chords);
+            if (!next) continue;
+            const problems = checkFourPart(next);
+            if (problems.some(found => found.level === "error") || countOf(problems, "warning") > warnings) continue;
+            current = next;
+            added += 1;
+            used.add(each.k);
+        }
+        return current;
     }
 
     // The budget counts checks of a species line, or moves from chord to chord
     // in four parts, which cost far less: by default about 50 ms of searching at most.
     const MODEL_BUDGET = Object.freeze({ species: 6000, fourpart: 60000 });
-    function modelAnswer(exercise, { random = Math.random, budget = null } = {}) {
+    // Embellished (2.11.0), four parts' answer has non-chord tones too.
+    function modelAnswer(exercise, { random = Math.random, budget = null, embellish = false } = {}) {
         if (exercise?.kind === "species") return modelSpecies(exercise, random, budget ?? MODEL_BUDGET.species);
-        if (exercise?.kind === "fourpart") return modelFourPart(exercise, random, budget ?? MODEL_BUDGET.fourpart);
+        if (exercise?.kind === "fourpart") return modelFourPart(exercise, random, budget ?? MODEL_BUDGET.fourpart, embellish);
         return null;
     }
 
     return Object.freeze({
         RULE_GROUPS, RULE_SECTIONS, RULES_ALWAYS, RULE_PRESETS, cleanRulesOff, withRules,
+        RULES, ruleById, rulesFor, rulesOfGroups, STYLES, stylesOf, styleOf, withStyle,
         FUX, CHANT, PROGRESSIONS, FOURPART_KEYS, FORMS, RANGES, FIFTH_BARS, HEADER, ID, METER, CANTUS_MODES, CANTUS_LENGTH,
         fuxNotes, makeCantus, cantusProblems, cantusFinals, cantusExercise, cantusOf, checkCantus, speciesTemplate, tieSuspensions, speciesExercise, consonance, checkSpecies,
         chordFromNumeral, figuresFor, numeralParts, numeralText, keyChords, analyze, chordRhythm, fourPartExercise, figuredBass, checkFourPart,
+        NCT_KINDS, NCT_LABELS, CHORD_RHYTHMS, chordSpans, fitsChords, nonChordTones, drawnFourPart, embellishFourPart, setChordRhythm, chordRhythmOf,
         check, analysisLine, exerciseText, readExercise, setNote, setBarRhythm, clearWritten, allowedAlter, degreePitch, modelAnswer,
         CODES, codesFor, rhythmEditable, rhythmVoice, rhythmBars, fillCodes, barRhythm, pasteRhythms, clearBars, setNoteLength, toggleTie, rhythmFromTaps,
         MELODY_BARS, melodyExercise, withMelodyNotes, checkMelody, STAFF_CLEFS, withClef

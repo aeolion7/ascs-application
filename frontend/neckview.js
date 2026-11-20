@@ -18,9 +18,12 @@ const cons = {
     steady: null,           // the steady tone: { midi, oscillator, gain }
     drone: null,            // the drone on the root: { midi, oscillator, gain }
     scalePlay: null,        // the scale being played: { run } (2.6.0: a drill)
-    plucks: new Map(),      // pluck buffers by pitch and A4, newest last
+    plucks: new Map(),      // pluck buffers by pitch, version and A4, newest last
+    pluckTurns: new Map(),  // the version each pitch plucks next (2.11.0)
     tonesOut: null,
-    wave: null
+    plucksOut: null,        // the plucks' guitar body and room (2.11.0)
+    wave: null,
+    organWaves: new Map()   // the organ's stops by id (2.11.0)
 };
 
 function saveConsSettings() {
@@ -71,6 +74,38 @@ function consToneOutput(context) {
     return cons.tonesOut;
 }
 
+// The plucks' output (2.11.0): a guitar's body (a low resonance, a second
+// above it, a softer top, no rumble), heard dry and in a little room.
+const CONS_ROOM_SEND = 0.14;
+function consPluckOutput(context) {
+    if (!cons.plucksOut) {
+        const tones = consToneOutput(context);
+        const filter = (type, frequency, q, gain) => {
+            const node = context.createBiquadFilter();
+            node.type = type;
+            node.frequency.value = frequency;
+            node.Q.value = q;
+            node.gain.value = gain;
+            return node;
+        };
+        const body = filter("highpass", 55, 0.7, 0);
+        const bus = context.createGain();
+        body.connect(filter("peaking", 105, 1.6, 5)).connect(filter("peaking", 220, 1.4, 3)).connect(filter("highshelf", 5000, 0.7, -5)).connect(bus);
+        bus.connect(tones);
+        const room = context.createConvolver();
+        const [left, right] = MaestroMusic.roomSamples(context.sampleRate);
+        const tail = context.createBuffer(2, left.length, context.sampleRate);
+        tail.copyToChannel(left, 0);
+        tail.copyToChannel(right, 1);
+        room.buffer = tail;
+        const send = context.createGain();
+        send.gain.value = CONS_ROOM_SEND;
+        bus.connect(send).connect(room).connect(tones);
+        cons.plucksOut = body;
+    }
+    return cons.plucksOut;
+}
+
 async function readyConsAudio() {
     try {
         const context = consAudio();
@@ -83,13 +118,17 @@ async function readyConsAudio() {
     }
 }
 
+// Each pitch has a few versions, softer to harder, taken in turn, so a note
+// played again isn't the same sound again (2.11.0).
 function pluckBuffer(context, midi) {
-    const key = `${midi}@${cons.settings.a4}@${context.sampleRate}`;
+    const version = cons.pluckTurns.get(midi) ?? 0;
+    cons.pluckTurns.set(midi, (version + 1) % MaestroMusic.PLUCK_VELOCITIES.length);
+    const key = `${midi}/${version}@${cons.settings.a4}@${context.sampleRate}`;
     let buffer = cons.plucks.get(key);
     if (buffer) {
         cons.plucks.delete(key);
     } else {
-        const samples = MaestroMusic.pluckSamples(MaestroMusic.frequency(midi, cons.settings.a4), context.sampleRate);
+        const samples = MaestroMusic.pluckSamples(MaestroMusic.frequency(midi, cons.settings.a4), context.sampleRate, { velocity: MaestroMusic.PLUCK_VELOCITIES[version] });
         buffer = context.createBuffer(1, samples.length, context.sampleRate);
         buffer.copyToChannel(samples, 0);
         if (cons.plucks.size >= CONS_PLUCK_CACHE) cons.plucks.delete(cons.plucks.keys().next().value);
@@ -107,8 +146,9 @@ function dampConsVoice(voice) {
     voice.source.stop(now + 0.08);
 }
 
-// One plucked note, started at `when` into `destination`; it lets go of its
-// nodes when it ends. The loop of Progressions books its chords with it too.
+// One plucked note, started at `when` into `destination` (the plucks' output,
+// consPluckOutput, or one that leads to it); it lets go of its nodes when it
+// ends. The loop of Progressions books its chords with it too.
 function startConsVoice(context, midi, when, destination) {
     const source = context.createBufferSource();
     source.buffer = pluckBuffer(context, midi);
@@ -123,11 +163,51 @@ function startConsVoice(context, midi, when, destination) {
     return { source, gain };
 }
 
+// One organ note (2.11.0), in the voice's `stop`, at its place from left to
+// right, speaking quickly; it sounds until it's damped, as a key is held.
+const CONS_ORGAN_LEVEL = 0.15;
+function startConsOrgan(context, midi, when, stop) {
+    let wave = cons.organWaves.get(stop.id);
+    if (!wave) {
+        wave = context.createPeriodicWave(new Float32Array(stop.imag.length + 1), new Float32Array([0, ...stop.imag]));
+        cons.organWaves.set(stop.id, wave);
+    }
+    const source = context.createOscillator();
+    source.setPeriodicWave(wave);
+    source.frequency.value = MaestroMusic.frequency(midi, cons.settings.a4);
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0, when);
+    gain.gain.linearRampToValueAtTime(CONS_ORGAN_LEVEL * stop.level, when + 0.035);
+    const place = context.createStereoPanner();
+    place.pan.value = stop.pan;
+    source.connect(gain).connect(place).connect(consToneOutput(context));
+    source.addEventListener("ended", () => {
+        source.disconnect();
+        gain.disconnect();
+        place.disconnect();
+    });
+    source.start(when);
+    return { source, gain };
+}
+
 // Plucks notes together, each `spread` seconds after the last. The audio
 // thread is woken once, before any is booked.
 // `spread` may instead list each note's start in seconds, and `ends` when each
 // is damped (2.4.0: a progression's chords, each stopping as the next sounds).
-async function pluckConsNotes(midis, spread = 0, ends = null) {
+function pluckConsNotes(midis, spread = 0, ends = null) {
+    return soundConsNotes(midis, spread, ends, (context, midi, when) => startConsVoice(context, midi, when, consPluckOutput(context)));
+}
+
+// The organ's notes (2.11.0), each in its voice's stop from organVoices();
+// a note with no end is held for a moment.
+const CONS_ORGAN_HOLD = 1.2;
+function organConsNotes(midis, stops, spread = 0, ends = null) {
+    const starts = midis.map((_, at) => (Array.isArray(spread) ? spread[at] : at * spread));
+    const held = midis.map((_, at) => ends?.[at] ?? starts[at] + CONS_ORGAN_HOLD);
+    return soundConsNotes(midis, starts, held, (context, midi, when, at) => startConsOrgan(context, midi, when, stops[at]));
+}
+
+async function soundConsNotes(midis, spread, ends, start) {
     cons.starting += 1;
     let context;
     try {
@@ -143,7 +223,7 @@ async function pluckConsNotes(midis, spread = 0, ends = null) {
             dampConsVoice(oldest);
             cons.voices.delete(oldest);
         }
-        const voice = startConsVoice(context, midi, now + (Array.isArray(spread) ? spread[at] : at * spread), consToneOutput(context));
+        const voice = start(context, midi, now + (Array.isArray(spread) ? spread[at] : at * spread), at);
         if (ends?.[at] !== undefined && ends[at] !== null) {
             voice.gain.gain.setTargetAtTime(0, now + ends[at], 0.04);
             voice.source.stop(now + ends[at] + 0.3);
@@ -236,9 +316,10 @@ function retuneConsDrone() {
 // ---- Notes in time (2.6.0): booked a little ahead on the audio clock at
 // the metronome's tempo as it is now, so a change of tempo takes hold at once.
 // `events` are { midi, at, length } in beats, in order. Returns the run, with
-// stop(), or null if there's no sound.
+// stop(), or null if there's no sound. With `stops` (2.11.0), the organ plays
+// them, each event's `voice` in its stop.
 const CONS_SEQUENCE_AHEAD = 0.5;
-async function playConsSequence(events, { onBeat = null, onEnd = null } = {}) {
+async function playConsSequence(events, { onBeat = null, onEnd = null, stops = null } = {}) {
     const context = await readyConsAudio();
     if (!context) return null;
     const end = Math.max(0, ...events.map(event => event.at + event.length));
@@ -264,7 +345,8 @@ async function playConsSequence(events, { onBeat = null, onEnd = null } = {}) {
         if (due.length) {
             const offsets = due.map(event => Math.max(0, (event.at - beat) * seconds));
             const ends = due.map((event, at) => offsets[at] + event.length * seconds - 0.03);
-            pluckConsNotes(due.map(event => event.midi), offsets, ends).then(voices => {
+            const midis = due.map(event => event.midi);
+            (stops ? organConsNotes(midis, due.map(event => stops[event.voice]), offsets, ends) : pluckConsNotes(midis, offsets, ends)).then(voices => {
                 if (run.stopped) voices.forEach(dampConsVoice);
                 else run.voices.push(...voices);
             });

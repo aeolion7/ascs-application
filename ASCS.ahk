@@ -14,7 +14,7 @@ Suspend(true)
 
 ; ==========================================
 ; AEOLIONWARE SUPER COMMAND SYSTEM
-; Version 2.10.0
+; Version 2.11.0
 ; ==========================================
 
 #Include webview\WebViewToo.ahk
@@ -24,7 +24,7 @@ Suspend(true)
 ; GLOBAL VARIABLES
 ; ==========================================
 
-global ASCS_Version := "2.10.0"
+global ASCS_Version := "2.11.0"
 global ASCS_App := ""
 global ASCS_WindowIcon := 0
 global ASCS_IconPath := A_ScriptDir "\frontend\assets\ascs.ico"
@@ -1110,6 +1110,19 @@ HandleWebMessage(sender, args) {
             case "PowerNow":
                 if (content = "lock")
                     DllCall("LockWorkStation")
+                else if (content = "display")
+                    TurnOffDisplay()
+
+            case "GetVolume":
+                SendOutputVolume()
+
+            case "SetVolume":
+                if (StrLen(content) <= 3)
+                    SetOutputVolume(content)
+
+            case "SetMute":
+                if (content = "0" || content = "1")
+                    SetOutputMute(content = "1")
 
             case "GetRecycleBin":
                 SendRecycleBin()

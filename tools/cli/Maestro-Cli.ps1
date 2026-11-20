@@ -1354,6 +1354,8 @@ $IsolateFolders = @('lib', 'webview', 'frontend')
 $IsolateGuarded = 'Run|RunWait|ProcessClose|FileDelete|FileRecycle|FileMove|FileCopy|DirDelete|DirMove|DirCopy|DirCreate|FileAppend|FileOpen|IniWrite|IniDelete'
 # DLL calls that lock, sleep or shut down Windows.
 $IsolatePowerCalls = 'LockWorkStation|PowrProf\\SetSuspendState|ExitWindowsEx|InitiateSystemShutdown\w*|InitiateShutdown\w*'
+# A message that turns the display off (2.11.0): WM_SYSCOMMAND with SC_MONITORPOWER.
+$IsolateDisplayOff = '(?i)(?<![\w.])(PostMessage|SendMessage)\((?=\s*0x0*112\s*,\s*0xF170)'
 $IsolateInclude = '#Include %A_ScriptDir%\isolate-hook.ahk'
 
 function Get-IsolateRoot {
@@ -1367,6 +1369,7 @@ function ConvertTo-IsolatedScript([string]$text, [switch]$Entry, [switch]$Probes
     $text = [regex]::Replace($text, "(?i)(?<![\w.#`"'])($IsolateGuarded)\(", 'Isolate_$1(')
     $text = [regex]::Replace($text, "(?i)\bDllCall\(\s*`"($IsolatePowerCalls)`"", 'Isolate_Stub("$1"')
     $text = [regex]::Replace($text, '(?i)(?<![\w.])Send\((?=\s*ASCS_SoundSwitchKey)', 'Isolate_Stub("Send", ')
+    $text = [regex]::Replace($text, $IsolateDisplayOff, 'Isolate_Stub("$1", ')
     $text = [regex]::Replace($text, '(?i)(?<!\w)F24(?!\w)', 'Pause')
     $text = [regex]::Replace($text, '(?im)^(\s*)([~$*]*\^!\+a::)', '$1; (maestro isolate) $2')
     $text = [regex]::Replace($text, '(?<!\d)5232(?!\d)', "$IsolatePort")
@@ -1419,6 +1422,7 @@ function Find-IsolationHazards([string]$folder) {
             @{ In = $code; Pattern = "(?i)(?<![\w.#&$%])($IsolateGuarded)(?![\w(\[.]|[ \t]*[:+\-*/|&^]?=(?!=)|[ \t]+[^\s,)\]])"; What = 'a built-in passed on unguarded' }
             @{ In = $text; Pattern = "(?i)DllCall\(\s*`"($IsolatePowerCalls)`""; What = 'a power call' }
             @{ In = $text; Pattern = '(?i)(?<![\w.])Send\(\s*ASCS_SoundSwitchKey'; What = 'the audio switch' }
+            @{ In = $text; Pattern = $IsolateDisplayOff; What = 'turning the display off' }
             @{ In = $code; Pattern = '(?i)\.(ShellExecute\w*|Exec|Run)\(|ComObject\(\s*"WScript\.Shell'; What = 'a launch through COM' }
         )
         foreach ($check in $checks) {
